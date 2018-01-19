@@ -1,0 +1,1419 @@
+From efb91d51dcbeee6835dcc3ea523171ec98682136 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Wed, 27 Dec 2017 17:19:45 +0100
+Subject: [PATCH] kernel: Add Turris 1.X support
+
+Tested on Turris 1.1 and works, but might break other mpc boards, so might need
+some polishing.
+
+Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ target/linux/mpc85xx/Makefile                      |   6 +-
+ .../mpc85xx/base-files/etc/board.d/02_network      |   5 +
+ target/linux/mpc85xx/config-4.14                   | 519 +++++++++++++++++++++
+ .../files-4.14/arch/powerpc/boot/dts/turris.dts    | 252 ++++++++++
+ target/linux/mpc85xx/p2020/config-default          |  98 ++++
+ target/linux/mpc85xx/p2020/profiles/turris.mk      |  29 ++
+ target/linux/mpc85xx/p2020/target.mk               |   6 +
+ ...erpc-85xx-add-gpio-keys-to-of-match-table.patch |  10 +
+ .../100-powerpc-85xx-tl-wdr4900-v1-support.patch   |  78 ++++
+ .../101-powerpc-85xx-hiveap-330-support.patch      |  30 ++
+ .../102-powerpc-add-cmdline-override.patch         |  37 ++
+ .../230-fsl_elbc_nand_add_ecc_mode_selection.patch | 227 +++++++++
+ 12 files changed, 1294 insertions(+), 3 deletions(-)
+ create mode 100644 target/linux/mpc85xx/config-4.14
+ create mode 100644 target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
+ create mode 100644 target/linux/mpc85xx/p2020/config-default
+ create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
+ create mode 100644 target/linux/mpc85xx/p2020/target.mk
+ create mode 100644 target/linux/mpc85xx/patches-4.14/001-powerpc-85xx-add-gpio-keys-to-of-match-table.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/100-powerpc-85xx-tl-wdr4900-v1-support.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/101-powerpc-85xx-hiveap-330-support.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/102-powerpc-add-cmdline-override.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+
+diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
+index b181e67c0e..3dafa7d9f4 100644
+--- a/target/linux/mpc85xx/Makefile
++++ b/target/linux/mpc85xx/Makefile
+@@ -12,11 +12,11 @@ BOARDNAME:=Freescale MPC85xx
+ CPU_TYPE:=8540
+ FEATURES:=squashfs
+ MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
+-SUBTARGETS:=generic p1020
++SUBTARGETS:=generic p1020 p2020
+ 
+-KERNEL_PATCHVER:=4.9
++KERNEL_PATCHVER:=4.14
+ 
+-KERNELNAME:=zImage
++KERNELNAME:=zImage uImage
+ 
+ include $(INCLUDE_DIR)/target.mk
+ 
+diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
+index 19f01a6589..b8cb085647 100755
+--- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
++++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
+@@ -18,6 +18,11 @@ tplink,tl-wdr4900-v1)
+ 		"0@eth0" "2:lan:1" "3:lan:2" "4:lan:3" "5:lan:4" "1:wan"
+ 	ucidef_set_interface_macaddr "wan" "$(mtd_get_mac_binary config 332)"
+ 	;;
++cz-nic,turris-1.x)
++	ucidef_set_interfaces_lan_wan "eth0 eth1" "eth2"
++	ucidef_add_switch "switch0" "1" "1"
++	ucidef_add_switch_vlan "switch0" "1" "0 1 2 3 4 "
++	ucidef_add_switch_vlan "switch0" "2" "5 6"
+ *)
+ 	ucidef_set_interfaces_lan_wan "eth0" "eth1"
+ 	;;
+diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
+new file mode 100644
+index 0000000000..f06c478a07
+--- /dev/null
++++ b/target/linux/mpc85xx/config-4.14
+@@ -0,0 +1,520 @@
++# CONFIG_40x is not set
++# CONFIG_44x is not set
++CONFIG_ADVANCED_OPTIONS=y
++CONFIG_AR8216_PHY=y
++CONFIG_AR8216_PHY_LEDS=y
++CONFIG_ARCH_ENABLE_MEMORY_HOTPLUG=y
++CONFIG_ARCH_ENABLE_MEMORY_HOTREMOVE=y
++CONFIG_ARCH_HAS_DMA_SET_COHERENT_MASK=y
++CONFIG_ARCH_HAS_ELF_RANDOMIZE=y
++CONFIG_ARCH_HAS_FORTIFY_SOURCE=y
++CONFIG_ARCH_HAS_GCOV_PROFILE_ALL=y
++CONFIG_ARCH_HAS_SG_CHAIN=y
++CONFIG_ARCH_HAS_STRICT_KERNEL_RWX=y
++# CONFIG_ARCH_HAS_STRICT_MODULE_RWX is not set
++CONFIG_ARCH_HAS_TICK_BROADCAST=y
++CONFIG_ARCH_HAS_WALK_MEMORY=y
++CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG=y
++CONFIG_ARCH_HIBERNATION_POSSIBLE=y
++CONFIG_ARCH_MAY_HAVE_PC_FDC=y
++CONFIG_ARCH_MIGHT_HAVE_PC_PARPORT=y
++CONFIG_ARCH_MIGHT_HAVE_PC_SERIO=y
++CONFIG_ARCH_MMAP_RND_BITS=11
++CONFIG_ARCH_MMAP_RND_BITS_MAX=17
++CONFIG_ARCH_MMAP_RND_BITS_MIN=11
++CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MAX=17
++CONFIG_ARCH_MMAP_RND_COMPAT_BITS_MIN=11
++CONFIG_ARCH_OPTIONAL_KERNEL_RWX=y
++# CONFIG_ARCH_OPTIONAL_KERNEL_RWX_DEFAULT is not set
++# CONFIG_ARCH_RANDOM is not set
++CONFIG_ARCH_SUPPORTS_ATOMIC_RMW=y
++CONFIG_ARCH_SUPPORTS_DEBUG_PAGEALLOC=y
++CONFIG_ARCH_SUPPORTS_DEFERRED_STRUCT_PAGE_INIT=y
++CONFIG_ARCH_SUPPORTS_UPROBES=y
++CONFIG_ARCH_SUSPEND_POSSIBLE=y
++CONFIG_ARCH_USE_BUILTIN_BSWAP=y
++# CONFIG_ARCH_WANTS_THP_SWAP is not set
++CONFIG_ARCH_WANT_IPC_PARSE_VERSION=y
++CONFIG_ARCH_WEAK_RELEASE_ACQUIRE=y
++CONFIG_ASSOCIATIVE_ARRAY=y
++CONFIG_AUDIT_ARCH=y
++CONFIG_BLK_MQ_PCI=y
++CONFIG_BOOKE=y
++CONFIG_BOUNCE=y
++# CONFIG_BSC9131_RDB is not set
++# CONFIG_BSC9132_QDS is not set
++CONFIG_BTRFS_FS=y
++# CONFIG_BTRFS_FS_CHECK_INTEGRITY is not set
++CONFIG_BTRFS_FS_POSIX_ACL=y
++# CONFIG_C293_PCIE is not set
++CONFIG_CLONE_BACKWARDS=y
++CONFIG_CMDLINE="console=ttyS0,115200"
++CONFIG_CMDLINE_BOOL=y
++# CONFIG_CMDLINE_OVERRIDE is not set
++# CONFIG_CORENET_GENERIC is not set
++# CONFIG_CPM2 is not set
++CONFIG_CPU_BIG_ENDIAN=y
++CONFIG_CPU_RMAP=y
++CONFIG_CRC16=y
++CONFIG_CRYPTO_ACOMP2=y
++CONFIG_CRYPTO_AEAD=y
++CONFIG_CRYPTO_AEAD2=y
++# CONFIG_CRYPTO_AES_PPC_SPE is not set
++CONFIG_CRYPTO_CRC32C=y
++CONFIG_CRYPTO_DEFLATE=y
++CONFIG_CRYPTO_HASH=y
++CONFIG_CRYPTO_HASH2=y
++CONFIG_CRYPTO_LZO=y
++CONFIG_CRYPTO_MANAGER=y
++CONFIG_CRYPTO_MANAGER2=y
++# CONFIG_CRYPTO_MD5_PPC is not set
++CONFIG_CRYPTO_NULL2=y
++CONFIG_CRYPTO_RNG2=y
++# CONFIG_CRYPTO_SHA1_PPC is not set
++# CONFIG_CRYPTO_SHA1_PPC_SPE is not set
++# CONFIG_CRYPTO_SHA256_PPC_SPE is not set
++CONFIG_CRYPTO_WORKQUEUE=y
++CONFIG_DEBUG_BUGVERBOSE=y
++CONFIG_DEFAULT_UIMAGE=y
++CONFIG_DEVKMEM=y
++# CONFIG_DMA_NOOP_OPS is not set
++# CONFIG_DMA_VIRT_OPS is not set
++CONFIG_DNOTIFY=y
++CONFIG_DNS_RESOLVER=y
++# CONFIG_DRM_LIB_RANDOM is not set
++CONFIG_DTC=y
++# CONFIG_DYNAMIC_MEMSTART is not set
++# CONFIG_E200 is not set
++CONFIG_E500=y
++CONFIG_EARLY_PRINTK=y
++CONFIG_EDAC_ATOMIC_SCRUB=y
++CONFIG_EDAC_SUPPORT=y
++CONFIG_ENABLE_MUST_CHECK=y
++# CONFIG_EPAPR_BOOT is not set
++CONFIG_ETHERNET_PACKET_MANGLE=y
++CONFIG_EXPORTFS=y
++CONFIG_EXT4_FS=y
++CONFIG_EXT4_FS_POSIX_ACL=y
++CONFIG_EXT4_FS_SECURITY=y
++CONFIG_FANOTIFY=y
++CONFIG_FAT_FS=y
++CONFIG_FIXED_PHY=y
++# CONFIG_FORCE_SMP is not set
++CONFIG_FSL_BOOKE=y
++# CONFIG_FSL_DPAA is not set
++CONFIG_FSL_EMB_PERFMON=y
++# CONFIG_FSL_FMAN is not set
++CONFIG_FSL_GUTS=y
++CONFIG_FSL_LBC=y
++CONFIG_FSL_PCI=y
++CONFIG_FSL_PQ_MDIO=y
++CONFIG_FSL_SOC=y
++CONFIG_FSL_SOC_BOOKE=y
++CONFIG_FSL_ULI1575=y
++CONFIG_FS_MBCACHE=y
++CONFIG_FS_POSIX_ACL=y
++CONFIG_FUTEX_PI=y
++CONFIG_GENERIC_ALLOCATOR=y
++CONFIG_GENERIC_ATOMIC64=y
++CONFIG_GENERIC_BUG=y
++CONFIG_GENERIC_CLOCKEVENTS=y
++CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
++CONFIG_GENERIC_CMOS_UPDATE=y
++CONFIG_GENERIC_CPU_AUTOPROBE=y
++# CONFIG_GENERIC_CSUM is not set
++CONFIG_GENERIC_IO=y
++CONFIG_GENERIC_IRQ_MIGRATION=y
++CONFIG_GENERIC_IRQ_SHOW=y
++CONFIG_GENERIC_IRQ_SHOW_LEVEL=y
++CONFIG_GENERIC_ISA_DMA=y
++CONFIG_GENERIC_NVRAM=y
++CONFIG_GENERIC_PCI_IOMAP=y
++CONFIG_GENERIC_SMP_IDLE_THREAD=y
++CONFIG_GENERIC_STRNCPY_FROM_USER=y
++CONFIG_GENERIC_STRNLEN_USER=y
++CONFIG_GENERIC_TBSYNC=y
++CONFIG_GENERIC_TIME_VSYSCALL=y
++CONFIG_GEN_RTC=y
++# CONFIG_GE_FPGA is not set
++# CONFIG_GE_IMP3A is not set
++CONFIG_GIANFAR=y
++CONFIG_GLOB=y
++CONFIG_GPIOLIB=y
++CONFIG_GPIO_GENERIC=y
++CONFIG_GPIO_MPC8XXX=y
++CONFIG_GPIO_SYSFS=y
++CONFIG_GRACE_PERIOD=y
++# CONFIG_GRO_CELLS is not set
++CONFIG_HAS_DMA=y
++CONFIG_HAS_IOMEM=y
++CONFIG_HAS_IOPORT_MAP=y
++CONFIG_HAS_RAPIDIO=y
++# CONFIG_HAVE_64BIT_ALIGNED_ACCESS is not set
++CONFIG_HAVE_ARCH_AUDITSYSCALL=y
++# CONFIG_HAVE_ARCH_BITREVERSE is not set
++CONFIG_HAVE_ARCH_JUMP_LABEL=y
++CONFIG_HAVE_ARCH_KGDB=y
++CONFIG_HAVE_ARCH_SECCOMP_FILTER=y
++CONFIG_HAVE_ARCH_TRACEHOOK=y
++# CONFIG_HAVE_BOOTMEM_INFO_NODE is not set
++CONFIG_HAVE_CBPF_JIT=y
++CONFIG_HAVE_DEBUG_KMEMLEAK=y
++CONFIG_HAVE_DEBUG_STACKOVERFLOW=y
++CONFIG_HAVE_DMA_API_DEBUG=y
++CONFIG_HAVE_DYNAMIC_FTRACE=y
++CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS=y
++CONFIG_HAVE_FTRACE_MCOUNT_RECORD=y
++CONFIG_HAVE_FUNCTION_GRAPH_TRACER=y
++CONFIG_HAVE_FUNCTION_TRACER=y
++# CONFIG_HAVE_GENERIC_DMA_COHERENT is not set
++CONFIG_HAVE_GENERIC_GUP=y
++CONFIG_HAVE_IDE=y
++CONFIG_HAVE_IOREMAP_PROT=y
++CONFIG_HAVE_IRQ_EXIT_ON_IRQ_STACK=y
++CONFIG_HAVE_IRQ_TIME_ACCOUNTING=y
++CONFIG_HAVE_KPROBES_ON_FTRACE=y
++CONFIG_HAVE_MEMBLOCK=y
++CONFIG_HAVE_MEMBLOCK_NODE_MAP=y
++CONFIG_HAVE_MOD_ARCH_SPECIFIC=y
++CONFIG_HAVE_NET_DSA=y
++CONFIG_HAVE_OPROFILE=y
++CONFIG_HAVE_PERF_EVENTS=y
++CONFIG_HAVE_PERF_REGS=y
++CONFIG_HAVE_PERF_USER_STACK_DUMP=y
++CONFIG_HAVE_RCU_TABLE_FREE=y
++CONFIG_HAVE_REGS_AND_STACK_ACCESS_API=y
++# CONFIG_HAVE_SETUP_PER_CPU_AREA is not set
++CONFIG_HAVE_SYSCALL_TRACEPOINTS=y
++CONFIG_HAVE_VIRT_CPU_ACCOUNTING=y
++# CONFIG_HIVEAP_330 is not set
++CONFIG_HZ=1000
++# CONFIG_HZ_100 is not set
++CONFIG_HZ_1000=y
++CONFIG_HZ_PERIODIC=y
++CONFIG_ILLEGAL_POINTER_VALUE=0
++CONFIG_INET_DIAG=y
++# CONFIG_INET_DIAG_DESTROY is not set
++# CONFIG_INET_RAW_DIAG is not set
++CONFIG_INET_TCP_DIAG=y
++CONFIG_INITRAMFS_SOURCE=""
++CONFIG_IOMMU_HELPER=y
++# CONFIG_IPIC is not set
++CONFIG_IP_PNP=y
++# CONFIG_IP_PNP_BOOTP is not set
++CONFIG_IP_PNP_DHCP=y
++# CONFIG_IP_PNP_RARP is not set
++CONFIG_IRQCHIP=y
++CONFIG_IRQ_DOMAIN=y
++CONFIG_IRQ_FORCED_THREADING=y
++CONFIG_IRQ_WORK=y
++CONFIG_ISA_DMA_API=y
++CONFIG_JBD2=y
++CONFIG_JFFS2_FS_POSIX_ACL=y
++CONFIG_JFFS2_LZO=y
++CONFIG_JFFS2_RUBIN=y
++CONFIG_JFFS2_ZLIB=y
++CONFIG_KERNEL_GZIP=y
++CONFIG_KERNEL_START=0xc0000000
++# CONFIG_KERNEL_START_BOOL is not set
++CONFIG_KEYS=y
++# CONFIG_KSI8560 is not set
++CONFIG_LEGACY_PTYS=y
++CONFIG_LEGACY_PTY_COUNT=256
++CONFIG_LIBFDT=y
++CONFIG_LOCKD=y
++CONFIG_LOCK_SPIN_ON_OWNER=y
++CONFIG_LOWMEM_CAM_NUM=3
++# CONFIG_LOWMEM_CAM_NUM_BOOL is not set
++CONFIG_LOWMEM_SIZE=0x30000000
++# CONFIG_LOWMEM_SIZE_BOOL is not set
++CONFIG_LXT_PHY=y
++CONFIG_LZO_COMPRESS=y
++CONFIG_LZO_DECOMPRESS=y
++CONFIG_MATH_EMULATION=y
++# CONFIG_MATH_EMULATION_FULL is not set
++CONFIG_MATH_EMULATION_HW_UNIMPLEMENTED=y
++CONFIG_MDIO_BUS=y
++CONFIG_MDIO_DEVICE=y
++CONFIG_MIGRATION=y
++CONFIG_MMC=y
++CONFIG_MMC_BLOCK=y
++CONFIG_MMC_SDHCI=y
++CONFIG_MMC_SDHCI_IO_ACCESSORS=y
++CONFIG_MMC_SDHCI_OF_ESDHC=y
++# CONFIG_MMC_SDHCI_PCI is not set
++CONFIG_MMC_SDHCI_PLTFM=y
++# CONFIG_MMC_TIFM_SD is not set
++# CONFIG_MMC_WBSD is not set
++# CONFIG_MMIO_NVRAM is not set
++CONFIG_MODULES_USE_ELF_RELA=y
++# CONFIG_MPC8536_DS is not set
++# CONFIG_MPC8540_ADS is not set
++# CONFIG_MPC8560_ADS is not set
++CONFIG_MPC85xx_CDS=y
++# CONFIG_MPC85xx_DS is not set
++CONFIG_MPC85xx_MDS=y
++CONFIG_MPC85xx_RDB=y
++CONFIG_MPIC=y
++# CONFIG_MPIC_MSGR is not set
++CONFIG_MPIC_TIMER=y
++# CONFIG_MPIC_U3_HT_IRQS is not set
++# CONFIG_MPIC_WEIRD is not set
++CONFIG_MTD_CFI_STAA=y
++CONFIG_MTD_JEDECPROBE=y
++CONFIG_MTD_M25P80=y
++CONFIG_MTD_RAM=y
++CONFIG_MTD_ROM=y
++CONFIG_MTD_SPI_NOR=y
++CONFIG_MTD_UBI=y
++CONFIG_MTD_UBI_BEB_LIMIT=20
++# CONFIG_MTD_UBI_BLOCK is not set
++# CONFIG_MTD_UBI_FASTMAP is not set
++# CONFIG_MTD_UBI_GLUEBI is not set
++CONFIG_MTD_UBI_WL_THRESHOLD=4096
++CONFIG_MUTEX_SPIN_ON_OWNER=y
++# CONFIG_MVME2500 is not set
++# CONFIG_NEED_DMA_MAP_STATE is not set
++# CONFIG_NEED_PER_CPU_EMBED_FIRST_CHUNK is not set
++CONFIG_NEED_SG_DMA_LENGTH=y
++# CONFIG_NET_CADENCE is not set
++CONFIG_NET_FLOW_LIMIT=y
++# CONFIG_NET_VENDOR_3COM is not set
++# CONFIG_NET_VENDOR_ADAPTEC is not set
++# CONFIG_NET_VENDOR_AGERE is not set
++# CONFIG_NET_VENDOR_ALACRITECH is not set
++# CONFIG_NET_VENDOR_ALTEON is not set
++# CONFIG_NET_VENDOR_AMAZON is not set
++# CONFIG_NET_VENDOR_AMD is not set
++# CONFIG_NET_VENDOR_AQUANTIA is not set
++# CONFIG_NET_VENDOR_ARC is not set
++# CONFIG_NET_VENDOR_ATHEROS is not set
++# CONFIG_NET_VENDOR_AURORA is not set
++# CONFIG_NET_VENDOR_BROADCOM is not set
++# CONFIG_NET_VENDOR_BROCADE is not set
++# CONFIG_NET_VENDOR_CAVIUM is not set
++# CONFIG_NET_VENDOR_CHELSIO is not set
++# CONFIG_NET_VENDOR_CISCO is not set
++# CONFIG_NET_VENDOR_DEC is not set
++# CONFIG_NET_VENDOR_DLINK is not set
++# CONFIG_NET_VENDOR_EMULEX is not set
++# CONFIG_NET_VENDOR_EXAR is not set
++# CONFIG_NET_VENDOR_EZCHIP is not set
++# CONFIG_NET_VENDOR_HP is not set
++# CONFIG_NET_VENDOR_HUAWEI is not set
++# CONFIG_NET_VENDOR_INTEL is not set
++# CONFIG_NET_VENDOR_MARVELL is not set
++# CONFIG_NET_VENDOR_MELLANOX is not set
++# CONFIG_NET_VENDOR_MICREL is not set
++# CONFIG_NET_VENDOR_MICROCHIP is not set
++# CONFIG_NET_VENDOR_MYRI is not set
++# CONFIG_NET_VENDOR_NATSEMI is not set
++# CONFIG_NET_VENDOR_NETRONOME is not set
++# CONFIG_NET_VENDOR_NVIDIA is not set
++# CONFIG_NET_VENDOR_OKI is not set
++# CONFIG_NET_VENDOR_QLOGIC is not set
++# CONFIG_NET_VENDOR_QUALCOMM is not set
++# CONFIG_NET_VENDOR_RDC is not set
++# CONFIG_NET_VENDOR_REALTEK is not set
++# CONFIG_NET_VENDOR_RENESAS is not set
++# CONFIG_NET_VENDOR_ROCKER is not set
++# CONFIG_NET_VENDOR_SAMSUNG is not set
++# CONFIG_NET_VENDOR_SEEQ is not set
++# CONFIG_NET_VENDOR_SILAN is not set
++# CONFIG_NET_VENDOR_SIS is not set
++# CONFIG_NET_VENDOR_SMSC is not set
++# CONFIG_NET_VENDOR_SOLARFLARE is not set
++# CONFIG_NET_VENDOR_STMICRO is not set
++# CONFIG_NET_VENDOR_SUN is not set
++# CONFIG_NET_VENDOR_SYNOPSYS is not set
++# CONFIG_NET_VENDOR_TEHUTI is not set
++# CONFIG_NET_VENDOR_TI is not set
++# CONFIG_NET_VENDOR_VIA is not set
++# CONFIG_NET_VENDOR_WIZNET is not set
++# CONFIG_NET_VENDOR_XILINX is not set
++CONFIG_NFS_FS=y
++CONFIG_NFS_USE_KERNEL_DNS=y
++# CONFIG_NFS_USE_LEGACY_DNS is not set
++CONFIG_NFS_V2=y
++CONFIG_NFS_V4=y
++CONFIG_NFS_V4_1=y
++CONFIG_NFS_V4_1_IMPLEMENTATION_ID_DOMAIN="kernel.org"
++# CONFIG_NFS_V4_1_MIGRATION is not set
++CONFIG_NFS_V4_2=y
++CONFIG_NLS=y
++CONFIG_NLS_CODEPAGE_437=y
++CONFIG_NLS_ISO8859_1=y
++# CONFIG_NONSTATIC_KERNEL is not set
++CONFIG_NO_BOOTMEM=y
++CONFIG_NR_CPUS=4
++CONFIG_NR_IRQS=512
++CONFIG_OF=y
++CONFIG_OF_ADDRESS=y
++CONFIG_OF_ADDRESS_PCI=y
++CONFIG_OF_EARLY_FLATTREE=y
++CONFIG_OF_FLATTREE=y
++CONFIG_OF_GPIO=y
++CONFIG_OF_IRQ=y
++CONFIG_OF_MDIO=y
++CONFIG_OF_NET=y
++CONFIG_OF_PCI=y
++CONFIG_OF_PCI_IRQ=y
++CONFIG_OF_RESERVED_MEM=y
++CONFIG_OID_REGISTRY=y
++CONFIG_OLD_SIGACTION=y
++CONFIG_OLD_SIGSUSPEND=y
++CONFIG_P1010_RDB=y
++# CONFIG_P1022_DS is not set
++# CONFIG_P1022_RDK is not set
++# CONFIG_P1023_RDB is not set
++CONFIG_PADATA=y
++CONFIG_PAGE_OFFSET=0xc0000000
++# CONFIG_PAGE_OFFSET_BOOL is not set
++CONFIG_PCI=y
++CONFIG_PCIEAER=y
++CONFIG_PCIEASPM=y
++# CONFIG_PCIEASPM_DEBUG is not set
++CONFIG_PCIEASPM_DEFAULT=y
++# CONFIG_PCIEASPM_PERFORMANCE is not set
++# CONFIG_PCIEASPM_POWERSAVE is not set
++# CONFIG_PCIEASPM_POWER_SUPERSAVE is not set
++CONFIG_PCIEPORTBUS=y
++CONFIG_PCI_DOMAINS=y
++CONFIG_PGTABLE_LEVELS=2
++CONFIG_PHYLIB=y
++CONFIG_PHYSICAL_ALIGN=0x04000000
++CONFIG_PHYSICAL_START=0x00000000
++# CONFIG_PHYSICAL_START_BOOL is not set
++# CONFIG_PHYS_64BIT is not set
++CONFIG_PNFS_FILE_LAYOUT=y
++CONFIG_PNFS_FLEXFILE_LAYOUT=m
++# CONFIG_PPA8548 is not set
++CONFIG_PPC=y
++CONFIG_PPC32=y
++# CONFIG_PPC64 is not set
++CONFIG_PPC_85xx=y
++# CONFIG_PPC_8xx is not set
++# CONFIG_PPC_970_NAP is not set
++CONFIG_PPC_ADV_DEBUG_DACS=2
++CONFIG_PPC_ADV_DEBUG_DVCS=0
++CONFIG_PPC_ADV_DEBUG_IACS=2
++CONFIG_PPC_ADV_DEBUG_REGS=y
++CONFIG_PPC_BOOK3E_MMU=y
++# CONFIG_PPC_BOOK3S_32 is not set
++# CONFIG_PPC_CELL is not set
++# CONFIG_PPC_CELL_NATIVE is not set
++# CONFIG_PPC_COPRO_BASE is not set
++# CONFIG_PPC_DCR_MMIO is not set
++# CONFIG_PPC_DCR_NATIVE is not set
++CONFIG_PPC_DOORBELL=y
++# CONFIG_PPC_E500MC is not set
++# CONFIG_PPC_EARLY_DEBUG is not set
++# CONFIG_PPC_EPAPR_HV_PIC is not set
++CONFIG_PPC_FSL_BOOK3E=y
++CONFIG_PPC_I8259=y
++# CONFIG_PPC_ICP_HV is not set
++# CONFIG_PPC_ICP_NATIVE is not set
++# CONFIG_PPC_ICS_RTAS is not set
++CONFIG_PPC_INDIRECT_PCI=y
++CONFIG_PPC_MMU_NOHASH=y
++# CONFIG_PPC_MM_SLICES is not set
++# CONFIG_PPC_MPC106 is not set
++# CONFIG_PPC_P7_NAP is not set
++CONFIG_PPC_PCI_CHOICE=y
++# CONFIG_PPC_PTDUMP is not set
++# CONFIG_PPC_QEMU_E500 is not set
++# CONFIG_PPC_RTAS is not set
++CONFIG_PPC_SMP_MUXED_IPI=y
++CONFIG_PPC_UDBG_16550=y
++CONFIG_PPC_WERROR=y
++# CONFIG_PPC_XICS is not set
++# CONFIG_PPC_XIVE is not set
++# CONFIG_PPC_XIVE_SPAPR is not set
++# CONFIG_PQ2ADS is not set
++CONFIG_PRINTK_SAFE_LOG_BUF_SHIFT=13
++CONFIG_PROC_CHILDREN=y
++CONFIG_PROC_PAGE_MONITOR=y
++CONFIG_QE_GPIO=y
++CONFIG_QUICC_ENGINE=y
++CONFIG_RAID6_PQ=y
++CONFIG_RAS=y
++CONFIG_RCU_NEED_SEGCBLIST=y
++CONFIG_RCU_STALL_COMMON=y
++CONFIG_REGMAP=y
++CONFIG_REGMAP_SPI=y
++CONFIG_RFS_ACCEL=y
++CONFIG_ROOT_NFS=y
++CONFIG_RPS=y
++CONFIG_RTC_CLASS=y
++CONFIG_RTC_DRV_GENERIC=y
++CONFIG_RTC_I2C_AND_SPI=y
++CONFIG_RTC_MC146818_LIB=y
++CONFIG_RWSEM_SPIN_ON_OWNER=y
++CONFIG_RWSEM_XCHGADD_ALGORITHM=y
++# CONFIG_SBC8548 is not set
++# CONFIG_SCHED_INFO is not set
++# CONFIG_SCSI_DMA is not set
++CONFIG_SERIAL_8250_EXTENDED=y
++CONFIG_SERIAL_8250_FSL=y
++CONFIG_SERIAL_8250_SHARE_IRQ=y
++CONFIG_SERIAL_OF_PLATFORM=y
++# CONFIG_SERIAL_QE is not set
++CONFIG_SIMPLE_GPIO=y
++CONFIG_SMP=y
++CONFIG_SOCK_DIAG=y
++# CONFIG_SOCRATES is not set
++CONFIG_SOC_BUS=y
++CONFIG_SPARSE_IRQ=y
++CONFIG_SPE=y
++CONFIG_SPE_POSSIBLE=y
++CONFIG_SPI=y
++CONFIG_SPI_FSL_ESPI=y
++CONFIG_SPI_MASTER=y
++CONFIG_SRCU=y
++# CONFIG_STRIP_ASM_SYMS is not set
++# CONFIG_STX_GP3 is not set
++CONFIG_SUNRPC=y
++CONFIG_SUNRPC_BACKCHANNEL=y
++CONFIG_SUNRPC_GSS=y
++CONFIG_SWCONFIG=y
++CONFIG_SWIOTLB=y
++CONFIG_SWPHY=y
++CONFIG_SYSCTL_EXCEPTION_TRACE=y
++CONFIG_TASK_SIZE=0xc0000000
++# CONFIG_TASK_SIZE_BOOL is not set
++CONFIG_THIN_ARCHIVES=y
++CONFIG_THREAD_SHIFT=13
++CONFIG_TICK_CPU_ACCOUNTING=y
++# CONFIG_TL_WDR4900_V1 is not set
++# CONFIG_TQM8540 is not set
++# CONFIG_TQM8541 is not set
++# CONFIG_TQM8548 is not set
++# CONFIG_TQM8555 is not set
++# CONFIG_TQM8560 is not set
++CONFIG_TREE_RCU=y
++CONFIG_TREE_SRCU=y
++# CONFIG_TWR_P102x is not set
++CONFIG_UBIFS_FS=y
++CONFIG_UBIFS_FS_ADVANCED_COMPR=y
++CONFIG_UBIFS_FS_LZO=y
++CONFIG_UBIFS_FS_ZLIB=y
++CONFIG_UCC=y
++CONFIG_UCC_FAST=y
++CONFIG_UCC_GETH=y
++# CONFIG_UGETH_TX_ON_DEMAND is not set
++CONFIG_USB_SUPPORT=y
++CONFIG_VDSO32=y
++CONFIG_VFAT_FS=y
++# CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
++CONFIG_VM_EVENT_COUNTERS=y
++# CONFIG_XES_MPC85xx is not set
++CONFIG_XOR_BLOCKS=y
++CONFIG_XPS=y
++CONFIG_XXHASH=y
++CONFIG_XZ_DEC_BCJ=y
++CONFIG_XZ_DEC_POWERPC=y
++CONFIG_ZLIB_DEFLATE=y
++CONFIG_ZLIB_INFLATE=y
++CONFIG_ZSTD_COMPRESS=y
++CONFIG_ZSTD_DECOMPRESS=y
++CONFIG_CPU_HOTPLUG_STATE_CONTROL=n
++CONFIG_FB_FSL_DIU=n
+diff --git a/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
+new file mode 100644
+index 0000000000..da573b2ab7
+--- /dev/null
++++ b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
+@@ -0,0 +1,252 @@
++/*
++ * Turris RDB Device Tree Source
++ *
++ * Copyright 2013 CZ.NIC z.s.p.o. (http://www.nic.cz/)
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++/include/ "fsl/p2020si-pre.dtsi"
++
++/ {
++	model = "Turris";
++	compatible = "cz-nic,turris-1.x";
++
++	aliases {
++		ethernet0 = &enet0;
++		ethernet1 = &enet1;
++		ethernet2 = &enet2;
++		serial0 = &serial0;
++		serial1 = &serial1;
++		pci0 = &pci0;
++		pci1 = &pci1;
++		pci2 = &pci2;
++                spi0 = &spi0;
++	};
++
++	memory {
++		device_type = "memory";
++	};
++
++	lbc: localbus@ffe05000 {
++		reg = <0 0xffe05000 0 0x1000>;
++
++		/* NOR and NAND Flashes */
++		ranges = <0x0 0x0 0x0 0xef000000 0x01000000
++			  0x1 0x0 0x0 0xff800000 0x00040000
++			  0x2 0x0 0x0 0xffb00000 0x00020000>;
++		
++		nor@0,0 {
++                        #address-cells = <1>;
++                        #size-cells = <1>;
++                        compatible = "cfi-flash";
++                        reg = <0x0 0x0 0x1000000>;
++                        bank-width = <2>;
++                        device-width = <1>;
++
++                        partition@0 {
++                                /* 128KB for DTB Image */
++                                reg = <0x0 0x00020000>;
++                                label = "NOR (RO) DTB Image";
++                        };
++
++                        partition@20000 {
++                                /* 1.7 MB for Linux Kernel Image */
++                                reg = <0x00020000 0x1A0000>;
++                                label = "NOR (RO) Linux Kernel Image";
++                        };
++
++                        partition@1C0000 {
++                                /* 1.5 MB for JFFS2 based Root file System */
++                                reg = <0x001C0000 0x180000>;
++                                label = "NOR (RO) JFFS2 Root File System";
++                        };
++
++                        partition@340000 {
++                                /* for nand fw backup */
++                                reg = <0x00340000 0xb00000>;
++                                label = "NOR (RO) NAND FW backup";
++                        };
++
++                        partition@E40000 {
++                                /* 128KB for Certificates backup */
++                                reg = <0xE40000 0x000C0000>;
++                                label = "NOR (RW) Cert backup";
++                        };
++
++                        partition@f00000 {
++                                /* This location must not be altered  */
++                                /* 512KB for u-boot Bootloader Image */
++                                /* 512KB for u-boot Environment Variables */
++                                reg = <0x00f00000 0x00100000>;
++                                label = "NOR (RO) U-Boot Image";
++                        };
++                };
++	
++		nand@1,0 {
++			#address-cells = <1>;
++			#size-cells = <1>;
++			compatible = "fsl,p2020-fcm-nand",
++				     "fsl,elbc-fcm-nand";
++			reg = <0x1 0x0 0x00040000>;
++			nand-ecc-mode = "soft_bch";
++			nand-ecc-step-size = <512>;
++			nand-ecc-strength = <4>; 
++
++			partition@00 {
++				reg = <0x00000000 0x10000000>;
++				label = "rootfs-ubifs";
++			};
++
++		};
++
++	};
++
++	soc: soc@ffe00000 {
++		ranges = <0x0 0x0 0xffe00000 0x100000>;
++
++		i2c@3000 {
++			rtc@6f {
++				compatible = "mcp7940x";
++				reg = <0x6f>;
++			};
++			lm90@4c {
++				compatible = "sa56004";
++				reg = <0x4c>;
++			};
++		};
++
++                spi0: spi@7000 {
++                        spidev@0 {
++                                compatible = "spidev";
++                                spi-max-frequency = <40000000>;
++                                reg = <0>;
++                        };
++                        spidev@1 {
++                                compatible = "spidev";
++                                spi-max-frequency = <40000000>;
++                                reg = <1>;
++                        };
++                        spidev@2 {
++                                compatible = "spidev";
++                                spi-max-frequency = <40000000>;
++                                reg = <2>;
++                        };
++                        spidev@3 {
++                                compatible = "spidev";
++                                spi-max-frequency = <40000000>;
++                                reg = <3>;
++                        };
++                };
++
++		usb@22000 {
++			phy_type = "ulpi";
++			dr_mode = "host";
++		};
++
++	        mdio@24520 {
++        	        phy0: ethernet-phy@0 {
++                	        interrupts = <2 1 0 0>;
++                        	reg = <0x0>;
++                              qca,ar8327-initvals = <
++                                        0x00004 0x07600000 /* PAD0_MODE - eth1 */
++                                        0x00008 0x01000000 /* PAD5_MODE */
++                                        0x0000c 0x07600000 /* PAD6_MODE - eth0 */
++                                        0x00010 0x40000000 /* POWER_ON_STRIP */
++                                        0x00050 0xcc35cc35 /* LED_CTRL0 */
++                                        0x00054 0xca35ca35 /* LED_CTRL1 */
++                                        0x00058 0xc935c935 /* LED_CTRL2 */
++                                        0x0005c 0x03ffff00 /* LED_CTRL3 */
++                                        0x0007c 0x0000007e /* PORT0_STATUS */
++                                        0x00094 0x0000007e /* PORT6 STATUS */
++                                >;
++	                };
++                        phy7: ethernet-phy@7 {
++                                interrupts = <3 1 0 0>;
++                                reg = <0x7>;
++                        };
++	        };
++
++        	mdio@25520 {
++                        status = "disabled";
++	        };
++	
++        	mdio@26520 {
++                        status = "disabled";
++        	};
++
++
++		ptp_clock@24e00 {
++			fsl,tclk-period = <5>;
++			fsl,tmr-prsc = <200>;
++			fsl,tmr-add = <0xCCCCCCCD>;
++			fsl,tmr-fiper1 = <0x3B9AC9FB>;
++			fsl,tmr-fiper2 = <0x0001869B>;
++			fsl,max-adj = <249999999>;
++		};
++
++	        enet0: ethernet@24000 {
++                        phy-handle = <&phy0>;
++	                phy-connection-type = "rgmii-id";
++        	};
++
++	        enet1: ethernet@25000 {
++	                fixed-link = <6 1 1000 1 0>;
++        	};
++
++	        enet2: ethernet@26000 {
++                	phy-handle = <&phy7>;
++	                phy-connection-type = "rgmii-id";
++        	};
++	};
++        pci2: pcie@ffe08000 {
++                ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
++                          0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
++                reg = <0 0xffe08000 0 0x1000>;
++                pcie@0 {
++                        ranges = <0x2000000 0x0 0xc0000000
++                                  0x2000000 0x0 0xc0000000
++                                  0x0 0x20000000
++
++                                  0x1000000 0x0 0x0
++                                  0x1000000 0x0 0x0
++                                  0x0 0x10000>;
++                };
++        };
++
++        pci1: pcie@ffe09000 {
++                ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
++                          0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
++                reg = <0 0xffe09000 0 0x1000>;
++                pcie@0 {
++                        ranges = <0x2000000 0x0 0xa0000000
++                                  0x2000000 0x0 0xa0000000
++                                  0x0 0x20000000
++
++                                  0x1000000 0x0 0x0
++                                  0x1000000 0x0 0x0
++                                  0x0 0x10000>;
++                };
++        };
++
++        pci0: pcie@ffe0a000 {
++                ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
++                          0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
++                reg = <0 0xffe0a000 0 0x1000>;
++                pcie@0 {
++                        ranges = <0x2000000 0x0 0x80000000
++                                  0x2000000 0x0 0x80000000
++                                  0x0 0x20000000
++
++                                  0x1000000 0x0 0x0
++                                  0x1000000 0x0 0x0
++                                  0x0 0x10000>;
++                };
++        };
++
++};
++
++/include/ "fsl/p2020si-post.dtsi"
+diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
+new file mode 100644
+index 0000000000..fe43612a0d
+--- /dev/null
++++ b/target/linux/mpc85xx/p2020/config-default
+@@ -0,0 +1,98 @@
++CONFIG_ADVANCED_OPTIONS=y
++CONFIG_ARCH_CPU_PROBE_RELEASE=y
++CONFIG_ARCH_DMA_ADDR_T_64BIT=y
++CONFIG_ARCH_HAS_TICK_BROADCAST=y
++CONFIG_ARCH_PHYS_ADDR_T_64BIT=y
++CONFIG_BCH=y
++CONFIG_BOOKE_WDT=y
++CONFIG_BUILD_BIN2C=y
++CONFIG_CC_OPTIMIZE_FOR_SIZE=y
++CONFIG_CPU_IDLE=y
++CONFIG_CPU_IDLE_GOV_LADDER=y
++CONFIG_CPU_RMAP=y
++CONFIG_CRC16=y
++CONFIG_CRYPTO_DEFLATE=y
++CONFIG_CRYPTO_LZO=y
++CONFIG_CRYPTO_XZ=y
++# CONFIG_DYNAMIC_MEMSTART is not set
++CONFIG_FIXED_PHY=y
++CONFIG_FREEZER=y
++CONFIG_FSL_MPIC_TIMER_WAKEUP=y
++CONFIG_FSL_PMC=y
++CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
++CONFIG_GENERIC_TBSYNC=y
++CONFIG_HAVE_RCU_TABLE_FREE=y
++CONFIG_HIGHMEM=y
++CONFIG_HOTPLUG_CPU=y
++# CONFIG_HUGETLBFS is not set
++CONFIG_I2C=y
++CONFIG_I2C_BOARDINFO=y
++CONFIG_I2C_CHARDEV=y
++CONFIG_I2C_MPC=y
++CONFIG_IRQ_ALL_CPUS=y
++# CONFIG_KERNEL_START_BOOL is not set
++# CONFIG_LOWMEM_CAM_NUM_BOOL is not set
++CONFIG_LOWMEM_SIZE=0x20000000
++CONFIG_LOWMEM_SIZE_BOOL=y
++CONFIG_LZO_COMPRESS=y
++CONFIG_LZO_DECOMPRESS=y
++CONFIG_MAGIC_SYSRQ=y
++CONFIG_MATH_EMULATION=y
++# CONFIG_MATH_EMULATION_FULL is not set
++CONFIG_MATH_EMULATION_HW_UNIMPLEMENTED=y
++CONFIG_MPIC_MSGR=y
++# CONFIG_MTD_CFI_INTELEXT is not set
++CONFIG_MTD_JEDECPROBE=y
++CONFIG_MTD_NAND=y
++CONFIG_MTD_NAND_BCH=y
++CONFIG_MTD_NAND_ECC=y
++CONFIG_MTD_NAND_ECC_BCH=y
++CONFIG_MTD_NAND_FSL_ELBC=y
++# CONFIG_MTD_ROOTFS_ROOT_DEV is not set
++# CONFIG_MTD_ROOTFS_SPLIT is not set
++# CONFIG_MTD_SPLIT is not set
++# CONFIG_MTD_SPLIT_SQUASHFS_ROOT is not set
++CONFIG_MTD_TESTS=m
++CONFIG_MTD_UBI=y
++CONFIG_MTD_UBI_BEB_LIMIT=20
++# CONFIG_MTD_UBI_BLOCK is not set
++# CONFIG_MTD_UBI_FASTMAP is not set
++# CONFIG_MTD_UBI_GLUEBI is not set
++CONFIG_MTD_UBI_WL_THRESHOLD=4096
++CONFIG_MUTEX_SPIN_ON_OWNER=y
++CONFIG_NET_FLOW_LIMIT=y
++CONFIG_NR_CPUS=2
++# CONFIG_PAGE_OFFSET_BOOL is not set
++CONFIG_PCI_MSI=y
++# CONFIG_PHYSICAL_START_BOOL is not set
++CONFIG_PHYS_64BIT=y
++CONFIG_PHYS_ADDR_T_64BIT=y
++CONFIG_PM=y
++# CONFIG_PM_DEBUG is not set
++CONFIG_PM_SLEEP=y
++CONFIG_PM_SLEEP_SMP=y
++CONFIG_PPC_MSI_BITMAP=y
++CONFIG_PTE_64BIT=y
++CONFIG_RCU_STALL_COMMON=y
++CONFIG_RFS_ACCEL=y
++CONFIG_RPS=y
++CONFIG_RTC_CLASS=y
++CONFIG_RTC_DRV_DS1307=y
++CONFIG_RWSEM_SPIN_ON_OWNER=y
++CONFIG_SLUB_CPU_PARTIAL=y
++CONFIG_SMP=y
++CONFIG_STOP_MACHINE=y
++CONFIG_SUSPEND=y
++CONFIG_SUSPEND_FREEZER=y
++CONFIG_SYS_SUPPORTS_HUGETLBFS=y
++# CONFIG_TASK_SIZE_BOOL is not set
++CONFIG_TREE_RCU=y
++CONFIG_UBIFS_FS=y
++CONFIG_UBIFS_FS_ADVANCED_COMPR=y
++CONFIG_UBIFS_FS_LZO=y
++CONFIG_UBIFS_FS_XZ=y
++CONFIG_UBIFS_FS_ZLIB=y
++CONFIG_WATCHDOG_CORE=y
++CONFIG_XPS=y
++CONFIG_ZLIB_DEFLATE=y
++CONFIG_ZLIB_INFLATE=y
+diff --git a/target/linux/mpc85xx/p2020/profiles/turris.mk b/target/linux/mpc85xx/p2020/profiles/turris.mk
+new file mode 100644
+index 0000000000..e2830f933c
+--- /dev/null
++++ b/target/linux/mpc85xx/p2020/profiles/turris.mk
+@@ -0,0 +1,29 @@
++JFFS2_BLOCKSIZE := 128k
++FEATURES += rtc nand ubifs -squashfs
++NAND_BLOCKSIZE := 2048:128k
++TURRISNAND_DTS:="turris-bch"
++TURRISNAND_UBIFS_OPTS:="-m 2048 -e 124KiB -c 2000 -F"
++TURRISNAND_UBI_OPTS:="-m 2048 -p 128KiB -s 2048"
++KERNEL_PATCHVER:=4.14
++KERNELNAME:="zImage turris.dtb"
++
++define Profile/TURRIS
++	NAME:=Turris 1.X
++	PACKAGES:=\
++		kmod-usb-core kmod-usb2 kmod-usb2-fsl \
++		kmod-ath9k kmod-hostapd kmod-usb3 wpad \
++		kmod-usb-storage uboot-turris \
++		block-mount kmod-hwmon-core kmod-hwmon-lm90 \
++		nuci updater unbound oneshot logrotate \
++		mtd-utils mtd-utils-nandwrite start-indicator \
++		mtd-utils-flash-erase mtd-utils-flash-eraseall mtd-utils-flash-info \
++		luci luci-i18n-czech cert-backup foris update_mac wget \
++		userspace_time_sync openssh-moduli watchdog_adjust \
++		ucollect-config rainbow turris-version \
++		spidev-test i2c-tools -dropbear
++endef
++
++define Profile/TURRIS/Description
++	Package set optimized for the Turris 1.X.
++endef
++$(eval $(call Profile,TURRIS))
+diff --git a/target/linux/mpc85xx/p2020/target.mk b/target/linux/mpc85xx/p2020/target.mk
+new file mode 100644
+index 0000000000..aa39263309
+--- /dev/null
++++ b/target/linux/mpc85xx/p2020/target.mk
+@@ -0,0 +1,6 @@
++BOARDNAME:=P2020
++FEATURES += ramdisk
++
++define Target/Description
++	Build firmware images for Freescale P2020 based boards.
++endef
+diff --git a/target/linux/mpc85xx/patches-4.14/001-powerpc-85xx-add-gpio-keys-to-of-match-table.patch b/target/linux/mpc85xx/patches-4.14/001-powerpc-85xx-add-gpio-keys-to-of-match-table.patch
+new file mode 100644
+index 0000000000..58c4be6007
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/001-powerpc-85xx-add-gpio-keys-to-of-match-table.patch
+@@ -0,0 +1,10 @@
++--- a/arch/powerpc/platforms/85xx/common.c
+++++ b/arch/powerpc/platforms/85xx/common.c
++@@ -33,6 +33,7 @@ static const struct of_device_id mpc85xx
++ 	{ .compatible = "fsl,mpc8548-guts", },
++ 	/* Probably unnecessary? */
++ 	{ .compatible = "gpio-leds", },
+++	{ .compatible = "gpio-keys", },
++ 	/* For all PCI controllers */
++ 	{ .compatible = "fsl,mpc8540-pci", },
++ 	{ .compatible = "fsl,mpc8548-pcie", },
+diff --git a/target/linux/mpc85xx/patches-4.14/100-powerpc-85xx-tl-wdr4900-v1-support.patch b/target/linux/mpc85xx/patches-4.14/100-powerpc-85xx-tl-wdr4900-v1-support.patch
+new file mode 100644
+index 0000000000..bfe8100a2f
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/100-powerpc-85xx-tl-wdr4900-v1-support.patch
+@@ -0,0 +1,78 @@
++From 406d86e5990ac171f18ef6e2973672d8fbfe1556 Mon Sep 17 00:00:00 2001
++From: Gabor Juhos <juhosg@openwrt.org>
++Date: Wed, 20 Feb 2013 08:40:33 +0100
++Subject: [PATCH] powerpc: 85xx: add support for the TP-Link TL-WDR4900 v1
++ board
++
++This patch adds support for the TP-Link TL-WDR4900 v1
++concurrent dual-band wireless router. The devices uses
++the Freescale P1014 SoC.
++
++Signed-off-by: Gabor Juhos <juhosg@openwrt.org>
++---
++ arch/powerpc/boot/Makefile                  |   3 +
++ arch/powerpc/boot/wrapper                   |   4 +
++ arch/powerpc/platforms/85xx/Kconfig         |  11 ++
++ arch/powerpc/platforms/85xx/Makefile        |   1 +
++
++--- a/arch/powerpc/boot/Makefile
+++++ b/arch/powerpc/boot/Makefile
++@@ -137,6 +137,7 @@ src-plat-$(CONFIG_PPC_PSERIES) += pserie
++ src-plat-$(CONFIG_PPC_POWERNV) += pseries-head.S
++ src-plat-$(CONFIG_PPC_IBM_CELL_BLADE) += pseries-head.S
++ src-plat-$(CONFIG_MVME7100) += motload-head.S mvme7100.c
+++src-plat-$(CONFIG_TL_WDR4900_V1) += cuboot-tl-wdr4900-v1.c
++ 
++ src-wlib := $(sort $(src-wlib-y))
++ src-plat := $(sort $(src-plat-y))
++@@ -320,6 +321,7 @@ image-$(CONFIG_TQM8555)			+= cuImage.tqm
++ image-$(CONFIG_TQM8560)			+= cuImage.tqm8560
++ image-$(CONFIG_SBC8548)			+= cuImage.sbc8548
++ image-$(CONFIG_KSI8560)			+= cuImage.ksi8560
+++image-$(CONFIG_TL_WDR4900_V1)		+= cuImage.tl-wdr4900-v1
++ 
++ # Board ports in arch/powerpc/platform/86xx/Kconfig
++ image-$(CONFIG_MVME7100)                += dtbImage.mvme7100
++--- a/arch/powerpc/boot/wrapper
+++++ b/arch/powerpc/boot/wrapper
++@@ -277,6 +277,10 @@ cuboot*)
++     *-mpc85*|*-tqm85*|*-sbc85*)
++         platformo=$object/cuboot-85xx.o
++         ;;
+++    *-tl-wdr4900-v1)
+++        platformo=$object/cuboot-tl-wdr4900-v1.o
+++	link_address='0x1000000'
+++        ;;
++     *-amigaone)
++         link_address='0x800000'
++         ;;
++--- a/arch/powerpc/platforms/85xx/Kconfig
+++++ b/arch/powerpc/platforms/85xx/Kconfig
++@@ -169,6 +169,17 @@ config STX_GP3
++ 	select CPM2
++ 	select DEFAULT_UIMAGE
++ 
+++config TL_WDR4900_V1
+++	bool "TP-Link TL-WDR4900 v1"
+++	select DEFAULT_UIMAGE
+++	select ARCH_REQUIRE_GPIOLIB
+++	select GPIO_MPC8XXX
+++	help
+++	  This option enables support for the TP-Link TL-WDR4900 v1 board.
+++
+++	  This board is a Concurrent Dual-Band wireless router with a
+++	  Freescale P1014 SoC.
+++
++ config TQM8540
++ 	bool "TQ Components TQM8540"
++ 	help
++--- a/arch/powerpc/platforms/85xx/Makefile
+++++ b/arch/powerpc/platforms/85xx/Makefile
++@@ -24,6 +24,7 @@ obj-$(CONFIG_TWR_P102x)   += twr_p102x.o
++ obj-$(CONFIG_CORENET_GENERIC)   += corenet_generic.o
++ obj-$(CONFIG_STX_GP3)	  += stx_gp3.o
++ obj-$(CONFIG_TQM85xx)	  += tqm85xx.o
+++obj-$(CONFIG_TL_WDR4900_V1) += tl_wdr4900_v1.o
++ obj-$(CONFIG_SBC8548)     += sbc8548.o
++ obj-$(CONFIG_PPA8548)     += ppa8548.o
++ obj-$(CONFIG_SOCRATES)    += socrates.o socrates_fpga_pic.o
+diff --git a/target/linux/mpc85xx/patches-4.14/101-powerpc-85xx-hiveap-330-support.patch b/target/linux/mpc85xx/patches-4.14/101-powerpc-85xx-hiveap-330-support.patch
+new file mode 100644
+index 0000000000..ece8c7d80e
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/101-powerpc-85xx-hiveap-330-support.patch
+@@ -0,0 +1,30 @@
++--- a/arch/powerpc/platforms/85xx/Kconfig
+++++ b/arch/powerpc/platforms/85xx/Kconfig
++@@ -48,6 +48,17 @@ config BSC9132_QDS
++ 	  and dual StarCore SC3850 DSP cores.
++ 	  Manufacturer : Freescale Semiconductor, Inc
++ 
+++config HIVEAP_330
+++	bool "Aerohive HiveAP-330"
+++	select DEFAULT_UIMAGE
+++	select ARCH_REQUIRE_GPIOLIB
+++	select GPIO_MPC8XXX
+++	help
+++	  This option enables support for the Aerohive HiveAP-330 board.
+++
+++	  This board is a Concurrent Dual-Band wireless access point with a
+++	  Freescale P1020 SoC.
+++
++ config MPC8540_ADS
++ 	bool "Freescale MPC8540 ADS"
++ 	select DEFAULT_UIMAGE
++--- a/arch/powerpc/platforms/85xx/Makefile
+++++ b/arch/powerpc/platforms/85xx/Makefile
++@@ -9,6 +9,7 @@ obj-y += common.o
++ obj-$(CONFIG_BSC9131_RDB) += bsc913x_rdb.o
++ obj-$(CONFIG_BSC9132_QDS) += bsc913x_qds.o
++ obj-$(CONFIG_C293_PCIE)   += c293pcie.o
+++obj-$(CONFIG_HIVEAP_330) += hiveap-330.o
++ obj-$(CONFIG_MPC8540_ADS) += mpc85xx_ads.o
++ obj-$(CONFIG_MPC8560_ADS) += mpc85xx_ads.o
++ obj-$(CONFIG_MPC85xx_CDS) += mpc85xx_cds.o
+diff --git a/target/linux/mpc85xx/patches-4.14/102-powerpc-add-cmdline-override.patch b/target/linux/mpc85xx/patches-4.14/102-powerpc-add-cmdline-override.patch
+new file mode 100644
+index 0000000000..3d59927d1d
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/102-powerpc-add-cmdline-override.patch
+@@ -0,0 +1,37 @@
++--- a/arch/powerpc/Kconfig
+++++ b/arch/powerpc/Kconfig
++@@ -707,6 +707,14 @@ config CMDLINE_FORCE
++ 	  This is useful if you cannot or don't want to change the
++ 	  command-line options your boot loader passes to the kernel.
++ 
+++config CMDLINE_OVERRIDE
+++	bool "Use alternative cmdline from device tree"
+++	help
+++	  Some bootloaders may have uneditable bootargs. While CMDLINE_FORCE can
+++	  be used, this is not a good option for kernels that are shared across
+++	  devices. This setting enables using "chosen/cmdline-override" as the
+++	  cmdline if it exists in the device tree.
+++
++ config EXTRA_TARGETS
++ 	string "Additional default image types"
++ 	help
++--- a/drivers/of/fdt.c
+++++ b/drivers/of/fdt.c
++@@ -1079,6 +1079,17 @@ int __init early_init_dt_scan_chosen(uns
++ 	if (p != NULL && l > 0)
++ 		strlcpy(data, p, min((int)l, COMMAND_LINE_SIZE));
++ 
+++	/* CONFIG_CMDLINE_OVERRIDE is used to fallback to a different
+++	 * device tree option of chosen/bootargs-override. This is
+++	 * helpful on boards where u-boot sets bootargs, and is unable
+++	 * to be modified.
+++	 */
+++#ifdef CONFIG_CMDLINE_OVERRIDE
+++	p = of_get_flat_dt_prop(node, "bootargs-override", &l);
+++	if (p != NULL && l > 0)
+++		strlcpy(data, p, min((int)l, COMMAND_LINE_SIZE));
+++#endif
+++
++ 	/*
++ 	 * CONFIG_CMDLINE is meant to be a default in case nothing else
++ 	 * managed to set the command line, unless CONFIG_CMDLINE_FORCE
+diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+new file mode 100644
+index 0000000000..d6616263f3
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+@@ -0,0 +1,227 @@
++Index: a/drivers/mtd/nand/fsl_elbc_nand.c
++===================================================================
++--- a/drivers/mtd/nand/fsl_elbc_nand.c
+++++ b/drivers/mtd/nand/fsl_elbc_nand.c
++@@ -355,6 +355,14 @@ static void fsl_elbc_cmdfunc(struct mtd_
++ 		fsl_elbc_run_command(mtd);
++ 		return;
++ 
+++	case NAND_CMD_RNDOUT:
+++		dev_vdbg(priv->dev,
+++			 "fsl_elbc_cmdfunc: NAND_CMD_RNDOUT, column: 0x%x.\n",
+++			 column);
+++
+++		elbc_fcm_ctrl->index = column;
+++		return;
+++
++ 	/* READOOB reads only the OOB because no ECC is performed. */
++ 	case NAND_CMD_READOOB:
++ 		dev_vdbg(priv->dev,
++@@ -637,75 +645,6 @@ static int fsl_elbc_wait(struct mtd_info
++ 	return (elbc_fcm_ctrl->mdr & 0xff) | NAND_STATUS_WP;
++ }
++ 
++-static int fsl_elbc_chip_init_tail(struct mtd_info *mtd)
++-{
++-	struct nand_chip *chip = mtd_to_nand(mtd);
++-	struct fsl_elbc_mtd *priv = nand_get_controller_data(chip);
++-	struct fsl_lbc_ctrl *ctrl = priv->ctrl;
++-	struct fsl_lbc_regs __iomem *lbc = ctrl->regs;
++-	unsigned int al;
++-
++-	/* calculate FMR Address Length field */
++-	al = 0;
++-	if (chip->pagemask & 0xffff0000)
++-		al++;
++-	if (chip->pagemask & 0xff000000)
++-		al++;
++-
++-	priv->fmr |= al << FMR_AL_SHIFT;
++-
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->numchips = %d\n",
++-	        chip->numchips);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->chipsize = %lld\n",
++-	        chip->chipsize);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->pagemask = %8x\n",
++-	        chip->pagemask);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->chip_delay = %d\n",
++-	        chip->chip_delay);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->badblockpos = %d\n",
++-	        chip->badblockpos);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->chip_shift = %d\n",
++-	        chip->chip_shift);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->page_shift = %d\n",
++-	        chip->page_shift);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->phys_erase_shift = %d\n",
++-	        chip->phys_erase_shift);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.mode = %d\n",
++-	        chip->ecc.mode);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.steps = %d\n",
++-	        chip->ecc.steps);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.bytes = %d\n",
++-	        chip->ecc.bytes);
++-	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.total = %d\n",
++-	        chip->ecc.total);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->ooblayout = %p\n",
++-		mtd->ooblayout);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->flags = %08x\n", mtd->flags);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->size = %lld\n", mtd->size);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->erasesize = %d\n",
++-	        mtd->erasesize);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->writesize = %d\n",
++-	        mtd->writesize);
++-	dev_dbg(priv->dev, "fsl_elbc_init: mtd->oobsize = %d\n",
++-	        mtd->oobsize);
++-
++-	/* adjust Option Register and ECC to match Flash page size */
++-	if (mtd->writesize == 512) {
++-		priv->page_size = 0;
++-		clrbits32(&lbc->bank[priv->bank].or, OR_FCM_PGS);
++-	} else if (mtd->writesize == 2048) {
++-		priv->page_size = 1;
++-		setbits32(&lbc->bank[priv->bank].or, OR_FCM_PGS);
++-	} else {
++-		dev_err(priv->dev,
++-		        "fsl_elbc_init: page size %d is not supported\n",
++-		        mtd->writesize);
++-		return -1;
++-	}
++-
++-	return 0;
++-}
++-
++ static int fsl_elbc_read_page(struct mtd_info *mtd, struct nand_chip *chip,
++ 			      uint8_t *buf, int oob_required, int page)
++ {
++@@ -748,6 +687,32 @@ static int fsl_elbc_write_subpage(struct
++ 	return 0;
++ }
++ 
+++static int fsl_elbc_ecc_init(struct fsl_elbc_mtd *priv)
+++{
+++	struct nand_chip *chip = &priv->chip;
+++
+++	switch (chip->ecc.mode) {
+++	case NAND_ECC_SOFT:
+++		break;
+++	case NAND_ECC_HW:
+++		chip->ecc.read_page = fsl_elbc_read_page;
+++		chip->ecc.write_page = fsl_elbc_write_page;
+++		chip->ecc.write_subpage = fsl_elbc_write_subpage;
+++		/* put in small page settings and adjust later if needed */
+++		/* chip->ecc.layout = (priv->fmr & FMR_ECCM) ?
+++				&fsl_elbc_oob_sp_eccm1 : &fsl_elbc_oob_sp_eccm0; */
+++		chip->ecc.size = 512;
+++		chip->ecc.bytes = 3;
+++		chip->ecc.strength = 1;
+++		break;
+++	default:
+++		return -EINVAL;
+++	}
+++
+++	return 0;
+++}
+++
+++
++ static int fsl_elbc_chip_init(struct fsl_elbc_mtd *priv)
++ {
++ 	struct fsl_lbc_ctrl *ctrl = priv->ctrl;
++@@ -755,6 +721,8 @@ static int fsl_elbc_chip_init(struct fsl
++ 	struct fsl_elbc_fcm_ctrl *elbc_fcm_ctrl = ctrl->nand;
++ 	struct nand_chip *chip = &priv->chip;
++ 	struct mtd_info *mtd = nand_to_mtd(chip);
+++	int ret;
+++	unsigned int al;
++ 
++ 	dev_dbg(priv->dev, "eLBC Set Information for bank %d\n", priv->bank);
++ 
++@@ -787,24 +755,62 @@ static int fsl_elbc_chip_init(struct fsl
++ 	chip->controller = &elbc_fcm_ctrl->controller;
++ 	nand_set_controller_data(chip, priv);
++ 
++-	chip->ecc.read_page = fsl_elbc_read_page;
++-	chip->ecc.write_page = fsl_elbc_write_page;
++-	chip->ecc.write_subpage = fsl_elbc_write_subpage;
++-
++ 	/* If CS Base Register selects full hardware ECC then use it */
++ 	if ((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
++ 	    BR_DECC_CHK_GEN) {
++ 		chip->ecc.mode = NAND_ECC_HW;
++-		mtd_set_ooblayout(mtd, &fsl_elbc_ooblayout_ops);
++-		chip->ecc.size = 512;
++-		chip->ecc.bytes = 3;
++-		chip->ecc.strength = 1;
++ 	} else {
++ 		/* otherwise fall back to default software ECC */
++ 		chip->ecc.mode = NAND_ECC_SOFT;
++ 		chip->ecc.algo = NAND_ECC_HAMMING;
++ 	}
++ 
+++	ret = nand_scan_ident(mtd, 1, NULL);
+++	if (ret)
+++		return ret;
+++
+++	ret = fsl_elbc_ecc_init(priv);
+++	if (ret) {
+++		dev_err(priv->dev, "ECC init failed: %d\n", ret);
+++		return ret;
+++	}
+++
+++	/* calculate FMR Address Length field */
+++	al = 0;
+++	if (chip->pagemask & 0xffff0000)
+++		al++;
+++	if (chip->pagemask & 0xff000000)
+++		al++;
+++
+++	priv->fmr |= al << FMR_AL_SHIFT;
+++
+++	/* adjust Option Register and ECC to match Flash page size */
+++	if (mtd->writesize == 512) {
+++		priv->page_size = 0;
+++		clrbits32(&lbc->bank[priv->bank].or, OR_FCM_PGS);
+++	} else if (mtd->writesize == 2048) {
+++		priv->page_size = 1;
+++		setbits32(&lbc->bank[priv->bank].or, OR_FCM_PGS);
+++		/* adjust ecc setup if needed */
+++		if (((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
+++		    BR_DECC_CHK_GEN) && (chip->ecc.mode == NAND_ECC_HW)) {
+++			chip->ecc.size = 512;
+++		/*	chip->ecc.layout = (priv->fmr & FMR_ECCM) ?
+++			                   &fsl_elbc_oob_lp_eccm1 :
+++			                   &fsl_elbc_oob_lp_eccm0; */
+++		}
+++	} else {
+++		dev_err(priv->dev, "page size %d is not supported\n",
+++		        mtd->writesize);
+++		return -1;
+++ 	}
+++ 
+++	ret = nand_scan_tail(mtd);
+++	if (ret) {
+++		dev_err(priv->dev, "nand_scan_tail failed: %d\n", ret);
+++		return ret;
+++	}
+++
++ 	return 0;
++ }
++ 
++@@ -912,18 +940,6 @@ static int fsl_elbc_nand_probe(struct pl
++ 	if (ret)
++ 		goto err;
++ 
++-	ret = nand_scan_ident(mtd, 1, NULL);
++-	if (ret)
++-		goto err;
++-
++-	ret = fsl_elbc_chip_init_tail(mtd);
++-	if (ret)
++-		goto err;
++-
++-	ret = nand_scan_tail(mtd);
++-	if (ret)
++-		goto err;
++-
++ 	/* First look for RedBoot table or partitions on the command
++ 	 * line, these take precedence over device tree information */
++ 	mtd_device_parse_register(mtd, part_probe_types, NULL,
+-- 
+2.15.1
+

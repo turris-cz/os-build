@@ -1,0 +1,208 @@
+From c3868937dfff17c9e715563da23a394736ec1f14 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Wed, 17 Jan 2018 13:25:43 +0100
+Subject: [PATCH] build: Optionally provide file checksums in package metadata
+
+This may be useful if you don't entirely trust your flash and want to be able
+to check for corruptions.
+
+Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ config/Config-build.in                  |   8 ++
+ include/package-ipkg.mk                 |   8 ++
+ package/base-files/Makefile             |   2 +
+ package/base-files/files/sbin/pkg_check | 130 ++++++++++++++++++++++++++++++++
+ 4 files changed, 148 insertions(+)
+ create mode 100755 package/base-files/files/sbin/pkg_check
+
+diff --git a/config/Config-build.in b/config/Config-build.in
+index f9987fc..38f725f 100644
+--- a/config/Config-build.in
++++ b/config/Config-build.in
+@@ -68,6 +68,14 @@ menu "Global build settings"
+ 		  This removes all ipkg/opkg status data files from the target directory
+ 		  before building the root filesystem.
+ 
++	config IPK_FILES_CHECKSUMS
++		bool
++		prompt "Record files checksums in package metadata"
++		default n
++		help
++		  This makes file checksums part of package metadata. It increases size
++		  but provides you with pkg_check command to check for flash coruptions.
++
+ 	config INCLUDE_CONFIG
+ 		bool "Include build configuration in firmware" if DEVEL
+ 		default n
+diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
+index 9e2717e..358aede 100644
+--- a/include/package-ipkg.mk
++++ b/include/package-ipkg.mk
+@@ -194,6 +194,15 @@ $(_endef)
+ 	$(CheckDependencies)
+ 
+ 	$(RSTRIP) $$(IDIR_$(1))
++
++    ifneq ($$(CONFIG_IPK_FILES_CHECKSUMS),)
++	(cd $$(IDIR_$(1)); \
++		( \
++			find . -type f \! -path ./CONTROL/\* -exec sha256sum \{\} \; 2> /dev/null | \
++			sed 's|\([[:blank:]]\)\./|\1/|' > $$(IDIR_$(1))/CONTROL/files-sha256 \
++		) || true \
++	)
++    endif
+ 	(cd $$(IDIR_$(1))/CONTROL; \
+ 		( \
+ 			echo "$$$$CONTROL"; \
+diff --git a/package/base-files/Makefile b/package/base-files/Makefile
+index 0055474..411ed8e 100644
+--- a/package/base-files/Makefile
++++ b/package/base-files/Makefile
+@@ -195,6 +195,8 @@ define Package/base-files/install
+ 		mkdir -p $(1)/etc/opkg; \
+ 		$(call FeedSourcesAppend,$(1)/etc/opkg/distfeeds.conf); \
+ 		$(VERSION_SED) $(1)/etc/opkg/distfeeds.conf)
++	$(if $(CONFIG_IPK_FILES_CHECKSUMS), \
++		rm -f $(1)/sbin/pkg_check,)
+ endef
+ 
+ ifneq ($(DUMP),1)
+diff --git a/package/base-files/files/sbin/pkg_check b/package/base-files/files/sbin/pkg_check
+new file mode 100755
+index 0000000..9968c9b
+--- /dev/null
++++ b/package/base-files/files/sbin/pkg_check
+@@ -0,0 +1,130 @@
++#!/bin/sh
++#
++# Package checksums checking script
++# (C) 2018 CZ.NIC, z.s.p.o.
++#
++# This program is free software: you can redistribute it and/or modify
++# it under the terms of the GNU General Public License as published by
++# the Free Software Foundation, either version 3 of the License, or
++# (at your option) any later version.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++
++
++ERRFATAL="no"
++QUIET="yes"
++MISSING=""
++SUMMARY=""
++NL="
++"
++
++# Arguments parsing
++while expr "x$1" : "x-" > /dev/null; do
++	if [ "x$1" = "x-s" ]; then
++		ERRFATAL="yes"
++		shift
++	elif [ "x$1" = "x-v" ]; then
++		QUIET="	no"
++		shift
++	else
++		echo "Usage: $(basename $0) [-s] [-v] [pkg1 pkg2 ...]"
++		echo
++		echo "   -s   Stop on first change"
++		echo "   -v   Verbose"
++		if [ "x$1" = "x-h" ]; then
++			exit 0
++		else
++			echo
++			echo "ERROR: Unknown option '$1'"
++			exit 1
++		fi
++	fi
++done
++
++# Check all packages by default
++if [ -z "$1" ]; then
++	set $(cd /usr/lib/opkg/info/; for i in *.files-sha256sum; do basename $i .files-sha256sum; done)
++fi
++
++# Iterate over packages
++while [ "$1" ]; do
++	if [ \! -f "/usr/lib/opkg/info/$1.files-sha256sum" ]; then
++		if [ "$ERRFATAL" = no ]; then
++			echo " * No checksums for $1 - skipping"
++			echo
++		else
++			echo " * No checksums for $1 - exiting"
++			exit 1
++		fi
++		if [ -z "$MISSING" ]; then
++			MISSING="$1"
++		else
++			MISSING="$MISSING, $1"
++		fi
++		shift
++		continue
++	fi
++	[ $QUIET = yes ] || echo " * Checking package $1:"
++	ERR=""
++	CHECK="`sha256sum -c /usr/lib/opkg/info/$1.files-sha256sum 2> /dev/null`"
++
++	# Are the changed files config files?
++	if [ $? -ne 0 ] && [ "`cat "/usr/lib/opkg/info/$1.files-sha256sum"`" ]; then
++		NEWCHECK="`echo "$CHECK" | grep '^.*: OK$'`"
++		for i in `echo "$CHECK" | sed -n 's|^\(.*\): FAILED$|\1|p'`; do
++			if [ "`grep "^$i\$" "/usr/lib/opkg/info/$1.conffiles" 2> /dev/null`" ] || \
++			   [ "`echo "$i" | grep "^/etc/uci-defaults/"`" ]; then
++				NEWCHECK="${NEWCHECK}${NL}${i}: CONFIGURED"
++			else
++				NEWCHECK="${NEWCHECK}${NL}${i}: FAILED"
++				ERR="y"
++			fi
++		done
++		CHECK="$NEWCHECK"
++	fi
++
++	# Do we have changed files or not?
++	if [ -z "$ERR" ]; then
++		[ $QUIET = yes ] || [ -z "`cat "/usr/lib/opkg/info/$1.files-sha256sum"`" ] || echo "$CHECK" | sed 's|^|   - |'
++		[ $QUIET = yes ] || echo " * Package $1 is ok"
++		[ $QUIET = yes ] || echo
++	else
++		if [ $QUIET = yes ]; then
++			echo " * Changes found in package $1:"
++			echo "$CHECK" | sed -n 's|^\(.*:[[:blank:]]*FAILED\)$|   - \1|p'
++		else
++			echo "$CHECK" | sed 's|^|   - |'
++			echo " * Changes found in package $1!"
++		fi
++		if [ "$ERRFATAL" = yes ]; then
++			echo
++			echo "Exiting on first change found!"
++			exit 1
++		fi
++		for i in `echo "$CHECK" | sed -n 's|^\(.*\): FAILED$|\1|p'`; do
++			SUMMARY="${SUMMARY}${NL} - $1: $i"
++		done
++		echo
++	fi
++	shift
++done
++
++# If there are changed files, report them
++if [ "$SUMMARY" ]; then
++	echo "Some packages contain changed files!"
++	echo "Maybe something worth looking into?"
++	echo "Here is the list of packages and changed files:"
++	echo "$SUMMARY"
++fi
++if [ "$MISSING" ]; then
++	echo "Following packages are missing checksums: $MISSING"
++fi
++if [ "$MISSING" ] || [ "$SUMMARY" ]; then
++	exit 1
++fi
+-- 
+2.15.1
+

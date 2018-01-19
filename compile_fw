@@ -1,0 +1,291 @@
+#!/bin/bash -e
+
+# OpenWRT compilation script
+# (C) 2018 CZ.NIC, z.s.p.o.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+BUILD_DIR="$(pwd)"
+SRC_DIR="$(dirname "$0")"
+SRC_DIR="$(cd "$SRC_DIR"; pwd)"
+CMD="${0}"
+OPENWRT_URL="https://git.openwrt.org/openwrt/openwrt.git"
+BRANCH=master
+DEBUG=""
+PERL_DEBUG=""
+MAKE_DEBUG=""
+DEPTH="--depth 1"
+FORCE=""
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds configure build"
+
+export TMPDIR="${BUILD_DIR}/tmp"
+mkdir -p "$TMPDIR"
+
+[ \! -f "${SRC_DIR}"/turris-build.conf ] || . "${SRC_DIR}"/turris-build.conf
+[ \! -f ~/.turris-build ] || . ~/.turris-build
+[ \! -f ./turris-build.conf ] || . ./turris-build.conf
+
+MIRROR_UPDATED=""
+
+
+_report() {
+	echo -e '\033[0;34m'"$1"'\033[0m' >&2
+}
+
+_die() {
+	echo -e '\033[0;31m'"$1"'\033[0m' >&2
+	exit 1
+}
+
+configure_help="Recreates configuration for target boards"
+configure() {
+	_report "Creating default configuration"
+	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
+	set -x
+	cat "${SRC_DIR}"/configs/common "${SRC_DIR}"/configs/${TARGET_BOARD} > ./.config
+	echo "CONFIG_CCACHE=y" >> .config
+	make $MAKE_DEBUG defconfig
+}
+
+update_mirror_help="Updates all local mirrors"
+update_mirror() {
+	[ -n "$GIT_MIRROR" ] || return 0
+	[ -z "$MIRROR_UPDATED" ] || return 0
+	
+	_report "Updating local mirrors"
+	pushd "$GIT_MIRROR"
+	if [ \! -d openwrt ]; then
+		mkdir openwrt
+		cd openwrt && git init --bare && git remote add --mirror=fetch origin "$OPENWRT_URL"
+	fi
+	OPENWRT_URL="$GIT_MIRROR/openwrt"
+	for mirror in ./*; do
+		cd "$mirror" && git fetch --all
+		cd "$GIT_MIRROR"
+	done
+	popd
+	MIRROR_UPDATED="yes"
+}
+
+checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
+checkout() {
+	_report "Starting out fresh!"
+	_report "Checking out clean OpenWRT repository"
+	update_mirror
+	rm -rf .git
+	git init
+	git remote add origin "$OPENWRT_URL"
+	git fetch $DEPTH origin "$BRANCH"
+	git checkout -f "origin/$BRANCH"
+	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null)"
+	git clean -dff
+	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
+	git config --local commit.gpgsign false
+	echo "/turris-build.conf" >> ./.gitignore
+	echo "/version" >> ./.gitignore
+	git commit -m 'gitignore: Ignore some more files' ./.gitignore
+	[ \! -f "$SRC_DIR"/feeds.conf ] || cp "$SRC_DIR"/feeds.conf .
+	if [ -n "$DL_MIRROR" ]; then
+		rm -rf dl && ln -s "$DL_MIRROR" dl
+	fi
+	git log -n 1 --format="%h" > version
+}
+
+patch_feeds_help="Apply patches to the feeds"
+patch_feeds() {
+	_report "Patching feeds"
+	pushd "$SRC_DIR"/patches
+	for feed in *; do
+		[ -d "$BUILD_DIR"/feeds/$feed ] || continue
+		cd "$SRC_DIR"/patches/$feed
+		for patch in */*.patch; do
+			[ -f "$patch" ] || continue
+			cd "$BUILD_DIR"/feeds/$feed
+			git config --local commit.gpgsign false
+			git am "$SRC_DIR"/patches/$feed/$patch
+		done
+	done
+	popd
+}
+
+set_ccache_help="Set persistent ccache paths"
+set_ccache() {
+	[ -z "$CCACHE_SET" ] || return 0
+	_report "Setting ccache paths"
+	CCACHE_SET=y
+	[ -z "$CCACHE_HOST_DIR" ] || sed -i 's|\(export CCACHE_DIR:=\).*|\1'"$CCACHE_HOST_DIR|" include/host-build.mk
+	[ -z "$CCACHE_TARGET_DIR" ] || [ -z "$TARGET_ARCH" ] || sed -i 's|\(export CCACHE_DIR:=\).*|\1'"$CCACHE_TARGET_DIR/$TARGET_ARCH|" include/package.mk
+	[ -z "$(git diff include/host-build.mk include/package.mk)" ] || git commit -m "include: ccache settings" include/host-build.mk include/package.mk
+}
+
+set_local_feeds_help="Change feed URL to their mirror counterparts"
+set_local_feeds() {
+	[ -n "$GIT_MIRROR" ] || return 0
+	while read vcs name url rest; do
+		if [ "$vcs" = src-git ] && [ -d "$GIT_MIRROR"/$name ]; then
+			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
+			sed -i "s|$feed_url|file://$GIT_MIRROR/$name|" feeds.conf
+		fi
+	done < feeds.conf
+}
+
+mirror_feeds_help="Creates initial mirrors of all configured feeds"
+mirror_feeds() {
+	[ -n "$GIT_MIRROR" ] || return 0
+	pushd "$GIT_MIRROR"
+	cat "$SRC_DIR"/feeds.conf "$BUILD_DIR"/feeds.conf 2> /dev/null | while read vcs name url rest; do
+		if [ "$vcs" = src-git ] && [ \! -d "$GIT_MIRROR"/$name ]; then
+			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
+			mkdir "$name"
+			cd "$name" && git init --bare && git remote add --mirror=fetch origin "$feed_url" && git fetch --all
+			cd "$GIT_MIRROR"
+		fi
+	done
+	popd
+	update_mirror
+}
+
+patch_openwrt_help="Patch the main OpenWRT repository"
+patch_openwrt() {
+	_report "Patching OpenWRT repository"
+	pushd "$SRC_DIR"/patches/openwrt
+	for patch in */*.patch; do
+		cd "$BUILD_DIR"
+		git am "$SRC_DIR"/patches/openwrt/$patch
+	done
+	popd
+	set_ccache
+}
+
+get_feeds_help="Recreate configured feeds"
+get_feeds() {
+	update_mirror
+	set_local_feeds
+	perl $PERL_DEBUG ./scripts/feeds clean -a
+	perl $PERL_DEBUG ./scripts/feeds update -a
+	perl $PERL_DEBUG ./scripts/feeds install -a
+}
+
+repatch_feeds_help="Cleanup feeds, update them and patch them"
+repatch_feeds() {
+	get_feeds
+	patch_feeds
+}
+
+prefetch_help="Runs make download"
+prefetch() {
+	make $MAKE_DEBUG $BUILD_ARGS $OWRT_DEBUG download
+}
+
+build_help="	Builds everything"
+build() {
+	_report "Starting real build"
+	set_ccache
+	if [ -z "$FORCE" ]; then
+		make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG
+	else
+		make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG || \
+		IGNORE_ERRORS=m make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG || \
+		IGNORE_ERRORS=m make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 V=s
+	fi
+}
+
+# Sets various variables to match the specified target, just a helper
+_set_target() {
+	_report "Setting target as $1"
+	case "$1" in
+		omnia)
+			TARGET_BOARD=omnia
+			TARGET_ARCH=armv7l
+			;;
+		turris)
+			TARGET_BOARD=turris
+			TARGET_ARCH=ppcspe
+			;;
+		mox)
+			TARGET_BOARD=mox
+			TARGET_ARCH=aarch64
+			;;
+		*)
+			echo "Invalid target board!!! Use -t [turris|omnia|mox]!!!"
+			exit 1
+			;;
+	esac
+}
+
+help_help="	Displays text with help"
+help() {
+	echo "Usage: $CMD [options] [command] [command] ..."
+	echo
+	echo "Available options are:"
+	echo "	-x		Enable debug mode"
+	echo "	-f		Try hard to get stuff to compile"
+	echo "	-d		Do not use shallow checkouts"
+	echo "	-t board	Set target board to _board_"
+	echo "	-a \"arg1 arg2\"	Set build arguments - passed directly to make"
+	echo "	-l		Do not update local git mirrors"
+	echo
+	echo "Available commands are:"
+	declare -F | sed -n 's|declare -f \([a-z]\)|\1|p' | while read func; do
+		echo "	$func	$(eval echo \"\$${func}_help\")"
+	done
+	echo
+	echo "Default commands are: $DEFAULT_STEPS"
+	echo
+}
+
+[ -z "$BOARD" ] || _set_target "$BOARD"
+
+while expr x$1 : x- > /dev/null; do
+	cmd="x$1"
+	shift
+	case $cmd in
+		x-x)
+			set -x
+			DEBUG="yes"
+			PERL_DEBUG="-d:Trace"
+			MAKE_DEBUG="-n"
+			OWRT_DEBUG="V=s"
+			;;
+		x-d)
+			DEPTH=""
+			;;
+		x-f)
+			FORCE="y"
+			;;
+		x-t)
+			_set_target "$1"
+			shift
+			;;
+		x-a)
+			BUILD_ARGS="$1"
+			shift
+			;;
+		x-b)
+			BRANCH="$1"
+			shift
+			;;
+		x-l)
+			MIRROR_UPDATED="override"
+			OPENWRT_URL="$GIT_MIRROR/openwrt"
+			;;
+	esac
+done
+
+[ -n "$1" ] || set $DEFAULT_STEPS
+
+while [ -n "$1" ]; do
+	eval "$1"
+	shift
+done
