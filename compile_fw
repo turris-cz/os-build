@@ -28,7 +28,7 @@ PERL_DEBUG=""
 MAKE_DEBUG=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds configure build"
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build"
 
 export TMPDIR="${BUILD_DIR}/tmp"
 mkdir -p "$TMPDIR"
@@ -49,15 +49,89 @@ _die() {
 	exit 1
 }
 
+_get_version() {
+	if ! grep . "${SRC_DIR}"/NEWS | head -n 1 | grep '^[0-9.]\+$'; then
+		echo "$(grep '^[0-9.]\+$' "${SRC_DIR}"/NEWS | head -n 1).999"
+	fi
+}
+
+gen_version_help="Generates Turris version package from NEWS"
+gen_version() {
+	_report "Generating turris-version package"
+	# Find the current version
+	VERSION="$(_get_version)"
+	# If top of the NEWS is not a version number, find previous one and add 99
+	# Also try to figure out where are the actual NEWS for this version
+	if expr "$VERSION" : '999$' > /dev/null; then
+		START=1
+		END="$(grep -n '^[0-9.]\+$' "${SRC_DIR}"/NEWS | head -n 1 | sed 's|:.*||')"
+		END="$(expr $END - 1)"
+	else
+		START="$(grep -n '^[0-9.]\+$' "${SRC_DIR}"/NEWS | head -n 1 | sed 's|:.*||')"
+		START="$(expr $START + 1)"
+		END="$(grep -n '^[0-9.]\+$' "${SRC_DIR}"/NEWS | sed -n '2 s|:.*||p')"
+		[ -n "$END" ] || END="\$"
+	fi
+	# Generate package
+	mkdir -p "${BUILD_DIR}"/package/system/turris-version
+cat > "${BUILD_DIR}"/package/system/turris-version/Makefile << EOF
+#
+## Copyright (C) $(date +%Y) CZ.NIC z.s.p.o. (http://www.nic.cz/)
+#
+## This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
+# #
+#
+include \$(TOPDIR)/rules.mk
+
+PKG_NAME:=turris-version
+PKG_VERSION:=$VERSION
+
+PKG_MAINTAINER:=CZ.NIC <packaging@nic.cz>
+
+include \$(INCLUDE_DIR)/package.mk
+
+define Package/turris-version
+	TITLE:=turris-version
+endef
+
+define Build/Prepare
+endef
+
+define Build/Compile
+endef
+
+define Package/turris-version/postinst
+#!/bin/sh
+# Danger: spaces are not ordinary spaces, but special unicode ones
+[ -n "\$\$IPKG_INSTROOT" ] || {
+create_notification -s news "$(sed -n "$START,$END p" "${SRC_DIR}"/NEWS | grep . | sed 's|^[[:blank:]]*\*[[:blank:]]*| • |')"
+}
+endef
+
+define Package/turris-version/install
+	\$(INSTALL_DIR) \$(1)/etc
+	echo \$(PKG_VERSION) > \$(1)/etc/turris-version
+endef
+
+\$(eval \$(call BuildPackage,turris-version))
+EOF
+	pushd "${BUILD_DIR}"
+	git add "${BUILD_DIR}"/package/system/turris-version
+	git commit -m 'turris-version: Create a package with release notes'
+	popd
+}
+
 configure_help="Recreates configuration for target boards"
 configure() {
 	_report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
-	set -x
 	cat "${SRC_DIR}"/configs/common/* "${SRC_DIR}"/configs/${TARGET_BOARD}/* > ./.config
 	echo "CONFIG_DEVEL=y" >> .config
 	echo "CONFIG_CCACHE=y" >> .config
 	echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR" >> .config
+	echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/${TARGET_BOARD}\"" >> .config
+	echo "CONFIG_VERSION_NUMBER=\"$(_get_version)\"" >> .config
 	if [ "$EVERYTHING" = yes ]; then
 		echo "CONFIG_ALL_KMODS=y" >> .config
 		echo "CONFIG_ALL=y" >> .config
