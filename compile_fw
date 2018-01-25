@@ -23,6 +23,7 @@ CMD="${0}"
 OPENWRT_URL="https://git.openwrt.org/openwrt/openwrt.git"
 BRANCH=master
 DEBUG=""
+EVERYTHING=""
 PERL_DEBUG=""
 MAKE_DEBUG=""
 DEPTH="--depth 1"
@@ -53,8 +54,22 @@ configure() {
 	_report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
 	set -x
-	cat "${SRC_DIR}"/configs/common "${SRC_DIR}"/configs/${TARGET_BOARD} > ./.config
+	cat "${SRC_DIR}"/configs/common/* "${SRC_DIR}"/configs/${TARGET_BOARD}/* > ./.config
+	echo "CONFIG_DEVEL=y" >> .config
 	echo "CONFIG_CCACHE=y" >> .config
+	echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR" >> .config
+	if [ "$EVERYTHING" = yes ]; then
+		echo "CONFIG_ALL_KMODS=y" >> .config
+		echo "CONFIG_ALL=y" >> .config
+		echo "CONFIG_IB=y" >> .config
+		echo "CONFIG_IB_STANDALONE=y" >> .config
+		echo "CONFIG_SDK=y" >> .config
+	else
+		echo "CONFIG_ALL=n" >> .config
+		echo "CONFIG_IB=n" >> .config
+		echo "CONFIG_IB_STANDALONE=n" >> .config
+		echo "CONFIG_SDK=n" >> .config
+	fi
 	make $MAKE_DEBUG defconfig
 }
 
@@ -88,7 +103,7 @@ checkout() {
 	git remote add origin "$OPENWRT_URL"
 	git fetch $DEPTH origin "$BRANCH"
 	git checkout -f "origin/$BRANCH"
-	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null)"
+	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
 	git clean -dff
 	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
 	git config --local commit.gpgsign false
@@ -230,6 +245,7 @@ help() {
 	echo
 	echo "Available options are:"
 	echo "	-x		Enable debug mode"
+	echo "	-e		Build everything, not just minimal set"
 	echo "	-f		Try hard to get stuff to compile"
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-t board	Set target board to _board_"
@@ -257,6 +273,9 @@ while expr x$1 : x- > /dev/null; do
 			PERL_DEBUG="-d:Trace"
 			MAKE_DEBUG="-n"
 			OWRT_DEBUG="V=s"
+			;;
+		x-e)
+			EVERYTHING="yes"
 			;;
 		x-d)
 			DEPTH=""
