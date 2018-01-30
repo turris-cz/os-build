@@ -28,7 +28,7 @@ PERL_DEBUG=""
 MAKE_DEBUG=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build"
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build stats"
 
 export TMPDIR="${BUILD_DIR}/tmp"
 mkdir -p "$TMPDIR"
@@ -126,6 +126,17 @@ EOF
 	git add "${BUILD_DIR}"/package/system/turris-version
 	git commit -m 'turris-version: Create a package with release notes'
 	popd
+}
+
+stats_help="Prints statistics regarding number of built packages"
+stats() {
+	echo "Statistics of the build:"
+	echo
+	echo " * $(find bin/packages -name '*.ipk' | wc -l) packages built"
+	if [ -n "$BUILD_START" ] && [ -n "$BUILD_END" ]; then
+		BUILD_TIME="$(expr $BUILD_END - $BUILD_START)"
+		echo " * build time $(expr $BUILD_TIME / 3600):$(expr \( $BUILD_TIME % 3600 \) / 60):$(expr $BUILD_TIME % 60)"
+	fi
 }
 
 configure_help="Recreates configuration for target boards"
@@ -290,6 +301,7 @@ build_help="	Builds everything"
 build() {
 	_report "Starting real build"
 	set_ccache
+	BUILD_START="$(date +%s)"
 	if [ -z "$FORCE" ]; then
 		make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG
 	else
@@ -297,6 +309,7 @@ build() {
 		IGNORE_ERRORS=m make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG || \
 		IGNORE_ERRORS=m make $MAKE_DEBUG IS_TTY=1 LOGFILE=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 V=s
 	fi
+	BUILD_END="$(date +%s)"
 }
 
 # Sets various variables to match the specified target, just a helper
