@@ -28,7 +28,7 @@ PERL_DEBUG=""
 MAKE_DEBUG=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build stats"
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build store_hash stats"
 
 export TMPDIR="${BUILD_DIR}/tmp"
 mkdir -p "$TMPDIR"
@@ -275,6 +275,33 @@ patch_openwrt() {
 	done
 	popd
 	set_ccache
+}
+
+_git_remote_hash() {
+	pushd "$1" > /dev/null
+	br="$(LANG=C git status --long | sed -n 's|HEAD detached from \(.*\)|\1|p')"
+	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is up to date with '\\([^']*\\)'.*|\1|p")"
+	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is ahead of '\\([^']*\\)'.*|\1|p")"
+	[ -n "$br" ] || br=HEAD
+	git log -n1 --pretty=%H	"$br"
+	popd > /dev/null
+}
+
+store_hash_help="Stores hashes of current build"
+store_hash() {
+	_report "Storing hashes"
+	mkdir -p bin
+	{
+	echo "Project was build from following repositories:"
+	echo
+	echo " * turris-build: $(_git_remote_hash "${SRC_DIR}")"
+	echo " * openwrt: $(_git_remote_hash "${BUILD_DIR}")"
+	for feed in feeds/*; do
+		[ -d "$feed/.git" ] || continue
+		echo " * $feed: $(_git_remote_hash "${feed}")"
+	done
+	echo
+	} | tee bin/git-hash
 }
 
 get_feeds_help="Recreate configured feeds"
