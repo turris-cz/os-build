@@ -345,9 +345,20 @@ build() {
 	if [ -z "$FORCE" ]; then
 		make $MAKE_DEBUG IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG
 	else
-		make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG || \
-		make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 || \
-		make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 V=s
+		JOBS="$(echo " $BUILD_ARGS " | sed -n 's|.*-j\([0-9]\+\)|\1\n|p' | head -n 1)"
+		SUCCESS=""
+		while [ "$JOBS" -gt 0 ] && [ -z "$SUCCESS" ]; do
+			if ! make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j${JOBS}; then
+				JOBS="$(expr $JOBS / 2)"
+			else
+				SUCCESS="YES!!!"
+			fi
+		done
+		if [ "$JOBS" -le 0 ]; then
+			make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 V=s
+		else
+			make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG
+		fi
 	fi
 	BUILD_END="$(date +%s)"
 }
