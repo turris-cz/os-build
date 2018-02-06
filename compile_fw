@@ -348,16 +348,15 @@ build() {
 		JOBS="$(echo " $BUILD_ARGS " | sed -n 's|.*-j\([0-9]\+\)|\1\n|p' | head -n 1)"
 		SUCCESS=""
 		while [ "$JOBS" -gt 0 ] && [ -z "$SUCCESS" ]; do
-			if ! make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j${JOBS}; then
-				JOBS="$(expr $JOBS / 2)"
-			else
+			if make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j${JOBS}; then
 				SUCCESS="YES!!!"
+			else
+				_report "Build job with -j$JOBS failed, decreasing..."
+				JOBS="$(expr $JOBS / 2)"
 			fi
 		done
-		if [ "$JOBS" -le 0 ]; then
+		if [ "$JOBS" -le 1 ]; then
 			make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j1 V=s
-		else
-			make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG
 		fi
 	fi
 	BUILD_END="$(date +%s)"
