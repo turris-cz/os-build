@@ -348,9 +348,16 @@ build() {
 		JOBS="$(echo " $BUILD_ARGS " | sed -n 's|.*-j\([0-9]\+\)|\1\n|p' | head -n 1)"
 		SUCCESS=""
 		while [ "$JOBS" -gt 0 ] && [ -z "$SUCCESS" ]; do
-			if make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j${JOBS}; then
-				SUCCESS="YES!!!"
-			else
+			COUNTDOWN="$FORCE"
+			while [ $COUNTDOWN -gt 0 ] && [ -z "$SUCCESS" ]; do
+				if make $MAKE_DEBUG IGNORE_ERRORS=m IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG -j${JOBS}; then
+					SUCCESS="YES!!!"
+				else
+					COUNTDOWN="$(expr $COUNTDOWN - 1)"
+					_report "Build job with -j$JOBS failed, trying again as requested (try $COUNTDOWN/$FORCE)..."
+				fi
+			done
+			if [ -z "$SUCCESS" ]; then
 				_report "Build job with -j$JOBS failed, decreasing..."
 				JOBS="$(expr $JOBS / 2)"
 			fi
@@ -392,7 +399,7 @@ help() {
 	echo "Available options are:"
 	echo "	-x		Enable debug mode"
 	echo "	-e		Build everything, not just minimal set"
-	echo "	-f		Try hard to get stuff to compile"
+	echo "	-f[num]	Try hard to get stuff to compile (optional number specifies number of tries)"
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-t board	Set target board to _board_"
 	echo "	-a \"arg1 arg2\"	Set build arguments - passed directly to make"
@@ -427,8 +434,9 @@ while expr x$1 : x- > /dev/null; do
 		x-d)
 			DEPTH=""
 			;;
-		x-f)
-			FORCE="y"
+		x-f*)
+			FORCE="$(echo x$cmd | sed -n 's|^x-f\([0-9]*\)$|\1|p')"
+			[ -n "$FORCE" ] || FORCE="1"
 			;;
 		x-t)
 			_set_target "$1"
