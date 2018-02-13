@@ -320,6 +320,11 @@ get_feeds() {
 	perl $PERL_DEBUG ./scripts/feeds clean -a
 	perl $PERL_DEBUG ./scripts/feeds update -a
 	perl $PERL_DEBUG ./scripts/feeds install -a
+	set +e
+	DISABLED_PACKAGES="$(cat disabled_packages/common disabled_packages/${TARGET_BOARD} 2> /dev/null)"
+	DISABLED_PACKAGES="$(echo "$DISABLED_PACKAGES" | sed 's|#.*||' | grep .)"
+	set -e
+	[ -z "$DISABLED_PACKAGES" ] || perl $PERL_DEBUG ./scripts/feeds uninstall $DISABLED_PACKAGES
 }
 
 repatch_feeds_help="Cleanup feeds, update them and patch them"
