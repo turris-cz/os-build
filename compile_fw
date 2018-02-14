@@ -202,8 +202,14 @@ checkout() {
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
-	git fetch $DEPTH origin "$BRANCH"
-	git checkout -f "origin/$BRANCH"
+	HASH="$(echo "$BRANCH" | sed -n 's|^#||p')"
+	if [ -n "$HASH" ]; then
+		git fetch origin
+		git checkout -f $HASH 
+	else
+		git fetch $DEPTH origin "$BRANCH"
+		git checkout -f "origin/$BRANCH"
+	fi
 	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
 	git clean -dff
 	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
