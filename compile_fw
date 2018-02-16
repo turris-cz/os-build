@@ -27,9 +27,10 @@ EVERYTHING=""
 PERL_DEBUG=""
 SH_DEBUG=""
 MAKE_DEBUG=""
+PUBLISH_BRANCH=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build store_hash stats gen_junit"
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build gen_lists store_hash stats gen_junit"
 
 if [ "$BUILD_DIR" == "$SRC_DIR" ]; then
 	mkdir -p build
@@ -350,6 +351,15 @@ gen_junit() {
 	sh $SH_DEBUG "${SRC_DIR}"/helpers/generate_junit.sh
 }
 
+gen_lists_help="Generate updater package lists"
+gen_lists() {
+	_report "Generating package lists for updater"
+	[ -n "${TARGET_BOARD}" ] || _die "You need to specify target board!"
+	[ -n "${PUBLISH_BRANCH}" ] || _die "You need to specify publishing branch"
+	mkdir -p bin/packages/lists
+	"${SRC_DIR}"/helpers/generate_userlists.sh --model "${TARGET_BOARD}" --branch "${PUBLISH_BRANCH}" --src "${SRC_DIR}/lists" bin/packages/lists
+}
+
 build_help="	Builds everything"
 build() {
 	_report "Starting real build"
@@ -417,7 +427,10 @@ help() {
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-t board	Set target board to _board_"
 	echo "	-a \"arg1 arg2\"	Set build arguments - passed directly to make"
+	echo "	-b branch	Branch to checkout"
+	echo "	-p branch	Name of the branch that is being build"
 	echo "	-l		Do not update local git mirrors"
+	echo "	-h		Show help"
 	echo
 	echo "Available commands are:"
 	declare -F | sed -n 's|declare -f \([a-z]\)|\1|p' | while read func; do
@@ -456,8 +469,16 @@ while expr x$1 : x- > /dev/null; do
 			_set_target "$1"
 			shift
 			;;
+		x-h)
+			help
+			exit 0
+			;;
 		x-a)
 			BUILD_ARGS="$1"
+			shift
+			;;
+		x-p)
+			PUBLISH_BRANCH="$1"
 			shift
 			;;
 		x-b)
