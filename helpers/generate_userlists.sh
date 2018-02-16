@@ -72,9 +72,9 @@ M4ARGS="--include=lists -D _INCLUDE_=lists/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOAR
 $MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
 
 cd "$SRC_DIR"
-for f in $(find . -name '*.lua.m4'); do
+for f in $(find lists -name '*.lua.m4'); do
 	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename $f | sed s/\.m4$//)"
 done
-for f in $(find . -name '*.lua'); do
+for f in $(find lists -name '*.lua'); do
 	cp $f "$OUTPUT_PATH/$(basename $f)"
 done
