@@ -2,7 +2,7 @@
 set -e
 
 MINIMAL=false
-SRC_DIR="$(pwd)/lists"
+SRC_DIR="$(pwd)"
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
