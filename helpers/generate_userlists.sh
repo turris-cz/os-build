@@ -73,7 +73,7 @@ $MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
 
 sed -i 's|subdirs = {"base"[^}]*}|subdirs = {"core" , "base" '"$(
 	cat "$SRC_DIR"/feeds.conf | sed 's|#.*||' | grep '.' | sed 's|src-git \([^[:blank:]]*\) .*|, "\1"|' | tr '\n' ' '
-)}|" "$SRD_DIR/lists/repository.m4"
+)}|" "$SRC_DIR/lists/repository.m4"
 
 cd "$SRC_DIR"
 for f in $(find lists -name '*.lua.m4'); do
