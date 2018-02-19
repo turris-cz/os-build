@@ -23,6 +23,7 @@ CMD="${0}"
 OPENWRT_URL="https://git.openwrt.org/openwrt/openwrt.git"
 BRANCH=master
 DEBUG=""
+KEY=""
 EVERYTHING=""
 PERL_DEBUG=""
 SH_DEBUG=""
@@ -30,7 +31,7 @@ MAKE_DEBUG=""
 PUBLISH_BRANCH=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build gen_lists store_hash stats gen_junit"
+DEFAULT_STEPS="checkout patch_openwrt get_feeds patch_feeds gen_version configure build gen_lists store_hash sign stats gen_junit"
 
 if [ "$BUILD_DIR" == "$SRC_DIR" ]; then
 	mkdir -p build
@@ -197,6 +198,19 @@ update_mirror() {
 	done
 	popd
 	MIRROR_UPDATED="yes"
+}
+
+sign_help="Signs generated lists and resigns packages"
+sign() {
+	make package/system/usign/host/install
+	[ -x staging_dir/host/bin/usign ] || _die "Don't have usign, can't sign"
+	[ -n "$KEY" ] || KEY=key-build
+	[ -f "$KEY" ] || _die "No key available"
+	for i in bin/packages/lists/*.lua bin/packages/*/*/Packages bin/targets/*/*/packages/Packages; do
+		[ -f "$i" ] || continue
+		rm -f "$i".sig
+		staging_dir/host/bin/usign -S -m "$i" -s "$KEY"
+	done
 }
 
 checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
