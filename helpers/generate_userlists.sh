@@ -71,6 +71,10 @@ mkdir -p $OUTPUT_PATH
 M4ARGS="--include=lists -D _INCLUDE_=lists/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOARD"
 $MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
 
+sed -i 's|subdirs = {"base"[}]*}|subdirs = {"core"'"$(
+	cat "$SRC_DIR"/feeds.conf | sed 's|#.*||' | sed 's|src-git \([^[:blank:]]*\) .*|, "\1"|'
+)}|" "$SRD_DIR/lists/repository.m4"
+
 cd "$SRC_DIR"
 for f in $(find lists -name '*.lua.m4'); do
 	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename $f | sed s/\.m4$//)"
