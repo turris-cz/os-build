@@ -1,0 +1,38 @@
+From a35b2f5d7a8617ab24dd5ae403cd83959b7f8676 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Tue, 20 Feb 2018 08:20:30 +0100
+Subject: [PATCH] kernel: Hack to actually have something in kernel package
+
+For some reason, default kernel package is empty, this should make it work
+although the correct way is probably something completely different.
+---
+ package/kernel/linux/Makefile | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/package/kernel/linux/Makefile b/package/kernel/linux/Makefile
+index c2d10ec188..5afc54a705 100644
+--- a/package/kernel/linux/Makefile
++++ b/package/kernel/linux/Makefile
+@@ -36,6 +36,7 @@ define Build/Configure
+ endef
+ 
+ define Build/Compile
++	$(KERNEL_MAKE) $(KERNELNAME)
+ endef
+ 
+ define KernelPackage/depends
+@@ -53,7 +54,10 @@ define Package/kernel
+ endef
+ 
+ define Package/kernel/install
+-  # nothing to do
++		$(INSTALL_DIR) "$(1)"/boot
++		$(foreach k, $(KERNELNAME), \
++			$(CP) $(LINUX_DIR)/arch/$(LINUX_KARCH)/boot/$(IMAGES_DIR)/$(k) "$(1)"/boot; \
++		)
+ endef
+ 
+ define Package/kernel/extra_provides
+-- 
+2.16.1
+
