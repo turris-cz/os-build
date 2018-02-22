@@ -39,7 +39,7 @@ if features and features.provides then
 end
 Install("vixie-cron", "syslog-ng3", { priority = 40 })
 Install("logrotate", { priority = 40 })
-Install("dnsmasq", { priority = 40 })
+Install("dnsmasq-full", { priority = 40 })
 -- Note: Following packages should be critical only if we ignored dns-resolver
 if not model or model:match("^[Tt]urris$") then
 	Install("unbound", "unbound-anchor", { critical = (not features or not features.provides), priority = 40 })
@@ -71,7 +71,7 @@ Install("bind-client", "bind-dig", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", { priority = 40 })
 
 -- Turris utility
-Install("user_notify", "oneshot", "libatsha204", "watchdog_adjust", "daemon-watchdog", "update_mac", "switch-branch", { priority = 40 })
+Install("user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
 if not model or model:match("[Oo]mnia") then
 	Install("rainbow-omnia", { priority = 40 })
 	Install("schnapps", "sfpswitch", { priority = 40 })
