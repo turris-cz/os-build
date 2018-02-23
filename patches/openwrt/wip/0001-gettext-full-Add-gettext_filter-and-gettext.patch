@@ -1,0 +1,107 @@
+From 24d67c1a9f605292470397a7f4c8b46a9af53118 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Fri, 23 Feb 2018 21:10:56 +0100
+Subject: [PATCH] gettext-full: Add gettext_filter and gettext
+
+Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ package/libs/gettext-full/Makefile                 | 15 ++++++
+ .../src/gettext-tools/gettext_filter.c             | 54 ++++++++++++++++++++++
+ 2 files changed, 69 insertions(+)
+ create mode 100644 package/libs/gettext-full/src/gettext-tools/gettext_filter.c
+
+diff --git a/package/libs/gettext-full/Makefile b/package/libs/gettext-full/Makefile
+index db6aee7..3beb8fd 100644
+--- a/package/libs/gettext-full/Makefile
++++ b/package/libs/gettext-full/Makefile
+@@ -36,6 +36,14 @@ define Package/libintl-full
+   URL:=http://www.gnu.org/software/gettext/
+ endef
+ 
++define Package/gettext
++  SECTION:=utils
++  CATEGORY:=Utilities
++  DEPENDS:=+libintl-full
++  TITLE:=GNU Internationalization library
++  URL:=http://www.gnu.org/software/gettext/
++endef
++
+ TARGET_CFLAGS += $(FPIC)
+ ifneq ($(HOST_OS),Linux)
+   TARGET_CFLAGS += -I$(STAGING_DIR_HOSTPKG)/include
+@@ -95,5 +103,12 @@ define Package/libintl-full/install
+ 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libintl.so* $(1)/usr/lib/
+ endef
+ 
++define Package/gettext/install
++	$(INSTALL_DIR) $(1)/usr/bin
++	$(CP) $(PKG_INSTALL_DIR)/usr/bin/gettext $(1)/usr/bin
++	$(TARGET_CC) -o $(PKG_INSTALL_DIR)/usr/bin/gettext_filter $(TARGET_CFLAGS) $(TARGET_LDFLAGS) -I$(PKG_BUILD_DIR)/gettext-tools/intl -L$(PKG_BUILD_DIR)/gettext-tools/intl/.libs -lintl $(PKG_BUILD_DIR)/gettext-tools/gettext_filter.c
++endef
++
+ $(eval $(call HostBuild))
+ $(eval $(call BuildPackage,libintl-full))
++$(eval $(call BuildPackage,gettext))
+diff --git a/package/libs/gettext-full/src/gettext-tools/gettext_filter.c b/package/libs/gettext-full/src/gettext-tools/gettext_filter.c
+new file mode 100644
+index 0000000..ae71824
+--- /dev/null
++++ b/package/libs/gettext-full/src/gettext-tools/gettext_filter.c
+@@ -0,0 +1,54 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <libintl.h>
++#include <locale.h>
++
++int main(void) {
++	int c;
++	int translating = 0;
++	unsigned char last_c = 0;
++	char* buffer = NULL;
++	int buf_len = 0, i = 0;
++	setlocale(LC_ALL, "");
++	bindtextdomain(getenv("GETTEXT_DOMAIN"), "/usr/share/locale/");
++	textdomain(getenv("GETTEXT_DOMAIN"));
++	while((c=getchar()) != EOF) {
++		if(translating) {
++			if((c == ')') && (last_c != '\\') ) {
++				if(i > 0) {
++					buffer[i] = 0;
++					printf("%s", gettext(buffer));
++				}
++				translating = 0;
++				last_c = 0;
++				i = 0;
++			} else {
++				if(i >= buf_len) {
++					buf_len = buf_len + 4094;
++					buffer = realloc(buffer, buf_len + 3);
++				}
++				if(c != '\\') {
++					buffer[i] = c;
++					i++;
++				}
++				last_c = c;
++			}
++		} else {
++			if(last_c == '_') {
++				if (c == '(') {
++					translating = 1;
++				} else {
++					printf("_%c", c);
++					last_c = c;
++				}
++			} else {
++				if(c == '_') {
++					last_c = '_';
++				} else {
++					printf("%c", c);
++				}
++			}
++		}
++	}
++	return 0;
++}
+-- 
+2.16.2
+
