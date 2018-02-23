@@ -148,3 +148,4 @@ ip-full.
 if not features or not features.provides then
 	Package("ip", { virtual = true, deps = {"ip-full"} })
 end
+Package("libc", { abi_change_deep = true })
