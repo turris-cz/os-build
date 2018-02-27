@@ -9,7 +9,7 @@ Install("openvpn-openssl", { priority = 40 })
 
 -- 3G
 Install("br2684ctl", "comgt", "uqmi", { priority = 40 })
-Install("ppp-mod-pppoa", "pptpd", { priority = 40 })
+Install("ppp-mod-pppoe", "pptpd", { priority = 40 })
 Install("usb-modeswitch", { priority = 40 })
 
 -- IPv6
