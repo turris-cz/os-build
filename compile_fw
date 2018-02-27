@@ -133,7 +133,20 @@ EOF
 	popd
 }
 
-stats_help="Prints statistics regarding number of built packages"
+conflicts_help="Show packages that we are overriding in Turris OS packages"
+conflicts() {
+	_report "Showing conflicting packages"
+	echo "Following packages are being overridden by Turris packages:"
+	echo
+	mkdir -p tmp
+	find feeds/turrispackages -name Makefile | sed 's|.*/\([^/]*\)/Makefile|\1|' | sort > tmp/turris-packages.list
+	find feeds/ -name Makefile | grep -v '^feeds/turrispackages' | sed 's|.*/\([^/]*\)/Makefile|\1|' | sort > tmp/other-packages.list
+	comm -12 tmp/turris-packages.list tmp/other-packages.list | sed 's|^| * |'
+	echo
+	rm -f tmp/turris-packages.list tmp/other-packages.list
+}
+
+stats_help="	Prints statistics regarding number of built packages"
 stats() {
 	mkdir -p logs
 	_report "Reporting statistics"
@@ -200,7 +213,7 @@ update_mirror() {
 	MIRROR_UPDATED="yes"
 }
 
-sign_help="Signs generated lists and resigns packages"
+sign_help="	Signs generated lists and resigns packages"
 sign() {
 	[ -x staging_dir/host/bin/usign ] || make package/system/usign/host/install
 	[ -x staging_dir/host/bin/usign ] || _die "Don't have usign, can't sign"
