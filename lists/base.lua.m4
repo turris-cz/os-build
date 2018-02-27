@@ -155,5 +155,5 @@ and we need to have working gzip and tar before updater starts doing it's thing.
 ]]
 if installed and version_match and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true, abi_change = true })
-	Package('updater-ng', { deps = { 'gzip', 'tar' } })
+	Package('updater-ng', { deps = { 'gzip', 'tar', 'busybox' } })
 end
