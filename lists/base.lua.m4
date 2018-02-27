@@ -148,4 +148,10 @@ ip-full.
 if not features or not features.provides then
 	Package("ip", { virtual = true, deps = {"ip-full"} })
 end
-Package("libc", { abi_change_deep = true, abi_change = true })
+
+--[[
+We are migrating from uClibc to musl
+]]
+if installed and version_match and version_match(installed['turris-version'].version, '<4.0') then
+	Package("libc", { abi_change_deep = true, abi_change = true })
+end
