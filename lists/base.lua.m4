@@ -150,8 +150,10 @@ if not features or not features.provides then
 end
 
 --[[
-We are migrating from uClibc to musl
+We are migrating from uClibc to musl, so reinstall everything depending on libc
+and we need to have working gzip and tar before updater starts doing it's thing.
 ]]
 if installed and version_match and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true, abi_change = true })
+	Package('updater-ng', { deps = { 'gzip', 'tar' } })
 end
