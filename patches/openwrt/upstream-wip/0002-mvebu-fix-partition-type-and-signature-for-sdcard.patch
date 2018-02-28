@@ -1,0 +1,76 @@
+From 4806cec16c0741d986bcb1b6716e570f3298b3a3 Mon Sep 17 00:00:00 2001
+From: Tomasz Maciej Nowak <tomek_n@o2.pl>
+Date: Wed, 24 Jan 2018 15:32:58 +0100
+Subject: [PATCH 2/9] mvebu: fix partition type and signature for sdcard
+
+Previously the partition signature was assigned from provided type. Now
+both are corrected wherein signature is always generated from
+SOURCE_DATE_EPOCH. With that the root file system can be identified
+by PARTUUID string, without relying on static declaration of device node.
+This commit also does some cosmetics, removing trailing whitespace and
+replacing spaces with tab.
+
+Signed-off-by: Tomasz Maciej Nowak <tomek_n@o2.pl>
+---
+ target/linux/mvebu/image/Makefile                | 5 ++++-
+ target/linux/mvebu/image/gen_mvebu_sdcard_img.sh | 6 +++---
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/target/linux/mvebu/image/Makefile b/target/linux/mvebu/image/Makefile
+index b094f96e06..fe20ac7512 100644
+--- a/target/linux/mvebu/image/Makefile
++++ b/target/linux/mvebu/image/Makefile
+@@ -13,8 +13,10 @@ include $(INCLUDE_DIR)/image.mk
+ 
+ KERNEL_LOADADDR := 0x00008000
+ 
++SIGNATURE:=$(shell printf "%.8s" $(SOURCE_DATE_EPOCH))
++
+ define Build/dtb
+-        $(call Image/BuildDTB,$(DTS_DIR)/$(DEVICE_DTS).dts,$@.dtb)
++	$(call Image/BuildDTB,$(DTS_DIR)/$(DEVICE_DTS).dts,$@.dtb)
+ endef
+ 
+ # SD-Card Images:
+@@ -43,6 +45,7 @@ endef
+ 
+ define Build/sdcard-img
+ 	ROOTFS_SIZE=$$(( $(CONFIG_TARGET_ROOTFS_PARTSIZE) * 1024 * 2 )); \
++	SIGNATURE="$(SIGNATURE)" \
+ 	./gen_mvebu_sdcard_img.sh $@ \
+ 		"$(STAGING_DIR_IMAGE)/clearfog-u-boot-spl.kwb" \
+ 		c 32768 $@.boot \
+diff --git a/target/linux/mvebu/image/gen_mvebu_sdcard_img.sh b/target/linux/mvebu/image/gen_mvebu_sdcard_img.sh
+index 86499eea57..63acc79f40 100755
+--- a/target/linux/mvebu/image/gen_mvebu_sdcard_img.sh
++++ b/target/linux/mvebu/image/gen_mvebu_sdcard_img.sh
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env bash
+ #
+ # Copyright (C) 2016 Josua Mayer
+-# 
++#
+ # This program is free software; you can redistribute it and/or
+ # modify it under the terms of the GNU General Public License
+ # as published by the Free Software Foundation; either version 2
+@@ -40,7 +40,7 @@ dd if=/dev/zero of="$OUTFILE" bs=512 count=1 >/dev/null
+ printf "Done\n"
+ 
+ while [ "$#" -ge 3 ]; do
+-	ptgen_args="$ptgen_args -p $(($2 / 2 + 256)) -S 0x$1"
++	ptgen_args="$ptgen_args -t $1 -p $(($2 / 2 + 256))"
+ 	parts="$parts$3 "
+ 	shift; shift; shift
+ done
+@@ -50,7 +50,7 @@ sect=63
+ 
+ # create real partition table using fdisk
+ printf "Creating partition table: "
+-set `ptgen -o "$OUTFILE" -h $head -s $sect -l 1024 $ptgen_args`
++set `ptgen -o "$OUTFILE" -h $head -s $sect -l 1024 -S 0x$SIGNATURE $ptgen_args`
+ printf "Done\n"
+ 
+ # install bootloader
+-- 
+2.16.2
+

@@ -1,0 +1,45 @@
+From a167fc7e3f9759d1c237745a5b31c8bc2557cdb8 Mon Sep 17 00:00:00 2001
+From: Tomasz Maciej Nowak <tomek_n@o2.pl>
+Date: Thu, 25 Jan 2018 00:04:56 +0100
+Subject: [PATCH 5/9] mvebu: remove fs declaration in mount commands
+
+Allows to have other file system for boot partition without breaking
+sysupgrade.
+
+Signed-off-by: Tomasz Maciej Nowak <tomek_n@o2.pl>
+---
+ target/linux/mvebu/base-files/lib/preinit/79_move_config | 3 ++-
+ target/linux/mvebu/base-files/lib/upgrade/clearfog.sh    | 2 +-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/target/linux/mvebu/base-files/lib/preinit/79_move_config b/target/linux/mvebu/base-files/lib/preinit/79_move_config
+index b0ee62a809..1735ad8849 100644
+--- a/target/linux/mvebu/base-files/lib/preinit/79_move_config
++++ b/target/linux/mvebu/base-files/lib/preinit/79_move_config
+@@ -10,8 +10,9 @@ move_config() {
+ 		insmod fat
+ 		insmod vfat
+ 		mkdir -p /boot
+-		mount -t vfat -o rw,noatime $BOOTPART /boot
++		mount -o rw,noatime $BOOTPART /boot
+ 		[ -f /boot/sysupgrade.tgz ] && mv -f /boot/sysupgrade.tgz /
++		umount /boot
+ 	fi
+ }
+ 
+diff --git a/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh b/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
+index 5388b22198..b6dbde8458 100644
+--- a/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
++++ b/target/linux/mvebu/base-files/lib/upgrade/clearfog.sh
+@@ -25,7 +25,7 @@ platform_do_upgrade_clearfog() {
+ 
+ platform_copy_config_clearfog() {
+ 	mkdir -p /boot
+-	[ -f /boot/kernel.img ] || mount -t vfat -o rw,noatime /dev/mmcblk0p1 /boot
++	[ -f /boot/kernel.img ] || mount -o rw,noatime /dev/mmcblk0p1 /boot
+ 	cp -af "$CONF_TAR" /boot/
+ 	sync
+ 	umount /boot
+-- 
+2.16.2
+
