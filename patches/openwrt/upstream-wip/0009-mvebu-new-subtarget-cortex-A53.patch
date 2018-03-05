@@ -1,7 +1,7 @@
-From 02eb7efa4433ef3cb5129855008893a32e45dfba Mon Sep 17 00:00:00 2001
+From 95ebf81578cefce06ab1a80f0e151bfe96c7a031 Mon Sep 17 00:00:00 2001
 From: Tomasz Maciej Nowak <tomek_n@o2.pl>
 Date: Fri, 16 Feb 2018 21:50:07 +0100
-Subject: [PATCH 9/9] mvebu: new subtarget cortex A53
+Subject: [PATCH] mvebu: new subtarget cortex A53
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -39,8 +39,7 @@ environment:
 
 Signed-off-by: Tomasz Maciej Nowak <tomek_n@o2.pl>
 ---
- target/linux/generic/config-4.14                   |   1 +
- target/linux/mvebu/Makefile                        |   4 +-
+ target/linux/mvebu/Makefile                        |   2 +-
  .../linux/mvebu/base-files/etc/board.d/02_network  |   3 +
  target/linux/mvebu/base-files/lib/mvebu.sh         |   3 +
  .../linux/mvebu/base-files/lib/upgrade/platform.sh |   4 +-
@@ -63,7 +62,7 @@ Signed-off-by: Tomasz Maciej Nowak <tomek_n@o2.pl>
  ...dts-marvell-armada-37xx-add-a-crypto-node.patch |  37 +++
  ...m64-dts-marvell-armada37xx-Add-eth0-alias.patch |  20 ++
  ...521-esporessobin-dt-enable-spi-nor-on-i2c.patch |  29 ++
- 24 files changed, 1430 insertions(+), 6 deletions(-)
+ 23 files changed, 1428 insertions(+), 5 deletions(-)
  create mode 100644 target/linux/mvebu/cortexa53/config-default
  create mode 100644 target/linux/mvebu/cortexa53/target.mk
  create mode 100644 target/linux/mvebu/image/cortex-a53.mk
@@ -82,23 +81,11 @@ Signed-off-by: Tomasz Maciej Nowak <tomek_n@o2.pl>
  create mode 100644 target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
  create mode 100644 target/linux/mvebu/patches-4.14/521-esporessobin-dt-enable-spi-nor-on-i2c.patch
 
-diff --git a/target/linux/generic/config-4.14 b/target/linux/generic/config-4.14
-index f7d9ccae76..dcb16eb8d5 100644
---- a/target/linux/generic/config-4.14
-+++ b/target/linux/generic/config-4.14
-@@ -1697,6 +1697,7 @@ CONFIG_HW_PERF_EVENTS=y
- # CONFIG_HW_RANDOM is not set
- # CONFIG_HW_RANDOM_AMD is not set
- # CONFIG_HW_RANDOM_ATMEL is not set
-+# CONFIG_HW_RANDOM_CAVIUM is not set
- # CONFIG_HW_RANDOM_EXYNOS is not set
- # CONFIG_HW_RANDOM_GEODE is not set
- # CONFIG_HW_RANDOM_INTEL is not set
 diff --git a/target/linux/mvebu/Makefile b/target/linux/mvebu/Makefile
-index f01d1d9383..8a61e6cc4e 100644
+index 331c7c8..8a61e6c 100644
 --- a/target/linux/mvebu/Makefile
 +++ b/target/linux/mvebu/Makefile
-@@ -9,10 +9,10 @@ include $(TOPDIR)/rules.mk
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
  BOARD:=mvebu
  BOARDNAME:=Marvell EBU Armada
  FEATURES:=fpu usb pci pcie gpio
@@ -106,13 +93,9 @@ index f01d1d9383..8a61e6cc4e 100644
 +SUBTARGETS:=cortexa9 cortexa53
  MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
  
--KERNEL_PATCHVER:=4.9
-+KERNEL_PATCHVER:=4.14
- 
- include $(INCLUDE_DIR)/target.mk
- 
+ KERNEL_PATCHVER:=4.14
 diff --git a/target/linux/mvebu/base-files/etc/board.d/02_network b/target/linux/mvebu/base-files/etc/board.d/02_network
-index 4fc95406ca..32ca3e22d5 100755
+index 4fc9540..32ca3e2 100755
 --- a/target/linux/mvebu/base-files/etc/board.d/02_network
 +++ b/target/linux/mvebu/base-files/etc/board.d/02_network
 @@ -38,6 +38,9 @@ armada-388-clearfog-*)
@@ -126,7 +109,7 @@ index 4fc95406ca..32ca3e22d5 100755
  	ucidef_set_interface_lan "eth0"
  	;;
 diff --git a/target/linux/mvebu/base-files/lib/mvebu.sh b/target/linux/mvebu/base-files/lib/mvebu.sh
-index fb3ddee4f5..5c4f68a7a9 100755
+index fb3ddee..5c4f68a 100755
 --- a/target/linux/mvebu/base-files/lib/mvebu.sh
 +++ b/target/linux/mvebu/base-files/lib/mvebu.sh
 @@ -17,6 +17,9 @@ mvebu_board_detect() {
@@ -140,7 +123,7 @@ index fb3ddee4f5..5c4f68a7a9 100755
  		name="mirabox"
  		;;
 diff --git a/target/linux/mvebu/base-files/lib/upgrade/platform.sh b/target/linux/mvebu/base-files/lib/upgrade/platform.sh
-index 9334251246..cc8c28fe5b 100755
+index b59c765..413069c 100755
 --- a/target/linux/mvebu/base-files/lib/upgrade/platform.sh
 +++ b/target/linux/mvebu/base-files/lib/upgrade/platform.sh
 @@ -16,7 +16,7 @@ platform_do_upgrade() {
@@ -162,7 +145,7 @@ index 9334251246..cc8c28fe5b 100755
  		;;
  	esac
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
-index 708c4e5639..b577ed4085 100644
+index 71123f5..c0dd113 100644
 --- a/target/linux/mvebu/config-4.14
 +++ b/target/linux/mvebu/config-4.14
 @@ -39,6 +39,7 @@ CONFIG_ARMADA_38X_CLK=y
@@ -175,7 +158,7 @@ index 708c4e5639..b577ed4085 100644
  CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_FROM_BOOTLOADER=y
 diff --git a/target/linux/mvebu/cortexa53/config-default b/target/linux/mvebu/cortexa53/config-default
 new file mode 100644
-index 0000000000..e9f1edd380
+index 0000000..e9f1edd
 --- /dev/null
 +++ b/target/linux/mvebu/cortexa53/config-default
 @@ -0,0 +1,131 @@
@@ -312,7 +295,7 @@ index 0000000000..e9f1edd380
 +CONFIG_VMAP_STACK=y
 diff --git a/target/linux/mvebu/cortexa53/target.mk b/target/linux/mvebu/cortexa53/target.mk
 new file mode 100644
-index 0000000000..c8c684938a
+index 0000000..c8c6849
 --- /dev/null
 +++ b/target/linux/mvebu/cortexa53/target.mk
 @@ -0,0 +1,15 @@
@@ -332,7 +315,7 @@ index 0000000000..c8c684938a
 +
 +KERNELNAME:=Image dtbs
 diff --git a/target/linux/mvebu/image/Makefile b/target/linux/mvebu/image/Makefile
-index 1ed9c39f00..1646f8c01a 100644
+index 1ed9c39..1646f8c 100644
 --- a/target/linux/mvebu/image/Makefile
 +++ b/target/linux/mvebu/image/Makefile
 @@ -27,14 +27,16 @@ endef
@@ -363,7 +346,7 @@ index 1ed9c39f00..1646f8c01a 100644
  $(eval $(call BuildImage))
 diff --git a/target/linux/mvebu/image/cortex-a53.mk b/target/linux/mvebu/image/cortex-a53.mk
 new file mode 100644
-index 0000000000..a30c75c37c
+index 0000000..a30c75c
 --- /dev/null
 +++ b/target/linux/mvebu/image/cortex-a53.mk
 @@ -0,0 +1,16 @@
@@ -385,7 +368,7 @@ index 0000000000..a30c75c37c
 +endif
 diff --git a/target/linux/mvebu/image/globalscale-espressobin.bootscript b/target/linux/mvebu/image/globalscale-espressobin.bootscript
 new file mode 100644
-index 0000000000..0d03ac8513
+index 0000000..0d03ac8
 --- /dev/null
 +++ b/target/linux/mvebu/image/globalscale-espressobin.bootscript
 @@ -0,0 +1,10 @@
@@ -401,7 +384,7 @@ index 0000000000..0d03ac8513
 +booti ${kernel_addr} - ${fdt_addr}
 diff --git a/target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch b/target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
 new file mode 100644
-index 0000000000..7343e01d19
+index 0000000..7343e01
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
 @@ -0,0 +1,78 @@
@@ -485,7 +468,7 @@ index 0000000000..7343e01d19
 + 			clk_hw_unregister(driver_data->hw_data->hws[i]);
 diff --git a/target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch b/target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
 new file mode 100644
-index 0000000000..f9dec9f2ee
+index 0000000..f9dec9f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
 @@ -0,0 +1,178 @@
@@ -669,7 +652,7 @@ index 0000000000..f9dec9f2ee
 + 					mux_ops, rate_hw, rate_ops,
 diff --git a/target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch b/target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
 new file mode 100644
-index 0000000000..2065e788af
+index 0000000..2065e78
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
 @@ -0,0 +1,315 @@
@@ -990,7 +973,7 @@ index 0000000000..2065e788af
 + 	*hw = clk_hw_register_composite(dev, data->name, data->parent_names,
 diff --git a/target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Armada-37xx.patch b/target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
 new file mode 100644
-index 0000000000..11562c582b
+index 0000000..11562c5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
 @@ -0,0 +1,297 @@
@@ -1293,7 +1276,7 @@ index 0000000000..11562c582b
 ++MODULE_LICENSE("GPL");
 diff --git a/target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch b/target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
 new file mode 100644
-index 0000000000..3ac7091188
+index 0000000..3ac7091
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
 @@ -0,0 +1,70 @@
@@ -1369,7 +1352,7 @@ index 0000000000..3ac7091188
 + 
 diff --git a/target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch b/target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
 new file mode 100644
-index 0000000000..9e2b1c14eb
+index 0000000..9e2b1c1
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
 @@ -0,0 +1,39 @@
@@ -1414,7 +1397,7 @@ index 0000000000..9e2b1c14eb
 + 			};
 diff --git a/target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch b/target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
 new file mode 100644
-index 0000000000..47e0751c5f
+index 0000000..47e0751
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
 @@ -0,0 +1,27 @@
@@ -1447,7 +1430,7 @@ index 0000000000..47e0751c5f
 + 			};
 diff --git a/target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-add-second-UART-port.patch b/target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-add-second-UART-port.patch
 new file mode 100644
-index 0000000000..347119da00
+index 0000000..347119d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-add-second-UART-port.patch
 @@ -0,0 +1,56 @@
@@ -1509,7 +1492,7 @@ index 0000000000..347119da00
 + 
 diff --git a/target/linux/mvebu/patches-4.14/508-arm64-dts-marvell-armada-3720-espressobin-fill-UART-.patch b/target/linux/mvebu/patches-4.14/508-arm64-dts-marvell-armada-3720-espressobin-fill-UART-.patch
 new file mode 100644
-index 0000000000..fc85385cb3
+index 0000000..fc85385
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/508-arm64-dts-marvell-armada-3720-espressobin-fill-UART-.patch
 @@ -0,0 +1,47 @@
@@ -1562,7 +1545,7 @@ index 0000000000..fc85385cb3
 + 	status = "okay";
 diff --git a/target/linux/mvebu/patches-4.14/509-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch b/target/linux/mvebu/patches-4.14/509-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
 new file mode 100644
-index 0000000000..937ecc575e
+index 0000000..937ecc5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/509-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
 @@ -0,0 +1,48 @@
@@ -1616,7 +1599,7 @@ index 0000000000..937ecc575e
 + 					     "syscon", "simple-mfd";
 diff --git a/target/linux/mvebu/patches-4.14/510-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch b/target/linux/mvebu/patches-4.14/510-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch
 new file mode 100644
-index 0000000000..11a86de138
+index 0000000..11a86de
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/510-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch
 @@ -0,0 +1,37 @@
@@ -1659,7 +1642,7 @@ index 0000000000..11a86de138
 + 					     "marvell,sdhci-xenon";
 diff --git a/target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch b/target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
 new file mode 100644
-index 0000000000..ba26ee74f6
+index 0000000..ba26ee7
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
 @@ -0,0 +1,20 @@
@@ -1685,7 +1668,7 @@ index 0000000000..ba26ee74f6
 + 	};
 diff --git a/target/linux/mvebu/patches-4.14/521-esporessobin-dt-enable-spi-nor-on-i2c.patch b/target/linux/mvebu/patches-4.14/521-esporessobin-dt-enable-spi-nor-on-i2c.patch
 new file mode 100644
-index 0000000000..57f83a23c5
+index 0000000..57f83a2
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/521-esporessobin-dt-enable-spi-nor-on-i2c.patch
 @@ -0,0 +1,29 @@
