@@ -1,47 +1,120 @@
-Repository workflow
-===================
+Turris OS release workflow
+==========================
 
-Development
------------
+Binary branches
+---------------
 
-Latest upstream development and features ends up in `master` branch mixed
-together. This branch is mainly meant as a test-bed for merging conflicts and to
-follow latest upstream changes.
+There are several binary branches that people can switch into. Those differ in
+how well tested they are and from what sources they are build from. Generally
+releases can be in versioned directories and binary branches could be just a
+symlinks to the correct version. We need to test this idea a little more and
+more in detail and then extend this documentation.
+
+Here Be Dragons (HBD)
+~~~~~~~~~~~~~~~~~~~~~
+
+Latest, greatest build. If it builds, ship it. Contains mix of our latest
+efforts and latest upstream development. Can and will break regularly, not
+meant to be used on daily basis, more just for testing.
+
+Here Be Kittens (HBK)
+~~~~~~~~~~~~~~~~~~~~~
+
+Latest kinda working release. Contains latest builds from upstream stable branch
+and our latest development changes. Should be mostly stable, rolling and is
+meant for testing latest features. Not for BFU, but mostly usable.
+
+Here Be Sloths (HBS)
+~~~~~~~~~~~~~~~~~~~~
+
+Branch signed with deploy key, basically replacement for `rc`. Meant to contain
+stuff we are planning to realease. Should be ever more stable just a little
+more bleeding edge that officially deployed images.
+
+Source to binary
+----------------
+
+The most bleeding edge branch is `master`. It is build periodically from
+upstream master branches of everything. If it builds it get's released. It's
+main purpose is to have some kind of check how does our software works with
+latest upstream and to get ready before next big release. This is published as
+`HBD` binary branch.
+
+When upstream releases new big release, we fork `master` branch of build repo
+into `vX.0` where we start working on our next big release. Builds from this
+are in `HBK` binary branch.
+
+Over the time when stuff seems to calm down, we push binaries to `HBS` and when
+we are ready to deploy it, we deploy from `HBS` and after that we create extra
+commit which is no longer part of `vX.0` branch and has hard-coded hashes for
+all repositories so we will be able to reproduce the build (in theory at
+least). Tags are in form `vX.0.0` to always have a triplet there.
+
+Next release will happen probably happen the same way from `vX.0`. In the mean
+time we will fork `vX.1` from `vX.0` where we will be working on new changes.
+Builds from this branch will go to `HBK`, while when we need maintenance, we
+can still create it from `vX.0` through `HBS`. Over the time we will merge
+local small changes done in `vX.0` into `vX.1`.
 
 Maintenance
------------
+~~~~~~~~~~~
 
-For every major release there is a branch created with version name. This
-branch is created when upstream creates new release and rolls forward. No fixed
-hashes, just fixed branches in upstream repositories following their pace for
-respective upstream release. If we want to release fix faster than upstream, we
-include patch in our repository for the time being and drop it when fixed
-upstream.
-
-Releases
---------
-
-Releases are done from maintenance branches. Whenever something is good enough
-to be released we release binaries directly from maintenance branch but at the
-same time we create an extra commit which freezes hashes and tag it. This
-commit is not part of maintenance branch history and differs from the commit
-the release was build from by exactly just freezing hashes to the repositories.
+As we will be tracking upstream stable releases, hopefully we will have bunch
+of fixes automatically. When we need to be faster than upstream, we will create
+local patch, release our release, send patch upstream and when included
+upstream, we will drop our local patch. Generally, the main idea is to send as
+much as possible upstream and keep minimum patches, mostly just our packages
+and configuration.
 
 
 --------------------------------------------------------------------------------
 
-   Master
-     \          v4.0.0     v4.0.1   v4.0.2   v4.0.3
-      \            |          |        |        |
-       \-- v4.0 ------------------------------------
-        \                            \        \     \
-         \                            -- v4.1 ----------------------------
-          \                                              |         |
-           \                                          v4.1.0    v4.1.1
-            \
-             \
-              \-- v5.0 ----
-               \
-                \
+  ------------------------
+  | build:        master |
+  | openwrt:      master |
+  | tos-packages: master |
+  | packages:     master |
+  ------------------------
+            |
+            |
+            |
+            |<---- binaries: dragons (HBD)
+            |
+            |                       -------------------------                           ------------------------
+            v                       | build:        v.4.0.0 |                           | build:        v4.0.1 |
+            |                       | openwrt:      #abcd1  |                           | openwrt:      #abcd2 |
+            |                       | tos-packages: #efgh1  |                           | tos-packages: #efgh2 |              binaries: sloth (HBS)
+            |                       | packages:     #ijkl1  |                           | packages:     #ijkl2 |
+            |                       -------------------------                           ------------------------
+            v                                  |                                                  |
+            |                                  | add tag                                          |
+            |  --------------------------      ^ replace branch with hash                         ^  add tag
+            |  | build:        v4.0     |      |                                                  |  replace branch with hash
+            |  | openwrt:      18.5     |      |                   --------------------------     |
+            |--| tos-packages: master   |-->---O--------->------->-| tos-packages: for-v4.0 |-->--O---------->---------
+            |  | packages:     for-v18  |      ^              |    --------------------------     ^                    |
+            |  --------------------------      |              |                                   |                    |
+            v             ^              binaries: 4.0.0      v                            binaries: 4.0.1             v
+            |             |                                   |                                                        |
+            |             |                                   |   --------------------------                           |   binaries: 4.1.0
+            |       binaries: kittens (HBK)                   |   | build:        v4.1     |                           |          |
+            |             |                                   |   | openwrt:      18.5     |                           |          v
+            v             |                                    ---| tos-packages: master   |-->----------->------->--------->-----O----------->>>>
+            |             |-------------------------------------> | packages:     for-v18  |                                      |
+            |             |                                       --------------------------                                      v add tag & hashes
+            |             |                                                                                                       |
+            |             |                                                                                             ------------------------
+            |             |                                                                                             | build:        v4.0.1 |
+            v             v                                                                                             | openwrt:      #abcd3 |
+            |  --------------------------                                                                               | tos-packages: #efgh3 |
+            |  | build:        v5.0     |                                                                               | packages:     #ijkl3 |
+            |--| openwrt:      20.3     |----->>>>                                                                      ------------------------
+            |  | tos-packages: master   |
+            |  | packages:     for-v20  |
+            |  --------------------------
+            v
+            v
+            v
+            v
 
 --------------------------------------------------------------------------------
