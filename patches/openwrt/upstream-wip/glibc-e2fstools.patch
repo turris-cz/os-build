@@ -1,0 +1,100 @@
+From b2d2c21b9bd004ef2801b268e21c712d5be3b20c Mon Sep 17 00:00:00 2001
+From: Stefan Lippers-Hollmann <s.l-h@gmx.de>
+Date: Sun, 4 Mar 2018 22:57:04 +0100
+Subject: [PATCH] tools/e2fsprogs: fix building on a glibc 2.27 host
+
+The e2fsprogs host build fails on a glibc 2.27 host with
+
+make[6]: Entering directory 'build_dir/host/e2fsprogs-1.43.7/debugfs'
+        CC create_inode.o
+./../misc/create_inode.c:399:18: error: conflicting types for 'copy_file_range'
+ static errcode_t copy_file_range(ext2_filsys fs, int fd, ext2_file_t e2_file,
+                  ^~~~~~~~~~~~~~~
+In file included from ./../misc/create_inode.c:19:0:
+/usr/include/unistd.h:1110:9: note: previous declaration of 'copy_file_range' was here
+ ssize_t copy_file_range (int __infd, __off64_t *__pinoff,
+         ^~~~~~~~~~~~~~~
+
+Backport upstream commit "misc: rename copy_file_range to
+copy_file_chunk" 01551bdba16ab16512a01affe02ade32c41ede8a in order to
+fix this.
+
+Signed-off-by: Stefan Lippers-Hollmann <s.l-h@gmx.de>
+---
+ tools/e2fsprogs/Makefile                           |  2 +-
+ ...rename-copy_file_range-to-copy_file_chunk.patch | 53 ++++++++++++++++++++++
+ 2 files changed, 54 insertions(+), 1 deletion(-)
+ create mode 100644 tools/e2fsprogs/patches/005-misc-rename-copy_file_range-to-copy_file_chunk.patch
+
+diff --git a/tools/e2fsprogs/Makefile b/tools/e2fsprogs/Makefile
+index 36f5c547b8..c8bc22fdf6 100644
+--- a/tools/e2fsprogs/Makefile
++++ b/tools/e2fsprogs/Makefile
+@@ -11,7 +11,7 @@ PKG_NAME:=e2fsprogs
+ PKG_CPE_ID:=cpe:/a:e2fsprogs_project:e2fsprogs
+ PKG_VERSION:=1.43.7
+ PKG_HASH:=2a6367289047d68d9ba6a46cf89ab9a1efd0556cde02a51ebaf414ff51edded9
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=@KERNEL/linux/kernel/people/tytso/e2fsprogs/v$(PKG_VERSION)/
+diff --git a/tools/e2fsprogs/patches/005-misc-rename-copy_file_range-to-copy_file_chunk.patch b/tools/e2fsprogs/patches/005-misc-rename-copy_file_range-to-copy_file_chunk.patch
+new file mode 100644
+index 0000000000..86b75e1ed1
+--- /dev/null
++++ b/tools/e2fsprogs/patches/005-misc-rename-copy_file_range-to-copy_file_chunk.patch
+@@ -0,0 +1,53 @@
++From 01551bdba16ab16512a01affe02ade32c41ede8a Mon Sep 17 00:00:00 2001
++From: Palmer Dabbelt <palmer@dabbelt.com>
++Date: Fri, 29 Dec 2017 10:19:51 -0800
++Subject: [PATCH] misc: rename copy_file_range to copy_file_chunk
++
++As of 2.27, glibc will have a copy_file_range library call to wrap the
++new copy_file_range system call.  This conflicts with the function in
++misc/create_inode.c, which this patch renames _copy_file_range.
++
++Signed-off-by: Palmer Dabbelt <palmer@dabbelt.com>
++Signed-off-by: Theodore Ts'o <tytso@mit.edu>
++---
++ misc/create_inode.c | 8 ++++----
++ 1 file changed, 4 insertions(+), 4 deletions(-)
++
++--- a/misc/create_inode.c
+++++ b/misc/create_inode.c
++@@ -396,7 +396,7 @@ static ssize_t my_pread(int fd, void *bu
++ }
++ #endif /* !defined HAVE_PREAD64 && !defined HAVE_PREAD */
++ 
++-static errcode_t copy_file_range(ext2_filsys fs, int fd, ext2_file_t e2_file,
+++static errcode_t copy_file_chunk(ext2_filsys fs, int fd, ext2_file_t e2_file,
++ 				 off_t start, off_t end, char *buf,
++ 				 char *zerobuf)
++ {
++@@ -470,7 +470,7 @@ static errcode_t try_lseek_copy(ext2_fil
++ 
++ 		data_blk = data & ~(fs->blocksize - 1);
++ 		hole_blk = (hole + (fs->blocksize - 1)) & ~(fs->blocksize - 1);
++-		err = copy_file_range(fs, fd, e2_file, data_blk, hole_blk, buf,
+++		err = copy_file_chunk(fs, fd, e2_file, data_blk, hole_blk, buf,
++ 				      zerobuf);
++ 		if (err)
++ 			return err;
++@@ -521,7 +521,7 @@ static errcode_t try_fiemap_copy(ext2_fi
++ 			goto out;
++ 		for (i = 0, ext = ext_buf; i < fiemap_buf->fm_mapped_extents;
++ 		     i++, ext++) {
++-			err = copy_file_range(fs, fd, e2_file, ext->fe_logical,
+++			err = copy_file_chunk(fs, fd, e2_file, ext->fe_logical,
++ 					      ext->fe_logical + ext->fe_length,
++ 					      buf, zerobuf);
++ 			if (err)
++@@ -574,7 +574,7 @@ static errcode_t copy_file(ext2_filsys f
++ 		goto out;
++ #endif
++ 
++-	err = copy_file_range(fs, fd, e2_file, 0, statbuf->st_size, buf,
+++	err = copy_file_chunk(fs, fd, e2_file, 0, statbuf->st_size, buf,
++ 			      zerobuf);
++ out:
++ 	ext2fs_free_mem(&zerobuf);
