@@ -14,15 +14,6 @@ their brief descriptions.
 Advanced usage
 --------------
 
-Patching
-~~~~~~~~
-
-If you need to patch OpenWRT or any of the feeds, put a git formatted patch
-into respective subdirectory of patches directory. In patches directory, there
-is openwrt directory and directory for each feed we are patching. Inside those
-directories, patches are also divided into subdirectories like `to-upstream`,
-`wip` or `hack` to somehow distinguish between quality of patches.
-
 Configuration
 ~~~~~~~~~~~~~
 
@@ -38,3 +29,34 @@ There is a `NEWS` file in this directory that contains version number and after
 it lines with new features in the release. This file is used to generate
 `turris-version` package. `compile_fw` script reads it, finds the newest
 version and from notes underneath it creates the package with release notes.
+
+Patching
+~~~~~~~~
+
+If you need to patch OpenWRT or any of the feeds, put a git formatted patch
+into respective subdirectory of patches directory. In patches directory, there
+is openwrt directory and directory for each feed we are patching. Inside those
+directories, patches are also divided into subdirectories like `to-upstream`,
+`wip` or `hack` to somehow distinguish between quality of patches.
+
+Rebasing patches
+^^^^^^^^^^^^^^^^
+
+Sometimes patches no longer apply cleanly and needs to be rebased. The most
+simple way to do that, given that we have everything in git, is the following:
+
+--------------------------------------------------------------------------------
+find . -name '*.rej' -delete                # Clean all existing reject files
+git am --reject .../patches/.../xyz.patch   # Try hard to apply patch
+find . -name '*.rej'                        # List all failed chunks
+--------------------------------------------------------------------------------
+
+After those commands, we'll  get our git tree in partially merged state and
+with few `.rej` files containing failed chunks. Actually, `compile_fw` script
+by default cleans up checkout directory and applies patches with `git am
+--reject` so if build fails, checkout ends up in the state similar to what can
+be achieved by those commands. Files with `.rej` extension needs to be merged
+manually and afterwards we need to call `git add` on newly patched files. Once
+all conflicts are resolved, `git am --continue` will create real commit that we
+were trying to add using `git am`. Now all that is left is to export it using
+`git format-patch -1` and overwrite patch stored in it of _build_ repository.
