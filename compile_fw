@@ -268,7 +268,8 @@ patch_feeds() {
 			[ -f "$patch" ] || continue
 			cd "$BUILD_DIR"/feeds/$feed
 			git config --local commit.gpgsign false
-			git am "$SRC_DIR"/patches/$feed/$patch
+			git am --reject "$SRC_DIR"/patches/$feed/$patch
+			cd "$SRC_DIR"/patches/$feed
 		done
 	done
 	popd
@@ -318,9 +319,14 @@ patch_openwrt() {
 	pushd "$SRC_DIR"/patches/openwrt
 	for patch in */*.patch; do
 		cd "$BUILD_DIR"
-		git am "$SRC_DIR"/patches/openwrt/$patch
+		git am --reject "$SRC_DIR"/patches/openwrt/$patch
 	done
 	popd
+	if [ -n "$(ls -1 "$SRC_DIR"/src/)" ]; then
+		cp -r "$SRC_DIR"/src/* .
+		find "$SRC_DIR"/src | sed 's|^'"$SRC_DIR"'/src/|git add |' | sh
+		git commit -m 'Add additional files'
+	fi
 	set_ccache
 }
 
