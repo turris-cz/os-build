@@ -25,7 +25,7 @@ define(`foreach_join',`ifelse(eval($#>3),1,`pushdef(`$1',`$4')$2`'ifelse(eval($#
 # Generate Install command with given PKGBASE and PKGPARTs joined: PKGBASE-PKGPART
 # Usage: forInstall(PKGBASE, PKGPARTa, PKGPARTb)
 define(`forInstall',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',shift($@)), { priority = 40 })')
-define(`forInstallCritical',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',shift($@)), { critical = true })')
+define(`forInstallCritical',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',shift($@)), { priority = 60 })')
 
 # Add languages packages for Luci
 # Usage: _LUCI_I18N_(APP)
