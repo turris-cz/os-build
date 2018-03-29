@@ -12,7 +12,7 @@ while [ $# -gt 0 ]; do
 			echo "Options:"
 			echo "  --help, -h"
 			echo "    Prints this help text."
-			echo "  --model (turris|omnia)"
+			echo "  --model (turris|omnia|mox)"
 			echo "    Target Turris model. Currently only turris or omnia are supported."
 			echo "  --branch BRANCH"
 			echo "    Target branch for which this userlist is generated."
@@ -24,7 +24,7 @@ while [ $# -gt 0 ]; do
 			;;
 		--model)
 			shift
-			[ "$1" != "turris" -a "$1" != "omnia" ] && {
+			[ "$1" != "turris" -a "$1" != "omnia" -a "$1" != "mox" ] && {
 				echo "Unknown model: $1" >&2
 				exit 1
 			}
