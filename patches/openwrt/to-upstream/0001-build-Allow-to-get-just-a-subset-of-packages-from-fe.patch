@@ -1,4 +1,4 @@
-From decaa09ed89d8685ff683526ea75dca8975039a0 Mon Sep 17 00:00:00 2001
+From 94ab2cc56aa8e3e6bfa93cd8997d7d0392f16134 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Mon, 23 Oct 2017 12:56:44 +0200
 Subject: [PATCH] build: Allow to get just a subset of packages from feeds
@@ -9,11 +9,11 @@ argument which packages should be used from the feed.
 
 Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
 ---
- scripts/feeds | 25 ++++++++++++++++---------
- 1 file changed, 16 insertions(+), 9 deletions(-)
+ scripts/feeds | 24 +++++++++++++++---------
+ 1 file changed, 15 insertions(+), 9 deletions(-)
 
 diff --git a/scripts/feeds b/scripts/feeds
-index f49cdb3..cebe05a 100755
+index 437af03..173ab6f 100755
 --- a/scripts/feeds
 +++ b/scripts/feeds
 @@ -52,7 +52,7 @@ sub parse_config() {
@@ -34,7 +34,7 @@ index f49cdb3..cebe05a 100755
  	}
  	close FEEDS;
  }
-@@ -165,12 +165,13 @@ my %update_method = (
+@@ -167,12 +167,13 @@ my %update_method = (
  # src-git: pull broken
  # src-cpy: broken if `basename $src` != $name
  
@@ -49,19 +49,18 @@ index f49cdb3..cebe05a 100755
  
  	my $m = $update_method{$type};
  	my $localpath = "./feeds/$name";
-@@ -198,6 +199,11 @@ sub update_feed_via($$$$$) {
+@@ -199,6 +200,10 @@ sub update_feed_via($$$$$) {
+ 		}
  		system("cd '$safepath'; $update_cmd") == 0 or return 1;
  	}
- 
 +	if($filter) {
 +		system("cd '$safepath'; find ./[a-zA-Z0-9]* -name Makefile -not -regex '" . $filter . "' -exec dirname \{\} \\; | xargs -d '\n' rm -rf");
 +		system("cd '$safepath'; find ./[a-zA-Z0-9]* -empty -exec rmdir -p \\{\\} \\; 2> /dev/null");
 +	}
-+
- 	return 0;
- }
- 
-@@ -715,13 +721,14 @@ sub uninstall {
+ 	if ($m->{'post_update'}) {
+ 		my $cmd = $m->{'post_update'};
+ 		system("cd '$safepath'; $cmd") == 0 or return 1;
+@@ -721,13 +726,14 @@ sub uninstall {
  	return 0;
  }
  
@@ -77,7 +76,7 @@ index f49cdb3..cebe05a 100755
  	my $force_relocate=update_location( $name, "@$src" );
  	my $rv=0;
  
-@@ -736,7 +743,7 @@ sub update_feed($$$$$)
+@@ -742,7 +748,7 @@ sub update_feed($$$$$)
  		my $failed = 1;
  		foreach my $feedsrc (@$src) {
  			warn "Updating feed '$name' from '$feedsrc' ...\n";
@@ -86,7 +85,7 @@ index f49cdb3..cebe05a 100755
  				if ($force_update) {
  					$rv=1;
  					$failed=0;
-@@ -788,17 +795,17 @@ sub update {
+@@ -794,17 +800,17 @@ sub update {
  
  	if ( ($#ARGV == -1) or $opts{a}) {
  		foreach my $feed (@feeds) {
@@ -109,5 +108,5 @@ index f49cdb3..cebe05a 100755
  		}
  	}
 -- 
-2.15.1
+2.16.3
 
