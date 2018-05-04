@@ -9,7 +9,7 @@ about it. This is helper function is here to overcome that.
 local function replan_str(str, bl)
 	return (features and features.replan_string and str or bl)
 end
-Package('updater-ng', { replan = replan_str('immediate', true) })
+Package('updater-ng', { replan = replan_str('finished', true) })
 Package('l10n_supported', { replan = replan_str('finished', true) })
 Package('nuci', { replan = replan_str('finished', false) })
 
