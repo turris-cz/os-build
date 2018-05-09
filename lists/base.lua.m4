@@ -11,7 +11,6 @@ local function replan_str(str, bl)
 end
 Package('updater-ng', { replan = replan_str('finished', true) })
 Package('l10n_supported', { replan = replan_str('finished', true) })
-Package('nuci', { replan = replan_str('finished', false) })
 
 
 -- Critical minimum
@@ -84,7 +83,6 @@ if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n("foris-diagnostics-plugin-l10n-")
 end
-Install("nuci", "nuci-nethist", { priority = 40 })
 Install("turris-version", "lighttpd-https-cert", "start-indicator", { priority = 40 })
 Install("conntrack-tools", { priority = 40 })
 Install("lighttpd-mod-setenv", { priority = 40 }) -- Missing dependency of luci (setenv used in /etc/lighttpd/conf.d/luci.conf)
