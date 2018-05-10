@@ -85,7 +85,6 @@ if for_l10n then
 end
 Install("turris-version", "lighttpd-https-cert", "start-indicator", { priority = 40 })
 Install("conntrack-tools", { priority = 40 })
-Install("lighttpd-mod-setenv", { priority = 40 }) -- Missing dependency of luci (setenv used in /etc/lighttpd/conf.d/luci.conf)
 
 -- Wifi
 Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
@@ -95,7 +94,7 @@ Install("ath10k-firmware-qca988x", { priority = 40 })
 Install("bash", "coreutils", "diffutils", "htop", "curl", "vim-full", "terminfo", "psmisc", { priority = 40 })
 
 -- Luci
-Install("luci", { priority = 40 })
+Install("luci", "luci-lighttpd", { priority = 40 })
 forInstall(luci,base,proto-ipv6,proto-ppp,app-commands)
 _LUCI_I18N_(base, commands)
 
