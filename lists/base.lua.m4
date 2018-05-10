@@ -70,7 +70,7 @@ Install("bind-client", "bind-dig", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", { priority = 40 })
 
 -- Turris utility
-Install("user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
+Install("turris-utils", "user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
 if not model or model:match("[Oo]mnia") then
 	Install("rainbow-omnia", { priority = 40 })
 	Install("schnapps", "sfpswitch", { priority = 40 })
