@@ -1,0 +1,35 @@
+From d1c8fb6e30b860062c76948414648caa38502039 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 28 May 2018 16:36:07 +0200
+Subject: [PATCH] net/openssh: permit root login
+
+Having no root login possibility is commonly pretty good idea but not on
+device with only root account. Because of that root login should be
+enabled by default on OpenWRT.
+---
+ net/openssh/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/openssh/Makefile b/net/openssh/Makefile
+index 3098481..dedf26a 100644
+--- a/net/openssh/Makefile
++++ b/net/openssh/Makefile
+@@ -250,6 +250,7 @@ define Package/openssh-server/install
+ 	chmod 0700 $(1)/etc/ssh
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/etc/ssh/sshd_config $(1)/etc/ssh/
+ 	sed -r -i 's,^#(HostKey /etc/ssh/ssh_host_(rsa|ecdsa|ed25519)_key)$$$$,\1,' $(1)/etc/ssh/sshd_config
++	sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' $(1)/etc/ssh/sshd_config
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+ 	$(INSTALL_BIN) ./files/sshd.init $(1)/etc/init.d/sshd
+ 	$(INSTALL_DIR) $(1)/usr/sbin
+@@ -260,6 +261,7 @@ define Package/openssh-server-pam/install
+ 	$(call Package/openssh-server/install,$(1))
+ 	sed -i 's,#PasswordAuthentication yes,PasswordAuthentication no,g' $(1)/etc/ssh/sshd_config
+ 	sed -i 's,#UsePAM no,UsePAM yes,g' $(1)/etc/ssh/sshd_config
++	sed -i 's/^#PermitRootLogin.*/PermitRootLogin yes/' $(1)/etc/ssh/sshd_config
+ 	$(INSTALL_DIR) $(1)/etc/pam.d
+ 	$(INSTALL_DATA) ./files/sshd.pam $(1)/etc/pam.d/sshd
+ 	$(INSTALL_DIR) $(1)/etc/security
+-- 
+2.17.0
+
