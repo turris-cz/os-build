@@ -1,0 +1,100 @@
+From 002ef2d02fa5ffc9730c784ca7725276d69e1544 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Tue, 29 May 2018 16:13:18 +0200
+Subject: [PATCH] base-files: do not automatically activate services and
+ restart activated
+
+For security reasons only selected services are are automatically
+activated. Those are listed in /etc/services_wanted.
+We also restart services when updated instead of just starting them.
+---
+ package/base-files/files/etc/services_wanted | 48 ++++++++++++++++++++
+ package/base-files/files/lib/functions.sh    | 16 ++++---
+ 2 files changed, 58 insertions(+), 6 deletions(-)
+ create mode 100644 package/base-files/files/etc/services_wanted
+
+diff --git a/package/base-files/files/etc/services_wanted b/package/base-files/files/etc/services_wanted
+new file mode 100644
+index 0000000..184aa2e
+--- /dev/null
++++ b/package/base-files/files/etc/services_wanted
+@@ -0,0 +1,48 @@
++asm1062-fix
++atd
++boot
++btrfs-scan
++cron
++cups
++dnsmasq
++done
++firewall
++foris-controller
++foris-ws
++fstab
++gpio_switch
++hd-idle
++led
++libatsha204
++lighttpd
++lm-sensors
++lvm2
++lxc-auto
++mountd
++nethist
++network
++odhcpd
++rainbow
++relayd
++resolver
++rpcd
++setup_led
++sfpswitch
++smartd
++socat
++sqm
++sshd
++start-indicator
++sysctl
++sysfixtime
++sysfsutils
++syslog-ng
++sysntpd
++system
++ucitrack
++umount
++update_mac
++updater
++urandom_seed
++usbmode
++watchdog_adjust
+diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
+index 197aef1..175d016 100755
+--- a/package/base-files/files/lib/functions.sh
++++ b/package/base-files/files/lib/functions.sh
+@@ -243,13 +243,17 @@ default_postinst() {
+ 
+ 	local shell="$(which bash)"
+ 	for i in $(grep -s "^/etc/init.d/" "$root/usr/lib/opkg/info/${pkgname}.list"); do
+-		if [ -n "$root" ]; then
+-			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
+-		else
+-			if [ "$PKG_UPGRADE" != "1" ]; then
+-				"$i" enable
++		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
++			if [ -n "$root" ]; then
++				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
++			else
++				if [ "$PKG_UPGRADE" != "1" ]; then
++					"$i" enable
++				fi
+ 			fi
+-			"$i" start
++		fi
++		if [ -z "$root" -a "$pkgname" \!= "updater" ] && "$i" enabled; then
++			"$i" restart
+ 		fi
+ 	done
+ 
+-- 
+2.17.0
+
