@@ -30,7 +30,7 @@ end
 
 -- OpenWRT minimum
 Install("procd", "ubus", "uci", "netifd", "firewall", "swconfig", { critical = true})
-Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", { priority = 40 })
+Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40 })
 
 -- Turris minimum
 if features and features.provides then
