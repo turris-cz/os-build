@@ -17,7 +17,7 @@ new file mode 100644
 index 0000000..81aef3a
 --- /dev/null
 +++ b/package/kernel/linux/modules/dvb.mk
-@@ -0,0 +1,1198 @@
+@@ -0,0 +1,1197 @@
 +#
 +# Copyright (C) 2018 CZ.NIC, z. s. p. o. <https://www.nic.cz/>
 +#
@@ -291,8 +291,9 @@ index 0000000..81aef3a
 +
 +define KernelPackage/dvb-usb-dibusb-common
 +  TITLE:=Common library for DiBcom USB drivers
-+  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-common.ko
-+  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-common)
++  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-common.ko \
++         $(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-mc-common.ko
++  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-common dvb-usb-dibusb-mc-common)
 +  $(call AddDepends/dvb-usb,+PACKAGE_kmod-dvb-dib3000mc:kmod-dvb-dib3000mc)
 +endef
 +
@@ -512,20 +513,6 @@ index 0000000..81aef3a
 +  AUTOLOAD:=$(call AutoProbe,$1)
 +endef
 +
-+define DvbStaging
-+  SUBMENU:=$(DVB_MENU)
-+  KCONFIG:= \
-+	CONFIG_STAGING=y \
-+	CONFIG_STAGING_MEDIA=y \
-+	CONFIG_DVB_CXD2099=m \
-+	CONFIG_DVB_MN88472=m \
-+	CONFIG_DVB_MN88473=m \
-+	$2
-+  DEPENDS:=+kmod-i2c-core +kmod-dvb-core +kmod-i2c-mux +kmod-regmap
-+  FILES:=$(LINUX_DIR)/drivers/staging/media/mn88473/$1.ko
-+  AUTOLOAD:=$(call AutoProbe,$1)
-+endef
-+
 +define KernelPackage/dvb-drxk
 +  TITLE:=Micronas DRXK based
 +  $(call DvbFrontend,drxk,CONFIG_DVB_DRXK)
@@ -584,9 +571,21 @@ index 0000000..81aef3a
 +
 +$(eval $(call KernelPackage,dvb-si2168))
 +
++define KernelPackage/dvb-mn88472
++  TITLE:=Panasonic MN88472
++  $(call DvbFrontend,mn88472,CONFIG_DVB_MN88472)
++  DEPENDS+=+kmod-i2c-mux
++endef
++
++define KernelPackage/dvb-mn88472/description
++  Panasonic MN88472
++endef
++
++$(eval $(call KernelPackage,dvb-mn88472))
++
 +define KernelPackage/dvb-mn88473
 +  TITLE:=Panasonic MN88473
-+  $(call DvbStaging,mn88473,CONFIG_DVB_MN88473)
++  $(call DvbFrontend,mn88473,CONFIG_DVB_MN88473)
 +  DEPENDS+=+kmod-i2c-mux
 +endef
 +
@@ -865,7 +864,7 @@ index 0000000..81aef3a
 +define KernelPackage/media-tuner-fc2580
 +  TITLE:=FCI FC2580 silicon tuner
 +  $(call MediaTuner,fc2580,CONFIG_MEDIA_TUNER_FC2580)
-+  DEPENDS+=+LINUX_4_4:kmod-regmap +LINUX_4_4:kmod-video-core
++  DEPENDS+=+kmod-regmap +kmod-video-core
 +endef
 +
 +define KernelPackage/media-tuner-fc2580/description
@@ -1132,7 +1131,7 @@ index 0000000..81aef3a
 +define KernelPackage/media-tuner-tua9001
 +  TITLE:=Infineon TUA 9001 silicon tuner
 +  $(call MediaTuner,tua9001,CONFIG_MEDIA_TUNER_TUA9001)
-+DEPENDS+=+LINUX_4_4:kmod-regmap
++  DEPENDS+=+kmod-regmap
 +endef
 +
 +define KernelPackage/media-tuner-tua9001/description
