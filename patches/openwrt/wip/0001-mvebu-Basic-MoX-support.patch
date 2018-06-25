@@ -1,4 +1,4 @@
-From 77409341f7d1f95f068587e3a86ae4c4128c8b0f Mon Sep 17 00:00:00 2001
+From a3ceae6eae23b76f4cf0a8967f469e471654af37 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -16,7 +16,11 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...support-for-Armada-37xx-CPU-watchdog.patch | 440 +++++++++++++++++
  ...no-uhs-voltage-cap-to-MMC-host-struc.patch |  57 +++
  ...l-Add-DTS-files-for-Turris-Mox-and-i.patch | 463 ++++++++++++++++++
- 9 files changed, 1475 insertions(+)
+ ...metic-fixes-to-phylink-sfp-sfp-bus.c.patch | 233 +++++++++
+ .../9085-sfp-fix-sparse-warning.patch         |  30 ++
+ ...-t-guess-support-from-connector-type.patch |  57 +++
+ ...rt-for-1000Base-PX-and-1000Base-BX10.patch |  60 +++
+ 13 files changed, 1855 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/0034-From-Ken-Ma-make-marvell.com.patch
  create mode 100644 target/linux/mvebu/patches-4.14/0036-net-dsa-mv88e6xxx-88E6141-6341-SERDES-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/0037-drivers-gpio-Add-support-for-Turris-Mox-SFP-cage-mod.patch
@@ -24,6 +28,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/0039-watchdog-Add-support-for-Armada-37xx-CPU-watchdog.patch
  create mode 100644 target/linux/mvebu/patches-4.14/0040-drivers-mmc-Add-no-uhs-voltage-cap-to-MMC-host-struc.patch
  create mode 100644 target/linux/mvebu/patches-4.14/0041-ARM64-dts-marvell-Add-DTS-files-for-Turris-Mox-and-i.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9084-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9085-sfp-fix-sparse-warning.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9086-sfp-don-t-guess-support-from-connector-type.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9087-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
 index f5e9876..8c77688 100644
@@ -1568,6 +1576,410 @@ index 0000000..131d732
 ++	status = "okay";
 ++	usb-phy = <&usb3_phy>;
 ++};
++-- 
++2.17.1
++
+diff --git a/target/linux/mvebu/patches-4.14/9084-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch b/target/linux/mvebu/patches-4.14/9084-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch
+new file mode 100644
+index 0000000..10c8bc1
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9084-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch
+@@ -0,0 +1,233 @@
++From 1d798ffc4fbd94775e415445366f4d30df595c11 Mon Sep 17 00:00:00 2001
++From: Florian Fainelli <f.fainelli@gmail.com>
++Date: Mon, 30 Oct 2017 21:42:57 -0700
++Subject: [PATCH 84/90] net: phy: Cosmetic fixes to phylink/sfp/sfp-bus.c
++
++Perform a number of stylistic changes to phylink.c, sfp.c and sfp-bus.c:
++
++- align with netdev-style comments
++- align function arguments to the opening parenthesis
++- remove blank lines
++- fixup a few lines over 80 columns
++
++Signed-off-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 13 ++++++-------
++ drivers/net/phy/sfp-bus.c | 11 +++--------
++ drivers/net/phy/sfp.c     | 27 +++++++++++++--------------
++ 3 files changed, 22 insertions(+), 29 deletions(-)
++
++Index: linux-4.14.50/drivers/net/phy/phylink.c
++===================================================================
++--- linux-4.14.50.orig/drivers/net/phy/phylink.c
+++++ linux-4.14.50/drivers/net/phy/phylink.c
++@@ -357,7 +357,7 @@ static void phylink_get_fixed_state(stru
++  *    1     1       0     1     TX
++  */
++ static void phylink_resolve_flow(struct phylink *pl,
++-	struct phylink_link_state *state)
+++				 struct phylink_link_state *state)
++ {
++ 	int new_pause = 0;
++ 
++@@ -506,7 +506,8 @@ static int phylink_register_sfp(struct p
++ }
++ 
++ struct phylink *phylink_create(struct net_device *ndev, struct device_node *np,
++-	phy_interface_t iface, const struct phylink_mac_ops *ops)
+++			       phy_interface_t iface,
+++			       const struct phylink_mac_ops *ops)
++ {
++ 	struct phylink *pl;
++ 	int ret;
++@@ -586,7 +587,7 @@ void phylink_phy_change(struct phy_devic
++ 	phylink_run_resolve(pl);
++ 
++ 	netdev_dbg(pl->netdev, "phy link %s %s/%s/%s\n", up ? "up" : "down",
++-	           phy_modes(phydev->interface),
+++		   phy_modes(phydev->interface),
++ 		   phy_speed_to_str(phydev->speed),
++ 		   phy_duplex_to_str(phydev->duplex));
++ }
++@@ -825,7 +826,7 @@ static void phylink_get_ksettings(const
++ }
++ 
++ int phylink_ethtool_ksettings_get(struct phylink *pl,
++-	struct ethtool_link_ksettings *kset)
+++				  struct ethtool_link_ksettings *kset)
++ {
++ 	struct phylink_link_state link_state;
++ 
++@@ -872,7 +873,7 @@ int phylink_ethtool_ksettings_get(struct
++ EXPORT_SYMBOL_GPL(phylink_ethtool_ksettings_get);
++ 
++ int phylink_ethtool_ksettings_set(struct phylink *pl,
++-	const struct ethtool_link_ksettings *kset)
+++				  const struct ethtool_link_ksettings *kset)
++ {
++ 	struct ethtool_link_ksettings our_kset;
++ 	struct phylink_link_state config;
++@@ -1340,8 +1341,6 @@ int phylink_mii_ioctl(struct phylink *pl
++ }
++ EXPORT_SYMBOL_GPL(phylink_mii_ioctl);
++ 
++-
++-
++ static int phylink_sfp_module_insert(void *upstream,
++ 				     const struct sfp_eeprom_id *id)
++ {
++Index: linux-4.14.50/drivers/net/phy/sfp-bus.c
++===================================================================
++--- linux-4.14.50.orig/drivers/net/phy/sfp-bus.c
+++++ linux-4.14.50/drivers/net/phy/sfp-bus.c
++@@ -26,7 +26,6 @@ struct sfp_bus {
++ 	bool started;
++ };
++ 
++-
++ int sfp_parse_port(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 		   unsigned long *support)
++ {
++@@ -208,7 +207,6 @@ void sfp_parse_support(struct sfp_bus *b
++ }
++ EXPORT_SYMBOL_GPL(sfp_parse_support);
++ 
++-
++ static LIST_HEAD(sfp_buses);
++ static DEFINE_MUTEX(sfp_mutex);
++ 
++@@ -295,7 +293,6 @@ static void sfp_unregister_bus(struct sf
++ 	bus->registered = false;
++ }
++ 
++-
++ int sfp_get_module_info(struct sfp_bus *bus, struct ethtool_modinfo *modinfo)
++ {
++ 	if (!bus->registered)
++@@ -305,7 +302,7 @@ int sfp_get_module_info(struct sfp_bus *
++ EXPORT_SYMBOL_GPL(sfp_get_module_info);
++ 
++ int sfp_get_module_eeprom(struct sfp_bus *bus, struct ethtool_eeprom *ee,
++-	u8 *data)
+++			  u8 *data)
++ {
++ 	if (!bus->registered)
++ 		return -ENOIOCTLCMD;
++@@ -330,8 +327,8 @@ void sfp_upstream_stop(struct sfp_bus *b
++ EXPORT_SYMBOL_GPL(sfp_upstream_stop);
++ 
++ struct sfp_bus *sfp_register_upstream(struct device_node *np,
++-	struct net_device *ndev, void *upstream,
++-	const struct sfp_upstream_ops *ops)
+++				      struct net_device *ndev, void *upstream,
+++				      const struct sfp_upstream_ops *ops)
++ {
++ 	struct sfp_bus *bus = sfp_bus_get(np);
++ 	int ret = 0;
++@@ -369,7 +366,6 @@ void sfp_unregister_upstream(struct sfp_
++ }
++ EXPORT_SYMBOL_GPL(sfp_unregister_upstream);
++ 
++-
++ /* Socket driver entry points */
++ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev)
++ {
++@@ -396,7 +392,6 @@ void sfp_remove_phy(struct sfp_bus *bus)
++ }
++ EXPORT_SYMBOL_GPL(sfp_remove_phy);
++ 
++-
++ void sfp_link_up(struct sfp_bus *bus)
++ {
++ 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
++Index: linux-4.14.50/drivers/net/phy/sfp.c
++===================================================================
++--- linux-4.14.50.orig/drivers/net/phy/sfp.c
+++++ linux-4.14.50/drivers/net/phy/sfp.c
++@@ -88,15 +88,12 @@ static const enum gpiod_flags gpio_flags
++ #define T_PROBE_INIT	msecs_to_jiffies(300)
++ #define T_PROBE_RETRY	msecs_to_jiffies(100)
++ 
++-/*
++- * SFP modules appear to always have their PHY configured for bus address
+++/* SFP modules appear to always have their PHY configured for bus address
++  * 0x56 (which with mdio-i2c, translates to a PHY address of 22).
++  */
++ #define SFP_PHY_ADDR	22
++ 
++-/*
++- * Give this long for the PHY to reset.
++- */
+++/* Give this long for the PHY to reset. */
++ #define T_PHY_RESET_MS	50
++ 
++ static DEFINE_MUTEX(sfp_mutex);
++@@ -150,10 +147,10 @@ static void sfp_gpio_set_state(struct sf
++ 		/* If the module is present, drive the signals */
++ 		if (sfp->gpio[GPIO_TX_DISABLE])
++ 			gpiod_direction_output(sfp->gpio[GPIO_TX_DISABLE],
++-						state & SFP_F_TX_DISABLE);
+++					       state & SFP_F_TX_DISABLE);
++ 		if (state & SFP_F_RATE_SELECT)
++ 			gpiod_direction_output(sfp->gpio[GPIO_RATE_SELECT],
++-						state & SFP_F_RATE_SELECT);
+++					       state & SFP_F_RATE_SELECT);
++ 	} else {
++ 		/* Otherwise, let them float to the pull-ups */
++ 		if (sfp->gpio[GPIO_TX_DISABLE])
++@@ -164,7 +161,7 @@ static void sfp_gpio_set_state(struct sf
++ }
++ 
++ static int sfp__i2c_read(struct i2c_adapter *i2c, u8 bus_addr, u8 dev_addr,
++-	void *buf, size_t len)
+++			 void *buf, size_t len)
++ {
++ 	struct i2c_msg msgs[2];
++ 	int ret;
++@@ -186,7 +183,7 @@ static int sfp__i2c_read(struct i2c_adap
++ }
++ 
++ static int sfp_i2c_read(struct sfp *sfp, bool a2, u8 addr, void *buf,
++-	size_t len)
+++			size_t len)
++ {
++ 	return sfp__i2c_read(sfp->i2c, a2 ? 0x51 : 0x50, addr, buf, len);
++ }
++@@ -220,7 +217,6 @@ static int sfp_i2c_configure(struct sfp
++ 	return 0;
++ }
++ 
++-
++ /* Interface */
++ static unsigned int sfp_get_state(struct sfp *sfp)
++ {
++@@ -295,7 +291,8 @@ static void sfp_sm_next(struct sfp *sfp,
++ 	sfp_sm_set_timer(sfp, timeout);
++ }
++ 
++-static void sfp_sm_ins_next(struct sfp *sfp, unsigned int state, unsigned int timeout)
+++static void sfp_sm_ins_next(struct sfp *sfp, unsigned int state,
+++			    unsigned int timeout)
++ {
++ 	sfp->sm_mod_state = state;
++ 	sfp_sm_set_timer(sfp, timeout);
++@@ -370,7 +367,8 @@ static void sfp_sm_link_check_los(struct
++ static void sfp_sm_fault(struct sfp *sfp, bool warn)
++ {
++ 	if (sfp->sm_retries && !--sfp->sm_retries) {
++-		dev_err(sfp->dev, "module persistently indicates fault, disabling\n");
+++		dev_err(sfp->dev,
+++			"module persistently indicates fault, disabling\n");
++ 		sfp_sm_next(sfp, SFP_S_TX_DISABLE, 0);
++ 	} else {
++ 		if (warn)
++@@ -653,7 +651,7 @@ static int sfp_module_info(struct sfp *s
++ }
++ 
++ static int sfp_module_eeprom(struct sfp *sfp, struct ethtool_eeprom *ee,
++-	u8 *data)
+++			     u8 *data)
++ {
++ 	unsigned int first, last, len;
++ 	int ret;
+diff --git a/target/linux/mvebu/patches-4.14/9085-sfp-fix-sparse-warning.patch b/target/linux/mvebu/patches-4.14/9085-sfp-fix-sparse-warning.patch
+new file mode 100644
+index 0000000..8ddaac4
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9085-sfp-fix-sparse-warning.patch
+@@ -0,0 +1,30 @@
++From 9e5400f52f431012cbeaaa72c6dc3bb5d8cfd44d Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 1 Dec 2017 10:24:58 +0000
++Subject: [PATCH 85/90] sfp: fix sparse warning
++
++drivers/net/phy/sfp-bus.c:298:13: warning: context imbalance in 'sfp_bus_release' - wrong count at exit
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/sfp-bus.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index f8c0327e6ad7..f2513b9e00cd 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -246,7 +246,7 @@ static struct sfp_bus *sfp_bus_get(struct device_node *np)
++ 	return found;
++ }
++ 
++-static void sfp_bus_release(struct kref *kref) __releases(sfp_mutex)
+++static void sfp_bus_release(struct kref *kref)
++ {
++ 	struct sfp_bus *bus = container_of(kref, struct sfp_bus, kref);
++ 
++-- 
++2.17.1
++
+diff --git a/target/linux/mvebu/patches-4.14/9086-sfp-don-t-guess-support-from-connector-type.patch b/target/linux/mvebu/patches-4.14/9086-sfp-don-t-guess-support-from-connector-type.patch
+new file mode 100644
+index 0000000..1de9002
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9086-sfp-don-t-guess-support-from-connector-type.patch
+@@ -0,0 +1,57 @@
++From bcd854af26d87f8b5b874ec0a97b7fd1b7365223 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 29 Dec 2017 12:15:17 +0000
++Subject: [PATCH 86/90] sfp: don't guess support from connector type
++
++Don't try to guess the support mask from the connector type - this is
++mostly irrelevant to the speeds that the transceiver supports.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/sfp-bus.c | 29 -----------------------------
++ 1 file changed, 29 deletions(-)
++
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index f2513b9e00cd..43dfe187378f 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -175,35 +175,6 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 		if (id->base.br_nominal >= 12)
++ 			phylink_set(support, 1000baseX_Full);
++ 	}
++-
++-	switch (id->base.connector) {
++-	case SFP_CONNECTOR_SC:
++-	case SFP_CONNECTOR_FIBERJACK:
++-	case SFP_CONNECTOR_LC:
++-	case SFP_CONNECTOR_MT_RJ:
++-	case SFP_CONNECTOR_MU:
++-	case SFP_CONNECTOR_OPTICAL_PIGTAIL:
++-		break;
++-
++-	case SFP_CONNECTOR_UNSPEC:
++-		if (id->base.e1000_base_t)
++-			break;
++-
++-	case SFP_CONNECTOR_SG: /* guess */
++-	case SFP_CONNECTOR_MPO_1X12:
++-	case SFP_CONNECTOR_MPO_2X16:
++-	case SFP_CONNECTOR_HSSDC_II:
++-	case SFP_CONNECTOR_COPPER_PIGTAIL:
++-	case SFP_CONNECTOR_NOSEPARATE:
++-	case SFP_CONNECTOR_MXC_2X16:
++-	default:
++-		/* a guess at the supported link modes */
++-		dev_warn(bus->sfp_dev,
++-			 "Guessing link modes, please report...\n");
++-		phylink_set(support, 1000baseT_Half);
++-		phylink_set(support, 1000baseT_Full);
++-		break;
++-	}
++ }
++ EXPORT_SYMBOL_GPL(sfp_parse_support);
++ 
++-- 
++2.17.1
++
+diff --git a/target/linux/mvebu/patches-4.14/9087-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch b/target/linux/mvebu/patches-4.14/9087-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch
+new file mode 100644
+index 0000000..cf911e1
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9087-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch
+@@ -0,0 +1,60 @@
++From a5077f273e43d670e8213f866351eeaeecece5d7 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 29 Dec 2017 12:15:23 +0000
++Subject: [PATCH 87/90] sfp: add support for 1000Base-PX and 1000Base-BX10
++
++Add support for decoding the transceiver information for 1000Base-PX and
++1000Base-BX10.  These use 1000BASE-X protocol.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/sfp-bus.c | 21 +++++++++++++++++++++
++ 1 file changed, 21 insertions(+)
++
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index 43dfe187378f..deade7d45331 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -120,10 +120,26 @@ EXPORT_SYMBOL_GPL(sfp_parse_interface);
++ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 		       unsigned long *support)
++ {
+++	unsigned int br_min, br_nom, br_max;
+++
++ 	phylink_set(support, Autoneg);
++ 	phylink_set(support, Pause);
++ 	phylink_set(support, Asym_Pause);
++ 
+++	/* Decode the bitrate information to MBd */
+++	br_min = br_nom = br_max = 0;
+++	if (id->base.br_nominal) {
+++		if (id->base.br_nominal != 255) {
+++			br_nom = id->base.br_nominal * 100;
+++			br_min = br_nom + id->base.br_nominal * id->ext.br_min;
+++			br_max = br_nom + id->base.br_nominal * id->ext.br_max;
+++		} else if (id->ext.br_max) {
+++			br_nom = 250 * id->ext.br_max;
+++			br_max = br_nom + br_nom * id->ext.br_min / 100;
+++			br_min = br_nom - br_nom * id->ext.br_min / 100;
+++		}
+++	}
+++
++ 	/* Set ethtool support from the compliance fields. */
++ 	if (id->base.e10g_base_sr)
++ 		phylink_set(support, 10000baseSR_Full);
++@@ -142,6 +158,11 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 		phylink_set(support, 1000baseT_Full);
++ 	}
++ 
+++	/* 1000Base-PX or 1000Base-BX10 */
+++	if ((id->base.e_base_px || id->base.e_base_bx10) &&
+++	    br_min <= 1300 && br_max >= 1200)
+++		phylink_set(support, 1000baseX_Full);
+++
++ 	switch (id->base.extended_cc) {
++ 	case 0x00: /* Unspecified */
++ 		break;
 +-- 
 +2.17.1
 +
