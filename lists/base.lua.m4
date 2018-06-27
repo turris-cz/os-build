@@ -20,6 +20,12 @@ Package("kmod-mac80211", { reboot = "delayed" })
 forInstallCritical(kmod,file2args(kmod.list))
 forInstallCritical(kmod,file2args(kmod-_BOARD_.list))
 Install("fstools", { critical = true })
+if model and model:match("[Tt]urris") then
+	Install("turris-support", { critical = true })
+end
+if model and model:match("[Mm][Oo][Xx]") then
+	Install("mox-support", { critical = true })
+end
 if not model or model:match("[Oo]mnia") then
 	Install("btrfs-progs", { critical = true })
 end
