@@ -2,7 +2,8 @@
 set -e
 
 MINIMAL=false
-SRC_DIR="$(pwd)"
+LISTS_DIR=
+OUTPUT_PATH=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -13,12 +14,12 @@ while [ $# -gt 0 ]; do
 			echo "  --help, -h"
 			echo "    Prints this help text."
 			echo "  --model (turris|omnia|mox)"
-			echo "    Target Turris model. Currently only turris or omnia are supported."
+			echo "    Target Turris model."
 			echo "  --branch BRANCH"
 			echo "    Target branch for which this userlist is generated."
 			echo "  --minimal"
 			echo "    Generate userlists for minimal branch. (This adds nightly as a fallback branch)"
-			echo "  --src"
+			echo "  --src PATH"
 			echo "    Source directory with list to process"
 			exit
 			;;
@@ -39,10 +40,15 @@ while [ $# -gt 0 ]; do
 			;;
 		--src)
 			shift
-			SRC_DIR="$(cd "$1"; pwd)"
+			LISTS_DIR="$1"
 			;;
 		*)
-			OUTPUT_PATH="$1"
+			if [ -z "$OUTPUT_PATH" ]; then
+				OUTPUT_PATH="$1"
+			else
+				echo "Unknown option: $1"
+				exit 1
+			fi
 			;;
 	esac
 	shift
@@ -52,7 +58,6 @@ done
 	echo "You have to specify output path." >&2
 	exit 1
 }
-OUTPUT_PATH="$(cd "$OUTPUT_PATH"; pwd)"
 [ -z "$BOARD" ] && {
 	echo "Missing --model option." >&2
 	exit 1
@@ -61,24 +66,23 @@ OUTPUT_PATH="$(cd "$OUTPUT_PATH"; pwd)"
 	echo "Missing --branch option." >&2
 	exit 1
 }
-[ -d "$SRC_DIR" ] || {
-	echo "$0 have to be run in Turris OS root directory." >&2
+[ -d "$LISTS_DIR" ] || {
+	echo "Valid --src directory has to be specified" >&2
+	exit 1
+}
+[ -f Makefile -a -f feeds.conf ] || {
+	echo "This script has to be run in OpenWRT build directory" >&2
 	exit 1
 }
 
 mkdir -p $OUTPUT_PATH
 
-M4ARGS="--include=lists -D _INCLUDE_=lists/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOARD"
+M4ARGS="--include=$LISTS_DIR -D _INCLUDE_=$LISTS_DIR/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOARD"
 $MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
 
-sed -i 's|subdirs = {"base"[^}]*}|subdirs = {"core" , "base" '"$(
-	cat "$SRC_DIR"/feeds.conf | sed 's|#.*||' | grep '.' | sed 's|src-git \([^[:blank:]]*\) .*|, "\1"|' | tr '\n' ' '
-)}|" "$SRC_DIR/lists/repository.m4"
-
-cd "$SRC_DIR"
-for f in $(find lists -name '*.lua.m4'); do
-	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename $f | sed s/\.m4$//)"
+for f in $(find "$LISTS_DIR" -name '*.lua.m4'); do
+	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename "$f" | sed s/\.m4$//)"
 done
-for f in $(find lists -name '*.lua'); do
-	cp $f "$OUTPUT_PATH/$(basename $f)"
+for f in $(find "$LISTS_DIR" -name '*.lua'); do
+	cp $f "$OUTPUT_PATH/$(basename "$f")"
 done

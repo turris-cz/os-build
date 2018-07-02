@@ -3,8 +3,7 @@ dnl We expect this to be include in base.lua just after utils.m4
 divert(-1)
 
 # This is definition of subrepositories
-# TODO generate this dynamically from feed.conf.default
-pushdef(`SUBDIRS',``subdirs = {"base", "turrispackages", "php", "hardware", "lucics", "packages", "routing", "management", "telephony", "printing"}'')
+pushdef(`SUBDIRS',`subdirs = {"base", "core" esyscmd(`awk "/src-git/{printf \", \\\"%s\\\"\", \$'`2}" feeds.conf')}')
 
 divert(0)dnl
 dnl
