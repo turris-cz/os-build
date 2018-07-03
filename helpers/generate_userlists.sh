@@ -1,9 +1,9 @@
 #!/bin/sh
 set -e
 
-MINIMAL=false
 LISTS_DIR=
 OUTPUT_PATH=
+FALLBACK=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -13,30 +13,21 @@ while [ $# -gt 0 ]; do
 			echo "Options:"
 			echo "  --help, -h"
 			echo "    Prints this help text."
-			echo "  --model (turris|omnia|mox)"
-			echo "    Target Turris model."
 			echo "  --branch BRANCH"
 			echo "    Target branch for which this userlist is generated."
-			echo "  --minimal"
-			echo "    Generate userlists for minimal branch. (This adds nightly as a fallback branch)"
+			echo "  --minimal BRANCH"
+			echo "    Generate userlists for minimal branch. (This adds BRANCH as a fallback branch)"
 			echo "  --src PATH"
 			echo "    Source directory with list to process"
 			exit
-			;;
-		--model)
-			shift
-			[ "$1" != "turris" -a "$1" != "omnia" -a "$1" != "mox" ] && {
-				echo "Unknown model: $1" >&2
-				exit 1
-			}
-			BOARD="$1"
 			;;
 		--branch)
 			shift
 			BRANCH="$1"
 			;;
 		--minimal)
-			MINIMAL=true
+			shift
+			FALLBACK="$1"
 			;;
 		--src)
 			shift
@@ -58,10 +49,6 @@ done
 	echo "You have to specify output path." >&2
 	exit 1
 }
-[ -z "$BOARD" ] && {
-	echo "Missing --model option." >&2
-	exit 1
-}
 [ -z "$BRANCH" ] && {
 	echo "Missing --branch option." >&2
 	exit 1
@@ -77,8 +64,8 @@ done
 
 mkdir -p $OUTPUT_PATH
 
-M4ARGS="--include=$LISTS_DIR -D _INCLUDE_=$LISTS_DIR/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOARD"
-$MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
+M4ARGS="--include=$LISTS_DIR -D _INCLUDE_=$LISTS_DIR/ -D _BRANCH_=$BRANCH"
+[ -z "$FALLBACK" ] || M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=$FALLBACK"
 
 for f in $(find "$LISTS_DIR" -name '*.lua.m4'); do
 	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename "$f" | sed s/\.m4$//)"
