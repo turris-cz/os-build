@@ -4,7 +4,6 @@ _FEATURE_GUARD_
 -- Tools
 Install("wol", "tcpdump", { priority = 40 })
 Install("relayd", "udev", { priority = 40 })
-Install("bind-client", "bind-dig", { priority = 40 })
 Install("openvpn-openssl", { priority = 40 })
 
 -- 3G

@@ -1,8 +1,9 @@
 #!/bin/sh
 set -e
 
-MINIMAL=false
-SRC_DIR="$(pwd)"
+LISTS_DIR=
+OUTPUT_PATH=
+FALLBACK=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -12,37 +13,33 @@ while [ $# -gt 0 ]; do
 			echo "Options:"
 			echo "  --help, -h"
 			echo "    Prints this help text."
-			echo "  --model (turris|omnia|mox)"
-			echo "    Target Turris model. Currently only turris or omnia are supported."
 			echo "  --branch BRANCH"
 			echo "    Target branch for which this userlist is generated."
-			echo "  --minimal"
-			echo "    Generate userlists for minimal branch. (This adds nightly as a fallback branch)"
-			echo "  --src"
+			echo "  --minimal BRANCH"
+			echo "    Generate userlists for minimal branch. (This adds BRANCH as a fallback branch)"
+			echo "  --src PATH"
 			echo "    Source directory with list to process"
 			exit
-			;;
-		--model)
-			shift
-			[ "$1" != "turris" -a "$1" != "omnia" -a "$1" != "mox" ] && {
-				echo "Unknown model: $1" >&2
-				exit 1
-			}
-			BOARD="$1"
 			;;
 		--branch)
 			shift
 			BRANCH="$1"
 			;;
 		--minimal)
-			MINIMAL=true
+			shift
+			FALLBACK="$1"
 			;;
 		--src)
 			shift
-			SRC_DIR="$(cd "$1"; pwd)"
+			LISTS_DIR="$1"
 			;;
 		*)
-			OUTPUT_PATH="$1"
+			if [ -z "$OUTPUT_PATH" ]; then
+				OUTPUT_PATH="$1"
+			else
+				echo "Unknown option: $1"
+				exit 1
+			fi
 			;;
 	esac
 	shift
@@ -52,33 +49,27 @@ done
 	echo "You have to specify output path." >&2
 	exit 1
 }
-OUTPUT_PATH="$(cd "$OUTPUT_PATH"; pwd)"
-[ -z "$BOARD" ] && {
-	echo "Missing --model option." >&2
-	exit 1
-}
 [ -z "$BRANCH" ] && {
 	echo "Missing --branch option." >&2
 	exit 1
 }
-[ -d "$SRC_DIR" ] || {
-	echo "$0 have to be run in Turris OS root directory." >&2
+[ -d "$LISTS_DIR" ] || {
+	echo "Valid --src directory has to be specified" >&2
+	exit 1
+}
+[ -f Makefile -a -f feeds.conf ] || {
+	echo "This script has to be run in OpenWRT build directory" >&2
 	exit 1
 }
 
 mkdir -p $OUTPUT_PATH
 
-M4ARGS="--include=lists -D _INCLUDE_=lists/ -D _BRANCH_=$BRANCH -D _BOARD_=$BOARD"
-$MINIMAL && M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=nightly"
+M4ARGS="--include=$LISTS_DIR -D _INCLUDE_=$LISTS_DIR/ -D _BRANCH_=$BRANCH"
+[ -z "$FALLBACK" ] || M4ARGS="$M4ARGS -D _BRANCH_FALLBACK_=$FALLBACK"
 
-sed -i 's|subdirs = {"base"[^}]*}|subdirs = {"core" , "base" '"$(
-	cat "$SRC_DIR"/feeds.conf | sed 's|#.*||' | grep '.' | sed 's|src-git \([^[:blank:]]*\) .*|, "\1"|' | tr '\n' ' '
-)}|" "$SRC_DIR/lists/repository.m4"
-
-cd "$SRC_DIR"
-for f in $(find lists -name '*.lua.m4'); do
-	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename $f | sed s/\.m4$//)"
+for f in $(find "$LISTS_DIR" -name '*.lua.m4'); do
+	m4 $M4ARGS $f > "$OUTPUT_PATH/$(basename "$f" | sed s/\.m4$//)"
 done
-for f in $(find lists -name '*.lua'); do
-	cp $f "$OUTPUT_PATH/$(basename $f)"
+for f in $(find "$LISTS_DIR" -name '*.lua'); do
+	cp $f "$OUTPUT_PATH/$(basename "$f")"
 done

@@ -18,8 +18,20 @@ Install("base-files", "busybox", { critical = true })
 Package("kernel", { reboot = "delayed" })
 Package("kmod-mac80211", { reboot = "delayed" })
 forInstallCritical(kmod,file2args(kmod.list))
-forInstallCritical(kmod,file2args(kmod-_BOARD_.list))
+if model:match("[Mm][Oo][Xx]") then
+	forInstallCritical(kmod,file2args(kmod-mox.list))
+elseif model:match("[Oo]mnia") then
+	forInstallCritical(kmod,file2args(kmod-omnia.list))
+elseif model:match("^[Tt]urris$") then
+	forInstallCritical(kmod,file2args(kmod-turris.list))
+end
 Install("fstools", { critical = true })
+if model and model:match("[Tt]urris") then
+	Install("turris-support", { critical = true })
+end
+if model and model:match("[Mm][Oo][Xx]") then
+	Install("mox-support", { critical = true })
+end
 if not model or model:match("[Oo]mnia") then
 	Install("btrfs-progs", { critical = true })
 end

@@ -1,9 +1,7 @@
 divert(-1)
 
-# We require the _BOARD_ variable to be defined so let's check
-ifdef(`_BOARD_',,`errprint(`_BOARD_ have to be defied when gerating new userlist. For example pass argument -D _BOARD_=turris to m4.')m4exit(`1')')
-# Also we use the _BRANCH_ variable, but if it isn't defined than it means deploy
-# and if defined as deploy then we undefine it.
+# We use the _BRANCH_ variable, but if it isn't defined than it means deploy and
+# if defined as deploy then we undefine it.
 ifelse(_BRANCH_,deploy,`undefine(`_BRANCH_')',)
 
 
