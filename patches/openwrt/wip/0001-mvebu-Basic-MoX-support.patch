@@ -1,4 +1,4 @@
-From 65adf24f970a3ddedc647f71792f7de0127dd748 Mon Sep 17 00:00:00 2001
+From e936c9827d3b0e90143c5515e1f59a75132318fa Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -9,7 +9,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  target/linux/mvebu/config-4.14                |   2 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
- ...ta-add-module-EEPROM-reading-support.patch |  49 +
  ...3-net-mvneta-move-port-configuration.patch | 106 +++
  ...024-net-mvneta-add-1000BaseX-support.patch |  65 ++
  ...7xx-account-for-const-type-of-of_dev.patch |  40 +
@@ -70,8 +69,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-support-for-Turris-Mox-SFP-cage-mod.patch | 364 ++++++++
  ...l-Add-DTS-files-for-Turris-Mox-and-i.patch | 864 ++++++++++++++++++
  ...-t-guess-support-from-connector-type.patch |  57 ++
- 63 files changed, 6842 insertions(+)
- create mode 100644 target/linux/mvebu/patches-4.14/90006-net-mvneta-add-module-EEPROM-reading-support.patch
+ 62 files changed, 6793 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90023-net-mvneta-move-port-configuration.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90024-net-mvneta-add-1000BaseX-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90025-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch
@@ -175,61 +173,6 @@ index 89c3363..2095a5c 100644
  define Device/armada-3720-db
    KERNEL_NAME := Image
    KERNEL := kernel-bin
-diff --git a/target/linux/mvebu/patches-4.14/90006-net-mvneta-add-module-EEPROM-reading-support.patch b/target/linux/mvebu/patches-4.14/90006-net-mvneta-add-module-EEPROM-reading-support.patch
-new file mode 100644
-index 0000000..50fdd13
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90006-net-mvneta-add-module-EEPROM-reading-support.patch
-@@ -0,0 +1,49 @@
-+From 132784d66c8ce9afecba7108de361b0602300e16 Mon Sep 17 00:00:00 2001
-+From: Russell King <rmk+kernel@arm.linux.org.uk>
-+Date: Thu, 1 Oct 2015 23:32:39 +0100
-+Subject: [PATCH 06/82] net: mvneta: add module EEPROM reading support
-+
-+Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
-+---
-+ drivers/net/ethernet/marvell/mvneta.c | 18 ++++++++++++++++++
-+ 1 file changed, 18 insertions(+)
-+
-+diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index f5b6614125a6..e4d25c718b2d 100644
-+--- a/drivers/net/ethernet/marvell/mvneta.c
-++++ b/drivers/net/ethernet/marvell/mvneta.c
-+@@ -4046,6 +4046,22 @@ static int mvneta_ethtool_set_wol(struct net_device *dev,
-+ 	return ret;
-+ }
-+ 
-++static int mvneta_ethtool_get_module_info(struct net_device *dev,
-++					  struct ethtool_modinfo *modinfo)
-++{
-++	struct mvneta_port *pp = netdev_priv(dev);
-++
-++	return phylink_ethtool_get_module_info(pp->phylink, modinfo);
-++}
-++
-++static int mvneta_ethtool_get_module_eeprom(struct net_device *dev,
-++					    struct ethtool_eeprom *ee, u8 *buf)
-++{
-++	struct mvneta_port *pp = netdev_priv(dev);
-++
-++	return phylink_ethtool_get_module_eeprom(pp->phylink, ee, buf);
-++}
-++
-+ static int mvneta_ethtool_get_eee(struct net_device *dev,
-+ 				  struct ethtool_eee *eee)
-+ {
-+@@ -4130,6 +4146,8 @@ static const struct ethtool_ops mvneta_eth_tool_ops = {
-+ 	.set_link_ksettings = mvneta_ethtool_set_link_ksettings,
-+ 	.get_wol        = mvneta_ethtool_get_wol,
-+ 	.set_wol        = mvneta_ethtool_set_wol,
-++	.get_module_info = mvneta_ethtool_get_module_info,
-++	.get_module_eeprom = mvneta_ethtool_get_module_eeprom,
-+ 	.get_eee	= mvneta_ethtool_get_eee,
-+ 	.set_eee	= mvneta_ethtool_set_eee,
-+ };
-+-- 
-+2.18.0
-+
 diff --git a/target/linux/mvebu/patches-4.14/90023-net-mvneta-move-port-configuration.patch b/target/linux/mvebu/patches-4.14/90023-net-mvneta-move-port-configuration.patch
 new file mode 100644
 index 0000000..e61fa5a
