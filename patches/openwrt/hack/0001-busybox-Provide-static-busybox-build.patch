@@ -1,4 +1,4 @@
-From 841ee10970e1951bb3af23c149edd18cfe0e77c4 Mon Sep 17 00:00:00 2001
+From ab1408a40d1c3d3bb3308b71bf924efc51a15c60 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Thu, 22 Feb 2018 14:46:46 +0100
 Subject: [PATCH] busybox: Provide static busybox build
@@ -7,11 +7,13 @@ Can be handy, but currently it is quite hacky.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- package/utils/busybox/Makefile | 34 ++++++++++++++++++++++++++++++++++
- 1 file changed, 34 insertions(+)
+ package/utils/busybox/Makefile                |   36 +
+ .../utils/busybox/files/busybox-static.config | 1127 +++++++++++++++++
+ 2 files changed, 1163 insertions(+)
+ create mode 100644 package/utils/busybox/files/busybox-static.config
 
 diff --git a/package/utils/busybox/Makefile b/package/utils/busybox/Makefile
-index 315dd42..1965658 100644
+index 315dd42..ff8cdde 100644
 --- a/package/utils/busybox/Makefile
 +++ b/package/utils/busybox/Makefile
 @@ -66,6 +66,20 @@ define Package/busybox/description
@@ -35,29 +37,32 @@ index 315dd42..1965658 100644
  define Package/busybox/config
  	source "$(SOURCE)/Config.in"
  endef
-@@ -101,11 +115,21 @@ ifneq ($(findstring c,$(OPENWRT_VERBOSE)),)
- endif
- 
+@@ -103,13 +117,24 @@ endif
  define Build/Configure
+ 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" > $(PKG_BUILD_DIR)/.config
+ 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
++	mv $(PKG_BUILD_DIR)/.config $(PKG_BUILD_DIR)/.config-regular
 +	cp ./files/busybox-static.config $(PKG_BUILD_DIR)/.config
 +	echo 'CONFIG_STATIC=y' >> $(PKG_BUILD_DIR)/.config
 +	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 +	mv $(PKG_BUILD_DIR)/.config $(PKG_BUILD_DIR)/.config-static
- 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" > $(PKG_BUILD_DIR)/.config
- 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
-+	mv $(PKG_BUILD_DIR)/.config $(PKG_BUILD_DIR)/.config-regular
++	cp $(PKG_BUILD_DIR)/.config-regular $(PKG_BUILD_DIR)/.config
  endef
  
  define Build/Compile
-+	cp $(PKG_BUILD_DIR)/.config-static $(PKG_BUILD_DIR)/.config
-+	$(call Build/Compile/Default,all)
-+	cp $(PKG_BUILD_DIR)/busybox $(PKG_BUILD_DIR)/busybox-static
-+	$(call Build/Compile/Default,clean)
 +	cp $(PKG_BUILD_DIR)/.config-regular $(PKG_BUILD_DIR)/.config
  	$(call Build/Compile/Default, \
  		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
  		all install \
-@@ -125,4 +148,15 @@ endif
+ 	)
++	$(call Build/Compile/Default,clean)
++	cp $(PKG_BUILD_DIR)/.config-static $(PKG_BUILD_DIR)/.config
++	$(call Build/Compile/Default,all)
++	cp $(PKG_BUILD_DIR)/busybox $(PKG_BUILD_DIR)/busybox-static
+ endef
+ 
+ define Package/busybox/install
+@@ -125,4 +150,15 @@ endif
  	-rm -rf $(1)/lib64
  endef
  
@@ -75,7 +80,7 @@ index 315dd42..1965658 100644
 +$(eval $(call BuildPackage,busybox-static))
 diff --git a/package/utils/busybox/files/busybox-static.config b/package/utils/busybox/files/busybox-static.config
 new file mode 100644
-index 0000000..c059272
+index 0000000..3468908
 --- /dev/null
 +++ b/package/utils/busybox/files/busybox-static.config
 @@ -0,0 +1,1127 @@
@@ -1207,5 +1212,5 @@ index 0000000..c059272
 +CONFIG_FEATURE_IPC_SYSLOG_BUFFER_SIZE=0
 +# CONFIG_FEATURE_KMSG_SYSLOG is not set
 -- 
-2.16.2
+2.18.0
 
