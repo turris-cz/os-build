@@ -3,7 +3,7 @@ dnl We expect this to be include in base.lua just after utils.m4
 divert(-1)
 
 # This is definition of subrepositories
-pushdef(`SUBDIRS',`subdirs = {"base", "core" esyscmd(`awk "/src-git/{printf \", \\\"%s\\\"\", \$'`2}" feeds.conf')}')
+pushdef(`SUBDIRS',`subdirs = {"base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" feeds.conf')}')
 
 divert(0)dnl
 local board

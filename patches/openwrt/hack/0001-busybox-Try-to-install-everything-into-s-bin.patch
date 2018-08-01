@@ -12,17 +12,22 @@ diff --git a/package/utils/busybox/Makefile b/package/utils/busybox/Makefile
 index fc882d3..5d4ba1d 100644
 --- a/package/utils/busybox/Makefile
 +++ b/package/utils/busybox/Makefile
-@@ -132,6 +132,13 @@ endef
+@@ -132,6 +132,18 @@ endef
  define Package/busybox/install
  	$(INSTALL_DIR) $(1)/etc/init.d
  	$(CP) $(PKG_INSTALL_DIR)/* $(1)/
-+	for i in $(1)/usr/bin/*; do \
++	$(INSTALL_DIR) $(1)/bin
++	$(INSTALL_DIR) $(1)/usr/bin
++	$(INSTALL_DIR) $(1)/sbin
++	[ -z "`ls $(1)/usr/bin/ 2> /dev/null`" ] || for i in $(1)/usr/bin/*; do \
 +		[ "$$$$(basename $$$$i)" \!= env ] || continue; \
-+		rm -f $$$$i &&	ln -s busybox $(1)/bin/`basename $$$$i`; \
++		echo Moving $$$$i && rm -f $$$$i &&  ln -s busybox $(1)/bin/`basename $$$$i`; \
 +	done
-+	for i in $(1)/usr/sbin/*; do \
-+		rm -f $$$$i &&	ln -s ../bin/busybox $(1)/sbin/`basename $$$$i`; \
++	[ -z "`ls $(1)/usr/sbin/ 2> /dev/null`" ] || for i in $(1)/usr/sbin/*; do \
++		echo Moving $$$$i && rm -f $$$$i &&  ln -s ../bin/busybox $(1)/sbin/`basename $$$$i`; \
 +	done
++	[ -e $(1)/usr/bin/env ] || ln -s ../../bin/busybox $(1)/usr/bin/env
++	rm -f $(1)/sbin/ifup $(1)/sbin/ifdown
  ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_CROND),)
  	$(INSTALL_BIN) ./files/cron $(1)/etc/init.d/cron
  endif
