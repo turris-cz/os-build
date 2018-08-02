@@ -189,6 +189,15 @@ configure() {
 		echo "CONFIG_SDK=n" >> .config
 	fi
 	make $MAKE_DEBUG defconfig
+	OPENWRT_ARCH="$(sed -n 's|^CONFIG_TARGET_BOARD="\([^"]*\)"|\1|p' .config)"
+	EXTRA_KERNEL="$(cat "${SRC_DIR}"/configs/common/* "${SRC_DIR}/configs/${TARGET_BOARD}"/* | sed -n 's|^[[:blank:]]*CONFIG_KERNEL|CONFIG|p')"
+	TO_COMMIT=""
+	for config in target/linux/"${OPENWRT_ARCH}"/config-*; do
+		echo "${EXTRA_KERNEL}" >> "$config"
+		TO_COMMIT="$TO_COMMIT $config"
+	done
+	
+	git commit -m 'kernel: Add customized kernel options' $TO_COMMIT
 }
 
 update_mirror_help="Updates all local mirrors"
