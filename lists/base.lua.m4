@@ -26,7 +26,7 @@ elseif model:match("^[Tt]urris$") then
 	forInstallCritical(kmod,file2args(kmod-turris.list))
 end
 Install("fstools", { critical = true })
-if model and model:match("[Tt]urris") then
+if model and model:match("^[Tt]urris$") then
 	Install("turris-support", { critical = true })
 end
 if model and model:match("[Mm][Oo][Xx]") then
