@@ -1,0 +1,161 @@
+From 42a3c6465a230a4e03f2a185f4db5ac57b89f673 Mon Sep 17 00:00:00 2001
+From: Rosy Song <rosysong@rosinson.com>
+Date: Sat, 4 Aug 2018 10:25:54 +0800
+Subject: [PATCH] netfilter: separate IPv6 relevant kernel modules from IPv4
+
+Signed-off-by: Rosy Song <rosysong@rosinson.com>
+---
+ include/netfilter.mk                      | 14 +++--
+ package/kernel/linux/modules/netfilter.mk | 63 +++++++++++++++++++++--
+ 2 files changed, 67 insertions(+), 10 deletions(-)
+
+diff --git a/include/netfilter.mk b/include/netfilter.mk
+index 510aa183ca1..e05bd4ee608 100644
+--- a/include/netfilter.mk
++++ b/include/netfilter.mk
+@@ -115,7 +115,7 @@ $(eval $(call nf_add,IPT_IPOPT,CONFIG_NETFILTER_XT_MATCH_DSCP, $(P_XT)xt_dscp))
+ $(eval $(call nf_add,IPT_IPOPT,CONFIG_NETFILTER_XT_TARGET_DSCP, $(P_XT)xt_DSCP))
+ $(eval $(call nf_add,IPT_HASHLIMIT,CONFIG_NETFILTER_XT_MATCH_HASHLIMIT, $(P_XT)xt_hashlimit))
+ $(eval $(call nf_add,IPT_RPFILTER,CONFIG_IP_NF_MATCH_RPFILTER, $(P_V4)ipt_rpfilter))
++$(eval $(call nf_add,IPT_RPFILTER,CONFIG_IP6_NF_MATCH_RPFILTER, $(P_V6)ip6t_rpfilter))
+-$(eval $(call nf_add,IP6T_RPFILTER,CONFIG_IP6_NF_MATCH_RPFILTER, $(P_V6)ip6t_rpfilter))
+ $(eval $(call nf_add,IPT_IPOPT,CONFIG_NETFILTER_XT_MATCH_LENGTH, $(P_XT)xt_length))
+ $(eval $(call nf_add,IPT_IPOPT,CONFIG_NETFILTER_XT_MATCH_STATISTIC, $(P_XT)xt_statistic))
+ $(eval $(call nf_add,IPT_IPOPT,CONFIG_NETFILTER_XT_MATCH_TCPMSS, $(P_XT)xt_tcpmss))
+@@ -267,9 +267,7 @@ $(eval $(call nf_add,IPT_LED,CONFIG_NETFILTER_XT_TARGET_LED, $(P_XT)xt_LED))
+ 
+ $(eval $(call nf_add,IPT_TEE,CONFIG_NETFILTER_XT_TARGET_TEE, $(P_XT)xt_TEE))
+ $(eval $(if $(NF_KMOD),$(call nf_add,IPT_TEE,CONFIG_NF_DUP_IPV4, $(P_V4)nf_dup_ipv4, ge 4.3),))
++$(eval $(if $(NF_KMOD),$(call nf_add,IPT_TEE,CONFIG_NF_DUP_IPV6, $(P_V6)nf_dup_ipv6, ge 4.3),))
+-
+-# tee (IPv6)
+-$(eval $(if $(NF_KMOD),$(call nf_add,IP6T_TEE,CONFIG_NF_DUP_IPV6, $(P_V6)nf_dup_ipv6, ge 4.3),))
+ 
+ # u32
+ 
+@@ -340,17 +342,15 @@ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_HASH, $(P_XT)nft_hash,
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_COUNTER, $(P_XT)nft_counter),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_LOG, $(P_XT)nft_log),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_LIMIT, $(P_XT)nft_limit),))
++$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_REJECT, $(P_XT)nft_reject $(P_V4)nft_reject_ipv4 $(P_V6)nft_reject_ipv6),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_REJECT_INET, $(P_XT)nft_reject_inet),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NF_TABLES_IPV4, $(P_V4)nf_tables_ipv4),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_CHAIN_ROUTE_IPV4, $(P_V4)nft_chain_route_ipv4),))
++$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NF_TABLES_IPV6, $(P_V6)nf_tables_ipv6),))
++$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_CHAIN_ROUTE_IPV6, $(P_V6)nft_chain_route_ipv6),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_REDIR, $(P_XT)nft_redir, ge 3.19.0),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE,CONFIG_NFT_QUOTA, $(P_XT)nft_quota, ge 4.9.0),))
+ 
+-# nftables (IPv6)
+-$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE6,CONFIG_NFT_REJECT, $(P_XT)nft_reject $(P_V4)nft_reject_ipv4 $(P_V6)nft_reject_ipv6),))
+-$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE6,CONFIG_NF_TABLES_IPV6, $(P_V6)nf_tables_ipv6),))
+-$(eval $(if $(NF_KMOD),$(call nf_add,NFT_CORE6,CONFIG_NFT_CHAIN_ROUTE_IPV6, $(P_V6)nft_chain_route_ipv6),))
+-
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_ARP,CONFIG_NF_TABLES_ARP, $(P_V4)nf_tables_arp),))
+ 
+ $(eval $(if $(NF_KMOD),$(call nf_add,NFT_BRIDGE,CONFIG_NF_TABLES_BRIDGE, $(P_EBT)nf_tables_bridge),))
+diff --git a/package/kernel/linux/modules/netfilter.mk b/package/kernel/linux/modules/netfilter.mk
+index 6d751cc658a..11b482454f9 100644
+--- a/package/kernel/linux/modules/netfilter.mk
++++ b/package/kernel/linux/modules/netfilter.mk
+@@ -586,19 +586,6 @@ endef
+ 
+ $(eval $(call KernelPackage,ipt-tee))
+ 
+-define KernelPackage/ip6t-tee
+-  TITLE:=TEE support (IPv6)
+-  DEPENDS:=+kmod-ipt-tee
+-  FILES:= $(foreach mod,$(IP6T_TEE-m),$(LINUX_DIR)/net/$(mod).ko)
+-  AUTOLOAD:=$(call AutoProbe,$(notdir nf_tee $(IP6T_TEE-m)))
+-  $(call AddDepends/ipt)
+-endef
+-
+-define KernelPackage/ip6t-tee/description
+-  Kernel modules for TEE (IPv6)
+-endef
+-
+-$(eval $(call KernelPackage,ip6t-tee))
+ 
+ define KernelPackage/ipt-u32
+   TITLE:=U32 support
+@@ -951,8 +964,10 @@ define KernelPackage/ipt-rpfilter
+   TITLE:=Netfilter rpfilter match
+   DEPENDS:=+kmod-ipt-core
+   KCONFIG:=$(KCONFIG_IPT_RPFILTER)
++  FILES:=$(realpath \
++	$(LINUX_DIR)/net/ipv4/netfilter/ipt_rpfilter.ko \
++	$(LINUX_DIR)/net/ipv6/netfilter/ip6t_rpfilter.ko)
++  AUTOLOAD:=$(call AutoProbe,ipt_rpfilter ip6t_rpfilter)
+-  FILES:=$(realpath $(LINUX_DIR)/net/ipv4/netfilter/ipt_rpfilter.ko)
+-  AUTOLOAD:=$(call AutoProbe,ipt_rpfilter)
+   $(call KernelPackage/ipt)
+ endef
+ 
+@@ -965,27 +976,10 @@ endef
+ $(eval $(call KernelPackage,ipt-rpfilter))
+ 
+ 
+-define KernelPackage/ip6t-rpfilter
+-  SUBMENU:=$(NF_MENU)
+-  TITLE:=Netfilter rpfilter match (IPv6)
+-  DEPENDS:=+kmod-ipt-core
+-  KCONFIG:=$(KCONFIG_IP6T_RPFILTER)
+-  FILES:=$(realpath $(LINUX_DIR)/net/ipv6/netfilter/ip6t_rpfilter.ko)
+-  AUTOLOAD:=$(call AutoProbe,ip6t_rpfilter)
+-  $(call KernelPackage/ipt)
+-endef
+-
+-define KernelPackage/ip6t-rpfilter/description
+- Kernel modules support for the Netfilter rpfilter match (IPv6)
+-endef
+-
+-$(eval $(call KernelPackage,ip6t-rpfilter))
+-
+-
+ define KernelPackage/nft-core
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter nf_tables support
++  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +kmod-nf-reject6 +kmod-nf-conntrack6
+-  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +kmod-nf-conntrack
+   FILES:=$(foreach mod,$(NFT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE-m)))
+   KCONFIG:= \
+@@ -983,20 +1011,6 @@ endef
+ 
+ $(eval $(call KernelPackage,nft-core))
+ 
+-define KernelPackage/nft-core6
+-  SUBMENU:=$(NF_MENU)
+-  TITLE:=Netfilter nf_tables support (IPv6)
+-  DEPENDS:=+kmod-nft-core +kmod-nf-reject6 +kmod-nf-conntrack6
+-  FILES:=$(foreach mod,$(NFT_CORE6-m),$(LINUX_DIR)/net/$(mod).ko)
+-  AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE6-m)))
+-  KCONFIG:= $(KCONFIG_NFT_CORE6)
+-endef
+-
+-define KernelPackage/nft-core6/description
+- Kernel module support for nftables (IPv6)
+-endef
+-
+-$(eval $(call KernelPackage,nft-core6))
+ 
+ define KernelPackage/nft-arp
+   SUBMENU:=$(NF_MENU)
+@@ -1042,17 +1084,6 @@ endef
+ $(eval $(call KernelPackage,nft-offload))
+ 
+ 
+-define KernelPackage/nft-offload6
+-  SUBMENU:=$(NF_MENU)
+-  TITLE:=Netfilter nf_tables routing/NAT offload support (IPv6)
+-  DEPENDS:=+kmod-nft-offload
+-  KCONFIG:=CONFIG_NF_FLOW_TABLE_IPV6
+-  FILES:=$(LINUX_DIR)/net/ipv6/netfilter/nf_flow_table_ipv6.ko
+-  AUTOLOAD:=$(call AutoProbe,nf_flow_table_ipv6)
+-endef
+-
+-$(eval $(call KernelPackage,nft-offload6))
+-
+ define KernelPackage/nft-nat6
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter nf_tables IPv6-NAT support
