@@ -31,7 +31,7 @@ MAKE_DEBUG=""
 PUBLISH_BRANCH=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="checkout clean patch_openwrt get_feeds patch_feeds gen_version configure build gen_lists store_hash sign stats gen_junit"
+DEFAULT_STEPS="prepare build gen_lists store_hash sign stats gen_junit"
 
 if [ "$BUILD_DIR" == "$SRC_DIR" ]; then
 	mkdir -p build
@@ -305,8 +305,8 @@ set_ccache() {
 	[ -z "$CCACHE_SET" ] || return 0
 	_report "Setting ccache paths"
 	CCACHE_SET=y
-	[ -z "$CCACHE_HOST_DIR" ] || sed -i 's|\(export CCACHE_DIR:=\)[^),]*|\1'"$CCACHE_HOST_DIR|" include/host-build.mk
-	[ -z "$CCACHE_TARGET_DIR" ] || [ -z "$TARGET_ARCH" ] || sed -i 's|\(export CCACHE_DIR:=\)[^),]*|\1'"$CCACHE_TARGET_DIR/$TARGET_ARCH)|" include/package.mk
+	[ -z "$CCACHE_HOST_DIR" ] || sed -i 's|$(STAGING_DIR_HOST)/ccache|'"$CCACHE_HOST_DIR|" include/host-build.mk
+	[ -z "$CCACHE_TARGET_DIR" ] || [ -z "$TARGET_ARCH" ] || sed -i 's|$(STAGING_DIR)/ccache|'"$CCACHE_TARGET_DIR/$TARGET_ARCH|" include/package.mk
 	[ -z "$(git diff include/host-build.mk include/package.mk)" ] || git commit -m "include: ccache settings" include/host-build.mk include/package.mk
 }
 
@@ -397,7 +397,7 @@ get_feeds() {
 	[ -z "$DISABLED_PACKAGES" ] || perl $PERL_DEBUG ./scripts/feeds uninstall $DISABLED_PACKAGES
 }
 
-repatch_feeds_help="Cleanup feeds, update them and patch them"
+repatch_feeds_help="Cleanup feeds, update them and patch them (Implies: get_feeds patch_feeds)"
 repatch_feeds() {
 	get_feeds
 	patch_feeds
@@ -461,7 +461,7 @@ clean() {
 	mkdir -p tmp
 }
 
-prepare_help="	Prepare build but don't build it"
+prepare_help="	Prepare build but don't build it (Implies: checkout clean patch_openwrt repatch_feeds gen_version configure)"
 prepare() {
 	checkout
 	clean
@@ -469,6 +469,17 @@ prepare() {
 	repatch_feeds
 	gen_version
 	configure
+}
+
+prepare_tools_help="	Prepare build and build tools"
+prepare_tools() {
+	prepare
+	make $MAKE_DEBUG IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG tools/compile toolchain/compile
+}
+
+pkgauto_help="	Deploy pkgauto.mk that can be used for rolling software development"
+pkgauto() {
+	cp "$SRC_DIR/helpers/pkgauto.mk" "$BUILD_DIR/include/pkgauto.mk"
 }
 
 # Sets various variables to match the specified target, just a helper
