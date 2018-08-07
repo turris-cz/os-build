@@ -48,7 +48,7 @@ Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40
 if features and features.provides then
 	Install("syslog", "cron", { priority = 40 })
 end
-Install("vixie-cron", "syslog-ng3", { priority = 40 })
+Install("vixie-cron", "syslog-ng", { priority = 40 })
 Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 -- Note: Following packages should be critical only if we ignored dns-resolver
@@ -76,18 +76,22 @@ end
 
 -- Utility
 Install("ip-full", "iptables", "ip6tables", { priority = 40 })
+Install("iputils-ping", "iputils-ping6", "iputils-tracepath", "iputils-tracepath6", "iputils-traceroute6", { priority = 40 })
 Install("shadow", "shadow-utils", "uboot-envtools", "i2c-tools", { priority = 40 })
 Install("openssh-client", "openssh-client-utils", "openssh-moduli", "openssh-server", "openssh-sftp-client", "openssh-sftp-server", "openssl-util", { priority = 40 })
 Install("bind-client", "bind-dig", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", { priority = 40 })
+Install("lm-sensors", { priority = 40 })
 
 -- Turris utility
 Install("turris-utils", "user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
-if not model or model:match("[Oo]mnia") then
-	Install("rainbow-omnia", { priority = 40 })
-	Install("schnapps", "sfpswitch", { priority = 40 })
-else
-	Install("rainbow", { priority = 40 })
+if not model then
+	if model:match("[Oo]mnia") then
+		Install("rainbow-omnia", { priority = 40 })
+		Install("schnapps", "sfpswitch", { priority = 40 })
+	elseif model:match("^[Tt]urris$") then
+		Install("rainbow", { priority = 40 })
+	end
 end
 
 Install("foris", "foris-diagnostics-plugin", { priority = 40 })
@@ -96,7 +100,7 @@ if for_l10n then
 	for_l10n("foris-diagnostics-plugin-l10n-")
 end
 Install("turris-version", "lighttpd-https-cert", "start-indicator", { priority = 40 })
-Install("conntrack-tools", { priority = 40 })
+Install("conntrack", { priority = 40 })
 
 -- Wifi
 Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
