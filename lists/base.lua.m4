@@ -45,9 +45,6 @@ Install("procd", "ubus", "uci", "netifd", "firewall", "swconfig", { critical = t
 Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40 })
 
 -- Turris minimum
-if features and features.provides then
-	Install("syslog", "cron", { priority = 40 })
-end
 Install("vixie-cron", "syslog-ng", { priority = 40 })
 Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
