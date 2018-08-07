@@ -1,7 +1,7 @@
 include(utils.m4)dnl Include utility macros
 include(repository.m4)dnl Include Repository command
 -- Updater itself
-Install('updater-ng', 'userlists', { critical = true })
+Install('updater-ng', 'updater-ng-supervisor', { critical = true })
 --[[
 Updater before v59.0 has no support for replan as string and it would complain
 about it. This is helper function is here to overcome that.
@@ -81,7 +81,7 @@ Install("pciutils", "usbutils", "lsof", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
 
 -- Turris utility
-Install("turris-utils", "user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
+Install("turris-utils", "user_notify", "user_notify_locales", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
 if not model then
 	if model:match("[Oo]mnia") then
 		Install("rainbow-omnia", { priority = 40 })
@@ -92,9 +92,11 @@ if not model then
 end
 
 Install("foris", "foris-diagnostics-plugin", { priority = 40 })
+Install('userlists', { priority = 40 })
 if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n("foris-diagnostics-plugin-l10n-")
+	for_l10n('userlists-l10n-')
 end
 Install("turris-version", "lighttpd-https-cert", "start-indicator", { priority = 40 })
 Install("conntrack", { priority = 40 })
@@ -140,7 +142,7 @@ mismatch resulting in to the unconfigured switch. This ensures that new swconfig
 is running on new kernel.
 
 Note: version_match was introduced after installed started working so we check
-if it's defined if we can use isntalled.
+if it's defined if we can use installed.
 ]]
 if not model or model:match("[Oo]mnia") then
 	if not version_match or not installed["kmod-swconfig"] or version_match(installed["kmod-swconfig"].version, "<4.4.40") then
@@ -154,9 +156,37 @@ But various packages requires package ip. In new updater we solve it using
 Provides field but this won't work with all updater versions. This hack adds
 virtual package ip for such updater version and basically just rebinds it to
 ip-full.
+There is a problem with executing this multiple times. Updater adds candidate for
+every Package command execution. But in older versions it also checks if virtual
+package has only one candidate. But because this script is executed twice (because
+it was invalidly specified as userlist) we have two candidates and error about
+invalid virtual package is reported. Setting flag on first pass trough ensures
+that we won't run it more than once. If updater fails then flags are not saved. If
+updater successes then  it had to update it self to never version with provides
+supported.
+Note that flags are not available in new version of updater. They were dropped
+with version 60.0.
 ]]
 if not features or not features.provides then
-	Package("ip", { virtual = true, deps = {"ip-full"} })
+	if flags[""] == nil then
+		Package("ip", { virtual = true, deps = {"ip-full"} })
+		flags[""] = true
+	end
+end
+
+--[[
+In Turris OS 3.10 nuci backend for Foris was obsoleted. updater.sh was replaced
+with updater-supervisor. And because all of that cleanup of some old files
+happened. But those files are required by nuci implementation. When updating to
+new version at first updater-ng is updated, then replan happens and foris is
+updated later on. But when user has approvals configured then we break nuci
+backend with some missing files that are no longer part of updater-ng and that
+breaks Foris so there is no easy way for user to approve update. Because of that
+we have to ensure that those needed files (even if they are just fake files) are
+present when old version of Foris is still present.
+]]
+if not version_match or (installed["foris"] and version_match(installed["foris"].version, "<97.7")) then
+	Package("updater-ng", { deps = { "updater-ng-migration-helper" } })
 end
 
 --[[
