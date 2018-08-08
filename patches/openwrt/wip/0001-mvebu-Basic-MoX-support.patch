@@ -1,4 +1,4 @@
-From e936c9827d3b0e90143c5515e1f59a75132318fa Mon Sep 17 00:00:00 2001
+From 7de5987523f97cd3c66cfd1f6ba0b44df2078828 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -7,7 +7,7 @@ Adding basic support for CZ.NICs MoX board.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- target/linux/mvebu/config-4.14                |   2 +
+ target/linux/mvebu/config-4.14                |   1 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
  ...3-net-mvneta-move-port-configuration.patch | 106 +++
  ...024-net-mvneta-add-1000BaseX-support.patch |  65 ++
@@ -69,7 +69,11 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-support-for-Turris-Mox-SFP-cage-mod.patch | 364 ++++++++
  ...l-Add-DTS-files-for-Turris-Mox-and-i.patch | 864 ++++++++++++++++++
  ...-t-guess-support-from-connector-type.patch |  57 ++
- 62 files changed, 6793 insertions(+)
+ .../patches-4.14/990001-change-Mox-dts.patch  | 264 ++++++
+ .../990002-add-moxtet-bus-driver.patch        | 545 +++++++++++
+ ...is-mox-sfp-driver-to-gpio-moxtet-sfp.patch | 227 +++++
+ .../990004-delete-turris-mox-sfp-driver.patch | 296 ++++++
+ 66 files changed, 8124 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90023-net-mvneta-move-port-configuration.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90024-net-mvneta-add-1000BaseX-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90025-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch
@@ -130,12 +134,16 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90081-drivers-gpio-Add-support-for-Turris-Mox-SFP-cage-mod.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90082-ARM64-dts-marvell-Add-DTS-files-for-Turris-Mox-and-i.patch
  create mode 100644 target/linux/mvebu/patches-4.14/9086-sfp-don-t-guess-support-from-connector-type.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/990001-change-Mox-dts.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/990002-add-moxtet-bus-driver.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/990003-change-gpio-turris-mox-sfp-driver-to-gpio-moxtet-sfp.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/990004-delete-turris-mox-sfp-driver.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
-index f5e9876..8c77688 100644
+index f5e9876..1e7dbda 100644
 --- a/target/linux/mvebu/config-4.14
 +++ b/target/linux/mvebu/config-4.14
-@@ -377,6 +377,7 @@ CONFIG_NEED_DMA_MAP_STATE=y
+@@ -375,6 +375,7 @@ CONFIG_NEED_DMA_MAP_STATE=y
  CONFIG_NEON=y
  # CONFIG_NET_CLS_CGROUP is not set
  CONFIG_NET_DSA=y
@@ -7304,6 +7312,1362 @@ index 0000000..1de9002
 + 
 +-- 
 +2.17.1
++
+diff --git a/target/linux/mvebu/patches-4.14/990001-change-Mox-dts.patch b/target/linux/mvebu/patches-4.14/990001-change-Mox-dts.patch
+new file mode 100644
+index 0000000..adf8c0e
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/990001-change-Mox-dts.patch
+@@ -0,0 +1,264 @@
++From 974424d6808c3148e1e135f06d0b4dc23501a27c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 10:49:20 +0200
++Subject: [PATCH 1/4] change Mox dts
++
++---
++ arch/arm64/boot/dts/marvell/Makefile          |   7 +-
++ .../dts/marvell/armada-3720-turris-mox.dts    | 226 ++++++++++++++++++
++ 2 files changed, 227 insertions(+), 6 deletions(-)
++ create mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++
++diff --git a/arch/arm64/boot/dts/marvell/Makefile b/arch/arm64/boot/dts/marvell/Makefile
++index fd5531a9dda4..51782b31b441 100644
++--- a/arch/arm64/boot/dts/marvell/Makefile
+++++ b/arch/arm64/boot/dts/marvell/Makefile
++@@ -6,12 +6,7 @@ dtb-$(CONFIG_ARCH_BERLIN) += berlin4ct-stb.dtb
++ # Mvebu SoC Family
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-espressobin.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd-peridot.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd-peridot-peridot.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd-peridot-peridot-peridot.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd-sfp.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd-topaz.dtb
++-dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox-sd.dtb
+++dtb-$(CONFIG_ARCH_MVEBU) += armada-3720-turris-mox.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-7040-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-db.dtb
++ dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++new file mode 100644
++index 000000000000..f577fe960ed5
++--- /dev/null
+++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++@@ -0,0 +1,226 @@
+++// SPDX-License-Identifier: GPL-2.0+ or X11
+++/*
+++ * Device Tree file for CZ.NIC Turris Mox Board
+++ * 2018 by Marek Behun <marek.behun@nic.cz>
+++ */
+++
+++/dts-v1/;
+++
+++#include <dt-bindings/gpio/gpio.h>
+++#include <dt-bindings/input/input.h>
+++#include "armada-372x.dtsi"
+++
+++/ {
+++	model = "CZ.NIC Turris Mox Board";
+++	compatible = "cznic,turris-mox", "marvell,armada3720", "marvell,armada3710";
+++
+++	aliases {
+++		spi0 = &spi0;
+++	};
+++
+++	chosen {
+++		stdout-path = "serial0:115200n8";
+++	};
+++
+++	memory@0 {
+++		device_type = "memory";
+++		reg = <0x00000000 0x00000000 0x00000000 0x20000000>;
+++	};
+++
+++	leds {
+++		compatible = "gpio-leds";
+++		red {
+++			gpios = <&gpiosb 21 GPIO_ACTIVE_LOW>;
+++			linux,default-trigger = "heartbeat";
+++		};
+++	};
+++
+++	gpio_keys {
+++		compatible = "gpio-keys";
+++		#address-cells = <1>;
+++		#size-cells = <0>;
+++
+++		button@0 {
+++			label = "reset";
+++			linux,code = <BTN_MISC>;
+++			gpios = <&gpiosb 20 GPIO_ACTIVE_LOW>;
+++			debounce-interval = <60>;
+++		};
+++	};
+++
+++	exp_usb3_vbus: usb3-vbus {
+++		compatible = "regulator-fixed";
+++		regulator-name = "usb3-vbus";
+++		regulator-min-microvolt = <5000000>;
+++		regulator-max-microvolt = <5000000>;
+++		enable-active-high;
+++		regulator-always-on;
+++		gpio = <&gpiosb 0 GPIO_ACTIVE_HIGH>;
+++	};
+++
+++	usb3_phy: usb3-phy {
+++		compatible = "usb-nop-xceiv";
+++		vcc-supply = <&exp_usb3_vbus>;
+++	};
+++
+++	vsdc_reg: regulator@1 {
+++		compatible = "regulator-gpio";
+++		regulator-name = "vsdc";
+++		regulator-min-microvolt = <1800000>;
+++		regulator-max-microvolt = <3300000>;
+++		regulator-boot-on;
+++
+++		gpios = <&gpiosb 23 GPIO_ACTIVE_HIGH>;
+++		gpios-states = <0>;
+++		states = <1800000 0x1
+++			  3300000 0x0>;
+++		enable-active-high;
+++	};
+++
+++	vsdio_reg: regulator@2 {
+++		compatible = "regulator-gpio";
+++		regulator-name = "vsdio";
+++		regulator-min-microvolt = <1800000>;
+++		regulator-max-microvolt = <3300000>;
+++		regulator-boot-on;
+++
+++		gpios = <&gpiosb 22 GPIO_ACTIVE_HIGH>;
+++		gpios-states = <0>;
+++		states = <1800000 0x1
+++			  3300000 0x0>;
+++		enable-active-high;
+++	};
+++};
+++
+++&pinctrl_nb {
+++	spi_cs1_pins: spi-cs1-pins {
+++		groups = "spi_cs1";
+++		function = "spi";
+++	};
+++
+++	sdio0_pins: sdio0-pins {
+++		groups = "sdio0";
+++		function = "sdio";
+++	};
+++};
+++
+++&pinctrl_sb {
+++	sdio_sb_pins: sdio-sb-pins {
+++		groups = "sdio_sb";
+++		function = "sdio";
+++	};
+++
+++	smi_pins: smi-pins {
+++		groups = "smi";
+++		function = "smi";
+++	};
+++
+++	pcie_pins: pcie1-pins {
+++		groups = "pcie1";
+++		function = "gpio";
+++	};
+++};
+++
+++&i2c0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&i2c1_pins>;
+++	status = "okay";
+++
+++	rtc@6f {
+++		compatible = "microchip,mcp7940x";
+++		reg = <0x6f>;
+++	};
+++};
+++
+++&pcie0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&pcie_pins>;
+++	status = "okay";
+++	max-link-speed = <2>;
+++	status = "disabled";
+++};
+++
+++&uart0 {
+++	status = "okay";
+++};
+++
+++&eth0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&rgmii_pins>;
+++	phy-mode = "rgmii-id";
+++	phy = <&phy1>;
+++	status = "okay";
+++};
+++
+++&mdio {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&smi_pins>;
+++	status = "okay";
+++
+++	phy1: ethernet-phy@1 {
+++		reg = <1>;
+++	};
+++};
+++
+++&sdhci0 {
+++	wp-inverted;
+++	bus-width = <4>;
+++	cd-gpios = <&gpionb 10 GPIO_ACTIVE_HIGH>;
+++	vqmmc-supply = <&vsdc_reg>;
+++	marvell,pad-type = "sd";
+++	status = "okay";
+++};
+++
+++&sdhci1 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&sdio0_pins &sdio_sb_pins>;
+++	non-removable;
+++	bus-width = <4>;
+++	marvell,pad-type = "sd";
+++	vqmmc-supply = <&vsdio_reg>;
+++	status = "okay";
+++};
+++
+++&spi0 {
+++	status = "okay";
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&spi_quad_pins &spi_cs1_pins>;
+++
+++	spi-flash@0 {
+++		#address-cells = <1>;
+++		#size-cells = <1>;
+++		compatible = "jedec,spi-nor";
+++		reg = <0>;
+++		spi-max-frequency = <2000000>;
+++
+++		partition@0 {
+++			label = "u-boot";
+++			reg = <0x0 0x3f0000>;
+++		};
+++
+++		partition@3f0000 {
+++			label = "u-boot-env";
+++			reg = <0x180000 0x10000>;
+++		};
+++
+++		partition@400000 {
+++			label = "Rescue system";
+++			reg = <0x190000 0x670000>;
+++		};
+++	};
+++
+++	moxtet@1 {
+++		#address-cells = <1>;
+++		#size-cells = <0>;
+++		compatible = "cznic,moxtet";
+++		reg = <1>;
+++		spi-max-frequency = <1000000>;
+++		spi-cpol;
+++		spi-cpha;
+++	};
+++};
+++
+++&usb3 {
+++	status = "okay";
+++	usb-phy = <&usb3_phy>;
+++};
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/990002-add-moxtet-bus-driver.patch b/target/linux/mvebu/patches-4.14/990002-add-moxtet-bus-driver.patch
+new file mode 100644
+index 0000000..29ae342
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/990002-add-moxtet-bus-driver.patch
+@@ -0,0 +1,545 @@
++From 93769bc154a0e5b2cfa46b58fcdd9c8bf2ecb5aa Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 10:50:08 +0200
++Subject: [PATCH 2/4] add moxtet bus driver
++
++---
++ drivers/mfd/Kconfig  |  10 +
++ drivers/mfd/Makefile |   1 +
++ drivers/mfd/moxtet.c | 491 +++++++++++++++++++++++++++++++++++++++++++
++ 3 files changed, 502 insertions(+)
++ create mode 100644 drivers/mfd/moxtet.c
++
++diff --git a/drivers/mfd/Kconfig b/drivers/mfd/Kconfig
++index fc5e4fef89d2..663789ef3225 100644
++--- a/drivers/mfd/Kconfig
+++++ b/drivers/mfd/Kconfig
++@@ -761,6 +761,16 @@ config MFD_MAX8998
++ 	  additional drivers must be enabled in order to use the functionality
++ 	  of the device.
++ 
+++config MFD_MOXTET
+++	tristate "CZ.NIC Turris Mox module configuration bus"
+++	depends on SPI_MASTER && OF
+++	help
+++	  Say yes here to add support for the module configuration bus found
+++	  on CZ.NIC's Turris Mox. This is needed for the ability to read
+++	  in what order the modules are connected and to get/set some of
+++	  their settings. For example the GPIOs on Mox SFP module are
+++	  configured through this bus.
+++
++ config MFD_MT6397
++ 	tristate "MediaTek MT6397 PMIC Support"
++ 	select MFD_CORE
++diff --git a/drivers/mfd/Makefile b/drivers/mfd/Makefile
++index 8703ff17998e..79b6e06c20c9 100644
++--- a/drivers/mfd/Makefile
+++++ b/drivers/mfd/Makefile
++@@ -150,6 +150,7 @@ max8925-objs			:= max8925-core.o max8925-i2c.o
++ obj-$(CONFIG_MFD_MAX8925)	+= max8925.o
++ obj-$(CONFIG_MFD_MAX8997)	+= max8997.o max8997-irq.o
++ obj-$(CONFIG_MFD_MAX8998)	+= max8998.o max8998-irq.o
+++obj-$(CONFIG_MFD_MOXTET)	+= moxtet.o
++ 
++ pcf50633-objs			:= pcf50633-core.o pcf50633-irq.o
++ obj-$(CONFIG_MFD_PCF50633)	+= pcf50633.o
++diff --git a/drivers/mfd/moxtet.c b/drivers/mfd/moxtet.c
++new file mode 100644
++index 000000000000..9a074316c217
++--- /dev/null
+++++ b/drivers/mfd/moxtet.c
++@@ -0,0 +1,491 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ * Turris Mox module configuration bus driver
+++ *
+++ * Copyright (C) 2018 Marek Behun <marek.behun@nic.cz>
+++ */
+++
+++#include <linux/module.h>
+++#include <linux/mutex.h>
+++#include <linux/of_device.h>
+++#include <linux/spi/spi.h>
+++#include <linux/mfd/moxtet.h>
+++
+++static ssize_t
+++module_id_show(struct device *dev, struct device_attribute *a, char *buf)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++
+++	return sprintf(buf, "0x%x\n", mdev->id);
+++}
+++static DEVICE_ATTR_RO(module_id);
+++
+++static ssize_t
+++module_name_show(struct device *dev, struct device_attribute *a, char *buf)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++
+++	return sprintf(buf, "%s\n", turris_mox_module_name(mdev->id));
+++}
+++static DEVICE_ATTR_RO(module_name);
+++
+++static ssize_t
+++input_value_show(struct device *dev, struct device_attribute *a, char *buf)
+++{
+++	int ret;
+++
+++	ret = moxtet_device_read(dev);
+++	if (ret < 0)
+++		return ret;
+++
+++	return sprintf(buf, "0x%x\n", ret);
+++}
+++static DEVICE_ATTR_RO(input_value);
+++
+++static ssize_t
+++output_value_show(struct device *dev, struct device_attribute *a, char *buf)
+++{
+++	int ret;
+++
+++	ret = moxtet_device_written(dev);
+++	if (ret < 0)
+++		return ret;
+++
+++	return sprintf(buf, "0x%x\n", ret);
+++}
+++
+++static ssize_t
+++output_value_store(struct device *dev, struct device_attribute *a,
+++		   const char *buf, size_t count)
+++{
+++	u32 val;
+++	int ret;
+++
+++	if (sscanf(buf, "%u", &val) != 1 || val > 0xff)
+++		return -EINVAL;
+++
+++	ret = moxtet_device_write(dev, val);
+++	if (ret < 0)
+++		return ret;
+++
+++	return count;
+++}
+++static DEVICE_ATTR_RW(output_value);
+++
+++static struct attribute *moxtet_dev_attrs[] = {
+++	&dev_attr_module_id.attr,
+++	&dev_attr_module_name.attr,
+++	&dev_attr_input_value.attr,
+++	&dev_attr_output_value.attr,
+++	NULL,
+++};
+++
+++static const struct attribute_group moxtet_dev_group = {
+++	.attrs = moxtet_dev_attrs,
+++};
+++
+++static const struct attribute_group *moxtet_dev_groups[] = {
+++	&moxtet_dev_group,
+++	NULL,
+++};
+++
+++static int moxtet_match(struct device *dev, struct device_driver *drv)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++	struct moxtet_driver *tdrv = to_moxtet_driver(drv);
+++	const enum turris_mox_module_id *t;
+++
+++	if (of_driver_match_device(dev, drv))
+++		return 1;
+++
+++	for (t = tdrv->id_table; *t; ++t)
+++		if (*t == mdev->id)
+++			return 1;
+++
+++	return 0;
+++}
+++
+++struct bus_type moxtet_bus_type = {
+++	.name		= "moxtet",
+++	.dev_groups	= moxtet_dev_groups,
+++	.match		= moxtet_match,
+++};
+++EXPORT_SYMBOL_GPL(moxtet_bus_type);
+++
+++int __moxtet_register_driver(struct module *owner,
+++			     struct moxtet_driver *mdrv)
+++{
+++	mdrv->driver.owner = owner;
+++	mdrv->driver.bus = &moxtet_bus_type;
+++	return driver_register(&mdrv->driver);
+++}
+++EXPORT_SYMBOL_GPL(__moxtet_register_driver);
+++
+++static int moxtet_dev_check(struct device *dev, void *data)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++	struct moxtet_device *new_dev = data;
+++
+++	if (mdev->moxtet == new_dev->moxtet && mdev->id == new_dev->id &&
+++	    mdev->idx == new_dev->idx)
+++		return -EBUSY;
+++	return 0;
+++}
+++
+++static void moxtet_dev_release(struct device *dev)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++
+++	put_device(mdev->moxtet->dev);
+++	kfree(mdev);
+++}
+++
+++static struct moxtet_device *
+++moxtet_alloc_device(struct moxtet *moxtet)
+++{
+++	struct moxtet_device *dev;
+++
+++	if (!get_device(moxtet->dev))
+++		return NULL;
+++
+++	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
+++	if (!dev) {
+++		put_device(moxtet->dev);
+++		return NULL;
+++	}
+++
+++	dev->moxtet = moxtet;
+++	dev->dev.parent = moxtet->dev;
+++	dev->dev.bus = &moxtet_bus_type;
+++	dev->dev.release = moxtet_dev_release;
+++
+++	device_initialize(&dev->dev);
+++
+++	return dev;
+++}
+++
+++static int moxtet_add_device(struct moxtet_device *dev)
+++{
+++	static DEFINE_MUTEX(add_mutex);
+++	int ret;
+++
+++	if (dev->idx >= TURRIS_MOX_MAX_MODULES || dev->id > 0xf)
+++		return -EINVAL;
+++
+++	dev_set_name(&dev->dev, "moxtet-%s.%u",
+++		     turris_mox_module_name(dev->id), dev->idx);
+++
+++	mutex_lock(&add_mutex);
+++
+++	ret = bus_for_each_dev(&moxtet_bus_type, NULL, dev,
+++			       moxtet_dev_check);
+++	if (ret)
+++		goto done;
+++
+++	ret = device_add(&dev->dev);
+++	if (ret < 0)
+++		dev_err(dev->moxtet->dev, "can't add %s, status %d\n",
+++			dev_name(dev->moxtet->dev), ret);
+++
+++done:
+++	mutex_unlock(&add_mutex);
+++	return ret;
+++}
+++
+++static int __unregister(struct device *dev, void *null)
+++{
+++	if (dev->of_node) {
+++		of_node_clear_flag(dev->of_node, OF_POPULATED);
+++		of_node_put(dev->of_node);
+++	}
+++
+++	device_unregister(dev);
+++
+++	return 0;
+++}
+++
+++static struct moxtet_device *
+++of_register_moxtet_device(struct moxtet *moxtet, struct device_node *nc)
+++{
+++	struct moxtet_device *dev;
+++	u32 val;
+++	int ret;
+++
+++	dev = moxtet_alloc_device(moxtet);
+++	if (!dev) {
+++		dev_err(moxtet->dev, "Moxtet device alloc error for "
+++			"%pOF\n", nc);
+++		return ERR_PTR(-ENOMEM);
+++	}
+++
+++	ret = of_property_read_u32(nc, "reg", &val);
+++	if (ret || val >= TURRIS_MOX_MAX_MODULES) {
+++		dev_err(moxtet->dev, "%pOF has no valid 'reg' property (%d)\n",
+++			nc, ret);
+++		goto err_put;
+++	}
+++	dev->idx = val;
+++
+++	ret = of_property_read_u32(nc, "moxtet,id", &val);
+++	if (ret || val > 0xf) {
+++		dev_err(moxtet->dev, "%pOF has no valid 'moxtet,id' "
+++			"property (%d)\n", nc, ret);
+++		goto err_put;
+++	}
+++	dev->id = val;
+++
+++	if (moxtet->modules[dev->idx] != dev->id) {
+++		dev_err(moxtet->dev, "%pOF requested Moxtet device ID 0x%x, "
+++			"but 0x%x found\n", nc, dev->id,
+++			moxtet->modules[dev->idx]);
+++		goto err_put;
+++	}
+++
+++	of_node_get(nc);
+++	dev->dev.of_node = nc;
+++
+++	ret = moxtet_add_device(dev);
+++	if (ret) {
+++		dev_err(moxtet->dev, "Moxtet device register error for "
+++			"%pOF\n", nc);
+++		of_node_put(nc);
+++		goto err_put;
+++	}
+++
+++	return dev;
+++
+++err_put:
+++	put_device(&dev->dev);
+++	return ERR_PTR(ret);
+++}
+++
+++static void of_register_moxtet_devices(struct moxtet *moxtet)
+++{
+++	struct moxtet_device *dev;
+++	struct device_node *nc;
+++
+++	if (!moxtet->dev->of_node)
+++		return;
+++
+++	for_each_available_child_of_node(moxtet->dev->of_node, nc) {
+++		if (of_node_test_and_set_flag(nc, OF_POPULATED))
+++			continue;
+++		dev = of_register_moxtet_device(moxtet, nc);
+++		if (IS_ERR(dev)) {
+++			dev_warn(moxtet->dev, "Failed to create Moxtet device "
+++				"for %pOF\n", nc);
+++			of_node_clear_flag(nc, OF_POPULATED);
+++		}
+++	}
+++}
+++
+++static void
+++moxtet_register_devices_from_topology(struct moxtet *moxtet)
+++{
+++	struct moxtet_device *dev;
+++	int i, ret;
+++
+++	for (i = 0; i < moxtet->count; ++i) {
+++		dev = moxtet_alloc_device(moxtet);
+++		if (!dev) {
+++			dev_err(moxtet->dev, "Moxtet device alloc error "
+++				"for device %u (ID 0x%x)\n", i,
+++				moxtet->modules[i]);
+++			continue;
+++		}
+++
+++		dev->idx = i;
+++		dev->id = moxtet->modules[i];
+++
+++		ret = moxtet_add_device(dev);
+++		if (ret && ret != -EBUSY) {
+++			dev_err(moxtet->dev, "Moxtet device register error"
+++				" for device %u (ID 0x%x): %i\n", i,
+++				moxtet->modules[i], ret);
+++		}
+++	}
+++}
+++
+++static int moxtet_find_topology(struct moxtet *moxtet)
+++{
+++	u8 buf[TURRIS_MOX_MAX_MODULES];
+++	int i, ret;
+++
+++	ret = spi_read(to_spi_device(moxtet->dev), buf, TURRIS_MOX_MAX_MODULES);
+++	if (ret < 0)
+++		return ret;
+++
+++	if (buf[0] == TURRIS_MOX_CPU_ID_EMMC) {
+++		dev_info(moxtet->dev, "Found eMMC Turris Mox CPU module\n");
+++	} else if (buf[0] == TURRIS_MOX_CPU_ID_SD) {
+++		dev_info(moxtet->dev, "Found SD Turris Mox CPU module\n");
+++	} else {
+++		dev_err(moxtet->dev, "Invalid Turris Mox CPU module 0x%02x\n",
+++			buf[0]);
+++		return -ENODEV;
+++	}
+++
+++	moxtet->count = 0;
+++
+++	for (i = 1; i < TURRIS_MOX_MAX_MODULES; ++i) {
+++		int module_id;
+++
+++		if (buf[i] == 0xff)
+++			break;
+++
+++		module_id = buf[i] & 0xf;
+++
+++		moxtet->modules[i-1] = module_id;
+++		++moxtet->count;
+++
+++		switch (module_id) {
+++		case TURRIS_MOX_MODULE_SFP:
+++			dev_info(moxtet->dev, "SFP module found\n");
+++			break;
+++		case TURRIS_MOX_MODULE_PCI:
+++			dev_info(moxtet->dev, "PCIe module found\n");
+++			break;
+++		case TURRIS_MOX_MODULE_TOPAZ:
+++			dev_info(moxtet->dev, "Topaz Switch module found\n");
+++			break;
+++		case TURRIS_MOX_MODULE_PERIDOT:
+++			dev_info(moxtet->dev, "Peridot Switch module found\n");
+++			break;
+++		default:
+++			dev_info(moxtet->dev, "Unknown Moxtet module found "
+++				 "(ID 0x%02x)\n", module_id);
+++		}
+++	}
+++
+++	return 0;
+++}
+++
+++int moxtet_device_read(struct device *dev)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++	struct moxtet *moxtet = mdev->moxtet;
+++	u8 buf[TURRIS_MOX_MAX_MODULES];
+++	struct spi_transfer xfer = {
+++		.rx_buf = buf,
+++		.tx_buf = moxtet->tx,
+++		.len = moxtet->count + 1
+++	};
+++	int ret;
+++
+++	if (mdev->idx >= moxtet->count)
+++		return -EINVAL;
+++
+++	mutex_lock(&moxtet->lock);
+++
+++	ret = spi_sync_transfer(to_spi_device(moxtet->dev), &xfer, 1);
+++
+++	mutex_unlock(&moxtet->lock);
+++
+++	if (ret < 0)
+++		return ret;
+++
+++	return buf[mdev->idx + 1] >> 4;
+++}
+++EXPORT_SYMBOL_GPL(moxtet_device_read);
+++
+++int moxtet_device_write(struct device *dev, u8 val)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++	struct moxtet *moxtet = mdev->moxtet;
+++	int ret;
+++
+++	if (mdev->idx >= moxtet->count)
+++		return -EINVAL;
+++
+++	mutex_lock(&moxtet->lock);
+++
+++	moxtet->tx[mdev->idx + 1] = val;
+++
+++	ret = spi_write(to_spi_device(moxtet->dev), moxtet->tx,
+++			moxtet->count + 1);
+++
+++	mutex_unlock(&moxtet->lock);
+++
+++	return ret;
+++}
+++EXPORT_SYMBOL_GPL(moxtet_device_write);
+++
+++int moxtet_device_written(struct device *dev)
+++{
+++	struct moxtet_device *mdev = to_moxtet_device(dev);
+++	struct moxtet *moxtet = mdev->moxtet;
+++
+++	if (mdev->idx >= moxtet->count)
+++		return -EINVAL;
+++
+++	return moxtet->tx[mdev->idx + 1];
+++}
+++EXPORT_SYMBOL_GPL(moxtet_device_written);
+++
+++static int moxtet_probe(struct spi_device *spi)
+++{
+++	struct moxtet *moxtet;
+++	int ret;
+++
+++	ret = spi_setup(spi);
+++	if (ret < 0)
+++		return ret;
+++
+++	moxtet = devm_kzalloc(&spi->dev, sizeof(struct moxtet),
+++			      GFP_KERNEL);
+++	if (!moxtet)
+++		return -ENOMEM;
+++
+++	moxtet->dev = &spi->dev;
+++	spi_set_drvdata(spi, moxtet);
+++
+++	mutex_init(&moxtet->lock);
+++
+++	ret = moxtet_find_topology(moxtet);
+++	if (ret < 0)
+++		return ret;
+++
+++	of_register_moxtet_devices(moxtet);
+++	moxtet_register_devices_from_topology(moxtet);
+++
+++	return 0;
+++}
+++
+++static int moxtet_remove(struct spi_device *spi)
+++{
+++	struct moxtet *moxtet = spi_get_drvdata(spi);
+++	int dummy;
+++
+++	dummy = device_for_each_child(moxtet->dev, NULL, __unregister);
+++
+++	mutex_destroy(&moxtet->lock);
+++
+++	return 0;
+++}
+++
+++static const struct of_device_id moxtet_dt_ids[] = {
+++	{ .compatible = "cznic,moxtet" },
+++	{},
+++};
+++MODULE_DEVICE_TABLE(of, moxtet_dt_ids);
+++
+++static struct spi_driver moxtet_driver = {
+++	.driver = {
+++		.name		= "moxtet",
+++		.of_match_table = moxtet_dt_ids,
+++	},
+++	.probe		= moxtet_probe,
+++	.remove		= moxtet_remove,
+++};
+++module_spi_driver(moxtet_driver);
+++
+++static int __init moxtet_init(void)
+++{
+++	return bus_register(&moxtet_bus_type);
+++}
+++
+++postcore_initcall(moxtet_init);
+++
+++MODULE_AUTHOR("Marek Behun <marek.behun@nic.cz>");
+++MODULE_DESCRIPTION("CZ.NIC's Turris Mox module configuration bus");
+++MODULE_LICENSE("GPL v2");
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/990003-change-gpio-turris-mox-sfp-driver-to-gpio-moxtet-sfp.patch b/target/linux/mvebu/patches-4.14/990003-change-gpio-turris-mox-sfp-driver-to-gpio-moxtet-sfp.patch
+new file mode 100644
+index 0000000..4677eb8
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/990003-change-gpio-turris-mox-sfp-driver-to-gpio-moxtet-sfp.patch
+@@ -0,0 +1,227 @@
++From 0e5833d459d887f939ba1c9f9bac01c927f3e728 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 10:50:40 +0200
++Subject: [PATCH 3/4] change gpio-turris-mox-sfp driver to gpio-moxtet-sfp
++
++---
++ drivers/gpio/Kconfig           |  13 +--
++ drivers/gpio/Makefile          |   2 +-
++ drivers/gpio/gpio-moxtet-sfp.c | 155 +++++++++++++++++++++++++++++++++
++ 3 files changed, 163 insertions(+), 7 deletions(-)
++ create mode 100644 drivers/gpio/gpio-moxtet-sfp.c
++
++diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
++index 697c14d07881..838f5af5598c 100644
++--- a/drivers/gpio/Kconfig
+++++ b/drivers/gpio/Kconfig
++@@ -995,6 +995,13 @@ config GPIO_MAX77620
++ 	  driver also provides interrupt support for each of the gpios.
++ 	  Say yes here to enable the max77620 to be used as gpio controller.
++ 
+++config GPIO_MOXTET_SFP
+++	tristate "Turris Mox SFP GPIO expander"
+++	depends on MFD_MOXTET
+++	help
+++	  This is the driver needed for configuring the SFP cage found
+++	  on Turris Mox SFP module.
+++
++ config GPIO_MSIC
++ 	bool "Intel MSIC mixed signal gpio support"
++ 	depends on (X86 || COMPILE_TEST) && MFD_INTEL_MSIC
++@@ -1268,12 +1275,6 @@ config GPIO_MC33880
++ 	  SPI driver for Freescale MC33880 high-side/low-side switch.
++ 	  This provides GPIO interface supporting inputs and outputs.
++ 
++-config GPIO_MOX_SFP
++-	tristate "Turris Mox SFP GPIO expander"
++-	help
++-	  This is the driver needed for configuring the SFP cage found
++-	  on Turris Mox SFP module.
++-
++ config GPIO_PISOSR
++ 	tristate "Generic parallel-in/serial-out shift register"
++ 	help
++diff --git a/drivers/gpio/Makefile b/drivers/gpio/Makefile
++index 20b24b8fd8b2..6f07520d1d66 100644
++--- a/drivers/gpio/Makefile
+++++ b/drivers/gpio/Makefile
++@@ -83,6 +83,7 @@ obj-$(CONFIG_GPIO_MC9S08DZ60)	+= gpio-mc9s08dz60.o
++ obj-$(CONFIG_GPIO_ML_IOH)	+= gpio-ml-ioh.o
++ obj-$(CONFIG_GPIO_MM_LANTIQ)	+= gpio-mm-lantiq.o
++ obj-$(CONFIG_GPIO_MOCKUP)      += gpio-mockup.o
+++obj-$(CONFIG_GPIO_MOXTET_SFP)	+= gpio-moxtet-sfp.o
++ obj-$(CONFIG_GPIO_MPC5200)	+= gpio-mpc5200.o
++ obj-$(CONFIG_GPIO_MPC8XXX)	+= gpio-mpc8xxx.o
++ obj-$(CONFIG_GPIO_MSIC)		+= gpio-msic.o
++@@ -95,7 +96,6 @@ obj-$(CONFIG_GPIO_PCA953X)	+= gpio-pca953x.o
++ obj-$(CONFIG_GPIO_PCF857X)	+= gpio-pcf857x.o
++ obj-$(CONFIG_GPIO_PCH)		+= gpio-pch.o
++ obj-$(CONFIG_GPIO_PCI_IDIO_16)	+= gpio-pci-idio-16.o
++-obj-$(CONFIG_GPIO_MOX_SFP)	+= gpio-turris-mox-sfp.o
++ obj-$(CONFIG_GPIO_PISOSR)	+= gpio-pisosr.o
++ obj-$(CONFIG_GPIO_PL061)	+= gpio-pl061.o
++ obj-$(CONFIG_GPIO_PXA)		+= gpio-pxa.o
++diff --git a/drivers/gpio/gpio-moxtet-sfp.c b/drivers/gpio/gpio-moxtet-sfp.c
++new file mode 100644
++index 000000000000..42476ec318f5
++--- /dev/null
+++++ b/drivers/gpio/gpio-moxtet-sfp.c
++@@ -0,0 +1,155 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ *  Turris Mox SFP - GPIOs on the SFP cage found on Turris Mox SFP module
+++ *
+++ *  Copyright (C) 2018 Marek Behun <marek.behun@nic.cz>
+++ */
+++
+++#include <linux/gpio/consumer.h>
+++#include <linux/gpio.h>
+++#include <linux/mfd/moxtet.h>
+++#include <linux/module.h>
+++#include <linux/of_gpio.h>
+++
+++#define MOXTET_SFP_IN_GPIOS	3
+++
+++struct moxtet_sfp_chip {
+++	struct device		*dev;
+++	struct gpio_chip	gpio_chip;
+++	struct gpio_desc	*gpiod_oe;
+++	u8			state;
+++};
+++
+++static int moxtet_sfp_get_value(struct gpio_chip *gc, unsigned offset)
+++{
+++	struct moxtet_sfp_chip *chip = gpiochip_get_data(gc);
+++	int ret;
+++
+++	if (offset < MOXTET_SFP_IN_GPIOS) {
+++		ret = moxtet_device_read(chip->dev);
+++	} else {
+++		offset -= MOXTET_SFP_IN_GPIOS;
+++		ret = moxtet_device_written(chip->dev);
+++	}
+++
+++	if (ret < 0)
+++		return ret;
+++
+++	return (ret >> offset) & 1;
+++}
+++
+++static void moxtet_sfp_set_value(struct gpio_chip *gc, unsigned offset, int val)
+++{
+++	struct moxtet_sfp_chip *chip = gpiochip_get_data(gc);
+++	int ret;
+++
+++	if (offset < MOXTET_SFP_IN_GPIOS)
+++		return;
+++
+++	offset -= MOXTET_SFP_IN_GPIOS;
+++
+++	ret = moxtet_device_written(chip->dev);
+++	if (ret < 0)
+++		return;
+++
+++	if (val)
+++		ret |= (1 << offset);
+++	else
+++		ret &= ~(1 << offset);
+++
+++	moxtet_device_write(chip->dev, ret);
+++}
+++
+++static int moxtet_sfp_get_direction(struct gpio_chip *gc, unsigned offset)
+++{
+++	return offset < MOXTET_SFP_IN_GPIOS;
+++}
+++
+++static int moxtet_sfp_direction_input(struct gpio_chip *gc, unsigned offset)
+++{
+++	if (offset >= MOXTET_SFP_IN_GPIOS)
+++		return -EINVAL;
+++	return 0;
+++}
+++
+++static int moxtet_sfp_direction_output(struct gpio_chip *gc,
+++		unsigned offset, int val)
+++{
+++	if (offset < MOXTET_SFP_IN_GPIOS)
+++		return -EINVAL;
+++
+++	moxtet_sfp_set_value(gc, offset, val);
+++	return 0;
+++}
+++
+++static int moxtet_sfp_probe(struct device *dev)
+++{
+++	struct moxtet_sfp_chip *chip;
+++
+++	chip = devm_kzalloc(dev, sizeof(*chip), GFP_KERNEL);
+++	if (!chip)
+++		return -ENOMEM;
+++
+++	chip->dev = dev;
+++	chip->gpio_chip.parent = dev;
+++
+++	dev_set_drvdata(dev, chip);
+++
+++	chip->gpiod_oe = devm_gpiod_get_optional(dev, "enable",
+++						 GPIOD_OUT_LOW);
+++	if (IS_ERR(chip->gpiod_oe))
+++		return PTR_ERR(chip->gpiod_oe);
+++
+++	gpiod_set_value_cansleep(chip->gpiod_oe, 1);
+++
+++	chip->gpio_chip.label = dev_name(dev);
+++	chip->gpio_chip.get_direction = moxtet_sfp_get_direction;
+++	chip->gpio_chip.direction_input = moxtet_sfp_direction_input;
+++	chip->gpio_chip.direction_output = moxtet_sfp_direction_output;
+++	chip->gpio_chip.get = moxtet_sfp_get_value;
+++	chip->gpio_chip.set = moxtet_sfp_set_value;
+++	chip->gpio_chip.base = -1;
+++
+++	chip->gpio_chip.ngpio = 5;
+++
+++	chip->gpio_chip.can_sleep = true;
+++	chip->gpio_chip.owner = THIS_MODULE;
+++
+++	return gpiochip_add_data(&chip->gpio_chip, chip);
+++}
+++
+++static int moxtet_sfp_remove(struct device *dev)
+++{
+++	struct moxtet_sfp_chip *chip = dev_get_drvdata(dev);
+++
+++	gpiod_set_value_cansleep(chip->gpiod_oe, 0);
+++	gpiochip_remove(&chip->gpio_chip);
+++
+++	return 0;
+++}
+++
+++static const struct of_device_id moxtet_sfp_dt_ids[] = {
+++	{ .compatible = "cznic,moxtet-sfp" },
+++	{},
+++};
+++MODULE_DEVICE_TABLE(of, moxtet_sfp_dt_ids);
+++
+++static const enum turris_mox_module_id moxtet_sfp_id_table[] = {
+++	TURRIS_MOX_MODULE_SFP,
+++	0
+++};
+++
+++static struct moxtet_driver moxtet_sfp_driver = {
+++	.driver = {
+++		.name		= "moxtet-sfp",
+++		.of_match_table	= moxtet_sfp_dt_ids,
+++		.probe		= moxtet_sfp_probe,
+++		.remove		= moxtet_sfp_remove,
+++	},
+++	.id_table	= moxtet_sfp_id_table,
+++};
+++module_moxtet_driver(moxtet_sfp_driver);
+++
+++MODULE_AUTHOR("Marek Behun <marek.behun@nic.cz>");
+++MODULE_DESCRIPTION("GPIO configuration of the SFP cage found on Turris Mox");
+++MODULE_LICENSE("GPL v2");
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/990004-delete-turris-mox-sfp-driver.patch b/target/linux/mvebu/patches-4.14/990004-delete-turris-mox-sfp-driver.patch
+new file mode 100644
+index 0000000..9e87d97
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/990004-delete-turris-mox-sfp-driver.patch
+@@ -0,0 +1,296 @@
++From aa17a37914785a629fc3e87d76016e885582bf17 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 10:51:10 +0200
++Subject: [PATCH 4/4] delete turris mox sfp driver
++
++---
++ drivers/gpio/gpio-turris-mox-sfp.c | 277 -----------------------------
++ 1 file changed, 277 deletions(-)
++ delete mode 100644 drivers/gpio/gpio-turris-mox-sfp.c
++
++diff --git a/drivers/gpio/gpio-turris-mox-sfp.c b/drivers/gpio/gpio-turris-mox-sfp.c
++deleted file mode 100644
++index d471eea3f9f2..000000000000
++--- a/drivers/gpio/gpio-turris-mox-sfp.c
+++++ /dev/null
++@@ -1,277 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0
++-/*
++- *  Turris Mox SFP - GPIOs on the SFP cage found on Turris Mox SFP module
++- *
++- *  Copyright (C) 2018 Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include <linux/gpio/consumer.h>
++-#include <linux/init.h>
++-#include <linux/mutex.h>
++-#include <linux/spi/spi.h>
++-#include <linux/gpio.h>
++-#include <linux/of_gpio.h>
++-#include <linux/slab.h>
++-#include <linux/module.h>
++-
++-struct mox_sfp_chip {
++-	struct gpio_chip	gpio_chip;
++-	struct mutex		lock;
++-	u8			state;
++-	int			sfp_idx;
++-	struct gpio_desc	*gpiod_oe;
++-	char			module_topology[128];
++-};
++-
++-static int mox_sfp_find(struct mox_sfp_chip *chip) {
++-	static const char hex[16] = "0123456789ABCDEF";
++-	static const char *module_names[] = {
++-		[0x0] = "0x00 ",
++-		[0x1] = "sfp ",
++-		[0x2] = "pci ",
++-		[0x3] = "topaz ",
++-		[0x4] = "peridot ",
++-	};
++-	struct spi_transfer t;
++-	u8 rx[10], tx[10];
++-	size_t len = 0;
++-	int i, res;
++-
++-	memset(rx, 0, 10);
++-	memset(tx, 0, 10);
++-
++-	memset(&t, 0, sizeof(t));
++-
++-	t.rx_buf = rx;
++-	t.tx_buf = tx;
++-	t.len = 10;
++-
++-	res = spi_sync_transfer(to_spi_device(chip->gpio_chip.parent), &t, 1);
++-	if (res < 0)
++-		return res;
++-
++-	if (rx[0] != 0xff && rx[0] != 0x00 && rx[0] != 0x10)
++-		return -ENODEV;
++-
++-	chip->sfp_idx = 0;
++-
++-	for (i = 1; i < 10; ++i) {
++-		int midx = rx[i] & 0xf, stridx = 0;
++-		size_t mlen;
++-
++-		if (!chip->sfp_idx && midx == 0x1)
++-			chip->sfp_idx = i;
++-
++-		if (0x1 <= midx && midx <= 0x4)
++-			stridx = midx;
++-
++-		mlen = strlen(module_names[stridx]);
++-
++-		if (len + mlen < sizeof(chip->module_topology)) {
++-			strcpy(&chip->module_topology[len],
++-			       module_names[stridx]);
++-
++-			if (stridx != midx)
++-				chip->module_topology[len+3] = hex[midx];
++-
++-			len += mlen;
++-		}
++-	}
++-	chip->module_topology[len > 0 ? len - 1 : 0] = '\0';
++-
++-	return 0;
++-}
++-
++-static int mox_sfp_do_spi(struct mox_sfp_chip *chip) {
++-	struct spi_transfer t;
++-	u8 rx[10], tx[10], val;
++-	int res;
++-
++-	val = (chip->state >> 3);
++-
++-	memset(tx, 0, 10);
++-	tx[chip->sfp_idx] = val;
++-
++-	memset(&t, 0, sizeof(t));
++-	t.rx_buf = rx;
++-	t.tx_buf = tx;
++-	t.len = 10;
++-
++-	res = spi_sync_transfer(to_spi_device(chip->gpio_chip.parent), &t, 1);
++-	if (res < 0)
++-		return res;
++-
++-	if ((rx[0] != 0xff && rx[0] != 0x00 && rx[0] != 0x10)
++-	    || (rx[chip->sfp_idx] & 0xf) != 0x1)
++-		return -ENODEV;
++-
++-	chip->state = (chip->state & ~7) | ((rx[chip->sfp_idx] >> 4) & 7);
++-
++-	return 0;
++-}
++-
++-static int mox_sfp_get_value(struct gpio_chip *gc, unsigned offset)
++-{
++-	struct mox_sfp_chip *chip = gpiochip_get_data(gc);
++-	int ret;
++-
++-	if (offset <= 2) {
++-		mutex_lock(&chip->lock);
++-		ret = mox_sfp_do_spi(chip);
++-		mutex_unlock(&chip->lock);
++-
++-		if (ret < 0)
++-			return ret;
++-	}
++-
++-	return (chip->state >> offset) & 1;
++-}
++-
++-static void mox_sfp_set_value(struct gpio_chip *gc,
++-		unsigned offset, int val)
++-{
++-	struct mox_sfp_chip *chip = gpiochip_get_data(gc);
++-
++-	if (offset <= 2)
++-		return;
++-
++-	mutex_lock(&chip->lock);
++-	if (val)
++-		chip->state |= (1 << offset);
++-	else
++-		chip->state &= ~(1 << offset);
++-
++-	(void) mox_sfp_do_spi(chip);
++-
++-	mutex_unlock(&chip->lock);
++-}
++-
++-static int mox_sfp_get_direction(struct gpio_chip *gc, unsigned offset)
++-{
++-	return offset <= 2;
++-}
++-
++-static int mox_sfp_direction_input(struct gpio_chip *gc, unsigned offset)
++-{
++-	if (offset > 2)
++-		return -EINVAL;
++-	return 0;
++-}
++-
++-static int mox_sfp_direction_output(struct gpio_chip *gc,
++-		unsigned offset, int val)
++-{
++-	if (offset <= 2 || offset > 4)
++-		return -EINVAL;
++-	mox_sfp_set_value(gc, offset, val);
++-	return 0;
++-}
++-
++-static ssize_t module_topology_show(struct device *dev,
++-				    struct device_attribute *attr, char *buf)
++-{
++-	struct mox_sfp_chip *chip = dev_get_drvdata(dev);
++-	return sprintf(buf, "%s\n", chip->module_topology);
++-}
++-static DEVICE_ATTR_RO(module_topology);
++-
++-static int mox_sfp_probe(struct spi_device *spi)
++-{
++-	struct mox_sfp_chip *chip;
++-	int ret;
++-
++-	spi->max_speed_hz = 20000000;
++-	spi->bits_per_word = 8;
++-
++-	ret = spi_setup(spi);
++-	if (ret < 0)
++-		return ret;
++-
++-	chip = devm_kzalloc(&spi->dev, sizeof(*chip), GFP_KERNEL);
++-	if (!chip)
++-		return -ENOMEM;
++-
++-	chip->gpio_chip.parent = &spi->dev;
++-
++-	ret = mox_sfp_find(chip);
++-	if (ret < 0) {
++-		dev_err(&spi->dev, "Failed finding MOX bus: %d\n", ret);
++-		return ret;
++-	}
++-
++-	device_create_file(&spi->dev, &dev_attr_module_topology);
++-	spi_set_drvdata(spi, chip);
++-	mutex_init(&chip->lock);
++-
++-	if (chip->sfp_idx) {
++-		chip->gpiod_oe = devm_gpiod_get_optional(&spi->dev, "enable",
++-							 GPIOD_OUT_LOW);
++-		if (IS_ERR(chip->gpiod_oe)) {
++-			ret = PTR_ERR(chip->gpiod_oe);
++-			goto exit_destroy;
++-		}
++-
++-		gpiod_set_value_cansleep(chip->gpiod_oe, 1);
++-
++-		chip->gpio_chip.label = spi->modalias;
++-		chip->gpio_chip.get_direction = mox_sfp_get_direction;
++-		chip->gpio_chip.direction_input = mox_sfp_direction_input;
++-		chip->gpio_chip.direction_output = mox_sfp_direction_output;
++-		chip->gpio_chip.get = mox_sfp_get_value;
++-		chip->gpio_chip.set = mox_sfp_set_value;
++-		chip->gpio_chip.base = -1;
++-
++-		chip->gpio_chip.ngpio = 5;
++-
++-		chip->gpio_chip.can_sleep = true;
++-		chip->gpio_chip.owner = THIS_MODULE;
++-
++-		ret = gpiochip_add_data(&chip->gpio_chip, chip);
++-		if (ret)
++-			goto exit_destroy;
++-	}
++-
++-	return 0;
++-
++-exit_destroy:
++-	device_remove_file(&spi->dev, &dev_attr_module_topology);
++-	mutex_destroy(&chip->lock);
++-
++-	return ret;
++-}
++-
++-static int mox_sfp_remove(struct spi_device *spi)
++-{
++-	struct mox_sfp_chip *chip = spi_get_drvdata(spi);
++-
++-	device_remove_file(&spi->dev, &dev_attr_module_topology);
++-
++-	if (chip->sfp_idx) {
++-		gpiod_set_value_cansleep(chip->gpiod_oe, 0);
++-		gpiochip_remove(&chip->gpio_chip);
++-	}
++-
++-	mutex_destroy(&chip->lock);
++-
++-	return 0;
++-}
++-
++-static const struct of_device_id mox_sfp_dt_ids[] = {
++-	{ .compatible = "cznic,turris-mox-bus" },
++-	{},
++-};
++-MODULE_DEVICE_TABLE(of, mox_sfp_dt_ids);
++-
++-static struct spi_driver mox_sfp_driver = {
++-	.driver = {
++-		.name		= "mox-sfp",
++-		.of_match_table	= mox_sfp_dt_ids,
++-	},
++-	.probe		= mox_sfp_probe,
++-	.remove		= mox_sfp_remove,
++-};
++-module_spi_driver(mox_sfp_driver);
++-
++-MODULE_AUTHOR("Marek Behun <marek.behun@nic.cz>");
++-MODULE_DESCRIPTION("GPIO configuration of the SFP cage found on Turris Mox");
++-MODULE_LICENSE("GPL v2");
++-- 
++2.18.0
 +
 -- 
 2.18.0
