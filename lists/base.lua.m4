@@ -29,11 +29,11 @@ Install("fstools", { critical = true })
 if model and model:match("^[Tt]urris$") then
 	Install("turris-support", { critical = true })
 end
+if not model or model:match("[Oo]mnia") then
+	Install("omnia-support", "btrfs-progs", { critical = true })
+end
 if model and model:match("[Mm][Oo][Xx]") then
 	Install("mox-support", { critical = true })
-end
-if not model or model:match("[Oo]mnia") then
-	Install("btrfs-progs", { critical = true })
 end
 if features and features.provides then
 	-- If we don't support Provides than updater would report that this package is missing
