@@ -1,4 +1,4 @@
-From 7de5987523f97cd3c66cfd1f6ba0b44df2078828 Mon Sep 17 00:00:00 2001
+From 3544987e1a1e81371e3f89ce1c91d1490fc60068 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -73,7 +73,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  .../990002-add-moxtet-bus-driver.patch        | 545 +++++++++++
  ...is-mox-sfp-driver-to-gpio-moxtet-sfp.patch | 227 +++++
  .../990004-delete-turris-mox-sfp-driver.patch | 296 ++++++
- 66 files changed, 8124 insertions(+)
+ .../patches-4.14/9990001-add-moxtet.h.patch   | 122 +++
+ .../patches-4.14/9990002-delete-old-dts.patch | 833 +++++++++++++++++
+ .../patches-4.14/9990003-change-moxtet.patch  |  34 +
+ 69 files changed, 9113 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90023-net-mvneta-move-port-configuration.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90024-net-mvneta-add-1000BaseX-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90025-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch
@@ -138,6 +141,9 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/990002-add-moxtet-bus-driver.patch
  create mode 100644 target/linux/mvebu/patches-4.14/990003-change-gpio-turris-mox-sfp-driver-to-gpio-moxtet-sfp.patch
  create mode 100644 target/linux/mvebu/patches-4.14/990004-delete-turris-mox-sfp-driver.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9990001-add-moxtet.h.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9990002-delete-old-dts.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/9990003-change-moxtet.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
 index f5e9876..1e7dbda 100644
@@ -8666,6 +8672,1013 @@ index 0000000..9e87d97
 +-MODULE_AUTHOR("Marek Behun <marek.behun@nic.cz>");
 +-MODULE_DESCRIPTION("GPIO configuration of the SFP cage found on Turris Mox");
 +-MODULE_LICENSE("GPL v2");
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/9990001-add-moxtet.h.patch b/target/linux/mvebu/patches-4.14/9990001-add-moxtet.h.patch
+new file mode 100644
+index 0000000..f92c57e
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9990001-add-moxtet.h.patch
+@@ -0,0 +1,122 @@
++From ba282e16cc358c97b4fbeec41ee486a2c2865be9 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 14:18:23 +0200
++Subject: [PATCH 1/3] add moxtet.h
++
++---
++ include/linux/mfd/moxtet.h | 103 +++++++++++++++++++++++++++++++++++++
++ 1 file changed, 103 insertions(+)
++ create mode 100644 include/linux/mfd/moxtet.h
++
++diff --git a/include/linux/mfd/moxtet.h b/include/linux/mfd/moxtet.h
++new file mode 100644
++index 000000000000..922fc2be9f7b
++--- /dev/null
+++++ b/include/linux/mfd/moxtet.h
++@@ -0,0 +1,103 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ * Turris Mox module configuration bus driver
+++ *
+++ * Copyright (C) 2018 Marek Behun <marek.behun@nic.cz>
+++ */
+++
+++#ifndef __LINUX_MFD_MOXTET_H
+++#define __LINUX_MFD_MOXTET_H
+++
+++#include <linux/device.h>
+++#include <linux/mutex.h>
+++
+++#define TURRIS_MOX_MAX_MODULES	10
+++
+++enum turris_mox_cpu_module_id {
+++	TURRIS_MOX_CPU_ID_EMMC	= 0x00,
+++	TURRIS_MOX_CPU_ID_SD	= 0x10,
+++};
+++
+++enum turris_mox_module_id {
+++	TURRIS_MOX_MODULE_SFP		= 0x01,
+++	TURRIS_MOX_MODULE_PCI		= 0x02,
+++	TURRIS_MOX_MODULE_TOPAZ		= 0x03,
+++	TURRIS_MOX_MODULE_PERIDOT	= 0x04,
+++};
+++
+++static inline const char *turris_mox_module_name(unsigned int id)
+++{
+++	switch (id) {
+++	case TURRIS_MOX_MODULE_SFP:
+++		return "sfp";
+++	case TURRIS_MOX_MODULE_PCI:
+++		return "pci";
+++	case TURRIS_MOX_MODULE_TOPAZ:
+++		return "topaz";
+++	case TURRIS_MOX_MODULE_PERIDOT:
+++		return "peridot";
+++	default:
+++		return "unknown";
+++	}
+++}
+++
+++extern struct bus_type moxtet_type;
+++
+++struct moxtet {
+++	struct device	*dev;
+++	struct mutex	lock;
+++	u8		modules[TURRIS_MOX_MAX_MODULES];
+++	int		count;
+++	u8		tx[TURRIS_MOX_MAX_MODULES];
+++	char		module_topology[128];
+++};
+++
+++struct moxtet_driver {
+++	const enum turris_mox_module_id	*id_table;
+++	struct device_driver		driver;
+++};
+++
+++static inline struct moxtet_driver *
+++to_moxtet_driver(struct device_driver *drv)
+++{
+++	if (!drv)
+++		return NULL;
+++	return container_of(drv, struct moxtet_driver, driver);
+++}
+++
+++extern int __moxtet_register_driver(struct module *owner,
+++				    struct moxtet_driver *mdrv);
+++
+++static inline void moxtet_unregister_driver(struct moxtet_driver *mdrv)
+++{
+++	if (mdrv)
+++		driver_unregister(&mdrv->driver);
+++}
+++
+++#define moxtet_register_driver(driver) \
+++	__moxtet_register_driver(THIS_MODULE, driver)
+++
+++#define module_moxtet_driver(__moxtet_driver) \
+++	module_driver(__moxtet_driver, moxtet_register_driver, \
+++			moxtet_unregister_driver)
+++
+++struct moxtet_device {
+++	struct device			dev;
+++	struct moxtet			*moxtet;
+++	enum turris_mox_module_id	id;
+++	unsigned int			idx;
+++};
+++
+++extern int moxtet_device_read(struct device *dev);
+++extern int moxtet_device_write(struct device *dev, u8 val);
+++extern int moxtet_device_written(struct device *dev);
+++
+++static inline struct moxtet_device *
+++to_moxtet_device(struct device *dev)
+++{
+++	if (!dev)
+++		return NULL;
+++	return container_of(dev, struct moxtet_device, dev);
+++}
+++
+++#endif /* __LINUX_MFD_MOXTET_H */
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/9990002-delete-old-dts.patch b/target/linux/mvebu/patches-4.14/9990002-delete-old-dts.patch
+new file mode 100644
+index 0000000..25073d8
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9990002-delete-old-dts.patch
+@@ -0,0 +1,833 @@
++From 2a8541b0413ec858d003631282275a062a43a92a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 14:19:57 +0200
++Subject: [PATCH 2/3] delete old dts
++
++---
++ ...20-turris-mox-peridot-peridot-peridot.dtsi | 127 -----------
++ ...rmada-3720-turris-mox-peridot-peridot.dtsi | 119 ----------
++ .../armada-3720-turris-mox-peridot.dtsi       | 111 ---------
++ ...-turris-mox-sd-peridot-peridot-peridot.dts |   8 -
++ ...ada-3720-turris-mox-sd-peridot-peridot.dts |   8 -
++ .../armada-3720-turris-mox-sd-peridot.dts     |   8 -
++ .../marvell/armada-3720-turris-mox-sd-sfp.dts |   8 -
++ .../armada-3720-turris-mox-sd-topaz.dts       |   8 -
++ .../dts/marvell/armada-3720-turris-mox-sd.dts |  16 --
++ .../marvell/armada-3720-turris-mox-sfp.dtsi   |  24 --
++ .../marvell/armada-3720-turris-mox-topaz.dtsi |  75 ------
++ .../dts/marvell/armada-3720-turris-mox.dtsi   | 214 ------------------
++ 12 files changed, 726 deletions(-)
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot-peridot.dtsi
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot.dtsi
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot.dtsi
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot-peridot.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-sfp.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-topaz.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd.dts
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sfp.dtsi
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox-topaz.dtsi
++ delete mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dtsi
++
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot-peridot.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot-peridot.dtsi
++deleted file mode 100644
++index 8bf54e7a0796..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot-peridot.dtsi
+++++ /dev/null
++@@ -1,127 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board Topaz switch module
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-peridot-peridot.dtsi"
++-
++-&switch0 {
++-	ports {
++-		switch0port10: port@10 {
++-			link = <&switch1port9 &switch2port9>;
++-		};
++-	};
++-};
++-
++-&switch1 {
++-	ports {
++-		switch1port10: port@10 {
++-			reg = <10>;
++-			label = "dsa";
++-			phy-mode = "2500base-x";
++-			link = <&switch2port9>;
++-		};
++-	};
++-};
++-
++-&mdio {
++-	switch2: switch2@12 {
++-		compatible = "marvell,mv88e6190";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		reg = <0x12>;
++-
++-		dsa,member = <0 2>;
++-
++-		ports {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			port@1 {
++-				reg = <1>;
++-				label = "lan17";
++-				phy-handle = <&switch2phy1>;
++-			};
++-
++-			port@2 {
++-				reg = <2>;
++-				label = "lan18";
++-				phy-handle = <&switch2phy2>;
++-			};
++-
++-			port@3 {
++-				reg = <3>;
++-				label = "lan19";
++-				phy-handle = <&switch2phy3>;
++-			};
++-
++-			port@4 {
++-				reg = <4>;
++-				label = "lan20";
++-				phy-handle = <&switch2phy4>;
++-			};
++-
++-			port@5 {
++-				reg = <5>;
++-				label = "lan21";
++-				phy-handle = <&switch2phy5>;
++-			};
++-
++-			port@6 {
++-				reg = <6>;
++-				label = "lan22";
++-				phy-handle = <&switch2phy6>;
++-			};
++-
++-			port@7 {
++-				reg = <7>;
++-				label = "lan23";
++-				phy-handle = <&switch2phy7>;
++-			};
++-
++-			port@8 {
++-				reg = <8>;
++-				label = "lan24";
++-				phy-handle = <&switch2phy8>;
++-			};
++-
++-			switch2port9: port@9 {
++-				reg = <9>;
++-				label = "dsa";
++-				phy-mode = "2500base-x";
++-				link = <&switch1port10 &switch0port10>;
++-			};
++-		};
++-
++-		mdio {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			switch2phy1: switch2phy1@1 {
++-				reg = <0x1>;
++-			};
++-			switch2phy2: switch2phy2@2 {
++-				reg = <0x2>;
++-			};
++-			switch2phy3: switch2phy3@3 {
++-				reg = <0x3>;
++-			};
++-			switch2phy4: switch2phy4@4 {
++-				reg = <0x4>;
++-			};
++-			switch2phy5: switch2phy5@5 {
++-				reg = <0x5>;
++-			};
++-			switch2phy6: switch2phy6@6 {
++-				reg = <0x6>;
++-			};
++-			switch2phy7: switch2phy7@7 {
++-				reg = <0x7>;
++-			};
++-			switch2phy8: switch2phy8@8 {
++-				reg = <0x8>;
++-			};
++-		};
++-	};
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot.dtsi
++deleted file mode 100644
++index 1c1b9e974352..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot-peridot.dtsi
+++++ /dev/null
++@@ -1,119 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board Topaz switch module
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-peridot.dtsi"
++-
++-&switch0 {
++-	ports {
++-		switch0port10: port@10 {
++-			reg = <10>;
++-			label = "dsa";
++-			phy-mode = "2500base-x";
++-			link = <&switch1port9>;
++-		};
++-	};
++-};
++-
++-&mdio {
++-	switch1: switch1@11 {
++-		compatible = "marvell,mv88e6190";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		reg = <0x11>;
++-
++-		dsa,member = <0 1>;
++-
++-		ports {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			port@1 {
++-				reg = <1>;
++-				label = "lan9";
++-				phy-handle = <&switch1phy1>;
++-			};
++-
++-			port@2 {
++-				reg = <2>;
++-				label = "lan10";
++-				phy-handle = <&switch1phy2>;
++-			};
++-
++-			port@3 {
++-				reg = <3>;
++-				label = "lan11";
++-				phy-handle = <&switch1phy3>;
++-			};
++-
++-			port@4 {
++-				reg = <4>;
++-				label = "lan12";
++-				phy-handle = <&switch1phy4>;
++-			};
++-
++-			port@5 {
++-				reg = <5>;
++-				label = "lan13";
++-				phy-handle = <&switch1phy5>;
++-			};
++-
++-			port@6 {
++-				reg = <6>;
++-				label = "lan14";
++-				phy-handle = <&switch1phy6>;
++-			};
++-
++-			port@7 {
++-				reg = <7>;
++-				label = "lan15";
++-				phy-handle = <&switch1phy7>;
++-			};
++-
++-			port@8 {
++-				reg = <8>;
++-				label = "lan16";
++-				phy-handle = <&switch1phy8>;
++-			};
++-
++-			switch1port9: port@9 {
++-				reg = <9>;
++-				label = "dsa";
++-				phy-mode = "2500base-x";
++-				link = <&switch0port10>;
++-			};
++-		};
++-
++-		mdio {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			switch1phy1: switch1phy1@1 {
++-				reg = <0x1>;
++-			};
++-			switch1phy2: switch1phy2@2 {
++-				reg = <0x2>;
++-			};
++-			switch1phy3: switch1phy3@3 {
++-				reg = <0x3>;
++-			};
++-			switch1phy4: switch1phy4@4 {
++-				reg = <0x4>;
++-			};
++-			switch1phy5: switch1phy5@5 {
++-				reg = <0x5>;
++-			};
++-			switch1phy6: switch1phy6@6 {
++-				reg = <0x6>;
++-			};
++-			switch1phy7: switch1phy7@7 {
++-				reg = <0x7>;
++-			};
++-			switch1phy8: switch1phy8@8 {
++-				reg = <0x8>;
++-			};
++-		};
++-	};
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot.dtsi
++deleted file mode 100644
++index f2dab1432bf7..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-peridot.dtsi
+++++ /dev/null
++@@ -1,111 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board Topaz switch module
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-&eth1 {
++-	status = "okay";
++-	phy-mode = "1000base-x";
++-	managed = "in-band-status";
++-};
++-
++-&mdio {
++-	switch0: switch0@10 {
++-		compatible = "marvell,mv88e6190";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		reg = <0x10>;
++-
++-		dsa,member = <0 0>;
++-
++-		ports {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			port@1 {
++-				reg = <1>;
++-				label = "lan1";
++-				phy-handle = <&switch0phy1>;
++-			};
++-
++-			port@2 {
++-				reg = <2>;
++-				label = "lan2";
++-				phy-handle = <&switch0phy2>;
++-			};
++-
++-			port@3 {
++-				reg = <3>;
++-				label = "lan3";
++-				phy-handle = <&switch0phy3>;
++-			};
++-
++-			port@4 {
++-				reg = <4>;
++-				label = "lan4";
++-				phy-handle = <&switch0phy4>;
++-			};
++-
++-			port@5 {
++-				reg = <5>;
++-				label = "lan5";
++-				phy-handle = <&switch0phy5>;
++-			};
++-
++-			port@6 {
++-				reg = <6>;
++-				label = "lan6";
++-				phy-handle = <&switch0phy6>;
++-			};
++-
++-			port@7 {
++-				reg = <7>;
++-				label = "lan7";
++-				phy-handle = <&switch0phy7>;
++-			};
++-
++-			port@8 {
++-				reg = <8>;
++-				label = "lan8";
++-				phy-handle = <&switch0phy8>;
++-			};
++-
++-			port@9 {
++-				reg = <9>;
++-				label = "cpu";
++-				ethernet = <&eth1>;
++-			};
++-		};
++-
++-		mdio {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			switch0phy1: switch0phy1@1 {
++-				reg = <0x1>;
++-			};
++-			switch0phy2: switch0phy2@2 {
++-				reg = <0x2>;
++-			};
++-			switch0phy3: switch0phy3@3 {
++-				reg = <0x3>;
++-			};
++-			switch0phy4: switch0phy4@4 {
++-				reg = <0x4>;
++-			};
++-			switch0phy5: switch0phy5@5 {
++-				reg = <0x5>;
++-			};
++-			switch0phy6: switch0phy6@6 {
++-				reg = <0x6>;
++-			};
++-			switch0phy7: switch0phy7@7 {
++-				reg = <0x7>;
++-			};
++-			switch0phy8: switch0phy8@8 {
++-				reg = <0x8>;
++-			};
++-		};
++-	};
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot-peridot.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot-peridot.dts
++deleted file mode 100644
++index 4fae23cd8313..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot-peridot.dts
+++++ /dev/null
++@@ -1,8 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-sd.dts"
++-#include "armada-3720-turris-mox-peridot-peridot-peridot.dtsi"
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot.dts
++deleted file mode 100644
++index 72cdac876fdf..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot-peridot.dts
+++++ /dev/null
++@@ -1,8 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-sd.dts"
++-#include "armada-3720-turris-mox-peridot-peridot.dtsi"
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot.dts
++deleted file mode 100644
++index 43e8c9ff47c3..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-peridot.dts
+++++ /dev/null
++@@ -1,8 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-sd.dts"
++-#include "armada-3720-turris-mox-peridot.dtsi"
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-sfp.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-sfp.dts
++deleted file mode 100644
++index ea7069571498..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-sfp.dts
+++++ /dev/null
++@@ -1,8 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board 
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-sd.dts"
++-#include "armada-3720-turris-mox-sfp.dtsi"
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-topaz.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-topaz.dts
++deleted file mode 100644
++index ecfdfe51fd12..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd-topaz.dts
+++++ /dev/null
++@@ -1,8 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox-sd.dts"
++-#include "armada-3720-turris-mox-topaz.dtsi"
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd.dts
++deleted file mode 100644
++index 078ce5b8cfea..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sd.dts
+++++ /dev/null
++@@ -1,16 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board with SD card slot
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-#include "armada-3720-turris-mox.dtsi"
++-
++-&sdhci0 {
++-	wp-inverted;
++-	bus-width = <4>;
++-	cd-gpios = <&gpionb 10 GPIO_ACTIVE_HIGH>;
++-	vqmmc-supply = <&vsdc_reg>;
++-	marvell,pad-type = "sd";
++-	status = "okay";
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sfp.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sfp.dtsi
++deleted file mode 100644
++index 6f881d383ce5..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-sfp.dtsi
+++++ /dev/null
++@@ -1,24 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board SFP cage module
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-/ {
++-	sfp: sfp {
++-		compatible = "sff,sfp+";
++-		i2c-bus = <&i2c0>;
++-		mod-def0-gpio = <&mox_spi_bus 2 GPIO_ACTIVE_LOW>;
++-		los-gpio = <&mox_spi_bus 0 GPIO_ACTIVE_HIGH>;
++-		tx-fault-gpio = <&mox_spi_bus 1 GPIO_ACTIVE_HIGH>;
++-		tx-disable-gpio = <&mox_spi_bus 3 GPIO_ACTIVE_HIGH>;
++-		rate-select0-gpio = <&mox_spi_bus 4 GPIO_ACTIVE_HIGH>;
++-	};
++-};
++-
++-&eth1 {
++-	status = "okay";
++-	phy-mode = "sgmii";
++-	sfp = <&sfp>;
++-	managed = "in-band-status";
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-topaz.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-topaz.dtsi
++deleted file mode 100644
++index f4b7dee142e6..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox-topaz.dtsi
+++++ /dev/null
++@@ -1,75 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board Topaz switch module
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-&eth1 {
++-	status = "okay";
++-	phy-mode = "1000base-x";
++-	managed = "in-band-status";
++-};
++-
++-&mdio {
++-	switch0: switch0@2 {
++-		compatible = "marvell,mv88e6141";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		reg = <0x2>;
++-
++-		dsa,member = <0 0>;
++-
++-		ports {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			port@1 {
++-				reg = <1>;
++-				label = "lan1";
++-				phy-handle = <&switch0phy1>;
++-			};
++-
++-			port@2 {
++-				reg = <2>;
++-				label = "lan2";
++-				phy-handle = <&switch0phy2>;
++-			};
++-
++-			port@3 {
++-				reg = <3>;
++-				label = "lan3";
++-				phy-handle = <&switch0phy3>;
++-			};
++-
++-			port@4 {
++-				reg = <4>;
++-				label = "lan4";
++-				phy-handle = <&switch0phy4>;
++-			};
++-
++-			port@5 {
++-				reg = <5>;
++-				label = "cpu";
++-				ethernet = <&eth1>;
++-			};
++-		};
++-
++-		mdio {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			switch0phy1: switch0phy1@11 {
++-				reg = <0x11>;
++-			};
++-			switch0phy2: switch0phy2@12 {
++-				reg = <0x12>;
++-			};
++-			switch0phy3: switch0phy3@13 {
++-				reg = <0x13>;
++-			};
++-			switch0phy4: switch0phy4@14 {
++-				reg = <0x14>;
++-			};
++-		};
++-	};
++-};
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dtsi b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dtsi
++deleted file mode 100644
++index ec306f4a872f..000000000000
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dtsi
+++++ /dev/null
++@@ -1,214 +0,0 @@
++-// SPDX-License-Identifier: GPL-2.0+ or X11
++-/*
++- * Device Tree file for CZ.NIC Turris Mox Board
++- * 2018 by Marek Behun <marek.behun@nic.cz>
++- */
++-
++-/dts-v1/;
++-
++-#include <dt-bindings/gpio/gpio.h>
++-#include <dt-bindings/input/input.h>
++-#include "armada-372x.dtsi"
++-
++-/ {
++-	model = "CZ.NIC Turris Mox Board";
++-	compatible = "cznic,turris-mox", "marvell,armada3720", "marvell,armada3710";
++-
++-	aliases {
++-		spi0 = &spi0;
++-	};
++-
++-	chosen {
++-		stdout-path = "serial0:115200n8";
++-	};
++-
++-	memory@0 {
++-		device_type = "memory";
++-		reg = <0x00000000 0x00000000 0x00000000 0x20000000>;
++-	};
++-
++-	leds {
++-		compatible = "gpio-leds";
++-		red {
++-			gpios = <&gpiosb 21 GPIO_ACTIVE_LOW>;
++-			linux,default-trigger = "heartbeat";
++-		};
++-	};
++-
++-	gpio_keys {
++-		compatible = "gpio-keys";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-
++-		button@0 {
++-			label = "reset";
++-			linux,code = <BTN_MISC>;
++-			gpios = <&gpiosb 20 GPIO_ACTIVE_LOW>;
++-			debounce-interval = <60>;
++-		};
++-	};
++-
++-	exp_usb3_vbus: usb3-vbus {
++-		compatible = "regulator-fixed";
++-		regulator-name = "usb3-vbus";
++-		regulator-min-microvolt = <5000000>;
++-		regulator-max-microvolt = <5000000>;
++-		enable-active-high;
++-		regulator-always-on;
++-		gpio = <&gpiosb 0 GPIO_ACTIVE_HIGH>;
++-	};
++-
++-	usb3_phy: usb3-phy {
++-		compatible = "usb-nop-xceiv";
++-		vcc-supply = <&exp_usb3_vbus>;
++-	};
++-
++-	vsdc_reg: regulator@1 {
++-		compatible = "regulator-gpio";
++-		regulator-name = "vsdc";
++-		regulator-min-microvolt = <1800000>;
++-		regulator-max-microvolt = <3300000>;
++-		regulator-boot-on;
++-
++-		gpios = <&gpiosb 23 GPIO_ACTIVE_HIGH>;
++-		gpios-states = <0>;
++-		states = <1800000 0x1
++-			  3300000 0x0>;
++-		enable-active-high;
++-	};
++-
++-	vsdio_reg: regulator@2 {
++-		compatible = "regulator-gpio";
++-		regulator-name = "vsdio";
++-		regulator-min-microvolt = <1800000>;
++-		regulator-max-microvolt = <3300000>;
++-		regulator-boot-on;
++-
++-		gpios = <&gpiosb 22 GPIO_ACTIVE_HIGH>;
++-		gpios-states = <0>;
++-		states = <1800000 0x1
++-			  3300000 0x0>;
++-		enable-active-high;
++-	};
++-};
++-
++-&pinctrl_nb {
++-	spi_cs1_pins: spi-cs1-pins {
++-		groups = "spi_cs1";
++-		function = "spi";
++-	};
++-
++-	sdio0_pins: sdio0-pins {
++-		groups = "sdio0";
++-		function = "sdio";
++-	};
++-};
++-
++-&pinctrl_sb {
++-	sdio_sb_pins: sdio-sb-pins {
++-		groups = "sdio_sb";
++-		function = "sdio";
++-	};
++-
++-	smi_pins: smi-pins {
++-		groups = "smi";
++-		function = "smi";
++-	};
++-
++-	pcie_pins: pcie1-pins {
++-		groups = "pcie1";
++-		function = "gpio";
++-	};
++-};
++-
++-&i2c0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&i2c1_pins>;
++-	status = "okay";
++-
++-	rtc@6f {
++-		compatible = "microchip,mcp7940x";
++-		reg = <0x6f>;
++-	};
++-};
++-
++-&pcie0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&pcie_pins>;
++-	status = "okay";
++-	max-link-speed = <2>;
++-};
++-
++-&uart0 {
++-	status = "okay";
++-};
++-
++-&eth0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&rgmii_pins>;
++-	phy-mode = "rgmii-id";
++-	phy = <&phy1>;
++-	status = "okay";
++-};
++-
++-&mdio {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&smi_pins>;
++-	status = "okay";
++-
++-	phy1: ethernet-phy@1 {
++-		reg = <1>;
++-	};
++-};
++-
++-&sdhci1 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&sdio0_pins &sdio_sb_pins>;
++-	non-removable;
++-	bus-width = <4>;
++-	marvell,pad-type = "sd";
++-	vqmmc-supply = <&vsdio_reg>;
++-	status = "okay";
++-};
++-
++-&spi0 {
++-	status = "okay";
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&spi_quad_pins &spi_cs1_pins>;
++-
++-	spi-flash@0 {
++-		#address-cells = <1>;
++-		#size-cells = <1>;
++-		compatible = "jedec,spi-nor";
++-		reg = <0>;
++-		spi-max-frequency = <50000000>;
++-
++-		partition@0 {
++-			label = "u-boot";
++-			reg = <0x0 0x3f0000>;
++-		};
++-
++-		partition@3f0000 {
++-			label = "u-boot-env";
++-			reg = <0x180000 0x10000>;
++-		};
++-
++-		partition@400000 {
++-			label = "Rescue system";
++-			reg = <0x190000 0x670000>;
++-		};
++-	};
++-
++-	mox_spi_bus: mox_spi_bus@0 {
++-		compatible = "cznic,turris-mox-bus";
++-		gpio-controller;
++-		#gpio-cells = <2>;
++-		reg = <1>;
++-		spi-max-frequency = <50000000>;
++-	};
++-};
++-
++-&usb3 {
++-	status = "okay";
++-	usb-phy = <&usb3_phy>;
++-};
++-- 
++2.18.0
++
+diff --git a/target/linux/mvebu/patches-4.14/9990003-change-moxtet.patch b/target/linux/mvebu/patches-4.14/9990003-change-moxtet.patch
+new file mode 100644
+index 0000000..93dc753
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/9990003-change-moxtet.patch
+@@ -0,0 +1,34 @@
++From ca11741fa92580613fbb77065b1b8e37c5ed299b Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 8 Aug 2018 14:24:56 +0200
++Subject: [PATCH 3/3] change moxtet
++
++---
++ drivers/mfd/moxtet.c | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/mfd/moxtet.c b/drivers/mfd/moxtet.c
++index 9a074316c217..2f104017b2b0 100644
++--- a/drivers/mfd/moxtet.c
+++++ b/drivers/mfd/moxtet.c
++@@ -399,7 +399,7 @@ int moxtet_device_write(struct device *dev, u8 val)
++ 
++ 	mutex_lock(&moxtet->lock);
++ 
++-	moxtet->tx[mdev->idx + 1] = val;
+++	moxtet->tx[moxtet->count - mdev->idx] = val;
++ 
++ 	ret = spi_write(to_spi_device(moxtet->dev), moxtet->tx,
++ 			moxtet->count + 1);
++@@ -418,7 +418,7 @@ int moxtet_device_written(struct device *dev)
++ 	if (mdev->idx >= moxtet->count)
++ 		return -EINVAL;
++ 
++-	return moxtet->tx[mdev->idx + 1];
+++	return moxtet->tx[moxtet->count - mdev->idx];
++ }
++ EXPORT_SYMBOL_GPL(moxtet_device_written);
++ 
 +-- 
 +2.18.0
 +
