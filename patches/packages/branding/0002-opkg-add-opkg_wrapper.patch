@@ -1,0 +1,44 @@
+From 5f668ebb1cab8b4bbab265548192bac1a2a5fa5d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Thu, 9 Aug 2018 14:05:53 +0200
+Subject: [PATCH 2/2] opkg: add opkg_wrapper
+
+Updater-ng provides its wrapper on top of opkg to mirror opkg commands
+to its configuration. This commit adds wrapper for opkg that prefers
+updater's implementation (that expects that original opkg is now named
+opkg-cl) and as fallback uses opkg-cl.
+---
+ package/system/opkg/Makefile              | 3 ++-
+ package/system/opkg/files/opkg_wrapper.sh | 6 ++++++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+ create mode 100755 package/system/opkg/files/opkg_wrapper.sh
+
+diff --git a/package/system/opkg/Makefile b/package/system/opkg/Makefile
+index 950dccf..a7f014e 100644
+--- a/package/system/opkg/Makefile
++++ b/package/system/opkg/Makefile
+@@ -87,7 +87,8 @@ define Package/opkg/install
+ 	$(INSTALL_DATA) ./files/customfeeds.conf $(1)/etc/opkg/customfeeds.conf
+ 	$(INSTALL_DATA) ./files/opkg$(2).conf $(1)/etc/opkg.conf
+ 	$(INSTALL_BIN) ./files/20_migrate-feeds $(1)/etc/uci-defaults/
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/opkg-cl $(1)/bin/opkg
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/opkg-cl $(1)/bin/opkg-cl
++	$(INSTALL_BIN) ./files/opkg_wrapper.sh $(1)/bin/opkg
+   ifneq ($(CONFIG_SIGNED_PACKAGES),)
+ 	echo "option check_signature 1" >> $(1)/etc/opkg.conf
+   endif
+diff --git a/package/system/opkg/files/opkg_wrapper.sh b/package/system/opkg/files/opkg_wrapper.sh
+new file mode 100755
+index 0000000..654b23d
+--- /dev/null
++++ b/package/system/opkg/files/opkg_wrapper.sh
+@@ -0,0 +1,6 @@
++#!/bin/sh
++if which opkg-pkgupdate-wrapper.sh >/dev/null 2>&1; then
++    exec opkg-pkgupdate-wrapper.sh "$@"
++else
++    exec /bin/opkg-cl "$@"
++fi
+-- 
+2.18.0
+
