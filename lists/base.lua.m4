@@ -41,8 +41,11 @@ if features and features.provides then
 end
 
 -- OpenWRT minimum
-Install("procd", "ubus", "uci", "netifd", "firewall", "swconfig", { critical = true})
+Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
 Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40 })
+if model:match("^[Tt]urris$") then
+	Install("swconfig", { critical = true })
+end
 
 -- Turris minimum
 Install("vixie-cron", "syslog-ng", { priority = 40 })
@@ -114,80 +117,6 @@ forInstall(luci,base,proto-ipv6,proto-ppp,app-commands)
 _LUCI_I18N_(base, commands)
 
 _END_FEATURE_GUARD_
-
---[[
-Not all version of updater supported all features and so we are collecting various
-hacks so we would be able to update from older versions to new one.
-]]
-
---[[
-In Turris OS 3.8 files from original package opkg-trans were moved to mostly empty
-package updater-ng and opkg-trans was removed.
-Updater won't remove package before replanning so add dependency on empty
-opkg-trans package if we have installed version with those files (We would like to
-use version_match but this condition has the same effect because version_match was
-defined later than packages were merged.)
-]]
-if not version_match then
-	Package('updater-ng', { deps = {'opkg-trans'} })
-	if not model or model:match("^[Tt]urris$") then
-		-- On Turris 1.x we do the same also for updater as we are migrating from it in Turris OS 3.7.3'
-		Package('updater-ng', { deps = {'updater'} })
-	end
-end
-
---[[
-When we are updating from way old kernel we can have swconfig and kernel module
-mismatch resulting in to the unconfigured switch. This ensures that new swconfig
-is running on new kernel.
-
-Note: version_match was introduced after installed started working so we check
-if it's defined if we can use installed.
-]]
-if not model or model:match("[Oo]mnia") then
-	if not version_match or not installed["kmod-swconfig"] or version_match(installed["kmod-swconfig"].version, "<4.4.40") then
-		Package("swconfig", { reboot = "immediate" })
-	end
-end
-
---[[
-In Turris OS 3.9 the package ip was renamed to ip-tiny to be consistent with lede.
-But various packages requires package ip. In new updater we solve it using
-Provides field but this won't work with all updater versions. This hack adds
-virtual package ip for such updater version and basically just rebinds it to
-ip-full.
-There is a problem with executing this multiple times. Updater adds candidate for
-every Package command execution. But in older versions it also checks if virtual
-package has only one candidate. But because this script is executed twice (because
-it was invalidly specified as userlist) we have two candidates and error about
-invalid virtual package is reported. Setting flag on first pass trough ensures
-that we won't run it more than once. If updater fails then flags are not saved. If
-updater successes then  it had to update it self to never version with provides
-supported.
-Note that flags are not available in new version of updater. They were dropped
-with version 60.0.
-]]
-if not features or not features.provides then
-	if flags[""] == nil then
-		Package("ip", { virtual = true, deps = {"ip-full"} })
-		flags[""] = true
-	end
-end
-
---[[
-In Turris OS 3.10 nuci backend for Foris was obsoleted. updater.sh was replaced
-with updater-supervisor. And because all of that cleanup of some old files
-happened. But those files are required by nuci implementation. When updating to
-new version at first updater-ng is updated, then replan happens and foris is
-updated later on. But when user has approvals configured then we break nuci
-backend with some missing files that are no longer part of updater-ng and that
-breaks Foris so there is no easy way for user to approve update. Because of that
-we have to ensure that those needed files (even if they are just fake files) are
-present when old version of Foris is still present.
-]]
-if not version_match or (installed["foris"] and version_match(installed["foris"].version, "<97.7")) then
-	Package("updater-ng", { deps = { "updater-ng-migration-helper" } })
-end
 
 --[[
 We are migrating from uClibc to musl, so reinstall everything depending on libc
