@@ -1,7 +1,7 @@
 include(utils.m4)dnl Include utility macros
 include(repository.m4)dnl Include Repository command
 -- Updater itself
-Install('updater-ng', 'userlists', { critical = true })
+Install('updater-ng', 'updater-ng-supervisor', { critical = true })
 --[[
 Updater before v59.0 has no support for replan as string and it would complain
 about it. This is helper function is here to overcome that.
@@ -29,11 +29,11 @@ Install("fstools", { critical = true })
 if model and model:match("^[Tt]urris$") then
 	Install("turris-support", { critical = true })
 end
+if not model or model:match("[Oo]mnia") then
+	Install("omnia-support", "btrfs-progs", { critical = true })
+end
 if model and model:match("[Mm][Oo][Xx]") then
 	Install("mox-support", { critical = true })
-end
-if not model or model:match("[Oo]mnia") then
-	Install("btrfs-progs", { critical = true })
 end
 if features and features.provides then
 	-- If we don't support Provides than updater would report that this package is missing
@@ -41,8 +41,11 @@ if features and features.provides then
 end
 
 -- OpenWRT minimum
-Install("procd", "ubus", "uci", "netifd", "firewall", "swconfig", { critical = true})
+Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
 Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40 })
+if model:match("^[Tt]urris$") then
+	Install("swconfig", { critical = true })
+end
 
 -- Turris minimum
 Install("vixie-cron", "syslog-ng", { priority = 40 })
@@ -81,7 +84,7 @@ Install("pciutils", "usbutils", "lsof", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
 
 -- Turris utility
-Install("turris-utils", "user_notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
+Install("turris-utils", "user_notify", "user_notify_locales", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
 if not model then
 	if model:match("[Oo]mnia") then
 		Install("rainbow-omnia", { priority = 40 })
@@ -92,9 +95,11 @@ if not model then
 end
 
 Install("foris", "foris-diagnostics-plugin", { priority = 40 })
+Install('userlists', { priority = 40 })
 if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n("foris-diagnostics-plugin-l10n-")
+	for_l10n('userlists-l10n-')
 end
 Install("turris-version", "lighttpd-https-cert", "start-indicator", { priority = 40 })
 Install("conntrack", { priority = 40 })
@@ -114,56 +119,10 @@ _LUCI_I18N_(base, commands)
 _END_FEATURE_GUARD_
 
 --[[
-Not all version of updater supported all features and so we are collecting various
-hacks so we would be able to update from older versions to new one.
-]]
-
---[[
-In Turris OS 3.8 files from original package opkg-trans were moved to mostly empty
-package updater-ng and opkg-trans was removed.
-Updater won't remove package before replanning so add dependency on empty
-opkg-trans package if we have installed version with those files (We would like to
-use version_match but this condition has the same effect because version_match was
-defined later than packages were merged.)
-]]
-if not version_match then
-	Package('updater-ng', { deps = {'opkg-trans'} })
-	if not model or model:match("^[Tt]urris$") then
-		-- On Turris 1.x we do the same also for updater as we are migrating from it in Turris OS 3.7.3'
-		Package('updater-ng', { deps = {'updater'} })
-	end
-end
-
---[[
-When we are updating from way old kernel we can have swconfig and kernel module
-mismatch resulting in to the unconfigured switch. This ensures that new swconfig
-is running on new kernel.
-
-Note: version_match was introduced after installed started working so we check
-if it's defined if we can use isntalled.
-]]
-if not model or model:match("[Oo]mnia") then
-	if not version_match or not installed["kmod-swconfig"] or version_match(installed["kmod-swconfig"].version, "<4.4.40") then
-		Package("swconfig", { reboot = "immediate" })
-	end
-end
-
---[[
-In Turris OS 3.9 the package ip was renamed to ip-tiny to be consistent with lede.
-But various packages requires package ip. In new updater we solve it using
-Provides field but this won't work with all updater versions. This hack adds
-virtual package ip for such updater version and basically just rebinds it to
-ip-full.
-]]
-if not features or not features.provides then
-	Package("ip", { virtual = true, deps = {"ip-full"} })
-end
-
---[[
 We are migrating from uClibc to musl, so reinstall everything depending on libc
 and we need to have working gzip and tar before updater starts doing it's thing.
 ]]
 if installed and version_match and installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true })
-	Package('updater-ng', { deps = { 'gzip', 'tar', 'busybox', 'uci', 'libgcc' } })
+	Package('updater-ng', { deps = { 'libgcc' } })
 end

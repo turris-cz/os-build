@@ -1,0 +1,102 @@
+From 50f3ea44d93be1ef3714510c662aa1ec24056a86 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Tue, 7 Aug 2018 15:14:55 +0200
+Subject: [PATCH] jinja2: Provide packages for python2 as well
+
+Provide packages for legacy applications till they get ported.
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
+---
+ lang/python/Jinja2/Makefile     | 28 +++++++++++++++++++++++++++-
+ lang/python/MarkupSafe/Makefile | 17 +++++++++++++++++
+ 2 files changed, 44 insertions(+), 1 deletion(-)
+
+diff --git a/lang/python/Jinja2/Makefile b/lang/python/Jinja2/Makefile
+index 7ef9e0b..d95eb0b 100644
+--- a/lang/python/Jinja2/Makefile
++++ b/lang/python/Jinja2/Makefile
+@@ -21,6 +21,7 @@ PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$
+ 
+ include $(INCLUDE_DIR)/package.mk
+ include ../python3-package.mk
++include ../python-package.mk
+ 
+ define Package/python3-jinja2
+   SECTION:=lang
+@@ -28,7 +29,7 @@ define Package/python3-jinja2
+   SUBMENU:=Python
+   URL:=http://jinja.pocoo.org/
+   TITLE:=python3-jinja2
+-  DEPENDS:=+python3-light
++  DEPENDS:=+python3 +python3-markupsafe
+   VARIANT:=python3
+ endef
+ 
+@@ -38,5 +39,30 @@ unicode support, an optional integrated sandboxed execution
+ environment, widely used and BSD licensed.
+ endef
+ 
++define Package/python-jinja2
++  SECTION:=lang
++  CATEGORY:=Languages
++  SUBMENU:=Python
++  URL:=http://jinja.pocoo.org/
++  TITLE:=python-jinja2
++  DEPENDS:=+python +python-markupsafe
++  VARIANT:=python
++endef
++
++define Package/python-jinja2/description
++Jinja2 is a full featured template engine for Python. It has full
++unicode support, an optional integrated sandboxed execution
++environment, widely used and BSD licensed.
++endef
++
++ifeq ($(BUILD_VARIANT),python)
++define remove_async
++	rm -rf $(PKG_BUILD_DIR)/jinja2/async*
++endef
++Hooks/Prepare/Post += remove_async
++endif
++
+ $(eval $(call Py3Package,python3-jinja2))
+ $(eval $(call BuildPackage,python3-jinja2))
++$(eval $(call PyPackage,python-jinja2))
++$(eval $(call BuildPackage,python-jinja2))
+diff --git a/lang/python/MarkupSafe/Makefile b/lang/python/MarkupSafe/Makefile
+index 84cd184..e7b8884 100644
+--- a/lang/python/MarkupSafe/Makefile
++++ b/lang/python/MarkupSafe/Makefile
+@@ -21,6 +21,7 @@ PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$
+ 
+ include $(INCLUDE_DIR)/package.mk
+ include ../python3-package.mk
++include ../python-package.mk
+ 
+ define Package/python3-markupsafe
+   SECTION:=lang
+@@ -36,5 +37,21 @@ define Package/python3-markupsafe/description
+ MarkupSafe implements a XML/HTML/XHTML Markup safe string for Python
+ endef
+ 
++define Package/python-markupsafe
++  SECTION:=lang
++  CATEGORY:=Languages
++  SUBMENU:=Python
++  URL:=http://github.com/pallets/markupsafe/
++  TITLE:=python-markupsafe
++  DEPENDS:=+python-light
++  VARIANT:=python
++endef
++
++define Package/python-markupsafe/description
++MarkupSafe implements a XML/HTML/XHTML Markup safe string for Python
++endef
++
+ $(eval $(call Py3Package,python3-markupsafe))
+ $(eval $(call BuildPackage,python3-markupsafe))
++$(eval $(call PyPackage,python-markupsafe))
++$(eval $(call BuildPackage,python-markupsafe))
+-- 
+2.18.0
+

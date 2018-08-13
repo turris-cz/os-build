@@ -1,0 +1,43 @@
+From d350e4c0e17d8cd5dc1f818632cd43548b285759 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Thu, 9 Aug 2018 13:52:25 +0200
+Subject: [PATCH 1/2] opkg: run switch-brach --verify after update
+
+When opkg is updated it replaces its distfeeds to default. That moves it
+from selected branch back to deploy. We are unable to do that change
+only on server because some branches are just binary copies of less
+stable branch. This solves it just by setting current branch back in
+distfeeds.
+---
+ package/system/opkg/Makefile | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/package/system/opkg/Makefile b/package/system/opkg/Makefile
+index f00e574..950dccf 100644
+--- a/package/system/opkg/Makefile
++++ b/package/system/opkg/Makefile
+@@ -42,7 +42,7 @@ define Package/opkg
+   SECTION:=base
+   CATEGORY:=Base system
+   TITLE:=opkg package manager
+-  DEPENDS:=+uclient-fetch +libpthread +libubox
++  DEPENDS:=+uclient-fetch +libpthread +libubox +switch-branch
+   URL:=$(PKG_SOURCE_URL)
+   MENU:=1
+ endef
+@@ -95,6 +95,12 @@ define Package/opkg/install
+ 	$(INSTALL_BIN) ./files/opkg-key $(1)/usr/sbin/
+ endef
+ 
++define Package/opkg/postinst
++[ -n "$$IPKG_INSTROOT" ] || {
++	switch-branch --verify
++}
++endef
++
+ define Host/Install
+ 	$(INSTALL_BIN) $(HOST_BUILD_DIR)/src/opkg-cl $(STAGING_DIR_HOST)/bin/opkg
+ endef
+-- 
+2.18.0
+
