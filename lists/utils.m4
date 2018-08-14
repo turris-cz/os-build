@@ -40,7 +40,13 @@ end')
 # Feature guard
 # Some packages might not be installable without some features. Skipping every
 # additional packages ensures that at least updater is updated.
-define(`_FEATURE_GUARD_', `if features and features.provides and features.conflicts then -- Advanced dependencies guard')
+define(`_FEATURE_GUARD_', `if true then -- Advanced dependencies guard')
 define(`_END_FEATURE_GUARD_', `end')
+# This is empty for now because minimal version check is enought for now but is left there for future reuse.
 
 divert(0)dnl
+dnl We have minimal updater-ng version requirements
+if not version_match or not self_version or version_match(self_version, "<60.0.1") then
+	DIE("Minimal required version of Updater-ng for Turris repository is 60.0.1!")
+end
+
