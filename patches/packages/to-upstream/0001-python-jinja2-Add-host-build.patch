@@ -1,0 +1,117 @@
+From 76e6b17c9761cd220e9f0a80925c784188a65735 Mon Sep 17 00:00:00 2001
+From: Stepan Henek <stepan.henek@nic.cz>
+Date: Wed, 22 Aug 2018 13:05:02 +0200
+Subject: [PATCH] python-jinja2: Add host build
+
+Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+---
+ lang/python/Jinja2/Makefile | 54 ++++++++++++++++++++++++++-----------
+ 1 file changed, 39 insertions(+), 15 deletions(-)
+
+diff --git a/lang/python/Jinja2/Makefile b/lang/python/Jinja2/Makefile
+index d95eb0b..c21ae52 100644
+--- a/lang/python/Jinja2/Makefile
++++ b/lang/python/Jinja2/Makefile
+@@ -5,45 +5,46 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=Jinja2
+-PKG_VERSION:=2.9.6
++PKG_VERSION:=2.10
+ PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_SOURCE_URL:=https://pypi.python.org/packages/90/61/f820ff0076a2599dd39406dcb858ecb239438c02ce706c8e91131ab9c7f1/
+-PKG_HASH:=ddaa01a212cd6d641401cb01b605f4a4d9f37bfc93043d7f760ec70fb99ff9ff
++PKG_SOURCE_URL:=https://files.pythonhosted.org/packages/source/j/jinja2/
++PKG_HASH:=f84be1bb0040caca4cea721fcbbbbd61f9be9464ca236387158b0feea01914a4
+ PKG_BUILD_DEPENDS:=python3
+ PKG_LICENSE:=BSD-3-Clause
+ PKG_LICENSE_FILES:=LICENSE
+ PKG_MAINTAINER:=Daniel Golle <daniel@makrotopia.org>
+ 
+ PKG_BUILD_DIR:=$(BUILD_DIR)/$(BUILD_VARIANT)-$(PKG_NAME)-$(PKG_VERSION)
+-PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
++HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(BUILD_VARIANT)-libsass-$(PKG_VERSION)
+ 
+ include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/host-build.mk
+ include ../python3-package.mk
++include ../python3-host.mk
+ include ../python-package.mk
++include ../python-host.mk
+ 
+-define Package/python3-jinja2
++PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
++HOST_UNPACK:=$(HOST_TAR) -C $(HOST_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
++
++define Package/python-jinja2/Default
+   SECTION:=lang
+   CATEGORY:=Languages
+   SUBMENU:=Python
+   URL:=http://jinja.pocoo.org/
++endef
++
++define Package/python3-jinja2
++  $(call Package/python-jinja2/Default)
+   TITLE:=python3-jinja2
+   DEPENDS:=+python3 +python3-markupsafe
+   VARIANT:=python3
+ endef
+ 
+-define Package/python3-jinja2/description
+-Jinja2 is a full featured template engine for Python. It has full
+-unicode support, an optional integrated sandboxed execution
+-environment, widely used and BSD licensed.
+-endef
+-
+ define Package/python-jinja2
+-  SECTION:=lang
+-  CATEGORY:=Languages
+-  SUBMENU:=Python
+-  URL:=http://jinja.pocoo.org/
++  $(call Package/python-jinja2/Default)
+   TITLE:=python-jinja2
+   DEPENDS:=+python +python-markupsafe
+   VARIANT:=python
+@@ -55,14 +56,37 @@ unicode support, an optional integrated sandboxed execution
+ environment, widely used and BSD licensed.
+ endef
+ 
++define Package/python3-jinja2/description
++$(call Package/python-jinja2/description)
++.
++(Variant for Python3)
++endef
++
+ ifeq ($(BUILD_VARIANT),python)
+ define remove_async
+ 	rm -rf $(PKG_BUILD_DIR)/jinja2/async*
+ endef
+ Hooks/Prepare/Post += remove_async
++
++define remove_host_async
++	rm -rf $(HOST_BUILD_DIR)/jinja2/async*
++endef
++Hooks/HostPrepare/Post += remove_host_async
+ endif
+ 
++define Host/Compile
++	$(call Build/Compile/HostPyMod,,install --prefix="" --root="$(STAGING_DIR_HOSTPKG)")
++	$(call Build/Compile/HostPy3Mod,,install --prefix="" --root="$(STAGING_DIR_HOSTPKG)")
++endef
++
++Host/Install:=
++
++$(eval $(call HostBuild))
++
+ $(eval $(call Py3Package,python3-jinja2))
+ $(eval $(call BuildPackage,python3-jinja2))
++$(eval $(call BuildPackage,python3-jinja2-src))
++
+ $(eval $(call PyPackage,python-jinja2))
+ $(eval $(call BuildPackage,python-jinja2))
++$(eval $(call BuildPackage,python-jinja2-src))
+-- 
+2.18.0
+
