@@ -1,0 +1,72 @@
+From d46533bcde39eb704f0ef91d5a847b5a257df069 Mon Sep 17 00:00:00 2001
+From: Stepan Henek <stepan.henek@nic.cz>
+Date: Wed, 22 Aug 2018 11:08:34 +0200
+Subject: [PATCH] python-markupsafe: Add host build
+
+Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+---
+ lang/python/MarkupSafe/Makefile | 31 +++++++++++++++----------------
+ 1 file changed, 15 insertions(+), 16 deletions(-)
+
+diff --git a/lang/python/MarkupSafe/Makefile b/lang/python/MarkupSafe/Makefile
+index e7b8884..88df3b9 100644
+--- a/lang/python/MarkupSafe/Makefile
++++ b/lang/python/MarkupSafe/Makefile
+@@ -11,17 +11,23 @@ PKG_RELEASE:=1
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://pypi.python.org/packages/4d/de/32d741db316d8fdb7680822dd37001ef7a448255de9699ab4bfcbdf4172b/
+ PKG_HASH:=a6be69091dac236ea9c6bc7d012beab42010fa914c459791d627dad4910eb665
+-PKG_BUILD_DEPENDS:=python python3
+ PKG_LICENSE:=BSD-3-Clause
+ PKG_LICENSE_FILES:=LICENSE
+ PKG_MAINTAINER:=Daniel Golle <daniel@makrotopia.org>
+ 
+ PKG_BUILD_DIR:=$(BUILD_DIR)/$(BUILD_VARIANT)-$(PKG_NAME)-$(PKG_VERSION)
+-PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
++HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(BUILD_VARIANT)-$(PKG_NAME)-$(PKG_VERSION)
++
++PKG_BUILD_DEPENDS:=python3
++HOST_BUILD_DEPENDS:=python3/host
+ 
+ include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/host-build.mk
+ include ../python3-package.mk
+-include ../python-package.mk
++include ../python3-host.mk
++
++PKG_UNPACK=$(HOST_TAR) -C $(PKG_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
++HOST_UNPACK:=$(HOST_TAR) -C $(HOST_BUILD_DIR) --strip-components=1 -xzf $(DL_DIR)/$(PKG_SOURCE)
+ 
+ define Package/python3-markupsafe
+   SECTION:=lang
+@@ -37,21 +43,14 @@ define Package/python3-markupsafe/description
+ MarkupSafe implements a XML/HTML/XHTML Markup safe string for Python
+ endef
+ 
+-define Package/python-markupsafe
+-  SECTION:=lang
+-  CATEGORY:=Languages
+-  SUBMENU:=Python
+-  URL:=http://github.com/pallets/markupsafe/
+-  TITLE:=python-markupsafe
+-  DEPENDS:=+python-light
+-  VARIANT:=python
++define Host/Compile
++	$(call Build/Compile/HostPy3Mod,,install --prefix="" --root="$(STAGING_DIR_HOSTPKG)")
+ endef
+ 
+-define Package/python-markupsafe/description
+-MarkupSafe implements a XML/HTML/XHTML Markup safe string for Python
+-endef
++Host/Install:=
++
++$(eval $(call HostBuild))
+ 
+ $(eval $(call Py3Package,python3-markupsafe))
+ $(eval $(call BuildPackage,python3-markupsafe))
+-$(eval $(call PyPackage,python-markupsafe))
+-$(eval $(call BuildPackage,python-markupsafe))
++$(eval $(call BuildPackage,python3-markupsafe-src))
+-- 
+2.18.0
+

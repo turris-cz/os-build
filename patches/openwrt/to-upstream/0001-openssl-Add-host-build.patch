@@ -1,0 +1,64 @@
+From 9f6c0681f2d964ae30852e9e40d44cda7bdebd17 Mon Sep 17 00:00:00 2001
+From: Stepan Henek <stepan.henek@nic.cz>
+Date: Thu, 23 Aug 2018 10:58:04 +0200
+Subject: [PATCH] openssl: Add host build
+
+Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+---
+ package/libs/openssl/Makefile | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/package/libs/openssl/Makefile b/package/libs/openssl/Makefile
+index b64a51d..a77dbc8 100644
+--- a/package/libs/openssl/Makefile
++++ b/package/libs/openssl/Makefile
+@@ -45,6 +45,7 @@ PKG_CONFIG_DEPENDS:= \
+ 	CONFIG_OPENSSL_OPTIMIZE_SPEED
+ 
+ include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/host-build.mk
+ 
+ ifneq ($(CONFIG_CCACHE),)
+ HOSTCC=$(HOSTCC_NOCACHE)
+@@ -250,6 +251,30 @@ define Build/InstallDev
+ 	[ -n "$(TARGET_LDFLAGS)" ] && $(SED) 's#$(TARGET_LDFLAGS)##g' $(1)/usr/lib/pkgconfig/{openssl,libcrypto,libssl}.pc || true
+ endef
+ 
++HOST_CFLAGS += $(FPIC) -I$(CURDIR)/include -ffunction-sections -fdata-sections
++
++define Host/Configure
++	cd $(HOST_BUILD_DIR); perl Configure --openssldir=$(STAGING_DIR_HOST) $(shell echo $(HOST_OS)-$(HOST_ARCH) | tr A-Z a-z) shared
++endef
++
++define Host/Compile
++	+LD_LIBRARY_PATH=$(HOST_BUILD_DIR) $(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR) \
++		$(OPENSSL_MAKEFLAGS) \
++		all
++	+LD_LIBRARY_PATH=$(HOST_BUILD_DIR) $(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR) \
++		$(OPENSSL_MAKEFLAGS) \
++		build-shared
++	# Work around openssl build bug to link libssl.so with libcrypto.so.
++	-rm $(HOST_BUILD_DIR)/libssl.so.*.*.*
++	+LD_LIBRARY_PATH=$(HOST_BUILD_DIR) $(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR) \
++		$(OPENSSL_MAKEFLAGS) \
++		do_linux-shared
++	LD_LIBRARY_PATH=$(HOST_BUILD_DIR) $(MAKE) -C $(HOST_BUILD_DIR) \
++		$(OPENSSL_MAKEFLAGS) \
++		install
++endef
++
++
+ define Package/libopenssl/install
+ 	$(INSTALL_DIR) $(1)/usr/lib
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/lib/libcrypto.so.* $(1)/usr/lib/
+@@ -266,5 +291,7 @@ define Package/openssl-util/install
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/openssl $(1)/usr/bin/
+ endef
+ 
++$(eval $(call HostBuild))
++
+ $(eval $(call BuildPackage,libopenssl))
+ $(eval $(call BuildPackage,openssl-util))
+-- 
+2.18.0
+

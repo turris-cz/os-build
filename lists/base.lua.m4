@@ -6,11 +6,8 @@ Install('updater-ng', 'updater-ng-supervisor', { critical = true })
 Updater before v59.0 has no support for replan as string and it would complain
 about it. This is helper function is here to overcome that.
 ]]
-local function replan_str(str, bl)
-	return (features and features.replan_string and str or bl)
-end
-Package('updater-ng', { replan = replan_str('finished', true) })
-Package('l10n_supported', { replan = replan_str('finished', true) })
+Package('updater-ng', { replan = 'finished' })
+Package('l10n_supported', { replan = 'finished' })
 
 
 -- Critical minimum
@@ -26,19 +23,15 @@ elseif model:match("^[Tt]urris$") then
 	forInstallCritical(kmod,file2args(kmod-turris.list))
 end
 Install("fstools", { critical = true })
-if model and model:match("^[Tt]urris$") then
+if model:match("^[Tt]urris$") then
 	Install("turris-support", { critical = true })
 end
-if not model or model:match("[Oo]mnia") then
+if model:match("[Oo]mnia") then
 	Install("omnia-support", "btrfs-progs", { critical = true })
-end
-if model and model:match("[Mm][Oo][Xx]") then
+elseif model:match("[Mm][Oo][Xx]") then
 	Install("mox-support", { critical = true })
 end
-if features and features.provides then
-	-- If we don't support Provides than updater would report that this package is missing
-	Install("dns-resolver", { critical = true })
-end
+Install("dns-resolver", { critical = true })
 
 -- OpenWRT minimum
 Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
@@ -52,11 +45,10 @@ Install("vixie-cron", "syslog-ng", { priority = 40 })
 Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 -- Note: Following packages should be critical only if we ignored dns-resolver
-if not model or model:match("^[Tt]urris$") then
-	Install("unbound", "unbound-anchor", { critical = (not features or not features.provides), priority = 40 })
-end
-if not model or not model:match("^[Tt]urris$") then
-	Install("knot-resolver", { critical = (not features or not features.provides), priority = 40 })
+if model:match("^[Tt]urris$") then
+	Install("unbound", "unbound-anchor", { priority = 40 })
+else
+	Install("knot-resolver", { priority = 40 })
 end
 Install("ppp", "ppp-mod-pppoe", { priority = 40 })
 
@@ -68,11 +60,9 @@ Install("ca-certificates", { priority = 40 })
 _FEATURE_GUARD_
 
 -- Updater utility
-Install('updater-ng-opkg', { priority = 40 })
-if features.replan_string then
-	Package('updater-ng-opkg', { replan = 'finished' })
-	Package('updater-ng-localrepo', { replan = 'finished' })
-end
+Package('updater-ng-opkg', { replan = 'finished' })
+Package('updater-ng-localrepo', { replan = 'finished' })
+Package('switch-branch', { priority = 40 })
 
 -- Utility
 Install("ip-full", "iptables", "ip6tables", { priority = 40 })
@@ -84,14 +74,14 @@ Install("pciutils", "usbutils", "lsof", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
 
 -- Turris utility
-Install("turris-utils", "user_notify", "user_notify_locales", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", "switch-branch", { priority = 40 })
-if not model then
-	if model:match("[Oo]mnia") then
-		Install("rainbow-omnia", { priority = 40 })
-		Install("schnapps", "sfpswitch", { priority = 40 })
-	elseif model:match("^[Tt]urris$") then
-		Install("rainbow", { priority = 40 })
-	end
+Install("turris-utils", "user_notify", "user_notify_locales", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", { priority = 40 })
+if model:match("[Oo]mnia") then
+	Install("rainbow-omnia", "sfpswitch", { priority = 40 })
+elseif model:match("^[Tt]urris$") then
+	Install("rainbow", { priority = 40 })
+end
+if not model:match("^[Tt]urris$") then
+	Install("schnapps", { priority = 40 })
 end
 
 Install("foris", "foris-diagnostics-plugin", { priority = 40 })
@@ -122,7 +112,7 @@ _END_FEATURE_GUARD_
 We are migrating from uClibc to musl, so reinstall everything depending on libc
 and we need to have working gzip and tar before updater starts doing it's thing.
 ]]
-if installed and version_match and installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
+if installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true })
 	Package('updater-ng', { deps = { 'libgcc' } })
 end
