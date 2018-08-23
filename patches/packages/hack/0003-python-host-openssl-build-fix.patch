@@ -1,0 +1,152 @@
+From 29f5e872c8a98b83515c98bf8daeb4494ad0eb90 Mon Sep 17 00:00:00 2001
+From: Stepan Henek <stepan.henek@nic.cz>
+Date: Thu, 23 Aug 2018 13:37:56 +0200
+Subject: [PATCH] python: host openssl build fix
+
+Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+---
+ lang/python/python-host.mk     |  1 +
+ lang/python/python-package.mk  |  1 +
+ lang/python/python/Makefile    | 11 +++++++++++
+ lang/python/python3-host.mk    |  1 +
+ lang/python/python3-package.mk |  1 +
+ lang/python/python3/Makefile   | 11 +++++++++++
+ 6 files changed, 26 insertions(+)
+
+diff --git a/lang/python/python-host.mk b/lang/python/python-host.mk
+index a9e1c9c..3fe3121 100644
+--- a/lang/python/python-host.mk
++++ b/lang/python/python-host.mk
+@@ -49,6 +49,7 @@ define host_python_settings
+ 	CXX="$(HOSTCXX)" \
+ 	LD="$(HOSTCC)" \
+ 	LDSHARED="$(HOSTCC) -shared" \
++	LD_LIBRARY_PATH="$$(STAGING_DIR_HOST)/lib:$$(STAGING_DIR_HOSTPKG)/lib" \
+ 	CFLAGS="$(HOST_CFLAGS)" \
+ 	CPPFLAGS="$(HOST_CPPFLAGS) -I$(HOST_PYTHON_INC_DIR)" \
+ 	LDFLAGS="$(HOST_LDFLAGS) -lpython$(PYTHON_VERSION) -Wl$(comma)-rpath=$(STAGING_DIR_HOSTPKG)/lib" \
+diff --git a/lang/python/python-package.mk b/lang/python/python-package.mk
+index 66a4929..0b70d8b 100644
+--- a/lang/python/python-package.mk
++++ b/lang/python/python-package.mk
+@@ -70,6 +70,7 @@ define PyPackage
+   define Package/$(1)/install
+ 	$(call PyPackage/$(1)/install,$$(1))
+ 	find $(PKG_INSTALL_DIR) -name "*\.exe" | xargs rm -f
++	LD_LIBRARY_PATH="$$(STAGING_DIR_HOST)/lib:$$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(SHELL) $(python_mk_path)python-package-install.sh "2" \
+ 		"$(PKG_INSTALL_DIR)" "$$(1)" \
+ 		"$(HOST_PYTHON_BIN)" "$$(2)" \
+diff --git a/lang/python/python/Makefile b/lang/python/python/Makefile
+index 3e47ead..65aa4f6 100644
+--- a/lang/python/python/Makefile
++++ b/lang/python/python/Makefile
+@@ -125,6 +125,9 @@ MAKE_FLAGS+=\
+ 	LD="$(TARGET_CC)" \
+ 	PGEN=pgen2
+ 
++MAKE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
+ EXTRA_CFLAGS+= \
+ 	-DNDEBUG -fno-inline
+ EXTRA_LDFLAGS+= \
+@@ -167,6 +170,7 @@ endef
+ 
+ ifdef CONFIG_PACKAGE_python-setuptools
+ define Build/Compile/python-setuptools
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(STAGING_DIR_HOSTPKG)/bin/pip install \
+ 		--ignore-installed \
+ 		--root=$(PKG_BUILD_DIR)/install-setuptools --prefix=. \
+@@ -176,6 +180,7 @@ endif # CONFIG_PACKAGE_python-setuptools
+ 
+ ifdef CONFIG_PACKAGE_python-pip
+ define Build/Compile/python-pip
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(STAGING_DIR_HOSTPKG)/bin/pip install \
+ 		--ignore-installed \
+ 		--root=$(PKG_BUILD_DIR)/install-pip --prefix=. \
+@@ -285,6 +290,12 @@ HOST_CONFIGURE_ARGS+= \
+ 	--with-ensurepip=install \
+ 	CONFIG_SITE=
+ 
++HOST_CONFIGURE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
++HOST_MAKE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
+ define Host/Compile
+ 	$(call Host/Compile/Default,python Parser/pgen sharedmods)
+ endef
+diff --git a/lang/python/python3-host.mk b/lang/python/python3-host.mk
+index 43f8119..a1453ad 100644
+--- a/lang/python/python3-host.mk
++++ b/lang/python/python3-host.mk
+@@ -49,6 +49,7 @@ define host_python3_settings
+ 	CXX="$(HOSTCXX)" \
+ 	LD="$(HOSTCC)" \
+ 	LDSHARED="$(HOSTCC) -shared" \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	CFLAGS="$(HOST_CFLAGS)" \
+ 	CPPFLAGS="$(HOST_CPPFLAGS) -I$(HOST_PYTHON3_INC_DIR)" \
+ 	LDFLAGS="$(HOST_LDFLAGS) -lpython$(PYTHON3_VERSION) -Wl$(comma)-rpath=$(STAGING_DIR_HOSTPKG)/lib" \
+diff --git a/lang/python/python3-package.mk b/lang/python/python3-package.mk
+index 9e473b5..b11206b 100644
+--- a/lang/python/python3-package.mk
++++ b/lang/python/python3-package.mk
+@@ -69,6 +69,7 @@ define Py3Package
+   define Package/$(1)/install
+ 	$(call Py3Package/$(1)/install,$$(1))
+ 	find $(PKG_INSTALL_DIR) -name "*\.exe" | xargs rm -f
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(SHELL) $(python3_mk_path)python-package-install.sh "3" \
+ 		"$(PKG_INSTALL_DIR)" "$$(1)" \
+ 		"$(HOST_PYTHON3_BIN)" "$$(2)" \
+diff --git a/lang/python/python3/Makefile b/lang/python/python3/Makefile
+index 20ee1d5..d26c59d 100644
+--- a/lang/python/python3/Makefile
++++ b/lang/python/python3/Makefile
+@@ -129,6 +129,9 @@ MAKE_FLAGS+=\
+ 	LD="$(TARGET_CC)" \
+ 	PGEN=pgen3
+ 
++MAKE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
+ EXTRA_CFLAGS+= \
+ 	-DNDEBUG -fno-inline
+ EXTRA_LDFLAGS+= \
+@@ -171,6 +174,7 @@ endef
+ 
+ ifdef CONFIG_PACKAGE_python3-setuptools
+ define Build/Compile/python3-setuptools
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(STAGING_DIR_HOSTPKG)/bin/pip3 install \
+ 		--ignore-installed \
+ 		--root=$(PKG_BUILD_DIR)/install-setuptools --prefix=. \
+@@ -180,6 +184,7 @@ endif # CONFIG_PACKAGE_python3-setuptools
+ 
+ ifdef CONFIG_PACKAGE_python3-pip
+ define Build/Compile/python3-pip
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib" \
+ 	$(STAGING_DIR_HOSTPKG)/bin/pip3 install \
+ 		--ignore-installed \
+ 		--root=$(PKG_BUILD_DIR)/install-pip --prefix=. \
+@@ -281,6 +286,12 @@ HOST_CONFIGURE_ARGS+= \
+ 	--with-ensurepip=install \
+ 	CONFIG_SITE=
+ 
++HOST_CONFIGURE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
++HOST_MAKE_VARS+= \
++	LD_LIBRARY_PATH="$(STAGING_DIR_HOST)/lib:$(STAGING_DIR_HOSTPKG)/lib"
++
+ define Host/Compile
+ 	+$(HOST_MAKE_VARS) $(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR) python Parser/pgen
+ 	+$(HOST_MAKE_VARS) $(MAKE) $(HOST_JOBS) -C $(HOST_BUILD_DIR) sharedmods
+-- 
+2.18.0
+
