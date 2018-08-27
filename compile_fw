@@ -239,6 +239,12 @@ sign() {
 	done
 }
 
+_git_config() {
+	git config --local commit.gpgsign false
+	git config --local user.email "auto-build@example.com"
+	git config --local user.name "Build system automate"
+}
+
 _checkout_init() {
 	_report "Checking out clean OpenWRT repository"
 	update_mirror
@@ -252,7 +258,7 @@ _checkout_clean() {
 	git clean -dff
 	find . -name '*.rej' -delete
 	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
-	git config --local commit.gpgsign false
+	_git_config
 	echo "/turris-build.conf" >> ./.gitignore
 	echo "/version" >> ./.gitignore
 	git commit -m 'gitignore: Ignore some more files' ./.gitignore
@@ -310,7 +316,7 @@ patch_feeds() {
 		for patch in */*.patch; do
 			[ -f "$patch" ] || continue
 			cd "$BUILD_DIR"/feeds/$feed
-			git config --local commit.gpgsign false
+			_git_config
 			git am --reject "$SRC_DIR"/patches/$feed/$patch
 			cd "$SRC_DIR"/patches/$feed
 		done
