@@ -239,22 +239,15 @@ sign() {
 	done
 }
 
-checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
-checkout() {
-	_report "Starting out fresh!"
+_checkout_init() {
 	_report "Checking out clean OpenWRT repository"
 	update_mirror
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
-	HASH="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
-	if [ -n "$HASH" ]; then
-		git fetch origin
-		git checkout -f $HASH 
-	else
-		git fetch $DEPTH origin "$OPENWRT_BRANCH"
-		git checkout -f "origin/$OPENWRT_BRANCH"
-	fi
+}
+
+_checkout_clean() {
 	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
 	git clean -dff
 	find . -name '*.rej' -delete
@@ -263,12 +256,48 @@ checkout() {
 	echo "/turris-build.conf" >> ./.gitignore
 	echo "/version" >> ./.gitignore
 	git commit -m 'gitignore: Ignore some more files' ./.gitignore
-	[ \! -f "$SRC_DIR"/feeds.conf ] || cp "$SRC_DIR"/feeds.conf .
 	git log -n 1 --format="%h" > version
 	if [ -n "$DL_MIRROR" ]; then
 		mkdir -p "$DL_MIRROR"
 		rm -rf dl && ln -s "$DL_MIRROR" dl
 	fi
+}
+
+checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
+checkout() {
+	_report "Starting out fresh!"
+	_checkout_init
+	HASH="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
+	if [ -n "$HASH" ]; then
+		git fetch origin
+		git checkout -f $HASH 
+	else
+		git fetch $DEPTH origin "$OPENWRT_BRANCH"
+		git checkout -f "origin/$OPENWRT_BRANCH"
+	fi
+	_checkout_clean
+	cp "$SRC_DIR"/feeds.conf .
+}
+
+repo_checkout_help="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz"
+repo_checkout() {
+	_report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
+	curl "https://repo.turris.cz/$TARGET_BOARD-$PUBLISH_BRANCH/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
+	_checkout_init
+	git fetch
+	git checkout -f "$(awk -F : '/^openwrt:/{print $2}' repo-git-hashes)"
+	GIT_HASHES="$(cat repo-git-hashes)"
+	_checkout_clean
+	echo "$GIT_HASHES" > repo-git-hashes
+	rm -f feeds.conf
+	while read LINE; do
+		local HASH="$(awk -F : "/^feeds\/$(echo "$LINE" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
+		if [ -z "$HASH" ]; then
+			echo "$LINE" >> feeds.conf
+		else
+			echo "$LINE" | sed "s/\^.*$//;s/$/\^$HASH/" >> feeds.conf
+		fi
+	done < "$SRC_DIR/feeds.conf"
 }
 
 patch_feeds_help="Apply patches to the feeds"
@@ -475,6 +504,16 @@ prepare_tools_help="	Prepare build and build tools"
 prepare_tools() {
 	prepare
 	make $MAKE_DEBUG IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG tools/compile toolchain/compile
+}
+
+repo_prepare_help="	Same as prepare but instead of checkout uses repo_checkout"
+repo_prepare() {
+	repo_checkout
+	clean
+	patch_openwrt
+	repatch_feeds
+	gen_version
+	configure
 }
 
 pkgauto_help="	Deploy pkgauto.mk that can be used for rolling software development"
