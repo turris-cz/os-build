@@ -209,16 +209,14 @@ update_mirror() {
 	mkdir -p "$GIT_MIRROR"
 	pushd "$GIT_MIRROR"
 	if [ \! -d openwrt ]; then
-		mkdir openwrt
-		cd openwrt && git init --bare && git remote add --mirror=fetch origin "$OPENWRT_URL"
+		git clone --mirror "$OPENWRT_URL" openwrt
 	fi
-	cd "$GIT_MIRROR"
 	OPENWRT_URL="$GIT_MIRROR/openwrt"
 	for mirror in ./*; do
 		cd "$mirror" || continue
-		if ! git fetch --all; then
+		if ! git remote update --prune; then
 			sleep $(( 1 + $RANDOM % 30 ))
-			git fetch --all
+			git remote update --prune
 		fi
 		cd "$GIT_MIRROR"
 	done
@@ -364,9 +362,7 @@ mirror_feeds() {
 	cat "$SRC_DIR"/feeds.conf "$BUILD_DIR"/feeds.conf 2> /dev/null | while read vcs name url rest; do
 		if [ "$vcs" = src-git ] && [ \! -d "$GIT_MIRROR"/$name ]; then
 			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
-			mkdir "$name"
-			cd "$name" && git init --bare && git remote add --mirror=fetch origin "$feed_url" && git fetch --all
-			cd "$GIT_MIRROR"
+			git clone --mirror "$feed_url" "$name"
 		fi
 	done
 	popd
