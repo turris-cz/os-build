@@ -18,7 +18,7 @@ $(shell \
 	if [ ! -d "$(TMP_REPO_PATH)" ]; then \
 		git clone --mirror "$(PKG_SOURCE_URL)" "$(TMP_REPO_PATH)"; \
 	else \
-		git $(GIT_ARGS) remote update origin
+		git $(GIT_ARGS) remote update origin; \
 	fi)
 
 PKG_SOURCE_VERSION:=$(shell git $(GIT_ARGS) rev-parse "$(PKG_SOURCE_BRANCH)")
