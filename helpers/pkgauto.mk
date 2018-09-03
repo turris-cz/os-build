@@ -16,9 +16,9 @@ GIT_ARGS=--git-dir='$(TMP_REPO_PATH)' --bare
 
 $(shell \
 	if [ ! -d "$(TMP_REPO_PATH)" ]; then \
-		git clone --bare "$(PKG_SOURCE_URL)" "$(TMP_REPO_PATH)"; \
+		git clone --mirror "$(PKG_SOURCE_URL)" "$(TMP_REPO_PATH)"; \
 	else \
-		git $(GIT_ARGS) fetch --prune --prune-tags --force "$(PKG_SOURCE_URL)" "$(PKG_SOURCE_BRANCH):$(PKG_SOURCE_BRANCH)"; \
+		git $(GIT_ARGS) remote update origin; \
 	fi)
 
 PKG_SOURCE_VERSION:=$(shell git $(GIT_ARGS) rev-parse "$(PKG_SOURCE_BRANCH)")

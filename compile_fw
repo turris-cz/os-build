@@ -209,16 +209,14 @@ update_mirror() {
 	mkdir -p "$GIT_MIRROR"
 	pushd "$GIT_MIRROR"
 	if [ \! -d openwrt ]; then
-		mkdir openwrt
-		cd openwrt && git init --bare && git remote add --mirror=fetch origin "$OPENWRT_URL"
+		git clone --mirror "$OPENWRT_URL" openwrt
 	fi
-	cd "$GIT_MIRROR"
 	OPENWRT_URL="$GIT_MIRROR/openwrt"
 	for mirror in ./*; do
 		cd "$mirror" || continue
-		if ! git fetch --all; then
+		if ! git remote update --prune; then
 			sleep $(( 1 + $RANDOM % 30 ))
-			git fetch --all
+			git remote update --prune
 		fi
 		cd "$GIT_MIRROR"
 	done
@@ -239,14 +237,40 @@ sign() {
 	done
 }
 
-checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
-checkout() {
-	_report "Starting out fresh!"
+_git_config() {
+	git config --local commit.gpgsign false
+	git config --local user.email "auto-build@example.com"
+	git config --local user.name "Build system automate"
+}
+
+_checkout_init() {
 	_report "Checking out clean OpenWRT repository"
 	update_mirror
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
+}
+
+_checkout_clean() {
+	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
+	git clean -dff
+	find . -name '*.rej' -delete
+	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
+	_git_config
+	echo "/turris-build.conf" >> ./.gitignore
+	echo "/version" >> ./.gitignore
+	git commit -m 'gitignore: Ignore some more files' ./.gitignore
+	git log -n 1 --format="%h" > version
+	if [ -n "$DL_MIRROR" ]; then
+		mkdir -p "$DL_MIRROR"
+		rm -rf dl && ln -s "$DL_MIRROR" dl
+	fi
+}
+
+checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
+checkout() {
+	_report "Starting out fresh!"
+	_checkout_init
 	HASH="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
 	if [ -n "$HASH" ]; then
 		git fetch origin
@@ -255,20 +279,29 @@ checkout() {
 		git fetch $DEPTH origin "$OPENWRT_BRANCH"
 		git checkout -f "origin/$OPENWRT_BRANCH"
 	fi
-	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
-	git clean -dff
-	find . -name '*.rej' -delete
-	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
-	git config --local commit.gpgsign false
-	echo "/turris-build.conf" >> ./.gitignore
-	echo "/version" >> ./.gitignore
-	git commit -m 'gitignore: Ignore some more files' ./.gitignore
-	[ \! -f "$SRC_DIR"/feeds.conf ] || cp "$SRC_DIR"/feeds.conf .
-	git log -n 1 --format="%h" > version
-	if [ -n "$DL_MIRROR" ]; then
-		mkdir -p "$DL_MIRROR"
-		rm -rf dl && ln -s "$DL_MIRROR" dl
-	fi
+	_checkout_clean
+	cp "$SRC_DIR"/feeds.conf .
+}
+
+repo_checkout_help="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz"
+repo_checkout() {
+	_report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
+	curl "https://repo.turris.cz/$TARGET_BOARD-$PUBLISH_BRANCH/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
+	_checkout_init
+	git fetch
+	git checkout -f "$(awk -F : '/^openwrt:/{print $2}' repo-git-hashes)"
+	GIT_HASHES="$(cat repo-git-hashes)"
+	_checkout_clean
+	echo "$GIT_HASHES" > repo-git-hashes
+	rm -f feeds.conf
+	while read LINE; do
+		local HASH="$(awk -F : "/^feeds\/$(echo "$LINE" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
+		if [ -z "$HASH" ]; then
+			echo "$LINE" >> feeds.conf
+		else
+			echo "$LINE" | sed "s/\^.*$//;s/$/\^$HASH/" >> feeds.conf
+		fi
+	done < "$SRC_DIR/feeds.conf"
 }
 
 patch_feeds_help="Apply patches to the feeds"
@@ -281,7 +314,7 @@ patch_feeds() {
 		for patch in */*.patch; do
 			[ -f "$patch" ] || continue
 			cd "$BUILD_DIR"/feeds/$feed
-			git config --local commit.gpgsign false
+			_git_config
 			git am --reject "$SRC_DIR"/patches/$feed/$patch
 			cd "$SRC_DIR"/patches/$feed
 		done
@@ -329,9 +362,7 @@ mirror_feeds() {
 	cat "$SRC_DIR"/feeds.conf "$BUILD_DIR"/feeds.conf 2> /dev/null | while read vcs name url rest; do
 		if [ "$vcs" = src-git ] && [ \! -d "$GIT_MIRROR"/$name ]; then
 			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
-			mkdir "$name"
-			cd "$name" && git init --bare && git remote add --mirror=fetch origin "$feed_url" && git fetch --all
-			cd "$GIT_MIRROR"
+			git clone --mirror "$feed_url" "$name"
 		fi
 	done
 	popd
@@ -475,6 +506,16 @@ prepare_tools_help="	Prepare build and build tools"
 prepare_tools() {
 	prepare
 	make $MAKE_DEBUG IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG tools/compile toolchain/compile
+}
+
+repo_prepare_help="	Same as prepare but instead of checkout uses repo_checkout"
+repo_prepare() {
+	repo_checkout
+	clean
+	patch_openwrt
+	repatch_feeds
+	gen_version
+	configure
 }
 
 pkgauto_help="	Deploy pkgauto.mk that can be used for rolling software development"
