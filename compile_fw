@@ -31,7 +31,7 @@ MAKE_DEBUG=""
 PUBLISH_BRANCH=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="prepare build gen_lists store_hash sign stats gen_junit"
+DEFAULT_STEPS="prepare build store_hash stats gen_junit"
 
 if [ "$BUILD_DIR" == "$SRC_DIR" ]; then
 	mkdir -p build
@@ -230,19 +230,6 @@ update_mirror() {
 	MIRROR_UPDATED="yes"
 }
 
-sign_help="	Signs generated lists and resigns packages"
-sign() {
-	[ -x staging_dir/host/bin/usign ] || make package/usign/host/compile
-	[ -x staging_dir/host/bin/usign ] || _die "Don't have usign, can't sign"
-	[ -n "$KEY" ] || KEY=key-build
-	[ -f "$KEY" ] || _die "No key available"
-	for i in bin/packages/lists/*.lua bin/packages/*/*/Packages bin/targets/*/*/packages/Packages; do
-		[ -f "$i" ] || continue
-		rm -f "$i".sig
-		staging_dir/host/bin/usign -S -m "$i" -s "$KEY"
-	done
-}
-
 _checkout_init() {
 	_report "Checking out clean OpenWRT repository"
 	update_mirror
@@ -434,20 +421,12 @@ repatch_feeds() {
 
 prefetch_help="Runs make download"
 prefetch() {
-	make $MAKE_DEBUG $BUILD_ARGS $OWRT_DEBUG download
+	make $MAKE_DEBUG $BUILD_ARGS $OWRT_DEBUG BUILD_KEY="${KEY:-key-build}" download
 }
 
 gen_junit_help="Generates junit output from build logs"
 gen_junit() {
 	sh $SH_DEBUG "${SRC_DIR}"/helpers/generate_junit.sh
-}
-
-gen_lists_help="Generate updater package lists"
-gen_lists() {
-	_report "Generating package lists for updater"
-	[ -n "${TARGET_BOARD}" ] || _die "You need to specify target board!"
-	mkdir -p bin/packages/lists
-	"${SRC_DIR}"/helpers/generate_userlists.sh --branch "${PUBLISH_BRANCH}" --src "${SRC_DIR}/lists" bin/packages/lists
 }
 
 build_help="	Builds everything"
