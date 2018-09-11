@@ -2,10 +2,6 @@ include(utils.m4)dnl Include utility macros
 include(repository.m4)dnl Include Repository command
 -- Updater itself
 Install('updater-ng', 'updater-ng-supervisor', { critical = true })
---[[
-Updater before v59.0 has no support for replan as string and it would complain
-about it. This is helper function is here to overcome that.
-]]
 Package('updater-ng', { replan = 'finished' })
 Package('l10n_supported', { replan = 'finished' })
 
