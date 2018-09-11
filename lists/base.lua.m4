@@ -114,8 +114,7 @@ _LUCI_I18N_(base, commands)
 _END_FEATURE_GUARD_
 
 --[[
-We are migrating from uClibc to musl, so reinstall everything depending on libc
-and we need to have working gzip and tar before updater starts doing it's thing.
+We are migrating from uClibc to musl, so reinstall everything depending on libc.
 ]]
 if installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true })
