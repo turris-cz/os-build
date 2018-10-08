@@ -1,4 +1,4 @@
-From 26c32975257ac8941bf8cd9c66b5d231db400b62 Mon Sep 17 00:00:00 2001
+From e6b17664f11f4512c1b9ff72425d65fa8f6acf9e Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -9,6 +9,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  target/linux/mvebu/config-4.14                |   1 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
+ .../patches-4.14/450-reprobe_sfp_phy.patch    |  94 --
  ...ecure-remove-null-check-before-kfree.patch |  34 +
  ...cure-do-not-use-areq-result-for-part.patch |  63 ++
  ...nside-secure-remove-extra-empty-line.patch |  28 +
@@ -65,7 +66,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-marvell-armada-37xx-add-UART-clock.patch} |   9 +-
  ...-armada-37xx-add-nodes-allowing-cpu.patch} |  13 +-
  ...s-marvell-armada37xx-Add-eth0-alias.patch} |   9 +-
- ...host-and-device-to-the-same-MAX-pay.patch} |  45 +-
  ...rdvark-disable-LOS-state-by-default.patch} |  32 +-
  ...9-net-mvneta-move-port-configuration.patch | 106 +++
  ...060-net-mvneta-add-1000BaseX-support.patch |  65 ++
@@ -129,8 +129,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...tchdog-add-documentation-for-armada-.patch |  37 +
  ...l-armada-37xx-add-nodes-to-support-w.patch |  44 +
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 886 ++++++++++++++++++
+ ...x-Fix-88E6141-6341-2500mbps-SERDES-s.patch | 102 ++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 123 files changed, 13225 insertions(+), 280 deletions(-)
+ 124 files changed, 13312 insertions(+), 344 deletions(-)
+ delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90003-crypto-inside-secure-remove-extra-empty-line.patch
@@ -187,7 +189,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  rename target/linux/mvebu/patches-4.14/{506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch => 90054-arm64-dts-marvell-armada-37xx-add-UART-clock.patch} (74%)
  rename target/linux/mvebu/patches-4.14/{507-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch => 90055-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch} (73%)
  rename target/linux/mvebu/patches-4.14/{520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch => 90056-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch} (59%)
- rename target/linux/mvebu/patches-4.14/{524-PCI-aardvark-set-host-and-device-to-the-same-MAX-payload-size.patch => 90057-PCI-aardvark-set-host-and-device-to-the-same-MAX-pay.patch} (72%)
  rename target/linux/mvebu/patches-4.14/{526-PCI-aardvark-disable-LOS-state-by-default.patch => 90058-PCI-aardvark-disable-LOS-state-by-default.patch} (50%)
  create mode 100644 target/linux/mvebu/patches-4.14/90059-net-mvneta-move-port-configuration.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90060-net-mvneta-add-1000BaseX-support.patch
@@ -251,6 +252,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90118-documentation-watchdog-add-documentation-for-armada-.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90119-arm64-dts-marvell-armada-37xx-add-nodes-to-support-w.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90120-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90121-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
  rename target/linux/mvebu/patches-4.14/{508-cpufreq-armada-37xx-Fix-clock-leak.patch => 91508-cpufreq-armada-37xx-Fix-clock-leak.patch} (100%)
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
@@ -287,6 +289,106 @@ index 89c3363..c9ef4b0 100644
  define Device/armada-3720-db
    KERNEL_NAME := Image
    KERNEL := kernel-bin
+diff --git a/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch b/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
+deleted file mode 100644
+index e9a3d69..0000000
+--- a/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
++++ /dev/null
+@@ -1,94 +0,0 @@
+-From 28baa5e2635285b178326b301f534ed95c65dd01 Mon Sep 17 00:00:00 2001
+-From: Jonas Gorski <jonas.gorski@gmail.com>
+-Date: Thu, 29 Sep 2016 11:44:39 +0200
+-Subject: [PATCH] sfp: retry phy probe if unsuccessful
+-
+-Some phys seem to take longer than 50 ms to come out of reset, so retry
+-until we find a phy.
+-
+-Signed-off-by: Jonas Gorski <jonas.gorski@gmail.com>
+----
+- drivers/net/phy/sfp.c | 38 +++++++++++++++++++++++++-------------
+- 1 file changed, 25 insertions(+), 13 deletions(-)
+-
+---- a/drivers/net/phy/sfp.c
+-+++ b/drivers/net/phy/sfp.c
+-@@ -488,7 +488,7 @@ static void sfp_sm_phy_detach(struct sfp
+- 	sfp->mod_phy = NULL;
+- }
+- 
+--static void sfp_sm_probe_phy(struct sfp *sfp)
+-+static int sfp_sm_probe_phy(struct sfp *sfp)
+- {
+- 	struct phy_device *phy;
+- 	int err;
+-@@ -498,11 +498,11 @@ static void sfp_sm_probe_phy(struct sfp
+- 	phy = mdiobus_scan(sfp->i2c_mii, SFP_PHY_ADDR);
+- 	if (phy == ERR_PTR(-ENODEV)) {
+- 		dev_info(sfp->dev, "no PHY detected\n");
+--		return;
+-+		return -EAGAIN;
+- 	}
+- 	if (IS_ERR(phy)) {
+- 		dev_err(sfp->dev, "mdiobus scan returned %ld\n", PTR_ERR(phy));
+--		return;
+-+		return PTR_ERR(phy);
+- 	}
+- 
+- 	err = sfp_add_phy(sfp->sfp_bus, phy);
+-@@ -510,11 +510,13 @@ static void sfp_sm_probe_phy(struct sfp
+- 		phy_device_remove(phy);
+- 		phy_device_free(phy);
+- 		dev_err(sfp->dev, "sfp_add_phy failed: %d\n", err);
+--		return;
+-+		return err;
+- 	}
+- 
+- 	sfp->mod_phy = phy;
+- 	phy_start(phy);
+-+
+-+	return 0;
+- }
+- 
+- static void sfp_sm_link_up(struct sfp *sfp)
+-@@ -560,14 +562,9 @@ static void sfp_sm_fault(struct sfp *sfp
+- 
+- static void sfp_sm_mod_init(struct sfp *sfp)
+- {
+--	sfp_module_tx_enable(sfp);
+-+	int ret = 0;
+- 
+--	/* Wait t_init before indicating that the link is up, provided the
+--	 * current state indicates no TX_FAULT.  If TX_FAULT clears before
+--	 * this time, that's fine too.
+--	 */
+--	sfp_sm_next(sfp, SFP_S_INIT, T_INIT_JIFFIES);
+--	sfp->sm_retries = 5;
+-+	sfp_module_tx_enable(sfp);
+- 
+- 	/* Setting the serdes link mode is guesswork: there's no
+- 	 * field in the EEPROM which indicates what mode should
+-@@ -581,7 +578,22 @@ static void sfp_sm_mod_init(struct sfp *
+- 	if (sfp->id.base.e1000_base_t ||
+- 	    sfp->id.base.e100_base_lx ||
+- 	    sfp->id.base.e100_base_fx)
+--		sfp_sm_probe_phy(sfp);
+-+		ret = sfp_sm_probe_phy(sfp);
+-+
+-+	if (!ret) {
+-+		/* Wait t_init before indicating that the link is up, provided
+-+		 * the current state indicates no TX_FAULT.  If TX_FAULT clears
+-+		 * this time, that's fine too.
+-+		 */
+-+		sfp_sm_next(sfp, SFP_S_INIT, T_INIT_JIFFIES);
+-+		sfp->sm_retries = 5;
+-+		return;
+-+	}
+-+
+-+	if (ret == -EAGAIN)
+-+		sfp_sm_set_timer(sfp, T_PROBE_RETRY);
+-+	else
+-+		sfp_sm_next(sfp, SFP_S_TX_DISABLE, 0);
+- }
+- 
+- static int sfp_sm_mod_probe(struct sfp *sfp)
 diff --git a/target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch b/target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
 new file mode 100644
 index 0000000..64dbbbd
@@ -15518,6 +15620,114 @@ index 0000000..64e9fb2
 ++	status = "okay";
 ++	usb-phy = <&usb3_phy>;
 ++};
++-- 
++2.19.0
++
+diff --git a/target/linux/mvebu/patches-4.14/90121-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch b/target/linux/mvebu/patches-4.14/90121-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
+new file mode 100644
+index 0000000..2888d16
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/90121-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
+@@ -0,0 +1,102 @@
++From 56d8a7d7d2241993beec19e5b492de9c3fb04dfa Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Fri, 5 Oct 2018 13:23:05 +0200
++Subject: [PATCH] net: dsa: mc88e6xxx: Fix 88E6141/6341 2500mbps SERDES speed
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The port_set_speed method for the Topaz family must not be the same
++as for Peridot family, since on Topaz port 5 is the SERDES port and
++can be set to 2500mbps spped mode.
++
++This patch adds a new method for the Topaz family, allowing the alt_bit
++mode only for port 0 and 2500 mbps mode for port 5.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c |  4 ++--
++ drivers/net/dsa/mv88e6xxx/port.c | 25 +++++++++++++++++++++++--
++ drivers/net/dsa/mv88e6xxx/port.h |  1 +
++ 3 files changed, 26 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index b80e3267bb2e..f190c9e5f2e1 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -2699,7 +2699,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++ 	.port_set_link = mv88e6xxx_port_set_link,
++ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
++ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
++-	.port_set_speed = mv88e6390_port_set_speed,
+++	.port_set_speed = mv88e6341_port_set_speed,
++ 	.port_tag_remap = mv88e6095_port_tag_remap,
++ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
++ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
++@@ -3252,7 +3252,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++ 	.port_set_link = mv88e6xxx_port_set_link,
++ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
++ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
++-	.port_set_speed = mv88e6390_port_set_speed,
+++	.port_set_speed = mv88e6341_port_set_speed,
++ 	.port_tag_remap = mv88e6095_port_tag_remap,
++ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
++ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
++diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
++index 0ff40f36b89b..eb23abc53b4a 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.c
+++++ b/drivers/net/dsa/mv88e6xxx/port.c
++@@ -228,8 +228,11 @@ static int mv88e6xxx_port_set_speed(struct mv88e6xxx_chip *chip, int port,
++ 		ctrl = MV88E6XXX_PORT_MAC_CTL_SPEED_1000;
++ 		break;
++ 	case 2500:
++-		ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000 |
++-			MV88E6390_PORT_MAC_CTL_ALTSPEED;
+++		if (alt_bit)
+++			ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000 |
+++				MV88E6390_PORT_MAC_CTL_ALTSPEED;
+++		else
+++			ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000;
++ 		break;
++ 	case 10000:
++ 		/* all bits set, fall through... */
++@@ -291,6 +294,24 @@ int mv88e6185_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
++ 	return mv88e6xxx_port_set_speed(chip, port, speed, false, false);
++ }
++ 
+++/* Support 10, 100, 200, 1000, 2500 Mbps (e.g. 88E6341) */
+++int mv88e6341_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
+++{
+++	if (speed == SPEED_MAX)
+++		speed = port < 5 ? 1000 : 2500;
+++
+++	if (speed > 2500)
+++		return -EOPNOTSUPP;
+++
+++	if (speed == 200 && port != 0)
+++		return -EOPNOTSUPP;
+++
+++	if (speed == 2500 && port < 5)
+++		return -EOPNOTSUPP;
+++
+++	return mv88e6xxx_port_set_speed(chip, port, speed, !port, true);
+++}
+++
++ /* Support 10, 100, 200, 1000 Mbps (e.g. 88E6352 family) */
++ int mv88e6352_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
++ {
++diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
++index f32f56af8e35..36904c9bf955 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.h
+++++ b/drivers/net/dsa/mv88e6xxx/port.h
++@@ -269,6 +269,7 @@ int mv88e6xxx_port_set_duplex(struct mv88e6xxx_chip *chip, int port, int dup);
++ 
++ int mv88e6065_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
++ int mv88e6185_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
+++int mv88e6341_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
++ int mv88e6352_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
++ int mv88e6390_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
++ int mv88e6390x_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
 +-- 
 +2.19.0
 +
