@@ -1,0 +1,53 @@
+From b997f4dca00c239e891e70427c70e8b94e9a1389 Mon Sep 17 00:00:00 2001
+From: Build system automate <auto-build@example.com>
+Date: Thu, 11 Oct 2018 18:23:19 +0200
+Subject: [PATCH] build: Use LINUX_DIR for Kernel/Patch
+
+Use LINUX_DIR as a path when patching kernel. Doesn't break the current usage,
+but allows to create packages that will contain variation of a kernel with
+kernel being build in some subdirectory of PKG_BUILD_DIR.
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
+---
+ include/quilt.mk | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/include/quilt.mk b/include/quilt.mk
+index 61dcc79..8268e55 100644
+--- a/include/quilt.mk
++++ b/include/quilt.mk
+@@ -67,7 +67,7 @@ define PatchDir/Default
+ 			$(call filter_series,$(2)/series) | xargs -n1 \
+ 				$(KPATCH) "$(1)" "$(2)"; \
+ 		else \
+-			$(KPATCH) "$(1)" "$(2)"; \
++			 $(KPATCH) "$(1)" "$(2)"; \
+ 		fi; \
+ 	fi
+ endef
+@@ -94,17 +94,17 @@ endef
+ 
+ kernel_files=$(foreach fdir,$(GENERIC_FILES_DIR) $(FILES_DIR),$(fdir)/.)
+ define Kernel/Patch/Default
+-	$(if $(QUILT),rm -rf $(PKG_BUILD_DIR)/patches; mkdir -p $(PKG_BUILD_DIR)/patches)
++	$(if $(QUILT),rm -rf $(LINUX_DIR)/patches; mkdir -p $(LINUX_DIR)/patches)
+ 	$(if $(kernel_files),$(CP) $(kernel_files) $(LINUX_DIR)/)
+ 	find $(LINUX_DIR)/ -name \*.rej -or -name \*.orig | $(XARGS) rm -f
+ 	if [ -d $(GENERIC_PLATFORM_DIR)/patches$(if $(wildcard $(GENERIC_PLATFORM_DIR)/patches-$(KERNEL_PATCHVER)),-$(KERNEL_PATCHVER)) ]; then \
+ 		echo "generic patches directory is present. please move your patches to the pending directory" ; \
+ 		exit 1; \
+ 	fi
+-	$(call PatchDir,$(PKG_BUILD_DIR),$(GENERIC_BACKPORT_DIR),generic-backport/)
+-	$(call PatchDir,$(PKG_BUILD_DIR),$(GENERIC_PATCH_DIR),generic/)
+-	$(call PatchDir,$(PKG_BUILD_DIR),$(GENERIC_HACK_DIR),generic-hack/)
+-	$(call PatchDir,$(PKG_BUILD_DIR),$(PATCH_DIR),platform/)
++	$(call PatchDir,$(LINUX_DIR),$(GENERIC_BACKPORT_DIR),generic-backport/)
++	$(call PatchDir,$(LINUX_DIR),$(GENERIC_PATCH_DIR),generic/)
++	$(call PatchDir,$(LINUX_DIR),$(GENERIC_HACK_DIR),generic-hack/)
++	$(call PatchDir,$(LINUX_DIR),$(PATCH_DIR),platform/)
+ endef
+ 
+ define Quilt/RefreshDir
+-- 
+2.19.0
+

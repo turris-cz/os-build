@@ -1,0 +1,74 @@
+From 32a8d8f74738adb442c95946df1f6f7ffe6b86c4 Mon Sep 17 00:00:00 2001
+From: Build system automate <auto-build@example.com>
+Date: Tue, 9 Oct 2018 12:22:35 +0200
+Subject: [PATCH] mariadb: Small init script polishing
+
+Using mysqld to get datadir, pidfile and socketfile. This way datadir doesn't
+need to be set or can be set in included configuration file. Also allows people
+to override location of pid file and socket file.
+
+Apart from that, drop pidfile created by prrocd and let Maria create it by
+itself.
+
+Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ utils/mariadb/Makefile          |  2 +-
+ utils/mariadb/files/mysqld.init | 16 ++++++++--------
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
+index d9b7c4dec..8352a43fb 100644
+--- a/utils/mariadb/Makefile
++++ b/utils/mariadb/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=mariadb
+ PKG_VERSION:=10.2.17
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL := \
+diff --git a/utils/mariadb/files/mysqld.init b/utils/mariadb/files/mysqld.init
+index abc99fc7a..e19e343ab 100644
+--- a/utils/mariadb/files/mysqld.init
++++ b/utils/mariadb/files/mysqld.init
+@@ -22,8 +22,9 @@ my_user="${MY_USER:-mariadb}"
+ my_group="${MY_GROUP:-mariadb}"
+ 
+ start_service() {
+-	local conf='/etc/mysql/my.cnf'
+-	local datadir="$( sed -nE "s/^\s*datadir\s*=\s*('([^']*)'|\x22([^\x22]*)\x22|(.*\S))\s*$/\2\3\4/p" "$conf" )"
++	local datadir="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*datadir[[:blank:]]*/|/|p')"
++	local pidfile="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*pid-file[[:blank:]]*/|/|p')"
++	local socketfile="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*socket[[:blank:]]*/|/|p')"
+ 
+ 	[ -d "$datadir" ] || {
+ 		$LOGGER "datadir '$datadir' in '$conf' does not exist"
+@@ -36,18 +37,17 @@ start_service() {
+ 		return 1
+ 	}
+ 
+-	mkdir -p /var/lib/mysql
+-	chown "$my_user":"$my_group" /var/lib/mysql
+-
+-	mkdir -p /var/run/mysqld
+-	chown "$my_user":"$my_group" /var/run/mysqld
++	for i in $pidfile $socketfile; do
++		mkdir -p "$(dirname "$i")"
++		chown "$my_user":"$my_group" "$(dirname "$i")"
++	done
+ 
+ 	procd_open_instance
+ 
+ 	procd_set_param command $PROG $MY_ARGS
+-	procd_set_param pidfile /var/run/mysqld.pid
+ 	# forward stderr to logd
+ 	procd_set_param stderr 1
++	procd_set_param user "$my_user"
+ 
+ 	procd_close_instance
+ }
+-- 
+2.19.0
+
