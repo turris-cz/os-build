@@ -48,6 +48,37 @@ mkdir -p "$TMPDIR"
 
 MIRROR_UPDATED=""
 
+trap _cleanup 0 2 3 15
+
+_git_config() {
+	if [ "$1" ]; then
+		pushd "$1" > /dev/null
+		EXTRA_ARGS=""
+	else
+		pushd "$BUILD_DIR" > /dev/null
+		EXTRA_ARGS="$(echo feeds/*/.git)"
+	fi
+	for i in ./.git $EXTRA_ARGS; do
+		pushd "$(dirname "$i")" > /dev/null
+		git config --local commit.gpgsign false
+		git config --local user.email "auto-build@example.com"
+		git config --local user.name "Build system automate"
+		popd > /dev/null
+	done
+	popd > /dev/null
+}
+
+_git_unconfig() {
+	pushd "$BUILD_DIR" > /dev/null
+	for i in ./.git feeds/*/.git; do
+		pushd "$(dirname "$i")" > /dev/null
+		git config --local --unset commit.gpgsign
+		git config --local --unset user.email
+		git config --local --unset user.name
+		popd > /dev/null
+	done
+	popd > /dev/null
+}
 
 _report() {
 	echo -e '\033[0;34m'"$1"'\033[0m' >&2
@@ -56,6 +87,11 @@ _report() {
 _die() {
 	echo -e '\033[0;31m'"$1"'\033[0m' >&2
 	exit 1
+}
+
+_cleanup() {
+	_report "Cleaning up..."
+	_git_unconfig
 }
 
 _get_version() {
@@ -196,7 +232,6 @@ configure() {
 		echo "${EXTRA_KERNEL}" >> "$config"
 		TO_COMMIT="$TO_COMMIT $config"
 	done
-	
 	git commit -m 'kernel: Add customized kernel options' $TO_COMMIT
 }
 
@@ -214,6 +249,7 @@ update_mirror() {
 	OPENWRT_URL="$GIT_MIRROR/openwrt"
 	for mirror in ./*; do
 		cd "$mirror" || continue
+		_git_config .
 		if ! git remote update --prune; then
 			sleep $(( 1 + $RANDOM % 30 ))
 			git remote update --prune
@@ -235,12 +271,6 @@ sign() {
 		rm -f "$i".sig
 		staging_dir/host/bin/usign -S -m "$i" -s "$KEY"
 	done
-}
-
-_git_config() {
-	git config --local commit.gpgsign false
-	git config --local user.email "auto-build@example.com"
-	git config --local user.name "Build system automate"
 }
 
 _checkout_init() {
@@ -314,7 +344,6 @@ patch_feeds() {
 		for patch in */*.patch; do
 			[ -f "$patch" ] || continue
 			cd "$BUILD_DIR"/feeds/$feed
-			_git_config
 			git am --reject "$SRC_DIR"/patches/$feed/$patch
 			cd "$SRC_DIR"/patches/$feed
 		done
@@ -421,6 +450,7 @@ get_feeds() {
 	perl $PERL_DEBUG ./scripts/feeds clean -a
 	perl $PERL_DEBUG ./scripts/feeds update -a
 	perl $PERL_DEBUG ./scripts/feeds install -a
+	_git_config
 	set +e
 	DISABLED_PACKAGES="$(cat "${SRC_DIR}"/disabled_packages/common "${SRC_DIR}"/disabled_packages/${TARGET_BOARD} 2> /dev/null)"
 	DISABLED_PACKAGES="$(echo "$DISABLED_PACKAGES" | sed 's|#.*||' | grep .)"
@@ -570,6 +600,8 @@ help() {
 	echo "Default commands are: $DEFAULT_STEPS"
 	echo
 }
+
+_git_config
 
 [ -z "$BOARD" ] || _set_target "$BOARD"
 
