@@ -1,23 +1,26 @@
-From 5648bc845e4400d8067d2965cc4eb1cb7e7ad51a Mon Sep 17 00:00:00 2001
+From d9ba8d6cf441203761b78fbe21d18dc5b7fab21d Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Tue, 9 Oct 2018 12:22:35 +0200
 Subject: [PATCH] mariadb: Small init script polishing
 
-Using mysqld to get datadir, pidfile and socketfile. This way datadir doesn't
-need to be set or can be set in included configuration file. Also allows people
-to override location of pid file and socket file.
+Using mysqld to get datadir, tmpdir, pidfile and socketfile. This way they
+don't need to be set or can be set in included configuration file. Also allows
+people to override location of pid file and socket file.
 
-Apart from that, drop pidfile created by prrocd and let Maria create it by
-itself.
+Apart from that, drop pidfile created by procd and let Maria create it by
+itself but start MariaDB as mysql user and install configuration files in a way
+Maria can read it.
+
+Also include fallback when logger is not available.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- utils/mariadb/Makefile          |  2 +-
+ utils/mariadb/Makefile          |  8 +++++---
  utils/mariadb/files/mysqld.init | 20 +++++++++++---------
- 2 files changed, 12 insertions(+), 10 deletions(-)
+ 2 files changed, 16 insertions(+), 12 deletions(-)
 
 diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
-index c0c4e3a..8307bcb 100644
+index c0c4e3a69..7ff8f2bc3 100644
 --- a/utils/mariadb/Makefile
 +++ b/utils/mariadb/Makefile
 @@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
@@ -29,8 +32,23 @@ index c0c4e3a..8307bcb 100644
  
  PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
  PKG_SOURCE_URL := \
+@@ -493,10 +493,12 @@ define Package/mariadb-server/install
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+ 	$(INSTALL_DIR) $(1)/etc/mysql/conf.d
+ 	$(INSTALL_BIN) files/mysqld.init $(1)/etc/init.d/mysqld
+-	$(INSTALL_CONF) conf/my.cnf $(1)/etc/mysql
++	# DATA because spomebody thought giving CONF 0600 rights is a good idea
++	$(INSTALL_DATA) conf/my.cnf $(1)/etc/mysql
+ 	$(INSTALL_CONF) conf/mysqld.default $(1)/etc/default/mysqld
+ 	$(INSTALL_DIR) $(1)$(PLUGIN_DIR)
+-	$(INSTALL_CONF) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/daemon_example.ini $(1)$(PLUGIN_DIR)
++	# DATA because spomebody thought giving CONF 0600 rights is a good idea
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/daemon_example.ini $(1)$(PLUGIN_DIR)
+ 	$(INSTALL_DIR) $(1)/usr/share/mysql/english
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/english/errmsg.sys $(1)/usr/share/mysql/english
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/fill_help_tables.sql $(1)/usr/share/mysql
 diff --git a/utils/mariadb/files/mysqld.init b/utils/mariadb/files/mysqld.init
-index abc99fc..78354ad 100644
+index abc99fc7a..a9ee9ebb4 100644
 --- a/utils/mariadb/files/mysqld.init
 +++ b/utils/mariadb/files/mysqld.init
 @@ -12,6 +12,7 @@ MYSQLD=mysqld
@@ -67,7 +85,7 @@ index abc99fc..78354ad 100644
 -
 -	mkdir -p /var/run/mysqld
 -	chown "$my_user":"$my_group" /var/run/mysqld
-+	for i in "$datadir" "$tmpdir" "$(dirname "$pidfile")" "$(dirname "$socketfile")"; do
++	for i in /var/lib/mysql "$datadir" "$tmpdir" "$(dirname "$pidfile")" "$(dirname "$socketfile")"; do
 +		mkdir -p "$i"
 +		chown "$my_user":"$my_group" "$i"
 +	done
