@@ -73,6 +73,7 @@ Install("bind-client", "bind-dig", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
 Install("haveged", { priority = 40 })
+Install("umdns", { priority = 40 })
 
 -- Turris utility
 Install("turris-utils", "user_notify", "user_notify_locales", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", { priority = 40 })
