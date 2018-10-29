@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+declare -A available_commands
+
 BUILD_DIR="$(pwd)"
 SRC_DIR="$(dirname "$0")"
 SRC_DIR="$(cd "$SRC_DIR"; pwd)"
@@ -30,7 +32,12 @@ MAKE_DEBUG=""
 PUBLISH_BRANCH=""
 DEPTH="--depth 1"
 FORCE=""
-DEFAULT_STEPS="prepare build store_hash stats gen_junit"
+DEFAULT_STEPS=(
+	"prepare",
+	"build",
+	"store_hash",
+	"stats gen_junit",
+	)
 
 if [ "$BUILD_DIR" == "$SRC_DIR" ]; then
 	mkdir -p build
@@ -64,6 +71,15 @@ _die() {
 	exit 1
 }
 
+_enable_debug() {
+	set -x
+	DEBUG="yes"
+	PERL_DEBUG="-d:Trace"
+	MAKE_DEBUG="-n"
+	SH_DEBUG="-x"
+	OWRT_DEBUG="V=s"
+}
+
 _get_version() {
 	# If first grep fails - version is not first non-empty, add 999 to the end
 	# Be aware that Condition in if also outputs the results
@@ -72,7 +88,7 @@ _get_version() {
 	fi
 }
 
-gen_version_help="Generates Turris version package from NEWS"
+available_commands+=( ["gen_version"]="Generates Turris version package from NEWS" )
 gen_version() {
 	_report "Generating turris-version package"
 	# Find the current version
@@ -139,7 +155,7 @@ EOF
 	popd
 }
 
-conflicts_help="Show packages that we are overriding in Turris OS packages"
+available_commands+=( ["conflicts_help"]="Show packages that we are overriding in Turris OS packages" )
 conflicts() {
 	_report "Showing conflicting packages"
 	echo "Following packages are being overridden by Turris packages:"
@@ -152,7 +168,7 @@ conflicts() {
 	rm -f tmp/turris-packages.list tmp/other-packages.list
 }
 
-stats_help="	Prints statistics regarding number of built packages"
+available_commands+=( ["stats"]="	Prints statistics regarding number of built packages" )
 stats() {
 	mkdir -p logs
 	_report "Reporting statistics"
@@ -168,7 +184,7 @@ stats() {
 	} | tee logs/stats
 }
 
-configure_help="Recreates configuration for target boards"
+available_commands+=( ["configure"]="Recreates configuration for target boards" )
 configure() {
 	_report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
@@ -205,7 +221,7 @@ configure() {
 	_git commit -m 'kernel: Add customized kernel options' $TO_COMMIT
 }
 
-update_mirror_help="Updates all local mirrors"
+available_commands+=( ["update_mirror"]="Updates all local mirrors" )
 update_mirror() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	[ -z "$MIRROR_UPDATED" ] || return 0
@@ -252,7 +268,7 @@ _checkout_clean() {
 	fi
 }
 
-checkout_help="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out"
+available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
 checkout() {
 	_report "Starting out fresh!"
 	_checkout_init
@@ -268,7 +284,7 @@ checkout() {
 	cp "$SRC_DIR"/feeds.conf .
 }
 
-repo_checkout_help="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz"
+available_commands+=( ["repo_checkout"]="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz" )
 repo_checkout() {
 	_report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
 	curl "https://repo.turris.cz/$TARGET_BOARD-$PUBLISH_BRANCH/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
@@ -289,7 +305,7 @@ repo_checkout() {
 	done < "$SRC_DIR/feeds.conf"
 }
 
-patch_feeds_help="Apply patches to the feeds"
+available_commands+=( ["patch_feeds"]="Apply patches to the feeds" )
 patch_feeds() {
 	_report "Patching feeds"
 	pushd "$SRC_DIR"/patches
@@ -306,7 +322,7 @@ patch_feeds() {
 	popd
 }
 
-clean_ccache_help="Set persistent ccache paths"
+available_commands+=( ["clean_ccache"]="Clean persistent ccache paths" )
 clean_ccache() {
 	if [ "$(which ccache)" ]; then
 		_report "Cleaning ccache"
@@ -317,7 +333,7 @@ clean_ccache() {
 	fi
 }
 
-set_ccache_help="Set persistent ccache paths"
+available_commands+=( ["set_ccache"]="Set persistent ccache paths" )
 set_ccache() {
 	[ -z "$CCACHE_SET" ] || return 0
 	_report "Setting ccache paths"
@@ -327,7 +343,7 @@ set_ccache() {
 	[ -z "$(git diff include/host-build.mk include/package.mk)" ] || _git commit -m "include: ccache settings" include/host-build.mk include/package.mk
 }
 
-set_local_feeds_help="Change feed URL to their mirror counterparts"
+available_commands+=( ["set_local_feeds"]="Change feed URL to their mirror counterparts" )
 set_local_feeds() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	_report "Setting feeds to their local counterparts"
@@ -339,7 +355,7 @@ set_local_feeds() {
 	done < feeds.conf
 }
 
-mirror_feeds_help="Creates initial mirrors of all configured feeds"
+available_commands+=( ["mirror_feeds"]="Creates initial mirrors of all configured feeds" )
 mirror_feeds() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	pushd "$GIT_MIRROR"
@@ -353,7 +369,7 @@ mirror_feeds() {
 	update_mirror
 }
 
-patch_openwrt_help="Patch the main OpenWRT repository"
+available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	_report "Patching OpenWRT repository"
 	pushd "$SRC_DIR"/patches/openwrt
@@ -380,7 +396,7 @@ _git_remote_hash() {
 	popd > /dev/null
 }
 
-store_hash_help="Stores hashes of current build"
+available_commands+=( ["store_hash"]="Stores hashes of current build" )
 store_hash() {
 	_report "Storing hashes"
 	mkdir -p bin
@@ -397,7 +413,7 @@ store_hash() {
 	} | tee bin/git-hash
 }
 
-get_feeds_help="Recreate configured feeds"
+available_commands+=( ["get_feeds"]="Recreate configured feeds" )
 get_feeds() {
 	_report "Getting feeds"
 	update_mirror
@@ -412,23 +428,23 @@ get_feeds() {
 	[ -z "$DISABLED_PACKAGES" ] || perl $PERL_DEBUG ./scripts/feeds uninstall $DISABLED_PACKAGES
 }
 
-repatch_feeds_help="Cleanup feeds, update them and patch them (Implies: get_feeds patch_feeds)"
+available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them (Implies: get_feeds patch_feeds)" )
 repatch_feeds() {
 	get_feeds
 	patch_feeds
 }
 
-prefetch_help="Runs make download"
+available_commands+=( ["prefetch"]="Runs make download" )
 prefetch() {
 	make $MAKE_DEBUG $BUILD_ARGS $OWRT_DEBUG download
 }
 
-gen_junit_help="Generates junit output from build logs"
+available_commands+=( ["gen_junit"]="Generates junit output from build logs" )
 gen_junit() {
 	sh $SH_DEBUG "${SRC_DIR}"/helpers/generate_junit.sh
 }
 
-build_help="	Builds everything"
+available_commands+=( ["build"]="	Builds everything" )
 build() {
 	_report "Starting real build"
 	set_ccache
@@ -461,14 +477,14 @@ build() {
 	BUILD_END="$(date +%s)"
 }
 
-clean_help="	Clean current build directory"
+available_commands+=( ["clean"]="	Clean current build directory" )
 clean() {
 	_report "Cleaning up current build directory"
 	rm -rf ./build_dir ./tmp ./staging_dir ./logs ./bin
 	mkdir -p tmp
 }
 
-prepare_help="	Prepare build but don't build it (Implies: checkout clean patch_openwrt repatch_feeds gen_version configure)"
+available_commands+=( ["prepare"]="	Prepare build but don't build it (Implies: checkout clean patch_openwrt repatch_feeds gen_version configure)" )
 prepare() {
 	checkout
 	clean
@@ -478,13 +494,13 @@ prepare() {
 	configure
 }
 
-prepare_tools_help="	Prepare build and build tools"
+available_commands+=( ["prepare_tools"]="Prepare build and build tools" )
 prepare_tools() {
 	prepare
 	make $MAKE_DEBUG IS_TTY=1 BUILD_LOG=1 $BUILD_ARGS $OWRT_DEBUG tools/compile toolchain/compile target/compile
 }
 
-repo_prepare_help="	Same as prepare but instead of checkout uses repo_checkout"
+available_commands+=( ["repo_prepare"]="Same as prepare but instead of checkout uses repo_checkout" )
 repo_prepare() {
 	repo_checkout
 	clean
@@ -494,7 +510,7 @@ repo_prepare() {
 	configure
 }
 
-autopkg_help="	Deploy autopkg scripts that can be used for rolling software development"
+available_commands+=( ["autopkg"]="	Deploy autopkg scripts that can be used for rolling software development" )
 autopkg() {
 	_report "Deploying autopkg scripts"
 	cp "$SRC_DIR"/helpers/autopkg/* "$BUILD_DIR"/include/
@@ -525,90 +541,88 @@ _set_target() {
 	esac
 }
 
-help_help="	Displays text with help"
-help() {
-	echo "Usage: $CMD [options] [command] [command] ..."
+print_help() {
+	echo "Usage: $CMD [option].. [command].."
 	echo
 	echo "Available options are:"
 	echo "	-x		Enable debug mode"
 	echo "	-e		Build everything, not just minimal set"
-	echo "	-f[num]	Try hard to get stuff to compile (optional number specifies number of tries)"
+	echo "	-f[num]		Try hard to get stuff to compile (optional number specifies number of tries)"
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-t board	Set target board to _board_"
 	echo "	-a \"arg1 arg2\"	Set build arguments - passed directly to make"
 	echo "	-b branch	Branch to checkout"
 	echo "	-p branch	Name of the branch that is being build"
 	echo "	-l		Do not update local git mirrors"
-	echo "  -s key		Sign packges with given key"
+	echo "	-s key		Sign packges with given key"
 	echo "	-h		Show help"
 	echo
 	echo "Available commands are:"
-	declare -F | sed -n 's|declare -f \([a-z]\)|\1|p' | while read func; do
-		echo "	$func	$(eval echo \"\$${func}_help\")"
+	for cmd in "${!available_commands[@]}"; do
+		echo "	$cmd	${available_commands[$cmd]}"
 	done
 	echo
-	echo "Default commands are: $DEFAULT_STEPS"
+	echo "Default commands are: ${DEFAULT_STEPS[*]}"
 	echo
 }
 
-[ -z "$BOARD" ] || _set_target "$BOARD"
-
-while expr x$1 : x- > /dev/null; do
-	cmd="x$1"
-	shift
-	case $cmd in
-		x-x)
-			set -x
-			DEBUG="yes"
-			PERL_DEBUG="-d:Trace"
-			MAKE_DEBUG="-n"
-			SH_DEBUG="-x"
-			OWRT_DEBUG="V=s"
-			;;
-		x-e)
-			EVERYTHING="yes"
-			;;
-		x-d)
-			DEPTH=""
-			;;
-		x-f*)
-			FORCE="$(echo $cmd | sed -n 's|^x-f\([0-9]*\)$|\1|p')"
-			[ -n "$FORCE" ] || FORCE="1"
-			;;
-		x-t)
-			_set_target "$1"
-			shift
-			;;
-		x-h|x--help)
-			help
+steps=()
+# Parse arguments
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			print_help
 			exit 0
 			;;
-		x-a)
+		-x)
+			_enable_debug
+			;;
+		-e)
+			EVERYTHING="yes"
+			;;
+		-d)
+			DEPTH=""
+			;;
+		-f*)
+			FORCE="${1#-f}"
+			[ -n "$FORCE" ] || FORCE="1"
+			;;
+		-t)
+			shift
+			_set_target "$1"
+			;;
+		-a)
+			shift
 			BUILD_ARGS="$BUILD_ARGS $1"
-			shift
 			;;
-		x-p)
+		-p)
+			shift
 			PUBLISH_BRANCH="$1"
-			shift
 			;;
-		x-b)
+		-b)
+			shift
 			OPENWRT_BRANCH="$1"
-			shift
 			;;
-		x-l)
+		-l)
 			MIRROR_UPDATED="override"
 			OPENWRT_URL="$GIT_MIRROR/openwrt"
 			;;
-		x-s)
-			BUILD_ARGS="$BUILD_ARGS BUILD_KEY=$1"
+		-s)
 			shift
+			BUILD_ARGS="$BUILD_ARGS BUILD_KEY=$1"
+			;;
+		*)
+			[ -n "${available_commands[$1]}" ] || \
+				_die "There is no such option or command: $1"
+			steps+=( "$1" )
 			;;
 	esac
+	shift
 done
 
-[ -n "$1" ] || set $DEFAULT_STEPS
+[ -z "$BOARD" ] || _set_target "$BOARD"
+[ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
 
-while [ -n "$1" ]; do
-	eval "$1"
-	shift
+for step in "${steps[@]}"; do
+	"$step"
 done
