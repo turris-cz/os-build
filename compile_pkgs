@@ -19,6 +19,15 @@
 # Step list that is run when no commands are specified
 DEFAULT_STEPS=( "prepare" "build" "store_hash" "stats gen_junit" )
 
+# Printing helper functions
+_report() {
+	echo -e '\033[0;34m'"$1"'\033[0m' >&2
+}
+_die() {
+	echo -e '\033[0;31m'"$1"'\033[0m' >&2
+	exit 1
+}
+
 # Paths to OpenWRT build and turris-build sources
 src_dir="$(readlink -f "$(dirname "$0")")"
 build_dir="$(pwd)"
@@ -28,6 +37,30 @@ if [ "$build_dir" == "$src_dir" ]; then
 	cd build
 	build_dir="$(pwd)"
 fi
+
+# Sets various variables to match the specified target, just a helper
+# It is defined here so it can be used from configuration
+set_target() {
+	_report "Setting target as $1"
+	case "$1" in
+		omnia)
+			TARGET_BOARD=omnia
+			TARGET_ARCH=armv7l
+			;;
+		turris)
+			TARGET_BOARD=turris
+			TARGET_ARCH=ppcspe
+			;;
+		mox)
+			TARGET_BOARD=mox
+			TARGET_ARCH=aarch64
+			;;
+		*)
+			echo "Invalid target board!!! Use -t [turris|omnia|mox]!!!"
+			exit 1
+			;;
+	esac
+}
 
 # Configuration variables
 openwrt_url="https://git.openwrt.org/openwrt/openwrt.git" # OpenWRT git repository URL
@@ -67,34 +100,31 @@ _git() {
 }
 
 _sh() {
-	sh "$sh_debug" "$@"
+	sh $sh_debug "$@"
 }
 
 _perl() {
-	perl "$perl_debug" "$@"
+	perl $perl_debug "$@"
+}
+
+_make() {
+	make $make_debug "$@"
 }
 
 # Make for OpenWRT
 _openwrt_make() {
-	make "$make_debug" -C "$build_dir" IS_TTY=1 BUILD_LOG=1 "$owrt_debug" "${build_args[@]}" -j"$build_jobs" "$@"
-}
-
-_report() {
-	echo -e '\033[0;34m'"$1"'\033[0m' >&2
-}
-
-_die() {
-	echo -e '\033[0;31m'"$1"'\033[0m' >&2
-	exit 1
+	_make -C "$build_dir" IS_TTY=1 BUILD_LOG=1 "$owrt_debug" "${build_args[@]}" -j"$build_jobs" "$@"
 }
 
 _enable_debug() {
 	set -x
-	perl_debug="-d:Trace"
+	#perl_debug="-d:Trace"
 	make_debug="-n"
 	sh_debug="-x"
 	owrt_debug="V=s"
 }
+
+# Definition of avaliable commands ###############################################
 
 _get_version() {
 	# If first grep fails - version is not first non-empty, add 999 to the end
@@ -207,42 +237,46 @@ available_commands+=( ["configure"]="Recreates configuration for target boards" 
 configure() {
 	_report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
-	cat "${src_dir}"/configs/common/* "${src_dir}"/configs/${TARGET_BOARD}/* > ./.config
-	echo "CONFIG_DEVEL=y" >> .config
-	echo "CONFIG_CCACHE=y" >> .config
-	echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR" >> .config
-	echo "CONFIG_VERSION_DIST=TurrisOS"
-	echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/${publish_branch}\"" >> .config
-	echo "CONFIG_VERSION_NUMBER=\"$(_get_version)\"" >> .config
-	echo -n "CONFIG_ALL_KMODS=" >> .config
-	[ "$everything" = yes ] && echo y || echo n >> .config
-	_openwrt_make defconfig
+	local everything
+	[ "$EVERYTHING" = yes ] && everything=y || everything=n
+	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
+	{
+		echo "CONFIG_DEVEL=y"
+		echo "CONFIG_CCACHE=y"
+		echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR"
+		echo "CONFIG_VERSION_DIST=\"TurrisOS\""
+		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/${publish_branch}\""
+		echo "CONFIG_VERSION_NUMBER=\"$(_get_version)\""
+		echo "CONFIG_ALL_KMODS=$everything"
+		echo "CONFIG_ALL=$everything"
+	} >> .config
+	_make defconfig
 	OPENWRT_ARCH="$(sed -n 's|^CONFIG_TARGET_BOARD="\([^"]*\)"|\1|p' .config)"
 	EXTRA_KERNEL="$(cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* | sed -n 's|^[[:blank:]]*CONFIG_KERNEL|CONFIG|p')"
-	TO_COMMIT=""
+	local to_commit=()
 	for config in target/linux/"${OPENWRT_ARCH}"/config-*; do
 		echo "${EXTRA_KERNEL}" >> "$config"
-		TO_COMMIT="$TO_COMMIT $config"
+		to_commit+=( "$config" ) 
 	done
-	_git commit -m 'kernel: Add customized kernel options' $TO_COMMIT
+	_git commit -m 'kernel: Add customized kernel options' "${to_commit[@]}"
 }
 
 available_commands+=( ["update_mirror"]="Updates all local mirrors" )
 update_mirror() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	[ -z "$mirror_updated" ] || return 0
-	
+
 	_report "Updating local mirrors"
 	mkdir -p "$GIT_MIRROR"
 	pushd "$GIT_MIRROR"
-	if [ \! -d openwrt ]; then
+	if [ ! -d openwrt ]; then
 		git clone --mirror "$openwrt_url" openwrt
 	fi
 	openwrt_url="$GIT_MIRROR/openwrt"
 	for mirror in ./*; do
 		cd "$mirror" || continue
 		if ! git remote update --prune; then
-			sleep $(( 1 + $RANDOM % 30 ))
+			sleep $(( 1 + RANDOM % 30 ))
 			git remote update --prune
 		fi
 		cd "$GIT_MIRROR"
@@ -278,10 +312,11 @@ available_commands+=( ["checkout"]="Start everything from scratch - all changes 
 checkout() {
 	_report "Starting out fresh!"
 	_checkout_init
-	HASH="$(echo "$openwrt_branch" | sed -n 's|^#||p')"
-	if [ -n "$HASH" ]; then
+	local githash
+	githash="$(echo "$openwrt_branch" | sed -n 's|^#||p')"
+	if [ -n "$githash" ]; then
 		git fetch origin
-		git checkout -f "$HASH"
+		git checkout -f "$githash"
 	else
 		git fetch ${clone_deep+--deep 1} origin "$openwrt_branch"
 		git checkout -f "origin/$openwrt_branch"
@@ -301,12 +336,14 @@ repo_checkout() {
 	_checkout_clean
 	echo "$GIT_HASHES" > repo-git-hashes
 	rm -f feeds.conf
-	while read LINE; do
-		local HASH="$(awk -F : "/^feeds\/$(echo "$LINE" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
-		if [ -z "$HASH" ]; then
-			echo "$LINE" >> feeds.conf
+	local line githash
+	while read -r line; do
+		# TODO clean this awk
+		githash="$(awk -F : "/^feeds\/$(echo "$line" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
+		if [ -z "$githash" ]; then
+			echo "$line" >> feeds.conf
 		else
-			echo "$LINE" | sed "s/\^.*$//;s/$/\^$HASH/" >> feeds.conf
+			echo "$line" | sed "s/\^.*$//;s/$/\^$githash/" >> feeds.conf
 		fi
 	done < "$src_dir/feeds.conf"
 }
@@ -314,18 +351,17 @@ repo_checkout() {
 available_commands+=( ["patch_feeds"]="Apply patches to the feeds" )
 patch_feeds() {
 	_report "Patching feeds"
-	pushd "$src_dir"/patches
-	for feed in *; do
-		[ -d "$build_dir"/feeds/$feed ] || continue
-		cd "$src_dir"/patches/$feed
-		for patch in */*.patch; do
+	for feed in "$src_dir"/patches/*; do
+		[ -d "$feed" ] || continue
+		feed_name="$(basename "$feed")"
+		[ -d "$build_dir/feeds/$feed_name" ] || continue
+		for patch in "$feed"/*/*.patch; do
 			[ -f "$patch" ] || continue
-			cd "$build_dir"/feeds/$feed
-			_git am --reject "$src_dir"/patches/$feed/$patch
-			cd "$src_dir"/patches/$feed
+			pushd "$build_dir/feeds/$feed_name" >/dev/null
+			_git am --reject "$patch"
+			popd >/dev/null
 		done
 	done
-	popd
 }
 
 available_commands+=( ["clean_ccache"]="Clean persistent ccache paths" )
@@ -353,40 +389,38 @@ available_commands+=( ["set_local_feeds"]="Change feed URL to their mirror count
 set_local_feeds() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	_report "Setting feeds to their local counterparts"
-	while read vcs name url rest; do
-		if [ "$vcs" = src-git ] && [ -d "$GIT_MIRROR"/$name ]; then
-			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
-			sed -i "s|$feed_url|file://$GIT_MIRROR/$name|" feeds.conf
+	while read -r vcs name url rest; do
+		if [ "$vcs" = src-git ] && [ -d "$GIT_MIRROR/$name" ]; then
+			echo "$vcs $name file://$GIT_MIRROR/$name $rest"
+		else
+			echo "$vcs $name $url $rest"
 		fi
-	done < feeds.conf
+	done < feeds.conf > feeds.conf.new
+	mv feeds.conf.new feeds.conf
 }
 
 available_commands+=( ["mirror_feeds"]="Creates initial mirrors of all configured feeds" )
 mirror_feeds() {
 	[ -n "$GIT_MIRROR" ] || return 0
-	pushd "$GIT_MIRROR"
-	cat "$src_dir"/feeds.conf "$build_dir"/feeds.conf 2> /dev/null | while read vcs name url rest; do
-		if [ "$vcs" = src-git ] && [ \! -d "$GIT_MIRROR"/$name ]; then
-			feed_url="$(echo "$url" | sed 's|[[:blank:]^].*||')"
-			git clone --mirror "$feed_url" "$name"
+	pushd "$GIT_MIRROR" >/dev/null
+	cat "$src_dir"/feeds.conf "$build_dir"/feeds.conf 2> /dev/null | while read -r vcs name url rest; do
+		if [ "$vcs" = src-git ] && [ ! -d "$GIT_MIRROR/$name" ]; then
+			git clone --mirror "${url%^*}" "$name"
 		fi
 	done
-	popd
+	popd >/dev/null
 	update_mirror
 }
 
 available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	_report "Patching OpenWRT repository"
-	pushd "$src_dir"/patches/openwrt
-	for patch in */*.patch; do
-		cd "$build_dir"
-		_git am --reject "$src_dir"/patches/openwrt/$patch
+	for patch in "$src_dir/patches/openwrt"/*/*.patch; do
+		_git am --reject "$patch"
 	done
-	popd
-	if [ -n "$(ls -1 "$src_dir"/src/)" ]; then
+	if [ -d "$src_dir/src" ]; then
 		cp -r "$src_dir"/src/* .
-		find "$src_dir"/src | sed 's|^'"$src_dir"'/src/|git add |' | sh
+		find "$src_dir"/src -printf "%P\\0" | xargs --null git add
 		_git commit -m 'Add additional files'
 	fi
 	set_ccache
@@ -394,6 +428,7 @@ patch_openwrt() {
 
 _git_remote_hash() {
 	pushd "$1" > /dev/null
+	# TODO rework
 	br="$(LANG=C git status --long | sed -n 's|HEAD detached from \(.*\)|\1|p')"
 	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is up to date with '\\([^']*\\)'.*|\1|p")"
 	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is ahead of '\\([^']*\\)'.*|\1|p")"
@@ -419,6 +454,12 @@ store_hash() {
 	} | tee bin/git-hash
 }
 
+_mapfile_if_exists() {
+	if [ -f "$2" ]; then
+		mapfile "$1" < "$2"
+	fi
+}
+
 available_commands+=( ["get_feeds"]="Recreate configured feeds" )
 get_feeds() {
 	_report "Getting feeds"
@@ -427,11 +468,10 @@ get_feeds() {
 	_perl ./scripts/feeds clean -a
 	_perl ./scripts/feeds update -a
 	_perl ./scripts/feeds install -a
-	set +e
-	DISABLED_PACKAGES="$(cat "${src_dir}"/disabled_packages/common "${src_dir}"/disabled_packages/${TARGET_BOARD} 2> /dev/null)"
-	DISABLED_PACKAGES="$(echo "$DISABLED_PACKAGES" | sed 's|#.*||' | grep .)"
-	set -e
-	[ -z "$DISABLED_PACKAGES" ] || _perl ./scripts/feeds uninstall $DISABLED_PACKAGES
+	local disabled_packages=()
+	_mapfile_if_exists disabled_packages "$src_dir/disabled_packages/common"
+	_mapfile_if_exists disabled_packages "$src_dir/disabled_packages/$TARGET_BOARD"
+	[ ${#disabled_packages[@]} -gt 0 ] || _perl ./scripts/feeds uninstall "${disabled_packages[@]}"
 }
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them (Implies: get_feeds patch_feeds)" )
@@ -523,29 +563,6 @@ autopkg() {
 	_git commit -m 'autopkg: Add autopkg scripts'
 }
 
-# Sets various variables to match the specified target, just a helper
-_set_target() {
-	_report "Setting target as $1"
-	case "$1" in
-		omnia)
-			TARGET_BOARD=omnia
-			TARGET_ARCH=armv7l
-			;;
-		turris)
-			TARGET_BOARD=turris
-			TARGET_ARCH=ppcspe
-			;;
-		mox)
-			TARGET_BOARD=mox
-			TARGET_ARCH=aarch64
-			;;
-		*)
-			echo "Invalid target board!!! Use -t [turris|omnia|mox]!!!"
-			exit 1
-			;;
-	esac
-}
-
 print_help() {
 	echo "Usage: ${0} [OPTION].. [COMMAND].."
 	echo "Compile TurrisOS packages. This script fetches, patches and configures OpenWRT tree."
@@ -588,7 +605,7 @@ while [ $# -gt 0 ]; do
 			;;
 		-t)
 			shift
-			_set_target "$1"
+			set_target "$1"
 			;;
 		-a)
 			shift
@@ -629,7 +646,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -z "$BOARD" ] || _set_target "$BOARD"
+[ -z "$BOARD" ] || set_target "$BOARD"
 [ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
 
 for step in "${steps[@]}"; do
