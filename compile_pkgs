@@ -62,20 +62,26 @@ set_target() {
 }
 
 # Configuration variables
-openwrt_url="https://git.openwrt.org/openwrt/openwrt.git" # OpenWRT git repository URL
-openwrt_branch=master # Git reference used to checkout OpenWRT repository
-publish_branch="hbs" # Target publish branch
-force="" # Force build
-everything="" # Set this variable to build all packages not only minimal set
-clone_deep="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
-build_args=() # Additional arguments passed to OpenWRT make call (note that this is for all make calls in OpenWRT)
-build_jobs="$(nproc)" # Number of jobs to be passed to make calls
-sign_key="" # Path to private signing key
+OPENWRT_URL="https://git.openwrt.org/openwrt/openwrt.git" # OpenWRT git repository URL
+OPENWRT_BRANCH=master # Git reference used to checkout OpenWRT repository
+PUBLISH_BRANCH="hbs" # Target publish branch
+FORCE="" # Force build
+EVERYTHING="" # Set this variable to build all packages not only minimal set
+CLONE_DEEP="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
+BUILD_ARGS=() # Additional arguments passed to OpenWRT make call (note that this is for all make calls in OpenWRT)
+BUILD_JOBS="1" # Number of jobs to be passed to make calls
+SIGN_KEY="" # Path to private signing key
+GIT_MIRROR="" # Path to git mirror directory
+DL_MIRROR="" # Path to downloads mirror directory
+CCACHE_HOST_DIR="" # Path to ccache directory for host compilations
+CCACHE_TARGET_DIR="" # Path to ccache directory for target compilations
 
 # Load configurations
 [ -f "${src_dir}"/turris-build.conf ] && . "${src_dir}"/turris-build.conf
 [ -f ~/.turris-build ] && . ~/.turris-build
 [ -f ./turris-build.conf ] && . ./turris-build.conf
+
+##################################################################################
 
 # Technical variables
 declare -A available_commands # Set of all commands defined in this script
@@ -113,7 +119,7 @@ _make() {
 
 # Make for OpenWRT
 _openwrt_make() {
-	_make IS_TTY=1 BUILD_LOG=1 $owrt_debug "${build_args[@]}" -j"$build_jobs" "$@"
+	_make IS_TTY=1 BUILD_LOG=1 $owrt_debug "${BUILD_ARGS[@]}" -j"$BUILD_JOBS" "$@"
 }
 
 _enable_debug() {
@@ -241,7 +247,7 @@ configure() {
 		echo "CONFIG_CCACHE=y"
 		echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR"
 		echo "CONFIG_VERSION_DIST=\"TurrisOS\""
-		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/${publish_branch}\""
+		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/${PUBLISH_BRANCH}\""
 		echo "CONFIG_VERSION_NUMBER=\"$(_get_version)\""
 		echo "CONFIG_ALL_KMODS=$everything"
 		echo "CONFIG_ALL=$everything"
@@ -266,9 +272,9 @@ update_mirror() {
 	mkdir -p "$GIT_MIRROR"
 	pushd "$GIT_MIRROR"
 	if [ ! -d openwrt ]; then
-		git clone --mirror "$openwrt_url" openwrt
+		git clone --mirror "$OPENWRT_URL" openwrt
 	fi
-	openwrt_url="$GIT_MIRROR/openwrt"
+	OPENWRT_URL="$GIT_MIRROR/openwrt"
 	for mirror in ./*; do
 		cd "$mirror" || continue
 		if ! git remote update --prune; then
@@ -286,7 +292,7 @@ _checkout_init() {
 	update_mirror
 	rm -rf .git
 	git init
-	git remote add origin "$openwrt_url"
+	git remote add origin "$OPENWRT_URL"
 }
 
 _checkout_clean() {
@@ -309,13 +315,13 @@ checkout() {
 	_report "Starting out fresh!"
 	_checkout_init
 	local githash
-	githash="$(echo "$openwrt_branch" | sed -n 's|^#||p')"
+	githash="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
 	if [ -n "$githash" ]; then
 		git fetch origin
 		git checkout -f "$githash"
 	else
-		git fetch ${clone_deep+--deep 1} origin "$openwrt_branch"
-		git checkout -f "origin/$openwrt_branch"
+		git fetch ${CLONE_DEEP+--deep 1} origin "$OPENWRT_BRANCH"
+		git checkout -f "origin/$OPENWRT_BRANCH"
 	fi
 	_checkout_clean
 	cp "$src_dir"/feeds.conf .
@@ -323,8 +329,8 @@ checkout() {
 
 available_commands+=( ["repo_checkout"]="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz" )
 repo_checkout() {
-	_report "Starting out $TARGET_BOARD-$publish_branch!"
-	curl "https://repo.turris.cz/$TARGET_BOARD-$publish_branch/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
+	_report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
+	curl "https://repo.turris.cz/$TARGET_BOARD-$PUBLISH_BRANCH/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
 	_checkout_init
 	git fetch
 	git checkout -f "$(awk -F : '/^openwrt:/{print $2}' repo-git-hashes)"
@@ -490,19 +496,19 @@ gen_junit() {
 # compact way.
 _compile() {
 	set_ccache
-	if [ -z "$force" ]; then
+	if [ -z "$FORCE" ]; then
 		_openwrt_make "$@"
 	else
 		local success=""
-		local force_jobs="$build_jobs"
+		local force_jobs="$BUILD_JOBS"
 		while [ "$force_jobs" -gt 0 ] && [ -z "$success" ]; do
-			local countdown="$force"
+			local countdown="$FORCE"
 			while [ $countdown -gt 0 ] && [ -z "$success" ]; do
 				if _openwrt_make "$@" -j"$force_jobs"; then
 					success="YES!!!"
 				else
 					countdown="$((countdown - 1))"
-					_report "Build job with -j$force_jobs failed (trying $((force - countdown))/$force)..."
+					_report "Build job with -j$force_jobs failed (trying $((FORCE - countdown))/$FORCE)..."
 				fi
 			done
 			if [ -z "$success" ]; then
@@ -543,7 +549,7 @@ compile() {
 
 available_commands+=( ["sign"]="	Generate packages index and sign it" )
 sign() {
-	_build package/index BUILD_KEY="$sign_key"
+	_compile package/index BUILD_KEY="$SIGN_KEY"
 }
 
 available_commands+=( ["clean"]="	Clean current build directory" )
@@ -588,6 +594,8 @@ autopkg() {
 	_git commit -m 'autopkg: Add autopkg scripts'
 }
 
+##################################################################################
+
 print_help() {
 	echo "Usage: ${0} [OPTION].. [COMMAND].."
 	echo "Compile TurrisOS packages. This script fetches, patches and configures OpenWRT tree."
@@ -619,14 +627,14 @@ steps=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-e)
-			everything="yes"
+			EVERYTHING="yes"
 			;;
 		-j*)
-			build_jobs="${1#-j}"
+			BUILD_JOBS="${1#-j}"
 			;;
 		-f*)
-			force="${1#-f}"
-			[ -n "$force" ] || force="1"
+			FORCE="${1#-f}"
+			[ -n "$FORCE" ] || FORCE="1"
 			;;
 		-t)
 			shift
@@ -634,26 +642,26 @@ while [ $# -gt 0 ]; do
 			;;
 		-a)
 			shift
-			build_args+=( "$1" ) 
+			BUILD_ARGS+=( "$1" ) 
 			;;
 		-p)
 			shift
-			publish_branch="$1"
+			PUBLISH_BRANCH="$1"
 			;;
 		-b)
 			shift
-			openwrt_branch="$1"
+			OPENWRT_BRANCH="$1"
 			;;
 		-l)
 			mirror_updated="override"
-			openwrt_url="$GIT_MIRROR/openwrt"
+			OPENWRT_URL="$GIT_MIRROR/openwrt"
 			;;
 		-s)
 			shift
-			sign_key="$1"
+			SIGN_KEY="$1"
 			;;
 		-d)
-			clone_deep="y"
+			CLONE_DEEP="y"
 			;;
 		-x)
 			_enable_debug
@@ -671,7 +679,6 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -z "$BOARD" ] || set_target "$BOARD"
 [ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
 
 for step in "${steps[@]}"; do
