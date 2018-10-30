@@ -1,5 +1,4 @@
 #!/bin/bash -e
-
 # OpenWRT compilation script
 # (C) 2018 CZ.NIC, z.s.p.o.
 #
@@ -17,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # Step list that is run when no commands are specified
-DEFAULT_STEPS=( "prepare" "build" "store_hash" "stats gen_junit" )
+DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "gen_junit" )
 
 # Printing helper functions
 _report() {
@@ -71,6 +70,7 @@ everything="" # Set this variable to build all packages not only minimal set
 clone_deep="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
 build_args=() # Additional arguments passed to OpenWRT make call (note that this is for all make calls in OpenWRT)
 build_jobs="$(nproc)" # Number of jobs to be passed to make calls
+sign_key="" # Path to private signing key
 
 # Load configurations
 [ -f "${src_dir}"/turris-build.conf ] && . "${src_dir}"/turris-build.conf
@@ -113,13 +113,13 @@ _make() {
 
 # Make for OpenWRT
 _openwrt_make() {
-	_make -C "$build_dir" IS_TTY=1 BUILD_LOG=1 "$owrt_debug" "${build_args[@]}" -j"$build_jobs" "$@"
+	_make IS_TTY=1 BUILD_LOG=1 $owrt_debug "${build_args[@]}" -j"$build_jobs" "$@"
 }
 
 _enable_debug() {
 	set -x
-	#perl_debug="-d:Trace"
-	make_debug="-n"
+	perl_debug="-d:Trace"
+	make_debug="-d"
 	sh_debug="-x"
 	owrt_debug="V=s"
 }
@@ -490,20 +490,19 @@ gen_junit() {
 	_sh "${src_dir}"/helpers/generate_junit.sh
 }
 
-available_commands+=( ["build"]="	Builds everything" )
-build() {
-	_report "Starting real build"
+# Function calling make in OpenWRT tree that is designed to handle force option in
+# compact way.
+_compile() {
 	set_ccache
-	BUILD_START="$(date +%s)"
 	if [ -z "$force" ]; then
-		_openwrt_make
+		_openwrt_make "$@"
 	else
 		local success=""
 		local force_jobs="$build_jobs"
 		while [ "$force_jobs" -gt 0 ] && [ -z "$success" ]; do
 			local countdown="$force"
 			while [ $countdown -gt 0 ] && [ -z "$success" ]; do
-				if _openwrt_make -j"$force_jobs"; then
+				if _openwrt_make "$@" -j"$force_jobs"; then
 					success="YES!!!"
 				else
 					countdown="$((countdown - 1))"
@@ -516,10 +515,39 @@ build() {
 			fi
 		done
 		if [ "$force_jobs" -le 1 ] && [ -z "$success" ]; then
-			_openwrt_make -j1 V=s
+			_openwrt_make "$@" -j1 V=s
 		fi
 	fi
-	BUILD_END="$(date +%s)"
+}
+
+available_commands+=( ["compile_tools"]="Compile host tools" )
+compile_tools() {
+	_report "Compiling tools"
+	_compile tools/compile toolchain/compile
+}
+
+available_commands+=( ["compile_target"]="Compile target specific software (Linux kernel)" )
+compile_target() {
+	_report "Compiling target"
+	_compile target/compile
+}
+
+available_commands+=( ["compile_packages"]="Compile packages" )
+compile_packages() {
+	_report "Compiling packages"
+	_compile package/compile
+}
+
+available_commands+=( ["compile"]="	Compile tools, target and packages" )
+compile() {
+	compile_tools
+	compile_target
+	compile_packages
+}
+
+available_commands+=( ["sign"]="	Generate packages index and sign it" )
+sign() {
+	_build package/index BUILD_KEY="$sign_key"
 }
 
 available_commands+=( ["clean"]="	Clean current build directory" )
@@ -539,10 +567,11 @@ prepare() {
 	configure
 }
 
-available_commands+=( ["prepare_tools"]="Prepare build and build tools" )
+available_commands+=( ["prepare_tools"]="Prepare build and build tools (Impies: prepare compile_tools compile_target)" )
 prepare_tools() {
 	prepare
-	_openwrt_make tools/compile toolchain/compile target/compile
+	compile_tools
+	compile_target
 }
 
 available_commands+=( ["repo_prepare"]="Same as prepare but instead of checkout uses repo_checkout" )
@@ -625,7 +654,7 @@ while [ $# -gt 0 ]; do
 			;;
 		-s)
 			shift
-			build_args+=( "BUILD_KEY=$1" )
+			sign_key="$1"
 			;;
 		-d)
 			clone_deep="y"
