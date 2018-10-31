@@ -60,6 +60,7 @@ Install("ca-certificates", { priority = 40 })
 _FEATURE_GUARD_
 
 -- Updater utility
+Install("updater-ng-opkg", { priority = 40 })
 Package('updater-ng-opkg', { replan = 'finished' })
 Package('updater-ng-localrepo', { replan = 'finished' })
 Package('switch-branch', { priority = 40 })
