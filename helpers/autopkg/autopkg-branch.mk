@@ -1,6 +1,6 @@
 # Autopkg tracking given branch
 AUTOPKG_VARIANT:=branch
-include $(TOPDIR)/feeds/personal/autopkg-head.mk
+include $(INCLUDE_DIR)/autopkg-head.mk
 
 ifndef PKG_SOURCE_BRANCH
 $(error You have to define PKG_SOURCE_BRANCH before pkgauto.mk include)
@@ -21,4 +21,4 @@ PKG_RELEASE:=$(shell git $(GIT_ARGS) rev-list --count "$(PKG_VERSION)..$(PKG_SOU
 PKG_VERSION:=$(PKG_VERSION:v%=%).9999
 endif
 
-include $(TOPDIR)/feeds/personal/autopkg-tail.mk
+include $(INCLUDE_DIR)/autopkg-tail.mk
