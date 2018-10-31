@@ -1,0 +1,13 @@
+ifndef AUTOPKG_VARIANT
+	$(error "Don't include autopkg-tail.mk directly!")
+endif
+
+PKG_SOURCE_PROTO:=git
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_SOURCE_VERSION).tar.gz
+PKG_SOURCE_SUBDIR:=$(PKG_NAME)
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
+HOST_BUILD_DIR:=$(BUILD_DIR_HOST)/$(PKG_NAME)
+
+undefine TMP_REPO_PATH
+undefine GIT_ARGS
+undefine AUTOPKG_VARIANT
