@@ -122,8 +122,8 @@ _make() {
 _openwrt_make() {
 	local args=( "IS_TTY=1" "BUILD_LOG=1" )
 	[ -z "$owrt_debug" ] || args+=( "$owrt_debug" )
-	[ ${#BUILD_ARGS[@]} -eq 0 ] || args+=( "${BUILD_ARGS[@]}" )
-	_make "${args[@]}" -j"$BUILD_JOBS" "$@"
+	[ "${#BUILD_ARGS[@]}" -eq 0 ] || args+=( "${BUILD_ARGS[@]}" )
+	_make "${args[@]}" "$@"
 }
 
 _enable_debug() {
@@ -488,7 +488,7 @@ repatch_feeds() {
 
 available_commands+=( ["prefetch"]="Runs make download" )
 prefetch() {
-	_openwrt_make download
+	_openwrt_make -j"$BUILD_JOBS" download
 }
 
 available_commands+=( ["gen_junit"]="Generates junit output from build logs" )
@@ -512,14 +512,14 @@ pkgsrepo() {
 _compile() {
 	set_ccache
 	if [ -z "$FORCE" ]; then
-		_openwrt_make "$@"
+		_openwrt_make -j"$BUILD_JOBS" "$@"
 	else
 		local success=""
 		local force_jobs="$BUILD_JOBS"
 		while [ "$force_jobs" -gt 0 ] && [ -z "$success" ]; do
 			local countdown="$FORCE"
 			while [ $countdown -gt 0 ] && [ -z "$success" ]; do
-				if _openwrt_make "$@" -j"$force_jobs"; then
+				if _openwrt_make -j"$force_jobs" "$@"; then
 					success="YES!!!"
 				else
 					countdown="$((countdown - 1))"
@@ -532,7 +532,7 @@ _compile() {
 			fi
 		done
 		if [ "$force_jobs" -le 1 ] && [ -z "$success" ]; then
-			_openwrt_make "$@" -j1 V=s
+			_openwrt_make -j1 V=s "$@"
 		fi
 	fi
 }
