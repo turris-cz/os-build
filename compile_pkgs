@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # Step list that is run when no commands are specified
-DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "gen_junit" )
+DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "pkgsrepo" "stats" "gen_junit" )
 
 # Printing helper functions
 _report() {
@@ -75,6 +75,7 @@ GIT_MIRROR="" # Path to git mirror directory
 DL_MIRROR="" # Path to downloads mirror directory
 CCACHE_HOST_DIR="" # Path to ccache directory for host compilations
 CCACHE_TARGET_DIR="" # Path to ccache directory for target compilations
+OUTPUT_DIR="./pkgsrepo" # Output directory for pkgsrepo command
 
 # Load configurations
 [ -f "${src_dir}"/turris-build.conf ] && . "${src_dir}"/turris-build.conf
@@ -255,7 +256,7 @@ configure() {
 		echo "CONFIG_ALL_KMODS=$everything"
 		echo "CONFIG_ALL=$everything"
 	} >> .config
-	_make defconfig
+	_make defconfig diffconfig
 	OPENWRT_ARCH="$(sed -n 's|^CONFIG_TARGET_BOARD="\([^"]*\)"|\1|p' .config)"
 	EXTRA_KERNEL="$(cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* | sed -n 's|^[[:blank:]]*CONFIG_KERNEL|CONFIG|p')"
 	local to_commit=()
@@ -495,6 +496,17 @@ gen_junit() {
 	_sh "${src_dir}"/helpers/generate_junit.sh
 }
 
+available_commands+=( ["pkgsrepo"]="Extract packages from OpenWRT tree and place them to repository format as they are deployed to Turris servers" )
+pkgsrepo() {
+	_report "Extracting packages to pkgsrepo directory: $OUTPUT_DIR"
+	rm -rf "$OUTPUT_DIR"
+	mkdir -p "$OUTPUT_DIR"
+	mv bin/packages/*/* "$OUTPUT_DIR"
+	mv bin/targets/*/*/packages "$OUTPUT_DIR/core"
+	mv bin/targets/*/*/config.seed "$OUTPUT_DIR"
+	mv bin/git-hash "$OUTPUT_DIR"
+}
+
 # Function calling make in OpenWRT tree that is designed to handle force option in
 # compact way.
 _compile() {
@@ -612,7 +624,8 @@ print_help() {
 	echo "	-p BRANCH	Name of the branch that is being build. If not specified 'hbs' is used."
 	echo "	-a ARG		Add build arguments - passed directly to make. This option can be specified multiple times."
 	echo "	-l		Do not update local git mirrors. Use them as they are to fetch OpenWRT and its feeds."
-	echo "	-s key		Sign packges with given private key. Key has to be generated using using tool."
+	echo "	-o PATH		Path to output directory where repository is prepared. In default ./pkgsrepo is used."
+	echo "	-s KEY		Sign packges with given private key. Key has to be generated using using tool."
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-x		Enable debug mode"
 	echo "	-h, --help	Show this help text"
@@ -658,6 +671,10 @@ while [ $# -gt 0 ]; do
 		-l)
 			mirror_updated="override"
 			OPENWRT_URL="$GIT_MIRROR/openwrt"
+			;;
+		-o)
+			shift
+			OUTPUT_DIR="$1"
 			;;
 		-s)
 			shift
