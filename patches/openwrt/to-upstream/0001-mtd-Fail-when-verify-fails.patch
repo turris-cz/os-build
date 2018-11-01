@@ -1,0 +1,44 @@
+From 3eed73a15f039cb0c54707b6a5fed37d6669fee4 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Thu, 25 Oct 2018 12:53:02 +0200
+Subject: [PATCH] mtd: Fail when verify fails
+
+Return non-zero exit code when mtd verify fails.
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
+---
+ package/system/mtd/src/mtd.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/package/system/mtd/src/mtd.c b/package/system/mtd/src/mtd.c
+index fa04c0f95b..b378dce359 100644
+--- a/package/system/mtd/src/mtd.c
++++ b/package/system/mtd/src/mtd.c
+@@ -799,7 +799,7 @@ static void do_reboot(void)
+ 
+ int main (int argc, char **argv)
+ {
+-	int ch, i, boot, imagefd = 0, force, unlocked;
++	int ch, i, boot, imagefd = 0, force, unlocked, ret = 0;
+ 	char *erase[MAX_ARGS], *device = NULL;
+ 	char *fis_layout = NULL;
+ 	size_t offset = 0, data_size = 0, part_offset = 0, dump_len = 0;
+@@ -994,7 +994,7 @@ int main (int argc, char **argv)
+ 				mtd_unlock(device);
+ 			break;
+ 		case CMD_VERIFY:
+-			mtd_verify(device, imagefile);
++			ret |= mtd_verify(device, imagefile);
+ 			break;
+ 		case CMD_DUMP:
+ 			mtd_dump(device, offset, dump_len);
+@@ -1043,5 +1043,5 @@ int main (int argc, char **argv)
+ 	if (boot)
+ 		do_reboot();
+ 
+-	return 0;
++	return ret;
+ }
+-- 
+2.19.1
+
