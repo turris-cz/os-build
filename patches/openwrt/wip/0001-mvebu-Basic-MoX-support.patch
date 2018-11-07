@@ -1,4 +1,4 @@
-From 92f44928bdd8fcb2e262326f7bf12fe890ce7194 Mon Sep 17 00:00:00 2001
+From 232a908fcc4fe20799e40d1cd1aa347d1ef760de Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -130,10 +130,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...hdog-Document-armada-37xx-wdt-bindin.patch |  52 +
  ...tchdog-add-documentation-for-armada-.patch |  37 +
  ...l-armada-37xx-add-nodes-to-support-w.patch |  44 +
- ...drvark-warm-reset-the-cores-and-card.patch |  68 ++
+ ...drvark-warm-reset-the-cores-and-card.patch |  90 ++
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 910 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 126 files changed, 13419 insertions(+), 372 deletions(-)
+ 126 files changed, 13441 insertions(+), 372 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -14937,10 +14937,10 @@ index 0000000..acbba76
 +
 diff --git a/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 new file mode 100644
-index 0000000..87ad13e
+index 0000000..820df96
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
-@@ -0,0 +1,68 @@
+@@ -0,0 +1,90 @@
 +From 2bb282b437d76b4375988ed754b1be30f0f6cb43 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 16:55:11 +0200
@@ -14979,7 +14979,29 @@ index 0000000..87ad13e
 + 
 + /* PCIe Central Interrupts Registers */
 + #define CENTRAL_INT_BASE_ADDR			0x1b000
-+@@ -955,6 +959,8 @@ static int advk_pcie_probe(struct platfo
++@@ -270,6 +274,21 @@ static void advk_pcie_set_ob_win(struct
++ 	advk_writel(pcie, match_ls | BIT(0), OB_WIN_MATCH_LS(win_num));
++ }
++ 
+++static void advk_pcie_warm_reset(struct advk_pcie *pcie)
+++{
+++     u32 reg;
+++
+++     reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
+++     reg |= CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET;
+++     advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
+++
+++     mdelay(100);
+++
+++     reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
+++     reg &= ~(CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET);
+++     advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
+++}
+++
++ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ {
++ 	struct device *dev = &pcie->pdev->dev;
++@@ -955,6 +974,8 @@ static int advk_pcie_probe(struct platfo
 + 	struct pci_bus *bus, *child;
 + 	struct pci_host_bridge *bridge;
 + 	int ret, irq;
@@ -14988,7 +15010,7 @@ index 0000000..87ad13e
 + 
 + 	bridge = devm_pci_alloc_host_bridge(dev, sizeof(struct advk_pcie));
 + 	if (!bridge)
-+@@ -977,6 +983,20 @@ static int advk_pcie_probe(struct platfo
++@@ -977,6 +998,20 @@ static int advk_pcie_probe(struct platfo
 + 		return ret;
 + 	}
 + 
