@@ -1,4 +1,4 @@
-From 97b7dff46441ff92635cc86269d5a627da91bbcc Mon Sep 17 00:00:00 2001
+From 92f44928bdd8fcb2e262326f7bf12fe890ce7194 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -130,10 +130,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...hdog-Document-armada-37xx-wdt-bindin.patch |  52 +
  ...tchdog-add-documentation-for-armada-.patch |  37 +
  ...l-armada-37xx-add-nodes-to-support-w.patch |  44 +
- ...drvark-warm-reset-the-cores-and-card.patch | 115 +++
+ ...drvark-warm-reset-the-cores-and-card.patch |  68 ++
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 910 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 126 files changed, 13466 insertions(+), 372 deletions(-)
+ 126 files changed, 13419 insertions(+), 372 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -14937,10 +14937,10 @@ index 0000000..acbba76
 +
 diff --git a/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 new file mode 100644
-index 0000000..13128e6
+index 0000000..87ad13e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,68 @@
 +From 2bb282b437d76b4375988ed754b1be30f0f6cb43 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 16:55:11 +0200
@@ -14957,10 +14957,10 @@ index 0000000..13128e6
 + drivers/pci/host/pci-aardvark.c | 46 +++++++++++++++++++++++++++++++--
 + 1 file changed, 44 insertions(+), 2 deletions(-)
 +
-+diff --git a/drivers/pci/host/pci-aardvark.c b/drivers/pci/host/pci-aardvark.c
-+index 50e8addc22f9..5610fcb3f426 100644
-+--- a/drivers/pci/host/pci-aardvark.c
-++++ b/drivers/pci/host/pci-aardvark.c
++Index: linux-4.14.79/drivers/pci/host/pci-aardvark.c
++===================================================================
++--- linux-4.14.79.orig/drivers/pci/host/pci-aardvark.c
+++++ linux-4.14.79/drivers/pci/host/pci-aardvark.c
 +@@ -21,6 +21,7 @@
 + #include <linux/platform_device.h>
 + #include <linux/of_address.h>
@@ -14979,51 +14979,7 @@ index 0000000..13128e6
 + 
 + /* PCIe Central Interrupts Registers */
 + #define CENTRAL_INT_BASE_ADDR			0x1b000
-+@@ -270,8 +274,25 @@ static void advk_pcie_set_ob_win(struct advk_pcie *pcie,
-+ 	advk_writel(pcie, match_ls | BIT(0), OB_WIN_MATCH_LS(win_num));
-+ }
-+ 
-++static void advk_pcie_warm_reset(struct advk_pcie *pcie)
-++{
-++	u32 reg;
-++
-++	reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++	reg |= CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET;
-++	advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
-++
-++	mdelay(100);
-++
-++	reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++	reg &= ~(CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET);
-++	advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
-++}
-++
-+ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ {
-++	struct device *dev = &pcie->pdev->dev;
-++	struct device_node *node = dev->of_node;
-+ 	u32 reg;
-+ 	int i;
-+ 
-+@@ -311,10 +332,15 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ 		PCIE_CORE_CTRL2_TD_ENABLE;
-+ 	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
-+ 
-+-	/* Set GEN2 */
-++	/* Set GEN */
-+ 	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
-+ 	reg &= ~PCIE_GEN_SEL_MSK;
-+-	reg |= SPEED_GEN_2;
-++	if (of_pci_get_max_link_speed(node) == 1)
-++		reg |= SPEED_GEN_1;
-++	if (of_pci_get_max_link_speed(node) == 3)
-++		reg |= SPEED_GEN_3;
-++	else
-++		reg |= SPEED_GEN_2;
-+ 	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
-+ 
-+ 	/* Set lane X1 */
-+@@ -948,6 +974,8 @@ static int advk_pcie_probe(struct platform_device *pdev)
++@@ -955,6 +959,8 @@ static int advk_pcie_probe(struct platfo
 + 	struct pci_bus *bus, *child;
 + 	struct pci_host_bridge *bridge;
 + 	int ret, irq;
@@ -15032,7 +14988,7 @@ index 0000000..13128e6
 + 
 + 	bridge = devm_pci_alloc_host_bridge(dev, sizeof(struct advk_pcie));
 + 	if (!bridge)
-+@@ -970,6 +998,20 @@ static int advk_pcie_probe(struct platform_device *pdev)
++@@ -977,6 +983,20 @@ static int advk_pcie_probe(struct platfo
 + 		return ret;
 + 	}
 + 
@@ -15053,9 +15009,6 @@ index 0000000..13128e6
 + 	ret = advk_pcie_parse_request_of_pci_ranges(pcie);
 + 	if (ret) {
 + 		dev_err(dev, "Failed to parse resources\n");
-+-- 
-+2.19.1
-+
 diff --git a/target/linux/mvebu/patches-4.14/90122-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch b/target/linux/mvebu/patches-4.14/90122-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
 new file mode 100644
 index 0000000..67945aa
