@@ -1,4 +1,4 @@
-From 534426512d3f7ba0720e48628701f9082edbe9b2 Mon Sep 17 00:00:00 2001
+From 232a908fcc4fe20799e40d1cd1aa347d1ef760de Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -93,14 +93,14 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...net-phy-phylink-Remove-error-message.patch |  35 +
  ...0082-net-dsa-Plug-in-PHYLINK-support.patch | 577 +++++++++++
  ...lper-for-configuring-2500BaseX-modes.patch |  74 ++
- ...et-dsa-mv88e6xxx-add-PHYLINK-support.patch | 213 +++++
+ ...et-dsa-mv88e6xxx-add-PHYLINK-support.patch | 213 ++++
  ...8e6xxx-Add-support-to-enabling-pause.patch | 171 ++++
  ...et-dsa-mv88e6xxx-add-phylink-support.patch | 705 ++++++++++++++
  ...-mv88e6xxx-Refactor-SERDES-lane-code.patch | 284 ++++++
  ...88e6xxx-6390-vs-6390X-SERDES-support.patch | 126 +++
  ...v88e6xxx-88E6141-6341-SERDES-support.patch |  87 ++
  ...xxx-Rename-sgmii-10g-power-functions.patch |  65 ++
- ...x-Add-serdes-register-read-write-hel.patch | 107 +++
+ ...x-Add-serdes-register-read-write-hel.patch | 107 ++
  ...x-2500Base-X-uses-the-1000Base-X-SER.patch |  34 +
  ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 439 +++++++++
  ...x-Power-on-off-SERDES-on-cmode-chang.patch |  53 +
@@ -120,7 +120,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...x-fix-races-between-lock-and-irq-fre.patch | 102 ++
  ...-dsa-mv88e6xxx-Share-main-switch-IRQ.patch |  29 +
  ...x-Fix-88E6141-6341-2500mbps-SERDES-s.patch | 103 ++
- ...eta-Fix-napi-structure-mixup-on-arma.patch | 107 +++
+ ...eta-Fix-napi-structure-mixup-on-arma.patch | 107 ++
  ...fix-mvneta_config_rss-on-armada-3700.patch |  77 ++
  ...-armada-37xx-Correct-mpp-definitions.patch | 108 +++
  ...l-armada-37xx-mark-the-gpio-controll.patch |  56 ++
@@ -131,9 +131,9 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...tchdog-add-documentation-for-armada-.patch |  37 +
  ...l-armada-37xx-add-nodes-to-support-w.patch |  44 +
  ...drvark-warm-reset-the-cores-and-card.patch |  90 ++
- ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 905 ++++++++++++++++++
+ ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 910 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 126 files changed, 13436 insertions(+), 372 deletions(-)
+ 126 files changed, 13441 insertions(+), 372 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -14937,11 +14937,11 @@ index 0000000..acbba76
 +
 diff --git a/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 new file mode 100644
-index 0000000..09391ea
+index 0000000..820df96
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 @@ -0,0 +1,90 @@
-+From 4039bc6263e4306bc8ceac6e2a381ec41d9f2221 Mon Sep 17 00:00:00 2001
++From 2bb282b437d76b4375988ed754b1be30f0f6cb43 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 16:55:11 +0200
 +Subject: [PATCH 121/122] PCI: aadrvark: warm reset the cores and card
@@ -14957,10 +14957,10 @@ index 0000000..09391ea
 + drivers/pci/host/pci-aardvark.c | 46 +++++++++++++++++++++++++++++++--
 + 1 file changed, 44 insertions(+), 2 deletions(-)
 +
-+Index: linux-4.14.78/drivers/pci/host/pci-aardvark.c
++Index: linux-4.14.79/drivers/pci/host/pci-aardvark.c
 +===================================================================
-+--- linux-4.14.78.orig/drivers/pci/host/pci-aardvark.c
-++++ linux-4.14.78/drivers/pci/host/pci-aardvark.c
++--- linux-4.14.79.orig/drivers/pci/host/pci-aardvark.c
+++++ linux-4.14.79/drivers/pci/host/pci-aardvark.c
 +@@ -21,6 +21,7 @@
 + #include <linux/platform_device.h>
 + #include <linux/of_address.h>
@@ -14985,17 +14985,17 @@ index 0000000..09391ea
 + 
 ++static void advk_pcie_warm_reset(struct advk_pcie *pcie)
 ++{
-++   u32 reg;
+++     u32 reg;
 ++
-++   reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++   reg |= CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET;
-++   advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
+++     reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
+++     reg |= CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET;
+++     advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
 ++
-++   mdelay(100);
+++     mdelay(100);
 ++
-++   reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++   reg &= ~(CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET);
-++   advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
+++     reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
+++     reg &= ~(CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET);
+++     advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
 ++}
 ++
 + static void advk_pcie_setup_hw(struct advk_pcie *pcie)
@@ -15033,11 +15033,11 @@ index 0000000..09391ea
 + 		dev_err(dev, "Failed to parse resources\n");
 diff --git a/target/linux/mvebu/patches-4.14/90122-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch b/target/linux/mvebu/patches-4.14/90122-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
 new file mode 100644
-index 0000000..d4b7df0
+index 0000000..67945aa
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90122-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
-@@ -0,0 +1,905 @@
-+From 122a85d5ba5996c18e0b6536249bc2bfec8b0193 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,910 @@
++From ae2723deab8ac863f2d5ae1804eaa28b17edac51 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 17:01:12 +0200
 +Subject: [PATCH 122/122] ARM64: dts: marvell: Add DTS file for Turris Mox
@@ -15059,8 +15059,8 @@ index 0000000..d4b7df0
 + .../arm/marvell/armada-3720-turris-mox.txt    |   6 +
 + MAINTAINERS                                   |   1 +
 + arch/arm64/boot/dts/marvell/Makefile          |   1 +
-+ .../dts/marvell/armada-3720-turris-mox.dts    | 833 ++++++++++++++++++
-+ 4 files changed, 841 insertions(+)
++ .../dts/marvell/armada-3720-turris-mox.dts    | 838 ++++++++++++++++++
++ 4 files changed, 846 insertions(+)
 + create mode 100644 Documentation/devicetree/bindings/arm/marvell/armada-3720-turris-mox.txt
 + create mode 100644 arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
 +
@@ -15102,10 +15102,10 @@ index 0000000..d4b7df0
 + dtb-$(CONFIG_ARCH_MVEBU) += armada-8040-mcbin.dtb
 +diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
 +new file mode 100644
-+index 000000000000..3ba9196de562
++index 000000000000..1315c59ecef3
 +--- /dev/null
 ++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+@@ -0,0 +1,833 @@
++@@ -0,0 +1,838 @@
 ++// SPDX-License-Identifier: GPL-2.0+ or X11
 ++/*
 ++ * Device Tree file for CZ.NIC Turris Mox Board
@@ -15889,12 +15889,12 @@ index 0000000..d4b7df0
 ++
 ++		partition@0 {
 ++			label = "secure-firmware";
-++			reg = <0x0 0x15000>;
+++			reg = <0x0 0x20000>;
 ++		};
 ++
-++		partition@15000 {
+++		partition@20000 {
 ++			label = "u-boot";
-++			reg = <0x15000 0x16b000>;
+++			reg = <0x20000 0x160000>;
 ++		};
 ++
 ++		partition@180000 {
@@ -15904,7 +15904,12 @@ index 0000000..d4b7df0
 ++
 ++		partition@190000 {
 ++			label = "Rescue system";
-++			reg = <0x190000 0x670000>;
+++			reg = <0x190000 0x660000>;
+++		};
+++
+++		partition@7f0000 {
+++			label = "dtb";
+++			reg = <0x7f0000 0x10000>;
 ++		};
 ++	};
 ++
