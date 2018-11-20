@@ -23,6 +23,11 @@ export L10N=en,cs
 export LISTS=
 export UPDATER_SCRIPT=
 export OVERLAY=
+export SIGN_KEY=
+export OUTPUT=
+
+TURRIS_BUILD_DIR="$(dirname "$(readlink -f "$0")")"
+export TURRIS_BUILD_DIR
 
 ## Parse arguments ##
 while [ $# -gt 0 ]; do
@@ -62,6 +67,8 @@ while [ $# -gt 0 ]; do
 			echo "    PATH is expected to be directory and whole content is copied"
 			echo "    to newly generated root. This is handy if you want to change"
 			echo "    some default settings for example."
+			echo "  --sign KEY"
+			echo "    Sign medkit with given KEY and usign utility"
 			echo "  --help, -h"
 			echo "    Print this text and exit."
 			exit 0
@@ -89,6 +96,10 @@ while [ $# -gt 0 ]; do
 		--overlay)
 			shift
 			OVERLAY="$1"
+			;;
+		--sign)
+			shift
+			SIGN_KEY="$1"
 			;;
 		*)
 			if [ -z "$OUTPUT" ]; then
@@ -123,7 +134,9 @@ done
 			;;
 	esac
 }
-. "$(dirname "$(readlink -f "$0")")/helpers/generate_common.sh"
+OUTPUT="$(readlink -f "$OUTPUT")"
+
+. "$TURRIS_BUILD_DIR/helpers/generate_common.sh"
 
 updater_ng_repodetect "$BRANCH" "$BOARD"
 get_usign
@@ -144,24 +157,25 @@ touch root/usr/lib/opkg/status
 mkdir -p root/usr/share/updater
 
 ## Run updater it self
-"$PKGUPDATE" \
-	--model="$BOARD" \
+"\$PKGUPDATE" \
+	--model="\$BOARD" \
 	--board=rtunknown \
 	--out-of-root \
 	-R root \
-	--usign="$USIGN" \
-	--batch "file://$(dirname "$(readlink -f "$0")")/helpers/medkit-updater-ng.lua" || true
+	--usign="\$USIGN" \
+	--batch "file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua" || true
 
 ## Generate /etc/config/updater
 m4 \
-	-D_BRANCH_=$BRANCH \
-	-D_LISTS_=$LISTS \
-	-D_LANGS_=$L10N \
-	$(dirname "$(readlink -f "$0")")/helpers/medkit-updater-ng-config.m4 > root/etc/config/updater
+	-D_BRANCH_=\$BRANCH \
+	-D_LISTS_=\$LISTS \
+	-D_LANGS_=\$L10N \
+	"\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" \
+	> root/etc/config/updater
 
 ## Overlay user's files
-if [ -n "$OVERLAY" ]; then
-	cp -a "$OVERLAY/." root/
+if [ -n "\$OVERLAY" ]; then
+	cp -a "\$OVERLAY/." root/
 fi
 
 ## Root cleanups
@@ -174,8 +188,9 @@ rm -rf root/var/opkg-collided
 (
 cd root
 # Create archive
-tar -czf "$(readlink -f "$OUTPUT")" .
+tar -czf "\$OUTPUT" .
 )
+[ -z "\$SIGN_KEY" ] || "\$USIGN" -S -m "\$OUTPUT" -s "\$SIGN_KEY"
 
 ## Cleanup
 rm -rf root
