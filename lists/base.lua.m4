@@ -2,10 +2,6 @@ include(utils.m4)dnl Include utility macros
 include(repository.m4)dnl Include Repository command
 -- Updater itself
 Install('updater-ng', 'updater-ng-supervisor', { critical = true })
---[[
-Updater before v59.0 has no support for replan as string and it would complain
-about it. This is helper function is here to overcome that.
-]]
 Package('updater-ng', { replan = 'finished' })
 Package('l10n_supported', { replan = 'finished' })
 
@@ -118,8 +114,7 @@ _LUCI_I18N_(base, commands)
 _END_FEATURE_GUARD_
 
 --[[
-We are migrating from uClibc to musl, so reinstall everything depending on libc
-and we need to have working gzip and tar before updater starts doing it's thing.
+We are migrating from uClibc to musl, so reinstall everything depending on libc.
 ]]
 if installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
 	Package("libc", { abi_change_deep = true })

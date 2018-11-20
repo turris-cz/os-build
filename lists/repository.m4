@@ -3,7 +3,7 @@ dnl We expect this to be include in base.lua just after utils.m4
 divert(-1)
 
 # This is definition of subrepositories
-pushdef(`SUBDIRS',`subdirs = {"base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" feeds.conf')}')
+pushdef(`SUBDIRS',`subdirs = {"base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}')
 
 divert(0)dnl
 local board
@@ -19,7 +19,7 @@ end
 
 dnl
 dnl Basic turris repository
-Repository("turris", "https://repo.turris.cz/" .. board .. "ifdef(`_BRANCH_',-_BRANCH_)/packages", {
+Repository("turris", "https://repo.turris.cz/_BRANCH_/packages/" .. board, {
 	SUBDIRS
 })
 dnl
@@ -27,7 +27,7 @@ dnl Fallback turris repository for not complete branches
 dnl In testing branches we are compiling just a minimal set of packages to allow
 dnl updater to use all packages we are adding nightly as fallback reposutory.
 ifdef(`_BRANCH_FALLBACK_',
-`Repository("turris-fallback", "https://repo.turris.cz/" .. board .. "-_BRANCH_FALLBACK_/packages", {
+`Repository("turris-fallback", "https://repo.turris.cz/_BRANCH_FALLBACK_/packages/" .. board, {
 	SUBDIRS,
 	priority = 40,
 	ignore = {"missing"}

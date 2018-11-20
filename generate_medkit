@@ -1,0 +1,197 @@
+#!/bin/bash
+# Turris medkit generator script
+# (C) 2018 CZ.NIC, z.s.p.o.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+set -e
+
+export BOARD=
+export BRANCH=
+export L10N=en,cs
+# TODO fill in default lists when we have them selected
+export LISTS=
+export UPDATER_SCRIPT=
+export OVERLAY=
+export SIGN_KEY=
+export OUTPUT=
+
+TURRIS_BUILD_DIR="$(dirname "$(readlink -f "$0")")"
+export TURRIS_BUILD_DIR
+
+## Parse arguments ##
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			echo "This script generates Turris medkit using updater-ng."
+			echo "Usage: $0 [OPTION].. [OUTPUT]"
+			echo
+			echo "Generated medkit is written to file at path OUTPUT. If no OUTPUT"
+			echo "is specified then the default format for used board is used."
+			echo "Warning: This script generates a lot of stuff to current working"
+			echo "directory. It is suggested to use some empty one not your home."
+			echo "Options:"
+			echo "  --target, -t BOARD"
+			echo "    Set given board as target for generated medkit. In default"
+			echo "    if this options is not specified omnia is used. Allowed"
+			echo "    values are: turris, omnia, mox"
+			echo "  --branch, -b BRANCH"
+			echo "    Set given branch as source for packages used to generate "
+			echo "    this medkit. If this option is not set then 'hbd' is used."
+			echo "    Note that this does not sets that branch to updater-ng"
+			echo "    configuration. You have to do that on your own."
+			# TODO maybe add version specification for future out of build use.
+			echo "  --localization, -l LOCALIZATION,.."
+			echo "    After this argument a list of language codes to be added to"
+			echo "    medkit should be specified. Language codes should be"
+			echo "    separated by comma. In default en,cs is used."
+			echo "  --lists, -p PKGLIST,.."
+			echo "    What lists should be added to medkit. In default no"
+			echo "    additional lists will be added. Multiple lists can be"
+			echo "    specified by separating them by commas."
+			echo "  --updater-script FILE"
+			echo "    Run file as updater's script. It is executed after primary"
+			echo "    entry script of this tool."
+			echo "  --overlay PATH"
+			echo "    This allows you to overwrite or add some files to medkit."
+			echo "    PATH is expected to be directory and whole content is copied"
+			echo "    to newly generated root. This is handy if you want to change"
+			echo "    some default settings for example."
+			echo "  --sign KEY"
+			echo "    Sign medkit with given KEY and usign utility"
+			echo "  --help, -h"
+			echo "    Print this text and exit."
+			exit 0
+			;;
+		--target|-t)
+			shift
+			BOARD="$1"
+			;;
+		--branch|-b)
+			shift
+			BRANCH="$1"
+			;;
+		--localization|-l)
+			shift
+			L10N="$1"
+			;;
+		--lists|-p)
+			shift
+			LISTS="$1"
+			;;
+		--updater-script)
+			shift
+			UPDATER_SCRIPT="$1"
+			;;
+		--overlay)
+			shift
+			OVERLAY="$1"
+			;;
+		--sign)
+			shift
+			SIGN_KEY="$1"
+			;;
+		*)
+			if [ -z "$OUTPUT" ]; then
+				OUTPUT="$1"
+			else
+				echo "Unknown option: $1" >&2
+				exit 1
+			fi
+			;;
+	esac
+	shift
+done
+
+[ -n "$BOARD" ] || {
+	echo "You have to specify target Turris router." >&2
+	exit 1
+}
+[ -n "$BRANCH" ] || {
+	echo "You have to specify target branch." >&2
+	exit 1
+}
+[ -n "$OUTPUT" ] || {
+	case "$BOARD" in
+		mox)
+			OUTPUT=medkit-mox.tar.gz
+			;;
+		omnia)
+			OUTPUT=medkit-omnia.tar.gz
+			;;
+		turris)
+			OUTPUT=medkit-turris.tar.gz
+			;;
+	esac
+}
+OUTPUT="$(readlink -f "$OUTPUT")"
+
+. "$TURRIS_BUILD_DIR/helpers/generate_common.sh"
+
+updater_ng_repodetect "$BRANCH" "$BOARD"
+get_usign
+get_updater_ng
+get_turris_keys
+
+## Generate root ##
+exec fakeroot -- sh -esx <<EOF
+mkdir -p root
+## Create base filesystem for updater
+ln -sf tmp root/var
+# Create lock required by updater
+mkdir -p root/tmp/lock
+# Create opkg status file and info file
+mkdir -p root/usr/lib/opkg/info
+touch root/usr/lib/opkg/status
+# And updater directory
+mkdir -p root/usr/share/updater
+
+## Run updater it self
+"\$PKGUPDATE" \
+	--model="\$BOARD" \
+	--board=rtunknown \
+	--out-of-root \
+	-R root \
+	--usign="\$USIGN" \
+	--batch "file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua" || true
+
+## Generate /etc/config/updater
+m4 \
+	-D_BRANCH_=\$BRANCH \
+	-D_LISTS_=\$LISTS \
+	-D_LANGS_=\$L10N \
+	"\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" \
+	> root/etc/config/updater
+
+## Overlay user's files
+if [ -n "\$OVERLAY" ]; then
+	cp -a "\$OVERLAY/." root/
+fi
+
+## Root cleanups
+rm -f root/var/lock/opkg.lock
+rm -f root/usr/share/updater/flags
+rm -rf root/usr/share/updater/unpacked
+rm -rf root/var/opkg-collided
+
+## Tar root
+(
+cd root
+# Create archive
+tar -czf "\$OUTPUT" .
+)
+[ -z "\$SIGN_KEY" ] || "\$USIGN" -S -m "\$OUTPUT" -s "\$SIGN_KEY"
+
+## Cleanup
+rm -rf root
+EOF
