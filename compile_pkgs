@@ -459,12 +459,6 @@ store_hash() {
 	} | tee bin/git-hash
 }
 
-_mapfile_if_exists() {
-	if [ -f "$2" ]; then
-		mapfile "$1" < "$2"
-	fi
-}
-
 available_commands+=( ["get_feeds"]="Recreate configured feeds" )
 get_feeds() {
 	_report "Getting feeds"
@@ -473,10 +467,11 @@ get_feeds() {
 	_perl ./scripts/feeds clean -a
 	_perl ./scripts/feeds update -a
 	_perl ./scripts/feeds install -a
-	local disabled_packages=()
-	_mapfile_if_exists disabled_packages "$src_dir/disabled_packages/common"
-	_mapfile_if_exists disabled_packages "$src_dir/disabled_packages/$TARGET_BOARD"
-	[ ${#disabled_packages[@]} -gt 0 ] || _perl ./scripts/feeds uninstall "${disabled_packages[@]}"
+	local disabled_packages
+	disabled_packages="$(cat "$src_dir/disabled_packages/common" \
+                                   "$src_dir/disabled_packages/$TARGET_BOARD" \
+                               | sed 's|#.*||' | grep '[^[:blank:]]')"
+	[ -z "$disabled_packages" ] || _perl ./scripts/feeds uninstall $disabled_packages
 }
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them (Implies: get_feeds patch_feeds)" )
