@@ -3,7 +3,7 @@ _FEATURE_GUARD_
 
 -- Tools
 Install("tcpdump", { priority = 40 })
-Install("relayd", "udev", { priority = 40 })
+Install("relayd", { priority = 40 })
 Install("openvpn-openssl", { priority = 40 })
 
 -- 3G
