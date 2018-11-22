@@ -2,7 +2,7 @@ include(utils.m4)dnl Include utility macros
 _FEATURE_GUARD_
 
 -- Tools
-Install("wol", "tcpdump", { priority = 40 })
+Install("tcpdump", { priority = 40 })
 Install("relayd", "udev", { priority = 40 })
 Install("openvpn-openssl", { priority = 40 })
 
