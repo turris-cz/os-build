@@ -26,8 +26,8 @@ Install("swap-utils", { priority = 40 })
 Install("foris-storage-plugin", { priority = 40 })
 
 -- File systems
-Install("lvm2", "mdadm", "mkdosfs", "mkhfs", "btrfs-progs", "davfs2", "e2fsprogs", "fuse-utils", "xfs-mkfs", { priority = 40 })
-Install("block-mount", "badblocks", "cifsmount", "dosfsck", "hfsfsck", "xfs-fsck", "xfs-growfs", { priority = 40 })
+Install("lvm2", "mdadm", "dosfstools", "mkhfs", "btrfs-progs", "davfs2", "e2fsprogs", "fuse-utils", "xfs-mkfs", { priority = 40 })
+Install("block-mount", "badblocks", "cifsmount", "hfsfsck", "xfs-fsck", "xfs-growfs", { priority = 40 })
 Install("nfs-kernel-server", "nfs-kernel-server-utils", { priority = 40 })
 Install("ntfs-3g", "ntfs-3g-utils", { priority = 40 })
 Install("sshfs", { priority = 40 })
