@@ -81,6 +81,8 @@ if model:match("[Oo]mnia") then
 	Install("rainbow-omnia", "sfpswitch", { priority = 40 })
 elseif model:match("^[Tt]urris$") then
 	Install("rainbow", { priority = 40 })
+elseif model:match("^[Mm][Oo][Xx]$") then
+	Install("kmod-gpio-button-hotplug", "kmod-mwifiex-sdio", { priority = 40 })
 end
 if not model:match("^[Tt]urris$") then
 	Install("schnapps", { priority = 40 })
