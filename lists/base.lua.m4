@@ -88,7 +88,7 @@ if not model:match("^[Tt]urris$") then
 	Install("schnapps", { priority = 40 })
 end
 
-Install("foris", "foris-diagnostics-plugin", { priority = 40 })
+Install("foris", "foris-diagnostics-plugin", "turris-webapps", { priority = 40 })
 Install('userlists', { priority = 40 })
 if for_l10n then
 	for_l10n("foris-l10n-")
