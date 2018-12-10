@@ -17,7 +17,8 @@
 set -e
 
 export BOARD=
-export BRANCH=
+export BRANCH="hbs"
+export UPDATER_BRANCH=
 export L10N=en,cs
 # TODO fill in default lists when we have them selected
 export LISTS=
@@ -47,9 +48,11 @@ while [ $# -gt 0 ]; do
 			echo "    values are: turris, omnia, mox"
 			echo "  --branch, -b BRANCH"
 			echo "    Set given branch as source for packages used to generate "
-			echo "    this medkit. If this option is not set then 'hbd' is used."
+			echo "    this medkit. If this option is not set then 'hbs' is used."
 			echo "    Note that this does not sets that branch to updater-ng"
-			echo "    configuration. You have to do that on your own."
+			echo "    configuration. You have to use --updater-branch for that."
+			echo "  --updater-branch BRANCH"
+			echo "    Set target branch inside medkit for updater-ng."
 			# TODO maybe add version specification for future out of build use.
 			echo "  --localization, -l LOCALIZATION,.."
 			echo "    After this argument a list of language codes to be added to"
@@ -80,6 +83,10 @@ while [ $# -gt 0 ]; do
 		--branch|-b)
 			shift
 			BRANCH="$1"
+			;;
+		--updater-branch)
+			shift
+			UPDATER_BRANCH="$1"
 			;;
 		--localization|-l)
 			shift
@@ -117,10 +124,6 @@ done
 	echo "You have to specify target Turris router." >&2
 	exit 1
 }
-[ -n "$BRANCH" ] || {
-	echo "You have to specify target branch." >&2
-	exit 1
-}
 [ -n "$OUTPUT" ] || {
 	case "$BOARD" in
 		mox)
@@ -144,7 +147,9 @@ get_updater_ng
 get_turris_keys
 
 ## Generate root ##
-exec fakeroot -- sh -esx <<EOF
+exec fakeroot -- /bin/bash -s <<EOF
+set -e
+
 mkdir -p root
 ## Create base filesystem for updater
 ln -sf tmp root/var
@@ -166,12 +171,11 @@ mkdir -p root/usr/share/updater
 	--batch "file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua" || true
 
 ## Generate /etc/config/updater
-m4 \
-	-D_BRANCH_=\$BRANCH \
-	-D_LISTS_=\$LISTS \
-	-D_LANGS_=\$L10N \
-	"\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" \
-	> root/etc/config/updater
+m4args=()
+[ -z "\$UPDATER_BRANCH" ] || m4args+=("-D_BRANCH_='\$UPDATER_BRANCH'")
+[ -z "\$LISTS" ] || m4args+=("-D_LISTS_='\$LISTS'")
+[ -z "\$L10N" ] || m4args+=("-D_LANGS_='\$L10N'")
+m4 "\${m4args[@]}" "\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" > root/etc/config/updater
 
 ## Overlay user's files
 if [ -n "\$OVERLAY" ]; then
@@ -190,8 +194,8 @@ cd root
 # Create archive
 tar -czf "\$OUTPUT" .
 )
-md5sum "\$OUTPUT" > "\$OUTPUT.md5"
-sha256sum "\$OUTPUT" > "\$OUTPUT.sha256"
+md5sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.md5"
+sha256sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.sha256"
 [ -z "\$SIGN_KEY" ] || "\$USIGN" -S -m "\$OUTPUT" -s "\$SIGN_KEY"
 
 ## Cleanup
