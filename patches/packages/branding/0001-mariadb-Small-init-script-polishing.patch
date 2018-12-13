@@ -1,7 +1,7 @@
-From eef1749fe403449ad1e68b2e967c88d303dd8003 Mon Sep 17 00:00:00 2001
-From: Michal Hrusecky <Michal@Hrusecky.net>
-Date: Tue, 9 Oct 2018 12:22:35 +0200
-Subject: [PATCH 04/12] mariadb: Small init script polishing
+From 5b7e67f27aa4d45681d487336ef77f00b3f1538b Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Wed, 12 Dec 2018 15:00:37 +0100
+Subject: [PATCH 1/6] mariadb: Small init script polishing
 
 Using mysqld to get datadir, tmpdir, pidfile and socketfile. This way they
 don't need to be set or can be set in included configuration file. Also allows
@@ -13,24 +13,26 @@ Maria can read it.
 
 Also include fallback when logger is not available.
 
-Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+Signed-off-by: Michal Hrusecky Michal@Hrusecky.net
 ---
- utils/mariadb/Makefile          |  6 ++++--
- utils/mariadb/files/mysqld.init | 20 +++++++++++---------
- 2 files changed, 15 insertions(+), 11 deletions(-)
+ utils/mariadb/Makefile          |  9 ++++++---
+ utils/mariadb/files/mysqld.init | 26 +++++++++++++++++---------
+ 2 files changed, 23 insertions(+), 12 deletions(-)
 
 diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
-index b501e7e..cc60dce 100644
+index b501e7e..3032a1f 100644
 --- a/utils/mariadb/Makefile
 +++ b/utils/mariadb/Makefile
-@@ -494,10 +494,12 @@ define Package/mariadb-server/install
+@@ -494,10 +494,13 @@ define Package/mariadb-server/install
  	$(INSTALL_DIR) $(1)/etc/init.d
  	$(INSTALL_DIR) $(1)/etc/mysql/conf.d
  	$(INSTALL_BIN) files/mysqld.init $(1)/etc/init.d/mysqld
 -	$(INSTALL_CONF) conf/my.cnf $(1)/etc/mysql
+-	$(INSTALL_CONF) conf/mysqld.default $(1)/etc/default/mysqld
 +	# DATA because spomebody thought giving CONF 0600 rights is a good idea
 +	$(INSTALL_DATA) conf/my.cnf $(1)/etc/mysql
- 	$(INSTALL_CONF) conf/mysqld.default $(1)/etc/default/mysqld
++	# DATA because spomebody thought giving CONF 0600 rights is a good idea
++	$(INSTALL_DATA) conf/mysqld.default $(1)/etc/default/mysqld
  	$(INSTALL_DIR) $(1)$(PLUGIN_DIR)
 -	$(INSTALL_CONF) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/daemon_example.ini $(1)$(PLUGIN_DIR)
 +	# DATA because spomebody thought giving CONF 0600 rights is a good idea
@@ -39,7 +41,7 @@ index b501e7e..cc60dce 100644
  	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/english/errmsg.sys $(1)/usr/share/mysql/english
  	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/fill_help_tables.sql $(1)/usr/share/mysql
 diff --git a/utils/mariadb/files/mysqld.init b/utils/mariadb/files/mysqld.init
-index abc99fc..a9ee9eb 100644
+index abc99fc..5cdb9c6 100644
 --- a/utils/mariadb/files/mysqld.init
 +++ b/utils/mariadb/files/mysqld.init
 @@ -12,6 +12,7 @@ MYSQLD=mysqld
@@ -50,16 +52,21 @@ index abc99fc..a9ee9eb 100644
  PROG=/usr/bin/$MYSQLD
  
  unset MY_ARGS MY_GROUP MY_USER
-@@ -22,11 +23,13 @@ my_user="${MY_USER:-mariadb}"
+@@ -21,12 +22,18 @@ unset MY_ARGS MY_GROUP MY_USER
+ my_user="${MY_USER:-mariadb}"
  my_group="${MY_GROUP:-mariadb}"
  
++mysql_get_var() {
++	/usr/bin/mysqld --help --verbose | sed -n 's|^'"$1"'[[:blank:]]\+||p'
++}
++
  start_service() {
 -	local conf='/etc/mysql/my.cnf'
 -	local datadir="$( sed -nE "s/^\s*datadir\s*=\s*('([^']*)'|\x22([^\x22]*)\x22|(.*\S))\s*$/\2\3\4/p" "$conf" )"
-+	local datadir="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*datadir[[:blank:]]*/|/|p')"
-+	local tmpdir="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*tmpdir[[:blank:]]*/|/|p')"
-+	local pidfile="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*pid-file[[:blank:]]*/|/|p')"
-+	local socketfile="$(/usr/bin/mysqld --help --verbose | sed -n 's|^[[:blank:]]*socket[[:blank:]]*/|/|p')"
++	local datadir="$(mysql_get_var datadir)"
++	local tmpdir="$(mysql_get_var tmpdir)"
++	local pidfile="$(mysql_get_var pid-file)"
++	local socketfile="$(mysql_get_var socket)"
  
  	[ -d "$datadir" ] || {
 -		$LOGGER "datadir '$datadir' in '$conf' does not exist"
@@ -67,7 +74,7 @@ index abc99fc..a9ee9eb 100644
  		return 1
  	}
  
-@@ -36,18 +39,17 @@ start_service() {
+@@ -36,18 +43,19 @@ start_service() {
  		return 1
  	}
  
@@ -76,9 +83,11 @@ index abc99fc..a9ee9eb 100644
 -
 -	mkdir -p /var/run/mysqld
 -	chown "$my_user":"$my_group" /var/run/mysqld
-+	for i in /var/lib/mysql "$datadir" "$tmpdir" "$(dirname "$pidfile")" "$(dirname "$socketfile")"; do
-+		mkdir -p "$i"
-+		chown "$my_user":"$my_group" "$i"
++	for i in /var/lib/mysql "$tmpdir" "$(dirname "$pidfile")" "$(dirname "$socketfile")"; do
++		if [ \! -d "$i" ]; then
++			mkdir -p "$i"
++			chown "$my_user":"$my_group" "$i"
++		fi
 +	done
  
  	procd_open_instance
@@ -92,5 +101,5 @@ index abc99fc..a9ee9eb 100644
  	procd_close_instance
  }
 -- 
-2.19.1
+2.19.2
 
