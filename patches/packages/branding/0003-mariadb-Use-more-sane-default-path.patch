@@ -1,20 +1,29 @@
-From 760b460dcd943440e91fc69847304b073810256b Mon Sep 17 00:00:00 2001
+From 799f50cce1d20076a067d3606da6f0036e5f94f2 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 12 Dec 2018 15:08:45 +0100
-Subject: [PATCH 3/6] mariadb: Use more sane default path
+Subject: [PATCH] mariadb: Use more sane default path
 
 Let's set default paths in a way that makes sense.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- utils/mariadb/Makefile | 21 ++++++---------------
- 1 file changed, 6 insertions(+), 15 deletions(-)
+ utils/mariadb/Makefile | 30 ++++++++++--------------------
+ 1 file changed, 10 insertions(+), 20 deletions(-)
 
 diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
-index 6057919..f5b5abb 100644
+index 93d6dfe1c..ab9dec946 100644
 --- a/utils/mariadb/Makefile
 +++ b/utils/mariadb/Makefile
-@@ -338,20 +338,11 @@ CMAKE_OPTIONS += \
+@@ -33,7 +33,7 @@ PKG_BUILD_DEPENDS:=libevent2 mariadb/host
+ 
+ CMAKE_INSTALL:=1
+ 
+-PLUGIN_DIR:=/usr/lib/mysql/plugin
++PLUGIN_DIR:=/usr/lib/mariadb/plugin
+ 
+ MARIADB_COMMON_DEPENDS := \
+ 	+libatomic \
+@@ -339,20 +339,11 @@ CMAKE_OPTIONS += \
  	-DDISABLE_SHARED=NO \
  	-DENABLED_PROFILING=OFF \
  	-DENABLE_STATIC_LIBS=OFF \
@@ -40,7 +49,30 @@ index 6057919..f5b5abb 100644
  	-DSKIP_TESTS=ON \
  	-DWITH_ASAN=OFF \
  	-DWITH_EMBEDDED_SERVER=OFF \
-@@ -514,7 +505,7 @@ define Package/mariadb-server-extra/install
+@@ -430,19 +421,18 @@ define Host/Install
+ endef
+ 
+ define Build/InstallDev
+-	$(INSTALL_DIR) $(2)/bin $(1)/usr/bin $(1)/usr/include $(1)/usr/lib/mysql $(1)/usr/lib/pkgconfig $(1)/usr/share/aclocal
++	$(INSTALL_DIR) $(2)/bin $(1)/usr/bin $(1)/usr/include $(1)/usr/lib $(1)/usr/lib/pkgconfig $(1)/usr/share/aclocal
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mysql_config $(1)/usr/bin
+ 	$(LN) $(STAGING_DIR)/usr/bin/mysql_config $(2)/bin
+ 	$(CP) $(PKG_INSTALL_DIR)/usr/include/mysql $(1)/usr/include
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libmysqlclient*.so* $(1)/usr/lib
+-	cd $(1)/usr/lib/mysql; $(LN) ../libmysqlclient*.so* .
++	$(CP) $(PKG_INSTALL_DIR)/usr/lib*/libmysqlclient*.so* $(1)/usr/lib
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/pkgconfig/mariadb.pc $(1)/usr/lib/pkgconfig
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/aclocal/mysql.m4 $(1)/usr/share/aclocal
+ endef
+ 
+ define Package/libmariadbclient/install
+ 	$(INSTALL_DIR) $(1)$(PLUGIN_DIR)
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libmysqlclient*.so* $(1)/usr/lib
++	$(CP) $(PKG_INSTALL_DIR)/usr/lib*/libmysqlclient*.so* $(1)/usr/lib
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/dialog.so $(1)$(PLUGIN_DIR)
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/mysql_clear_password.so $(1)$(PLUGIN_DIR)
+ endef
+@@ -493,7 +483,7 @@ define Package/mariadb-server-extra/install
  endef
  
  define Package/mariadb-server/conffiles
