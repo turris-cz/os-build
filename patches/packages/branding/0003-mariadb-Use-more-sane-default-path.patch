@@ -1,17 +1,15 @@
-From 799f50cce1d20076a067d3606da6f0036e5f94f2 Mon Sep 17 00:00:00 2001
-From: Michal Hrusecky <michal.hrusecky@nic.cz>
-Date: Wed, 12 Dec 2018 15:08:45 +0100
-Subject: [PATCH] mariadb: Use more sane default path
+commit 180e4ba20e1449e3f339da0da24429044a84faef
+Author: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date:   Wed Dec 12 15:08:45 2018 +0100
 
-Let's set default paths in a way that makes sense.
-
-Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
----
- utils/mariadb/Makefile | 30 ++++++++++--------------------
- 1 file changed, 10 insertions(+), 20 deletions(-)
+    mariadb: Use more sane default path
+    
+    Let's set default paths in a way that makes sense.
+    
+    Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 
 diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
-index 93d6dfe1c..ab9dec946 100644
+index 93d6dfe1c..be27d7670 100644
 --- a/utils/mariadb/Makefile
 +++ b/utils/mariadb/Makefile
 @@ -33,7 +33,7 @@ PKG_BUILD_DEPENDS:=libevent2 mariadb/host
@@ -23,7 +21,22 @@ index 93d6dfe1c..ab9dec946 100644
  
  MARIADB_COMMON_DEPENDS := \
  	+libatomic \
-@@ -339,20 +339,11 @@ CMAKE_OPTIONS += \
+@@ -181,7 +181,13 @@ include $(INCLUDE_DIR)/cmake.mk
+ TARGET_CFLAGS+=$(TARGET_CPPFLAGS)
+ 
+ define Package/mariadb/install/bin
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(2) $(1)/usr/bin
++	if [ -f $(PKG_INSTALL_DIR)/usr/bin/$(2) ]; then\
++		$(INSTALL_DIR) $(1)/usr/bin;\
++		$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(2) $(1)/usr/bin;\
++	else \
++		$(INSTALL_DIR) $(1)/usr/sbin;\
++		$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/$(2) $(1)/usr/sbin;\
++	fi
+ endef
+ 
+ define Package/mariadb/description/Default
+@@ -339,20 +345,11 @@ CMAKE_OPTIONS += \
  	-DDISABLE_SHARED=NO \
  	-DENABLED_PROFILING=OFF \
  	-DENABLE_STATIC_LIBS=OFF \
@@ -49,7 +62,7 @@ index 93d6dfe1c..ab9dec946 100644
  	-DSKIP_TESTS=ON \
  	-DWITH_ASAN=OFF \
  	-DWITH_EMBEDDED_SERVER=OFF \
-@@ -430,19 +421,18 @@ define Host/Install
+@@ -430,25 +427,23 @@ define Host/Install
  endef
  
  define Build/InstallDev
@@ -72,7 +85,59 @@ index 93d6dfe1c..ab9dec946 100644
  	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/dialog.so $(1)$(PLUGIN_DIR)
  	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/mysql_clear_password.so $(1)$(PLUGIN_DIR)
  endef
-@@ -493,7 +483,7 @@ define Package/mariadb-server-extra/install
+ 
+ define Package/mariadb-client/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(foreach b,$(MARIADB_CLIENT),$(call Package/mariadb/install/bin,$(1),$(b));)
+ 	# Install convenience links for mysqlcheck multi-call binary
+ 	cd $(1)/usr/bin; $(LN) mysqlcheck mysqlanalyze
+@@ -457,43 +452,39 @@ define Package/mariadb-client/install
+ endef
+ 
+ define Package/mariadb-client-extra/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(foreach b,$(MARIADB_CLIENT_EXTRA),$(call Package/mariadb/install/bin,$(1),$(b));)
+ endef
+ 
+ define Package/mariadb-extra-charsets/install
+-	$(INSTALL_DIR) $(1)/usr/share/mysql/charsets
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/charsets/* $(1)/usr/share/mysql/charsets
++	$(INSTALL_DIR) $(1)/usr/share/mariadb/charsets
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/charsets/* $(1)/usr/share/mariadb/charsets
+ endef
+ 
+ define Package/mariadb-server/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(foreach b,$(MARIADB_SERVER),$(call Package/mariadb/install/bin,$(1),$(b));)
+ 	$(INSTALL_DIR) $(1)/etc/default
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+-	$(INSTALL_DIR) $(1)/etc/mysql/conf.d
+ 	$(INSTALL_BIN) files/mysqld.init $(1)/etc/init.d/mysqld
+ 	# DATA because spomebody thought giving CONF 0600 rights is a good idea
+-	$(INSTALL_DATA) conf/my.cnf $(1)/etc/mysql
++	$(INSTALL_DATA) files/my.cnf $(1)/etc/mysql
+ 	$(INSTALL_DIR) $(1)$(PLUGIN_DIR)
+ 	# DATA because spomebody thought giving CONF 0600 rights is a good idea
+ 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/daemon_example.ini $(1)$(PLUGIN_DIR)
+-	$(INSTALL_DIR) $(1)/usr/share/mysql/english
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/english/errmsg.sys $(1)/usr/share/mysql/english
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/fill_help_tables.sql $(1)/usr/share/mysql
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/maria_add_gis_sp_bootstrap.sql $(1)/usr/share/mysql
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/mysql_performance_tables.sql $(1)/usr/share/mysql
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/mysql_system_tables.sql $(1)/usr/share/mysql
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mysql/mysql_system_tables_data.sql $(1)/usr/share/mysql
++	$(INSTALL_DIR) $(1)/usr/share/mariadb/english
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/english/errmsg.sys $(1)/usr/share/mariadb/english
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/fill_help_tables.sql $(1)/usr/share/mariadb
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/maria_add_gis_sp_bootstrap.sql $(1)/usr/share/mariadb
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/mysql_performance_tables.sql $(1)/usr/share/mariadb
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/mysql_system_tables.sql $(1)/usr/share/mariadb
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/mariadb/mysql_system_tables_data.sql $(1)/usr/share/mariadb
+ endef
+ 
+ define Package/mariadb-server-extra/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(foreach b,$(MARIADB_SERVER_EXTRA),$(call Package/mariadb/install/bin,$(1),$(b));)
  endef
  
  define Package/mariadb-server/conffiles
@@ -81,6 +146,3 @@ index 93d6dfe1c..ab9dec946 100644
  $(PLUGIN_DIR)/daemon_example.ini
  endef
  
--- 
-2.19.2
-
