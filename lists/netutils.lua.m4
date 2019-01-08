@@ -18,7 +18,6 @@ Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })
 forInstall(kmod,nf-nathelper-extra,usb-net-rndis,usb-net-qmi-wwan,usb-serial-option)
 
 -- Luci
-Install("luci-app-ddns", "luci-proto-3g", { priority = 40 })
-_LUCI_I18N_(ddns)
+Install("luci-proto-3g", { priority = 40 })
 
 _END_FEATURE_GUARD_
