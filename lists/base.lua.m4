@@ -6,6 +6,9 @@ include(luci.lua.m4)
 include(foris.lua)
 include(terminal-apps.lua)
 
+-- IPv6
+Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })
+
 _END_FEATURE_GUARD_
 
 --[[
