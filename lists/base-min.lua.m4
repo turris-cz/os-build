@@ -94,7 +94,7 @@ Install("conntrack", { priority = 40 })
 
 -- Wifi
 Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
-Install("ath10k-firmware-qca988x", { priority = 40 })
+Install("ath10k-firmware-qca988x-ct", { priority = 40 })
 if model:match("[Mm][Oo][Xx]") then
 	Install("mwifiex-sdio-firmware", { priority = 40 })
 end
