@@ -1,3 +1,5 @@
+include(base-min.lua.m4)
+
 _FEATURE_GUARD_
 
 Install("turris-netboot-data", { priority = 40 })
