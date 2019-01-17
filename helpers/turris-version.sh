@@ -68,7 +68,7 @@ endef
 
 define Package/turris-version/install
 	\$(INSTALL_DIR) \$(1)/etc
-	echo \$(PKG_VERSION) > \$(1)/etc/turris-version
+	echo \$(PKG_VERSION) | sed 's|-.*||' > \$(1)/etc/turris-version
 endef
 
 \$(eval \$(call BuildPackage,turris-version))
