@@ -1,4 +1,4 @@
-From d98698903e85a81962469dbef7c4d4998c9ec2fe Mon Sep 17 00:00:00 2001
+From b8d494de98ff76fefed6f9403dec2ac75b1e66d3 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 27 Dec 2017 17:19:45 +0100
 Subject: [PATCH] kernel: Add Turris 1.X support
@@ -9,16 +9,17 @@ some polishing.
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  .../mpc85xx/base-files/etc/board.d/02_network |   6 +
+ target/linux/mpc85xx/config-4.14              |   3 +
  .../arch/powerpc/boot/dts/turris.dts          | 252 ++++++++++++++++++
  target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
  ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 ++++++++++++++++
- 7 files changed, 620 insertions(+), 1 deletion(-)
+ 5 files changed, 517 insertions(+)
  create mode 100644 target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
  create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index 19f01a6..7679728 100755
+index 19f01a6589..7679728294 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -18,6 +18,12 @@ tplink,tl-wdr4900-v1)
@@ -34,9 +35,20 @@ index 19f01a6..7679728 100755
  *)
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
+diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
+index b60133e30e..3cba7aeb87 100644
+--- a/target/linux/mpc85xx/config-4.14
++++ b/target/linux/mpc85xx/config-4.14
+@@ -369,3 +369,6 @@ CONFIG_WATCHDOG_CORE=y
+ # CONFIG_XPS_USB_HCD_XILINX is not set
+ CONFIG_XZ_DEC_BCJ=y
+ CONFIG_XZ_DEC_POWERPC=y
++CONFIG_FB_FSL_DIU=n
++CONFIG_VGA_CONSOLE=y
++CONFIG_VGACON_SOFT_SCROLLBACK=n
 diff --git a/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
 new file mode 100644
-index 0000000..5c5555f
+index 0000000000..5c5555fde9
 --- /dev/null
 +++ b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
 @@ -0,0 +1,252 @@
@@ -294,7 +306,7 @@ index 0000000..5c5555f
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/p2020/profiles/turris.mk b/target/linux/mpc85xx/p2020/profiles/turris.mk
 new file mode 100644
-index 0000000..6c1d542
+index 0000000000..6c1d5420ce
 --- /dev/null
 +++ b/target/linux/mpc85xx/p2020/profiles/turris.mk
 @@ -0,0 +1,29 @@
@@ -329,7 +341,7 @@ index 0000000..6c1d542
 +$(eval $(call Profile,TURRIS))
 diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 new file mode 100644
-index 0000000..d661626
+index 0000000000..d6616263f3
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 @@ -0,0 +1,227 @@
@@ -561,5 +573,5 @@ index 0000000..d661626
 + 	 * line, these take precedence over device tree information */
 + 	mtd_device_parse_register(mtd, part_probe_types, NULL,
 -- 
-2.19.0
+2.20.1
 
