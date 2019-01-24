@@ -1,25 +1,55 @@
-From be622a150f1275b7d0d69826a8649a1eec21db17 Mon Sep 17 00:00:00 2001
+From 4e0531b2eb06db532adae3eaef409994abf94a21 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 23 Jan 2019 22:31:51 +0100
 Subject: [PATCH] Disable ABI stuff for now
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- include/package-ipkg.mk | 1 -
- 1 file changed, 1 deletion(-)
+ include/package-ipkg.mk | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
 
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index a906f8f96f..b063eb4b29 100644
+index dc05eefc7c..f4aa35e05b 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -93,7 +93,6 @@ _endef=endef
+@@ -93,9 +93,8 @@ _endef=endef
  
  ifeq ($(DUMP),)
    define BuildTarget/ipkg
 -    ABIV_$(1):=$(call GetABISuffix,$(1))
      PDIR_$(1):=$(call FeedPackageDir,$(1))
-     IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
+-    IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
++    IPKG_$(1):=$$(PDIR_$(1))/$(1)_$(VERSION)_$(PKGARCH).ipk
      IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
+     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
+ 
+@@ -148,22 +147,21 @@ ifeq ($(DUMP),)
+ 
+     $(STAGING_DIR_ROOT)/stamp/.$(1)_installed: $(PKG_BUILD_DIR)/.pkgdir/$(1).installed
+ 	mkdir -p $(STAGING_DIR_ROOT)/stamp
+-	$(if $(ABI_VERSION),echo '$(ABI_VERSION)' | cmp -s - $(PKG_INFO_DIR)/$(1).version || echo '$(ABI_VERSION)' > $(PKG_INFO_DIR)/$(1).version)
+ 	$(call locked,$(CP) $(PKG_BUILD_DIR)/.pkgdir/$(1)/. $(STAGING_DIR_ROOT)/,root-copy)
+ 	touch $$@
+ 
+-    Package/$(1)/DEPENDS := $$(call mergelist,$$(foreach dep,$$(filter-out @%,$$(IDEPEND_$(1))),$$(dep)$$(call GetABISuffix,$$(dep))))
++    Package/$(1)/DEPENDS := $$(call mergelist,$$(foreach dep,$$(filter-out @%,$$(IDEPEND_$(1))),$$(dep)))
+     ifneq ($$(EXTRA_DEPENDS),)
+       Package/$(1)/DEPENDS := $$(EXTRA_DEPENDS)$$(if $$(Package/$(1)/DEPENDS),$$(comma) $$(Package/$(1)/DEPENDS))
+     endif
+ 
+ $(_define) Package/$(1)/CONTROL
+-Package: $(1)$$(ABIV_$(1))
++Package: $(1)
+ Version: $(VERSION)
+ $$(call addfield,Depends,$$(Package/$(1)/DEPENDS)
+ )$$(call addfield,Conflicts,$$(call mergelist,$(CONFLICTS))
+-)$$(call addfield,Provides,$$(call mergelist,$(PROVIDES)$$(if $$(ABIV_$(1)), $(1)))
+-)$$(call addfield,Alternatives,$$(call mergelist,$(ALTERNATIVES))
++)$$(call addfield,Provides,$$(call mergelist,$(PROVIDES))
++e$$(call addfield,Alternatives,$$(call mergelist,$(ALTERNATIVES))
+ )$$(call addfield,Source,$(SOURCE)
+ )$$(call addfield,SourceName,$(1)
+ )$$(call addfield,License,$(LICENSE)
 -- 
 2.20.1
 
