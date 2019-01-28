@@ -1,5 +1,7 @@
 include(utils.m4)dnl Include utility macros
 include(repository.m4)dnl Include Repository command
+----------------------------------------------------------------------------------
+
 -- Updater itself
 Install('updater-ng', 'updater-ng-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
@@ -26,12 +28,14 @@ if model:match("[Oo]mnia") then
 	Install("omnia-support", "btrfs-progs", { critical = true })
 elseif model:match("[Mm][Oo][Xx]") then
 	Install("mox-support", { critical = true })
+	Install("zram-swap", { priority = 40 })
 end
 Install("dns-resolver", { critical = true })
 
 -- OpenWRT minimum
 Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
-Install("ebtables", "odhcpd", "odhcp6c", "rpcd", "opkg", "wget", { priority = 40 })
+Install("ebtables", "odhcpd", "odhcp6c", "rpcd", { priority = 40 })
+Install("opkg", "libustream-openssl", { priority = 40 })
 if model:match("^[Tt]urris$") then
 	Install("swconfig", { critical = true })
 end
@@ -80,8 +84,6 @@ if for_l10n then
 end
 if model:match("[Oo]mnia") then
 	Install("rainbow-omnia", "sfpswitch", { priority = 40 })
-elseif model:match("^[Mm][Oo][Xx]$") then
-	Install("zram-swap", "kmod-gpio-button-hotplug", "kmod-mwifiex-sdio", "kmod-ledtrig-heartbeat", { priority = 40 })
 elseif model:match("^[Tt]urris$") then
 	Install("rainbow", { priority = 40 })
 end
