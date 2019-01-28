@@ -7,7 +7,7 @@ Install("ppp-mod-pppoe", "pptpd", { priority = 40 })
 Install("usb-modeswitch", { priority = 40 })
 
 -- Kernel
-forInstall(kmod,nf-nathelper-extra,usb-net-rndis,usb-net-qmi-wwan,usb-serial-option)
+forInstall(kmod,nf-nathelper-extra,usb-net-rndis,usb-net-qmi-wwan,usb-serial-option,usb-serial-qualcomm)
 
 -- Luci
 Install("luci-proto-3g", { priority = 40 })
