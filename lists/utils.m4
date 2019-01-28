@@ -1,10 +1,5 @@
 divert(-1)
 
-# We use the _BRANCH_ variable, but if it isn't defined than it means deploy and
-# if defined as deploy then we undefine it.
-ifelse(_BRANCH_,deploy,`undefine(`_BRANCH_')',)
-
-
 # Transform lines in file to comma separated arguments
 # Usage: file2args(`FILE')
 define(`file2args',`syscmd(test -f _INCLUDE_`'$1)ifelse(sysval,0,,`errprint(File $1 is missing!)m4exit(`1')')dnl

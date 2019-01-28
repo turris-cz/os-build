@@ -17,7 +17,6 @@
 set -e
 
 output_path=
-fallback=
 sign_key=
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -28,23 +27,11 @@ while [ $# -gt 0 ]; do
 			echo "Options:"
 			echo "  --help, -h"
 			echo "    Prints this help text."
-			echo "  --branch BRANCH"
-			echo "    Target branch for which these lists are generated."
-			echo "  --minimal BRANCH"
-			echo "    Generate lists for minimal branch. (This adds BRANCH as a fallback branch)"
 			echo "  --sign KEY"
 			echo "    Sign lists with given KEY and usign utility"
 			echo "  --debug"
 			echo "    Run this script in debug mode"
 			exit
-			;;
-		--branch)
-			shift
-			branch="$1"
-			;;
-		--minimal)
-			shift
-			fallback="$1"
 			;;
 		--sign)
 			shift
@@ -66,10 +53,6 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$output_path" ] || output_path="generated_lists"
-[ -n "$branch" ] || {
-	echo "Missing --branch option." >&2
-	exit 1
-}
 tb="$(dirname "$(readlink -f "$0")")"
 [ -d "$tb/lists" -a -f "$tb/feeds.conf" ] || {
 	echo "This script has to be in same direstory as feeds.conf and lists directory." >&2
@@ -83,8 +66,7 @@ mkdir -p "$output_path"
 "$tb/helpers/turris-version.sh" version > "$output_path/turris-version"
 ( cd "$tb" && git rev-parse HEAD > "$output_path/git-hash" )
 
-m4args=( "--include=$tb/lists" "-D_INCLUDE_=$tb/lists/" "-D_FEEDS_=$tb/feeds.conf" "-D_BRANCH_=$branch" )
-[ -z "$fallback" ] || m4args+=( "-D _BRANCH_FALLBACK_=$fallback" )
+m4args=( "--include=$tb/lists" "-D_INCLUDE_=$tb/lists/" "-D_FEEDS_=$tb/feeds.conf" )
 
 for f in "$tb"/lists/*.lua.m4; do
 	[ -f "$f" ] || continue

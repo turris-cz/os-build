@@ -1,3 +1,4 @@
+include(utils.m4)dnl Include utility macros
 _FEATURE_GUARD_
 
 Install("foris", "foris-diagnostics-plugin", "turris-webapps", "lighttpd-https-cert", { priority = 40 })
