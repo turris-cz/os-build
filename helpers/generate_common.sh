@@ -76,7 +76,7 @@ updater_ng_repodetect() {
 	local BOARD="${2:-mox}"
 	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" \
 			| sed -n '/^Package: updater-ng$/,/^$/p' \
-			| awk '/^Version: /{ gsub("-[^-]*$","",$2); print $2 }')"
+			| awk '/^Version: /{ gsub("-.*$","",$2); print $2 }')"
 	if [ -z "$VERSION" ]; then
 		echo "Detection of updater-ng version from repository failed. Using $UPDATER_VERSION instead."
 	else
