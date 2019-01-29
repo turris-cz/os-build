@@ -53,7 +53,7 @@ end
 Install("ppp", "ppp-mod-pppoe", { priority = 40 })
 
 -- Certificates
-Install("dnssec-rootkey", "cznic-cacert-bundle", "cznic-repo-keys", "cznic-repo-keys-test", { critical = true })
+Install("dnssec-rootkey", "cznic-cacert-bundle", "cznic-repo-keys", { critical = true })
 -- Note: We don't ensure safety of these CAs
 Install("ca-certificates", { priority = 40 })
 

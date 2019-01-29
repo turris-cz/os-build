@@ -42,9 +42,11 @@ for list in os.getenv('LISTS'):gmatch('[^,]+') do
 	Script('turris-' .. list,  base_url .. list .. '.lua', script_options)
 end
 
--- Add test keys
--- TODO: Add condition here for stable branches
-Install('cznic-repo-keys-test')
+-- Add test keys if branch is overriden (is defined 
+local updater_branch = os.getenv('_UPDATER_BRANCH_')
+if updater_branch and updater_branch ~= "" then
+	Install('cznic-repo-keys-test')
+end
 
 -- Include any optional user script
 user_script = os.getenv('UPDATER_SCRIPT')
