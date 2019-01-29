@@ -23,6 +23,9 @@ function for_l10n(fragment)
 end
 Export('for_l10n')
 
+local repo_base_uri = "https://repo.turris.cz/" .. os.getenv('BRANCH')
+Export('repo_base_uri')
+
 local script_options = {
 	security = 'Remote',
 	ca = system_cas,
@@ -32,17 +35,16 @@ local script_options = {
 for key in os.getenv('TURRIS_KEYS'):gmatch('[^,]+') do
 	table.insert(script_options.pubkey, "file://" .. key)
 end
-base_url = 'https://repo.turris.cz/' .. os.getenv('BRANCH') .. '/lists/'
 
 -- Aways include base script
-Script('turris-base',  base_url .. 'base.lua', script_options)
+Script('turris-base',  repo_base_url .. '/lists/base.lua', script_options)
 
 -- Now include any additional lists
 for list in os.getenv('LISTS'):gmatch('[^,]+') do
-	Script('turris-' .. list,  base_url .. list .. '.lua', script_options)
+	Script('turris-' .. list,  repo_base_url .. '/lists/' .. list .. '.lua', script_options)
 end
 
--- Add test keys if branch is overriden (is defined 
+-- Add test keys if branch is overriden
 local updater_branch = os.getenv('_UPDATER_BRANCH_')
 if updater_branch and updater_branch ~= "" then
 	Install('cznic-repo-keys-test')
