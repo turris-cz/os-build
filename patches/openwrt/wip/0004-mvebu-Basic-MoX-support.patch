@@ -1,4 +1,4 @@
-From a6fa7694cfa3d9d85b17d17dbf96bf169bd220f8 Mon Sep 17 00:00:00 2001
+From 4d0dd07e90a235b70b50437ee33f3d9fd534e597 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -134,10 +134,11 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...drvark-warm-reset-the-cores-and-card.patch | 121 +++
  ...support-for-Armada-37xx-rWTM-mailbox.patch | 328 ++++++
  ...ell-armada37xx-add-rWTM-mailbox-node.patch |  38 +
- ...-Add-Turris-Mox-rWTM-firmware-driver.patch | 423 ++++++++
+ ...-Add-Turris-Mox-rWTM-firmware-driver.patch | 454 +++++++++
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 130 files changed, 14282 insertions(+), 415 deletions(-)
+ ...m64-restart-Armada-3700-restart-code.patch |   6 +-
+ 131 files changed, 14316 insertions(+), 418 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
@@ -268,10 +269,10 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  rename target/linux/mvebu/patches-4.14/{508-cpufreq-armada-37xx-Fix-clock-leak.patch => 9508-cpufreq-armada-37xx-Fix-clock-leak.patch} (100%)
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
-index f5e987616e..1e7dbdac8a 100644
+index 9171e08a33..350b001352 100644
 --- a/target/linux/mvebu/config-4.14
 +++ b/target/linux/mvebu/config-4.14
-@@ -375,6 +375,7 @@ CONFIG_NEED_DMA_MAP_STATE=y
+@@ -374,6 +374,7 @@ CONFIG_NEED_DMA_MAP_STATE=y
  CONFIG_NEON=y
  # CONFIG_NET_CLS_CGROUP is not set
  CONFIG_NET_DSA=y
@@ -280,7 +281,7 @@ index f5e987616e..1e7dbdac8a 100644
  CONFIG_NET_DSA_MV88E6XXX_GLOBAL2=y
  CONFIG_NET_DSA_TAG_DSA=y
 diff --git a/target/linux/mvebu/image/cortex-a53.mk b/target/linux/mvebu/image/cortex-a53.mk
-index 89c3363448..c9ef4b088d 100644
+index 711d2c0be8..fbfa7b3b4a 100644
 --- a/target/linux/mvebu/image/cortex-a53.mk
 +++ b/target/linux/mvebu/image/cortex-a53.mk
 @@ -13,4 +13,15 @@ define Device/globalscale-espressobin
@@ -15497,14 +15498,14 @@ index 0000000000..50cd639322
 +
 diff --git a/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch b/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
 new file mode 100644
-index 0000000000..f3db234259
+index 0000000000..d280a8adf4
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
-@@ -0,0 +1,423 @@
-+From c2bb9b2bd14c7f702088d6168f984c40e135cb8d Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,454 @@
++From d32e378c944b63f21d72206bcfd1e634a317099e Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Nov 2018 12:23:05 +0100
-+Subject: [PATCH 124/125] crypto: Add Turris Mox rWTM firmware driver
++Subject: [PATCH 124/126] crypto: Add Turris Mox rWTM firmware driver
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -15522,8 +15523,8 @@ index 0000000000..f3db234259
 +---
 + drivers/crypto/Kconfig           |  15 ++
 + drivers/crypto/Makefile          |   1 +
-+ drivers/crypto/turris-mox-rwtm.c | 351 +++++++++++++++++++++++++++++++
-+ 3 files changed, 367 insertions(+)
++ drivers/crypto/turris-mox-rwtm.c | 382 +++++++++++++++++++++++++++++++
++ 3 files changed, 398 insertions(+)
 + create mode 100644 drivers/crypto/turris-mox-rwtm.c
 +
 +diff --git a/drivers/crypto/Kconfig b/drivers/crypto/Kconfig
@@ -15566,10 +15567,10 @@ index 0000000000..f3db234259
 + obj-$(CONFIG_CRYPTO_DEV_VMX) += vmx/
 +diff --git a/drivers/crypto/turris-mox-rwtm.c b/drivers/crypto/turris-mox-rwtm.c
 +new file mode 100644
-+index 000000000000..cb896d610329
++index 000000000000..212337293b38
 +--- /dev/null
 ++++ b/drivers/crypto/turris-mox-rwtm.c
-+@@ -0,0 +1,351 @@
++@@ -0,0 +1,382 @@
 ++// SPDX-License-Identifier: GPL-2.0+
 ++/*
 ++ * Turris Mox rWTM firmware driver
@@ -15622,6 +15623,7 @@ index 0000000000..f3db234259
 ++	/* board information */
 ++	u64 serial_number;
 ++	int board_version, ram_size;
+++	u8 mac_address1[6], mac_address2[6];
 ++	u8 pubkey[135];
 ++	u8 last_sig[136];
 ++	int last_sig_done;
@@ -15640,6 +15642,8 @@ index 0000000000..f3db234259
 ++MOX_ATTR(serial_number, "%016llX\n");
 ++MOX_ATTR(board_version, "%i\n");
 ++MOX_ATTR(ram_size, "%i\n");
+++MOX_ATTR(mac_address1, "%pM\n");
+++MOX_ATTR(mac_address2, "%pM\n");
 ++MOX_ATTR(pubkey, "%s\n");
 ++
 ++static ssize_t
@@ -15653,6 +15657,18 @@ index 0000000000..f3db234259
 ++	rwtm->last_sig_done = 0;
 ++	memcpy(buf, rwtm->last_sig, 136);
 ++	return 136;
+++}
+++
+++static void be32_to_cpu_array(u32 *buf, int n)
+++{
+++	for (; n > 0; --n, ++buf)
+++		*buf = be32_to_cpu(*buf);
+++}
+++
+++static void cpu_to_be32_array(u32 *buf, int n)
+++{
+++	for (; n > 0; --n, ++buf)
+++		*buf = cpu_to_be32(*buf);
 ++}
 ++
 ++static ssize_t
@@ -15675,6 +15691,7 @@ index 0000000000..f3db234259
 ++
 ++	memset(rwtm->buf, 0, 4);
 ++	memcpy(rwtm->buf + 4, buf, 64);
+++	be32_to_cpu_array(rwtm->buf, 17);
 ++
 ++	msg.command = MBOX_CMD_SIGN;
 ++	msg.args[0] = 1;
@@ -15694,6 +15711,7 @@ index 0000000000..f3db234259
 ++		goto unlock_mutex;
 ++
 ++	memcpy(rwtm->last_sig, rwtm->buf + 68, 136);
+++	cpu_to_be32_array((u32 *) rwtm->last_sig, 34);
 ++	rwtm->last_sig_done = 1;
 ++
 ++	mutex_unlock(&rwtm->busy);
@@ -15709,6 +15727,8 @@ index 0000000000..f3db234259
 ++	&dev_attr_mox_serial_number.attr,
 ++	&dev_attr_mox_board_version.attr,
 ++	&dev_attr_mox_ram_size.attr,
+++	&dev_attr_mox_mac_address1.attr,
+++	&dev_attr_mox_mac_address2.attr,
 ++	&dev_attr_mox_pubkey.attr,
 ++	&dev_attr_mox_do_sign.attr,
 ++	NULL
@@ -15735,6 +15755,16 @@ index 0000000000..f3db234259
 ++		return MBOX_STS_VALUE(retval);
 ++}
 ++
+++static void reply_to_mac(u8 *mac, u32 t1, u32 t2)
+++{
+++	mac[0] = t1 >> 8;
+++	mac[1] = t1;
+++	mac[2] = t2 >> 24;
+++	mac[3] = t2 >> 16;
+++	mac[4] = t2 >> 8;
+++	mac[5] = t2;
+++}
+++
 ++static int mox_board_info(struct mox_rwtm *rwtm)
 ++{
 ++	struct armada_37xx_rwtm_tx_msg msg;
@@ -15759,6 +15789,8 @@ index 0000000000..f3db234259
 ++	rwtm->serial_number |= reply->status[0];
 ++	rwtm->board_version = reply->status[2];
 ++	rwtm->ram_size = reply->status[3];
+++	reply_to_mac(rwtm->mac_address1, reply->status[4], reply->status[5]);
+++	reply_to_mac(rwtm->mac_address2, reply->status[6], reply->status[7]);
 ++
 ++	pr_info("Turris Mox serial number %016llX\n", rwtm->serial_number);
 ++	pr_info("           board version %i\n", rwtm->board_version);
@@ -15922,7 +15954,7 @@ index 0000000000..f3db234259
 ++MODULE_DESCRIPTION("Turris Mox rWTM firmware driver");
 ++MODULE_AUTHOR("Marek Behun <marek.behun@nic.cz>");
 +-- 
-+2.19.2
++2.20.1
 +
 diff --git a/target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch b/target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
 new file mode 100644
@@ -16865,6 +16897,27 @@ diff --git a/target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-l
 similarity index 100%
 rename from target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-leak.patch
 rename to target/linux/mvebu/patches-4.14/9508-cpufreq-armada-37xx-Fix-clock-leak.patch
+diff --git a/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch b/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch
+index b442f71bee..e063bbaca9 100644
+--- a/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch
++++ b/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch
+@@ -1,7 +1,7 @@
+-From d419edef1a2429acfa35341eb6fbfaea3b6c87c4 Mon Sep 17 00:00:00 2001
++From 69abf3c124adfb41f5dec58cac50457cff6b4557 Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+ Date: Mon, 14 Jan 2019 17:00:04 +0100
+-Subject: [PATCH] arm64: restart: Armada 3700 restart code
++Subject: [PATCH 126/126] arm64: restart: Armada 3700 restart code
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+ Content-Transfer-Encoding: 8bit
+@@ -40,5 +40,5 @@ index 9e773732520c..2ae392c218fc 100644
+  	/*
+  	 * Whoops - the architecture was unable to reboot.
+ -- 
+-2.19.2
++2.20.1
+ 
 -- 
-2.19.2
+2.20.1
 
