@@ -23,7 +23,7 @@ function for_l10n(fragment)
 end
 Export('for_l10n')
 
-local repo_base_uri = "https://repo.turris.cz/" .. os.getenv('BRANCH')
+repo_base_uri = "https://repo.turris.cz/" .. os.getenv('BRANCH')
 Export('repo_base_uri')
 
 local script_options = {
