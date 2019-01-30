@@ -37,11 +37,11 @@ for key in os.getenv('TURRIS_KEYS'):gmatch('[^,]+') do
 end
 
 -- Aways include base script
-Script('turris-base',  repo_base_uri .. '/lists/base.lua', script_options)
+Script(repo_base_uri .. '/lists/base.lua', script_options)
 
 -- Now include any additional lists
 for list in os.getenv('LISTS'):gmatch('[^,]+') do
-	Script('turris-' .. list,  repo_base_uri .. '/lists/' .. list .. '.lua', script_options)
+	Script(repo_base_uri .. '/lists/' .. list .. '.lua', script_options)
 end
 
 -- Add test keys if branch is overriden
@@ -53,5 +53,5 @@ end
 -- Include any optional user script
 user_script = os.getenv('UPDATER_SCRIPT')
 if user_script and user_script ~= '' then
-	Script('user-script', 'file://' .. user_script)
+	Script('file://' .. user_script)
 end
