@@ -1,0 +1,289 @@
+From 65e3d2e9ae88c5570725163f7ac3ca2570073ed2 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 5 Feb 2019 19:23:27 +0100
+Subject: [PATCH] netdata: update to version 1.11.1
+
+---
+ admin/netdata/Makefile                        |  46 +++++---
+ admin/netdata/files/netdata.conf              | 102 +-----------------
+ ...h => 001-disable-plugins-by-default.patch} |  12 +--
+ admin/netdata/patches/002-force-python3.patch |  10 ++
+ 4 files changed, 51 insertions(+), 119 deletions(-)
+ rename admin/netdata/patches/{001-disable_external_plugins_by_default.patch => 001-disable-plugins-by-default.patch} (50%)
+ create mode 100644 admin/netdata/patches/002-force-python3.patch
+
+diff --git a/admin/netdata/Makefile b/admin/netdata/Makefile
+index 7bff2a37a..ed3d21462 100644
+--- a/admin/netdata/Makefile
++++ b/admin/netdata/Makefile
+@@ -8,18 +8,20 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=netdata
+-PKG_VERSION:=1.10.0
++PKG_VERSION:=1.11.1
+ PKG_RELEASE:=1
+ PKG_MAINTAINER:=
+-PKG_LICENSE:=GPL-3.0
++PKG_LICENSE:=GPL-3.0+
+ PKG_LICENSE_FILES:=COPYING
+ 
+-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+-PKG_SOURCE_URL:=https://github.com/firehol/netdata/releases/download/v$(PKG_VERSION)
+-PKG_HASH:=0514fc002c5c5fb730156b3fe928965b22327833c6c17e22b7097eda657e77a2
++PKG_SOURCE:=$(PKG_NAME)-v$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=https://github.com/netdata/netdata/releases/download/v$(PKG_VERSION)
++PKG_HASH:=0150b2a060da0e5cc844bd9540d6704cd352c434ea1bb9d5268131830a815736
++PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)_rolling
+ 
+ PKG_INSTALL:=1
+ PKG_FIXUP:=autoreconf
++PKG_USE_MIPS16:=0
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+@@ -34,38 +36,50 @@ endef
+ define Package/netdata/description
+   netdata is a highly optimized Linux daemon providing real-time performance
+   monitoring for Linux systems, applications and SNMP devices over the web.
++
++ If you want to use Python plugins install python3, python3-yaml and
++ python3-urllib3 however urllib3 isn't packaged yet (needs a PR on GitHub)
+ endef
+ 
+ TARGET_CFLAGS := $(filter-out -O%,$(TARGET_CFLAGS))
+ TARGET_CFLAGS += -ffunction-sections -fdata-sections -O3
+ TARGET_LDFLAGS += -Wl,--gc-sections
+ 
+-CONFIGURE_ARGS += --with-zlib --with-math --disable-x86-sse --disable-lto
++CONFIGURE_ARGS += \
++	--with-zlib \
++	--with-math \
++	--disable-x86-sse \
++	--enable-lto \
++	--without-libcap \
++	--disable-plugin-nfacct
+ 
+ define Package/netdata/conffiles
+ /etc/netdata/
+ endef
+ 
+ define Package/netdata/install
+-	mkdir -p $(1)/etc/netdata
++	$(INSTALL_DIR) $(1)/etc/netdata/custom-plugins.d
+ 	$(CP) $(PKG_INSTALL_DIR)/etc/netdata $(1)/etc
+ 	$(CP) ./files/netdata.conf $(1)/etc/netdata
+-	mkdir -p $(1)/usr/share/netdata
++	$(INSTALL_DIR) $(1)/usr/lib
++	$(CP) $(PKG_INSTALL_DIR)/usr/lib/netdata $(1)/usr/lib
++	$(CP) $(1)/usr/lib/netdata/conf.d/fping.conf $(1)/etc
++	$(CP) $(1)/usr/lib/netdata/conf.d/health_alarm_notify.conf $(1)/etc
++	rm -rf $(1)/usr/lib/netdata/python.d/python_modules/pyyaml2
++	rm -rf $(1)/usr/lib/netdata/python.d/python_modules/pyyaml3
++	rm -rf $(1)/usr/lib/netdata/python.d/python_modules/urllib3
++	$(CP) $(1)/usr/lib/netdata/plugins.d/tc-qos-helper.sh $(1)/etc
++	$(INSTALL_DIR) $(1)/usr/sbin
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netdata $(1)/usr/sbin
++	$(INSTALL_DIR) $(1)/usr/share/netdata
+ 	$(CP) $(PKG_INSTALL_DIR)/usr/share/netdata $(1)/usr/share
+ 	rm -rf $(1)/usr/share/netdata/web/images
+-	rm -rf $(1)/usr/share/netdata/web/old
+ 	rm $(1)/usr/share/netdata/web/demo*html
+ 	rm $(1)/usr/share/netdata/web/fonts/*.svg
+ 	rm $(1)/usr/share/netdata/web/fonts/*.ttf
+ 	rm $(1)/usr/share/netdata/web/fonts/*.woff
+-	mkdir -p $(1)/usr/lib/netdata
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/netdata $(1)/usr/lib
+-	rm $(1)/usr/lib/netdata/python.d/python-modules-installer.sh
+-	chmod 4755 $(1)/usr/lib/netdata/plugins.d/apps.plugin
+-	mkdir -p $(1)/etc/init.d
++	$(INSTALL_DIR) $(1)/etc/init.d
+ 	$(INSTALL_BIN) ./files/netdata.init $(1)/etc/init.d/netdata
+-	mkdir -p $(1)/usr/sbin
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/netdata $(1)/usr/sbin
+ endef
+ 
+ $(eval $(call BuildPackage,netdata))
+diff --git a/admin/netdata/files/netdata.conf b/admin/netdata/files/netdata.conf
+index 3026be116..46b87a8a7 100644
+--- a/admin/netdata/files/netdata.conf
++++ b/admin/netdata/files/netdata.conf
+@@ -1,83 +1,24 @@
+-# netdata configuration
++# Full configuration can be retrieved from the running
++# server at http://localhost:19999/netdata.conf
+ #
+-# You can download the latest version of this file, using:
+-#
+-#  wget -O /etc/netdata/netdata.conf http://localhost:19999/netdata.conf
+-# or
+-#  curl -o /etc/netdata/netdata.conf http://localhost:19999/netdata.conf
+-#
+-# You can uncomment and change any of the options below.
+-# The value shown in the commented settings, is the default value.
++# Example:
++#   curl -o /etc/netdata/netdata.conf http://localhost:19999/netdata.conf
+ #
+ 
+-# global netdata configuration
+-
+ [global]
+-	# glibc malloc arena max for plugins = 1
+-	# hostname = LEDE
+-	# history = 4036
+ 	update every = 2
+-	# config directory = /etc/netdata
+-	# log directory = /var/log/netdata
+-	# web files directory = /usr/share/netdata/web
+-	# cache directory = /var/cache/netdata
+-	# lib directory = /var/lib/netdata
+-	# home directory = /var/cache/netdata
+-	# plugins directory = "/usr/lib/netdata/plugins.d" "/etc/netdata/custom-plugins.d"
+-	# memory mode = save
+-	# host access prefix = 
+ 	memory deduplication (ksm) = no
+-	# TZ environment variable = :/etc/localtime
+-	# timezone = UTC
+-	# debug flags = 0x0000000000000000
+ 	debug log = syslog
+ 	error log = syslog
+ 	access log = none
+-	# errors flood protection period = 1200
+-	# errors to trigger flood protection = 200
+ 	run as user = root
+-	# OOM score = 1000
+-	# process scheduling policy = idle
+-	# process nice level = 19
+-	# pthread stack size = 81920
+-	# cleanup obsolete charts after seconds = 3600
+-	# gap when lost iterations above = 1
+-	# cleanup orphan hosts after seconds = 3600
+-	# delete obsolete charts files = yes
+-	# delete orphan hosts files = yes
+ 
+ [web]
+-	# mode = static-threaded
+-	# listen backlog = 4096
+-	# default port = 19999
+-	# bind to = *
+-	# web files owner = nobody
+-	# web files group = nogroup
+-	# disconnect idle clients after seconds = 60
+-	# timeout for first request = 60
+-	# respect do not track policy = no
+-	# x-frame-options response header = 
+ 	allow connections from = localhost 10.* 192.168.* 172.16.* 172.17.* 172.18.* 172.19.* 172.20.* 172.21.* 172.22.* 172.23.* 172.24.* 172.25.* 172.26.* 172.27.* 172.28.* 172.29.* 172.30.* 172.31.*
+ 	allow dashboard from = localhost 10.* 192.168.* 172.16.* 172.17.* 172.18.* 172.19.* 172.20.* 172.21.* 172.22.* 172.23.* 172.24.* 172.25.* 172.26.* 172.27.* 172.28.* 172.29.* 172.30.* 172.31.*
+-	# allow badges from = *
+-	# allow streaming from = *
+-	# allow netdata.conf from = localhost fd* 10.* 192.168.* 172.16.* 172.17.* 172.18.* 172.19.* 172.20.* 172.21.* 172.22.* 172.23.* 172.24.* 172.25.* 172.26.* 172.27.* 172.28.* 172.29.* 172.30.* 172.31.*
+-	# enable gzip compression = yes
+-	# gzip compression strategy = default
+-	# gzip compression level = 3
+-	# web server threads = 2
+-	# web server max sockets = 512
+ 
+ [plugins]
+-	# PATH environment variable = /usr/sbin:/usr/bin:/sbin:/bin:/sbin:/usr/sbin:/usr/local/bin:/usr/local/sbin
+-	# PYTHONPATH environment variable = 
+-	# proc = yes
+-	# diskspace = yes
+-	# cgroups = yes
+-	# tc = yes
+-	# idlejitter = yes
+-	# enable running new plugins = yes
+-	# check for new plugins every = 60
++	cgroups = no
+ 	apps = no
+ 	charts.d = no
+ 	fping = no
+@@ -86,36 +27,3 @@
+ 
+ [health]
+ 	enabled = no
+-	# in memory max health log entries = 1000
+-	# script to execute on alarm = /usr/lib/netdata/plugins.d/alarm-notify.sh
+-	# health configuration directory = /etc/netdata/health.d
+-	# run at least every seconds = 10
+-	# postpone alarms during hibernation for seconds = 60
+-	# rotate log every lines = 2000
+-
+-
+-[statsd]
+-	enabled = no
+-	# update every (flushInterval) = 1
+-	# udp messages to process at once = 10
+-	# create private charts for metrics matching = *
+-	# max private charts allowed = 200
+-	# max private charts hard limit = 1000
+-	# private charts memory mode = save
+-	# private charts history = 4036
+-	# decimal detail = 1000
+-	# disconnect idle tcp clients after seconds = 600
+-	# private charts hidden = no
+-	# histograms and timers percentile (percentThreshold) = 95.00000
+-	# add dimension for number of events received = yes
+-	# gaps on gauges (deleteGauges) = no
+-	# gaps on counters (deleteCounters) = no
+-	# gaps on meters (deleteMeters) = no
+-	# gaps on sets (deleteSets) = no
+-	# gaps on histograms (deleteHistograms) = no
+-	# gaps on timers (deleteTimers) = no
+-	# statsd server max TCP sockets = 256
+-	# listen backlog = 4096
+-	# default port = 8125
+-	# bind to = udp:localhost tcp:localhost
+-
+diff --git a/admin/netdata/patches/001-disable_external_plugins_by_default.patch b/admin/netdata/patches/001-disable-plugins-by-default.patch
+similarity index 50%
+rename from admin/netdata/patches/001-disable_external_plugins_by_default.patch
+rename to admin/netdata/patches/001-disable-plugins-by-default.patch
+index 629789247..a55670b67 100644
+--- a/admin/netdata/patches/001-disable_external_plugins_by_default.patch
++++ b/admin/netdata/patches/001-disable-plugins-by-default.patch
+@@ -1,5 +1,5 @@
+---- a/conf.d/charts.d.conf
+-+++ b/conf.d/charts.d.conf
++--- a/collectors/charts.d.plugin/charts.d.conf
+++++ b/collectors/charts.d.plugin/charts.d.conf
+ @@ -30,7 +30,7 @@
+  
+  # the default enable/disable for all charts.d collectors
+@@ -9,8 +9,8 @@
+  
+  # BY DEFAULT ENABLED MODULES
+  # ap=yes
+---- a/conf.d/python.d.conf
+-+++ b/conf.d/python.d.conf
++--- a/collectors/python.d.plugin/python.d.conf
+++++ b/collectors/python.d.plugin/python.d.conf
+ @@ -7,7 +7,7 @@
+  #
+  
+@@ -18,5 +18,5 @@
+ -enabled: yes
+ +enabled: no
+  
+- # Prevent log flood
+- # Define how many log messages can be written to log file in one log_interval
++ # ----------------------------------------------------------------------
++ # Enable / Disable python.d.plugin modules
+diff --git a/admin/netdata/patches/002-force-python3.patch b/admin/netdata/patches/002-force-python3.patch
+new file mode 100644
+index 000000000..756b4d7ec
+--- /dev/null
++++ b/admin/netdata/patches/002-force-python3.patch
+@@ -0,0 +1,10 @@
++--- a/collectors/python.d.plugin/python.d.plugin.in
+++++ b/collectors/python.d.plugin/python.d.plugin.in
++@@ -1,6 +1,4 @@
++-#!/usr/bin/env bash
++-'''':; exec "$(command -v python || command -v python3 || command -v python2 ||
++-echo "ERROR python IS NOT AVAILABLE IN THIS SYSTEM")" "$0" "$@" # '''
+++#!/usr/bin/python3
++ 
++ # -*- coding: utf-8 -*-
++ # Description:
+-- 
+2.17.1
+
