@@ -1,4 +1,4 @@
-From 4d0dd07e90a235b70b50437ee33f3d9fd534e597 Mon Sep 17 00:00:00 2001
+From 103c0f391a04b8da442f4ce664f70e80991f0630 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -54,7 +54,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...e-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} |  18 +-
  ...a-add-module-EEPROM-reading-support.patch} |  13 +-
  ...d-phy-remove-fixed_phy_update_state.patch} |  17 +-
- ...eprom-ethtool-access-into-netdev-co.patch} |  42 +-
+ ...eprom-ethtool-access-into-netdev-co.patch} |  40 +-
  ...p-use-netdev-sfp_bus-for-start-stop.patch} |   9 +-
  ...-marvell-10G-phy-support-to-use-SFP.patch} |  19 +-
  ...tch => 90047-sfp-add-sfp-compatible.patch} |  11 +-
@@ -138,7 +138,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
  ...m64-restart-Armada-3700-restart-code.patch |   6 +-
- 131 files changed, 14316 insertions(+), 418 deletions(-)
+ 131 files changed, 14315 insertions(+), 417 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
@@ -184,7 +184,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  rename target/linux/mvebu/patches-4.14/{405-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch => 90041-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} (72%)
  rename target/linux/mvebu/patches-4.14/{406-net-mvneta-add-module-EEPROM-reading-support.patch => 90042-net-mvneta-add-module-EEPROM-reading-support.patch} (74%)
  rename target/linux/mvebu/patches-4.14/{407-phy-fixed-phy-remove-fixed_phy_update_state.patch => 90043-phy-fixed-phy-remove-fixed_phy_update_state.patch} (78%)
- rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (76%)
+ rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (77%)
  rename target/linux/mvebu/patches-4.14/{409-sfp-use-netdev-sfp_bus-for-start-stop.patch => 90045-sfp-use-netdev-sfp_bus-for-start-stop.patch} (79%)
  rename target/linux/mvebu/patches-4.14/{410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch => 90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch} (85%)
  rename target/linux/mvebu/patches-4.14/{411-sfp-add-sfp-compatible.patch => 90047-sfp-add-sfp-compatible.patch} (66%)
@@ -5195,10 +5195,10 @@ index 71c2f45555..1183a4a182 100644
 +2.19.2
 +
 diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-similarity index 76%
+similarity index 77%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index 224b976451..160a3782cb 100644
+index c31a540228..8397c2aa63 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
@@ -5284,15 +5284,6 @@ index 224b976451..160a3782cb 100644
  --- a/include/linux/netdevice.h
  +++ b/include/linux/netdevice.h
  @@ -57,6 +57,7 @@ struct device;
-@@ -129,7 +138,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  /* 802.11 specific */
-  struct wireless_dev;
-  /* 802.15.4 specific */
--@@ -1932,6 +1933,7 @@ struct net_device {
-+@@ -1895,6 +1896,7 @@ struct net_device {
-  	struct netprio_map __rcu *priomap;
-  #endif
-  	struct phy_device	*phydev;
 @@ -137,9 +146,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	struct lock_class_key	*qdisc_tx_busylock;
   	struct lock_class_key	*qdisc_running_key;
