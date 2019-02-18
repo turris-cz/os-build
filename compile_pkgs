@@ -61,10 +61,19 @@ set_target() {
 	esac
 }
 
+# Get OpenWRT URL and branch from feeds.conf file
+openwrt_feed() {
+	# OpenWRT git repository URL
+	OPENWRT_URL="$(sed -n 's/# openwrt \([^;^]\+\).*/\1/p' "$src_dir/feeds.conf")"
+	# Git reference used to checkout OpenWRT repository
+	OPENWRT_BRANCH="$(sed -n 's/# openwrt [^;^]\+[;^]\([^\s]\+\).*/\1/p' "$src_dir/feeds.conf")"
+	# Check if ^ is used to separate URL and branch and in such case it is hash not branch
+	grep -E '^# openwrt [^;^]+\^.+' "$src_dir/feeds.conf" && OPENWRT_BRANCH="#$OPENWRT_BRANCH"
+	[ -n "$OPENWRT_BRANCH" ] || OPENWRT_BRANCH="master"
+}
+
 # Configuration variables
-OPENWRT_URL="https://git.openwrt.org/openwrt/openwrt.git" # OpenWRT git repository URL
-OPENWRT_BRANCH=master # Git reference used to checkout OpenWRT repository
-PUBLISH_BRANCH="hbd" # Target publish branch
+. "$src_dir/defaults.sh"
 FORCE="" # Force build
 EVERYTHING="" # Set this variable to build all packages not only minimal set
 CLONE_DEEP="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
@@ -76,6 +85,7 @@ DL_MIRROR="" # Path to downloads mirror directory
 CCACHE_HOST_DIR="" # Path to ccache directory for host compilations
 CCACHE_TARGET_DIR="" # Path to ccache directory for target compilations
 OUTPUT_DIR="./pkgsrepo" # Output directory for pkgsrepo command
+openwrt_feed
 
 # Load configurations
 [ -f "${src_dir}"/turris-build.conf ] && . "${src_dir}"/turris-build.conf

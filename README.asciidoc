@@ -4,15 +4,53 @@ Simple Turris OS building script
 Getting started
 ---------------
 
-Create an empty directory you want to build Turris OS in, enter that directory
-and from it call `compile_pkgs` script. In most basic use-case, this should be
-enough. Be aware - *it will delete all previous content of the current
-directory*. You can repeat individual steps of the compilation separately,
-check with the following command `compile_pkgs --help` for a list of available commands, generic options, and
-their brief descriptions.
+Create an empty directory you want to build Turris OS in, enter that directory and
+from it call `compile_pkgs` script. In most basic use-case, this should be enough.
+Be aware - *it will delete all previous content of the current directory*. You can
+repeat individual steps of the compilation separately, check with the following
+command `compile_pkgs --help` for a list of available commands, generic options,
+and their brief descriptions.
+
 
 Advanced usage
 --------------
+
+Building a single package
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+To build only one package you have to first prepare build directory. That can be
+achieved by running in target directory.
+--
+ compile_pkgs prepare_tools -t board # <1>
+--
+
+<1> ~-t~ means `-target`, so only valid values are `turris`, `omnia`, `mox`.
+
+Be aware *it removes previous content of current directory*!
+
+Once, you have compiled required tools, you need **enter build directory** and
+then run `make menuconfig`, select the package you want to compile and save it.
+Then you can build it using this command: +
+--
+ make package/name/compile # <2>
+--
+
+<2> ~name~ is package name, which you want to compile.
+
+You can also clean single package just by replacing `compile` with `clean`.
+
+The resulting package is placed in directory **bin/packages/~ARCH~/~REPO~**
+
+;; `ARCH` is target architecture specific string.
+;; `REPO` is the name of package's source repository.
+
+Occasionally, you can meet cases, where you need to run `make
+package/name/compile` with parameters `-j1 V=s` or `-j1 V=sc` to be able to see,
+what went wrong.
+
+
+Development and maintenance
+---------------------------
 
 Configuration
 ~~~~~~~~~~~~~
@@ -29,6 +67,37 @@ There is a `NEWS` file in this directory that contains the version number and af
 it lines with new features in the release. This file is used to generate
 `turris-version` package. `compile_pkgs` script reads it, finds the newest
 version and from notes underneath it creates the package with release notes.
+
+Releasing new version
+~~~~~~~~~~~~~~~~~~~~~
+
+When new version is released to Snails (see workflow for explanation) then new
+commit with hashes has to be created and pushed. This commit have to be tagged
+with appropriate version tag in format `vVERSION` where VERSION is released
+version. To make this all simple and to correctly set always all configurations we
+have script `helpers/new_release.sh`. Run this script after release from
+turris-build project root directory and it is going to automatically detect,
+commit and tag new version. You should review commit and tag it created for you
+and then push it using `git push --tags`.
+
+Script `helpers/new_release.sh` can generate various errors and warnings. It is
+advised to run it even before release in `verify` mode to review possible problems
+with release.
+
+Forking new release
+~~~~~~~~~~~~~~~~~~~
+
+According to workflow new releases are forked from parent branch. During this
+process care should be taken to tweak defaults to appropriate values. Following
+list should be taken as a checklist for new release branch.
+
+. Set `PUBLISH_BRANCH` in `defaults.sh`. Master branch should always be set to
+  `hbd` and release branches should be set to `hbs`.
+. Set branches in `feeds.conf`. You should append string like this:
+  `;openwrt-18.06`. This has to be done for all OpenWRT feeds as well for OpenWRT
+  it self. URL used by `compile_pkgs` is specified as first line in `feeds.conf`
+  and with exception of first column it has same format as feeds. Note that that
+  line is intentionally commented out as that is not feed.
 
 Patching
 ~~~~~~~~
@@ -60,33 +129,3 @@ manually and afterward, we need to call `git add` on newly patched files. Once
 all conflicts are resolved, `git am --continue` will create real commit that we
 were trying to add using `git am`. Now all that is left is to export it using
 `git format-patch -1` and overwrite patch stored in it of _build_ repository.
-
-Building a single package
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-To build only one package you have to first prepare build directory. That can be
-achieved by running in target directory.
---
- compile_pkgs prepare_tools -t board # <1>
---
-
-<1> ~-t~ means `-target`, so only valid values are `turris`, `omnia`, `mox`.
-
-Be aware *it removes previous content of current directory*!
-
-Once, you have compiled required tools, you need **enter build directory** and then run `make menuconfig`, select the package you want to compile and save it.
-Then you can build it using this command: +
---
- make package/name/compile # <2>
---
-
-<2> ~name~ is package name, which you want to compile.
-
-You can also clean single package just by replacing `compile` with `clean`.
-
-The resulting package is placed in directory **bin/packages/~ARCH~/~REPO~**
-
-;; `ARCH` is target architecture specific string.
-;; `REPO` is the name of package's source repository.
-
-Occasionally, you can meet cases, where you need to run `make package/name/compile` with parameters `-j1 V=s` or `-j1 V=sc` to be able to see, what went wrong.
