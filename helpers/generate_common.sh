@@ -74,9 +74,8 @@ get_usign() {
 updater_ng_repodetect() {
 	local REPO="$1"
 	local BOARD="${2:-mox}"
-	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" \
-			| sed -n '/^Package: updater-ng$/,/^$/p' \
-			| awk '/^Version: /{ gsub("-.*$","",$2); print $2 }')"
+	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" | \
+		awk '/^Package: updater-ng$/,/^$/ ^^ $1 == "Version:" { gsub(/-.*$/,"",$2); print $2 }')"
 	if [ -z "$VERSION" ]; then
 		echo "Detection of updater-ng version from repository failed. Using $UPDATER_VERSION instead."
 	else
