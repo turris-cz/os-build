@@ -78,14 +78,16 @@ Install("haveged", { priority = 40 })
 Install("umdns", { priority = 40 })
 
 -- Turris utility
-Install("turris-utils", "user-notify", "oneshot", "libatsha204", "watchdog_adjust", "update_mac", { priority = 40 })
+Install("turris-utils", "user-notify", "oneshot", "watchdog_adjust", "update_mac", { priority = 40 })
 if for_l10n then
 	for_l10n("user-notify-l10n-")
 end
-if model:match("[Oo]mnia") then
-	Install("rainbow-omnia", "sfpswitch", { priority = 40 })
+if model:match("[Mm][Oo][Xx]") then
+	Install("mox-otp", { priority = 40 })
+elseif model:match("[Oo]mnia") then
+	Install("rainbow-omnia", "sfpswitch", "libatsha204", { priority = 40 })
 elseif model:match("^[Tt]urris$") then
-	Install("rainbow", { priority = 40 })
+	Install("rainbow", "libatsha204", { priority = 40 })
 end
 if not model:match("^[Tt]urris$") then
 	Install("schnapps", { priority = 40 })
