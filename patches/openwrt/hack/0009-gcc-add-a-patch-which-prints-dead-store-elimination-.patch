@@ -1,0 +1,42 @@
+From bd0d0f915675ea42f90f67e5f988d06975d4fd5d Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Thu, 21 Feb 2019 17:40:50 +0100
+Subject: [PATCH] gcc: add a patch which prints dead store elimination for
+ memset.
+
+Note: inspired by CCC talk https://media.ccc.de/v/35c3-9788-memsad
+It'll be probably removed after we see what portion of packages
+this affects.
+---
+ .../gcc/patches/7.4.0/980-dse-memset-del-print.patch  | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+ create mode 100644 toolchain/gcc/patches/7.4.0/980-dse-memset-del-print.patch
+
+diff --git a/toolchain/gcc/patches/7.4.0/980-dse-memset-del-print.patch b/toolchain/gcc/patches/7.4.0/980-dse-memset-del-print.patch
+new file mode 100644
+index 0000000..b192b54
+--- /dev/null
++++ b/toolchain/gcc/patches/7.4.0/980-dse-memset-del-print.patch
+@@ -0,0 +1,19 @@
++--- a/gcc/tree-ssa-dse.c
+++++ b/gcc/tree-ssa-dse.c
++@@ -742,7 +742,15 @@ dse_dom_walker::dse_optimize_stmt (gimpl
++ 		}
++
++ 	      if (store_status == DSE_STORE_DEAD)
++-		delete_dead_call (gsi);
+++{
+++if (DECL_FUNCTION_CODE (gimple_call_fndecl (stmt)) == BUILT_IN_MEMSET)
+++{
+++char const *file = gimple_filename(stmt);
+++int line_no = gimple_lineno(stmt);
+++fprintf(stderr, "%s:%d: optimized out memset\n", file, line_no);
+++}
+++delete_dead_call (gsi);
+++}
++ 	      return;
++ 	    }
++
+-- 
+2.7.4
+
