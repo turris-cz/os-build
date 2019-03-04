@@ -1,5 +1,5 @@
 # Common functions for generate_lists and generate_medkit functions
-# (C) 2018 CZ.NIC, z.s.p.o.
+# (C) 2018-2020 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -77,7 +77,7 @@ updater_ng_repodetect() {
 	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" | \
 		awk '/^Package: updater-ng$/,/^$/ { if ($1 == "Version:") { gsub("-.*$","",$2); print $2 } }')"
 	if [ -z "$VERSION" ]; then
-		echo "Detection of updater-ng version from repository failed. Using $UPDATER_VERSION instead."
+		warn "Detection of updater-ng version from repository failed. Using $UPDATER_VERSION instead."
 	else
 		UPDATER_VERSION="v$VERSION"
 	fi

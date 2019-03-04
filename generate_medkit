@@ -1,6 +1,6 @@
 #!/bin/bash
 # Turris medkit generator script
-# (C) 2018 CZ.NIC, z.s.p.o.
+# (C) 2018-2020 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,12 +16,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-. "$(readlink -f "$(dirname "$0")")/defaults.sh"
+src_dir="$(dirname "$(readlink -f "$0")")"
+. "$src_dir/helpers/common.sh"
+. "$src_dir/helpers/generate_common.sh"
+
+. "$src_dir/defaults.sh"
 export BOARD=
 export BRANCH="$PUBLISH_BRANCH"
 export UPDATER_BRANCH=
 export L10N=cs,de
-# TODO fill in default lists when we have them selected
 export LISTS=
 export UPDATER_SCRIPT=
 export OVERLAY=
@@ -29,8 +32,7 @@ export SIGN_KEY=
 export OUTPUT=
 export TESTKEY=
 
-TURRIS_BUILD_DIR="$(dirname "$(readlink -f "$0")")"
-export TURRIS_BUILD_DIR
+export TURRIS_BUILD_DIR="$src_dir"
 
 ## Parse arguments ##
 while [ $# -gt 0 ]; do
@@ -123,10 +125,7 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -n "$BOARD" ] || {
-	echo "You have to specify target Turris router." >&2
-	exit 1
-}
+[ -n "$BOARD" ] || die "You have to specify target Turris router."
 [ -n "$OUTPUT" ] || {
 	case "$BOARD" in
 		mox)
@@ -141,8 +140,6 @@ done
 	esac
 }
 OUTPUT="$(readlink -f "$OUTPUT")"
-
-. "$TURRIS_BUILD_DIR/helpers/generate_common.sh"
 
 updater_ng_repodetect "$BRANCH" "$BOARD"
 get_usign

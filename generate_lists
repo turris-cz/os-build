@@ -1,6 +1,6 @@
 #!/bin/bash
 # Updater-ng configuration lists generating script
-# (C) 2018 CZ.NIC, z.s.p.o.
+# (C) 2018-2020 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,7 +16,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-output_path=
+src_dir="$(dirname "$(readlink -f "$0")")"
+. "$src_dir/helpers/common.sh"
+. "$src_dir/helpers/generate_common.sh"
+
+output_path="generated_lists"
 sign_key=
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -52,31 +56,26 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -n "$output_path" ] || output_path="generated_lists"
-tb="$(dirname "$(readlink -f "$0")")"
-[ -d "$tb/lists" -a -f "$tb/feeds.conf" ] || {
-	echo "This script has to be in same direstory as feeds.conf and lists directory." >&2
-	exit 1
-}
-. "$tb/helpers/generate_common.sh"
+[ -d "$src_dir/lists" -a -f "$src_dir/feeds.conf" ] || \
+	die "This script has to be in the same direstory as feeds.conf and lists directory."
 
 rm -rf "$output_path"
 mkdir -p "$output_path"
 
-"$tb/helpers/turris-version.sh" version > "$output_path/turris-version"
-( cd "$tb" && git rev-parse HEAD > "$output_path/git-hash" )
+"$src_dir/helpers/turris-version.sh" version > "$output_path/turris-version"
+( cd "$src_dir" && git rev-parse HEAD > "$output_path/git-hash" )
 
-listsdir="$tb/lists"
-m4args=( "--include=$listsdir" "-D_INCLUDE_=$listsdir/" "-D_FEEDS_=$tb/feeds.conf" )
+lists_dir="$src_dir/lists"
+m4args=( "--include=$lists_dir" "-D_INCLUDE_=$lists_dir/" "-D_FEEDS_=$src_dir/feeds.conf" )
 m4args+=( "-D_TURRIS_OS_VERSION_=$("${0%/*}/helpers/turris-version.sh" version)" )
 
-find "$listsdir" -name '*.lua.m4' -print0 | while read -r -d '' f; do
-	output="$output_path/${f##$listsdir/}"
+find "$lists_dir" -name '*.lua.m4' -print0 | while read -r -d '' f; do
+	output="$output_path/${f##$lists_dir/}"
 	mkdir -p "${output%/*}"
 	m4 "${m4args[@]}" "$f" > "${output%.m4}"
 done
-find "$listsdir" -name '*.lua' -print0 | while read -r -d '' f; do
-	output="$output_path/${f##$listsdir/}"
+find "$lists_dir" -name '*.lua' -print0 | while read -r -d '' f; do
+	output="$output_path/${f##$lists_dir/}"
 	mkdir -p "${output%/*}"
 	cp "$f" "${output}"
 done

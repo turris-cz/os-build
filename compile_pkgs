@@ -1,6 +1,6 @@
 #!/bin/bash -e
 # OpenWRT compilation script
-# (C) 2018 CZ.NIC, z.s.p.o.
+# (C) 2018-2020 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,15 +18,6 @@
 # Step list that is run when no commands are specified
 DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "pkgsrepo" "stats" "gen_junit" )
 
-# Printing helper functions
-_report() {
-	echo -e '\033[0;34m'"$1"'\033[0m' >&2
-}
-_die() {
-	echo -e '\033[0;31m'"$1"'\033[0m' >&2
-	exit 1
-}
-
 # Paths to OpenWRT build and turris-build sources
 src_dir="$(dirname "$(readlink -f "$0")")"
 build_dir="$(readlink -f "$(pwd)")"
@@ -37,10 +28,13 @@ if [ "$build_dir" == "$src_dir" ]; then
 	build_dir="$(pwd)"
 fi
 
+# Include common utilities
+. "$src_dir/helpers/common.sh"
+
 # Sets various variables to match the specified target, just a helper
 # It is defined here so it can be used from configuration
 set_target() {
-	_report "Setting target as $1"
+	report "Setting target as $1"
 	case "$1" in
 		omnia)
 			TARGET_BOARD=omnia
@@ -129,7 +123,7 @@ _make() {
 
 # Make for OpenWRT
 _openwrt_make() {
-	local args=( "IGNORE_ERRORS=m" "IS_TTY=1" "BUILD_LOG=1" )
+	local args=( "IGNORE_ERRORS=m" "BUILD_LOG=1" )
 	[ -z "$owrt_debug" ] || args+=( "$owrt_debug" )
 	[ "${#BUILD_ARGS[@]}" -eq 0 ] || args+=( "${BUILD_ARGS[@]}" )
 	_make "${args[@]}" "$@"
@@ -147,7 +141,7 @@ _enable_debug() {
 
 available_commands+=( ["gen_version"]="Generates Turris version package from NEWS" )
 gen_version() {
-	_report "Generating turris-version package"
+	report "Generating turris-version package"
 	"${src_dir}/helpers/turris-version.sh" --output "${build_dir}/package/system/turris-version" package
 	pushd "${build_dir}"
 	git add "${build_dir}/package/system/turris-version"
@@ -157,7 +151,7 @@ gen_version() {
 
 available_commands+=( ["conflicts"]="Show packages that we are overriding in Turris OS packages" )
 conflicts() {
-	_report "Showing conflicting packages"
+	report "Showing conflicting packages"
 	echo "Following packages are being overridden by Turris packages:"
 	echo
 	mkdir -p tmp
@@ -171,7 +165,7 @@ conflicts() {
 available_commands+=( ["stats"]="	Prints statistics regarding number of built packages" )
 stats() {
 	mkdir -p logs
-	_report "Reporting statistics"
+	report "Reporting statistics"
 	{
 		echo "Statistics of the build:"
 		echo
@@ -185,7 +179,7 @@ stats() {
 
 available_commands+=( ["configure"]="Recreates configuration for target boards" )
 configure() {
-	_report "Creating default configuration"
+	report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
 	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
 	{
@@ -218,7 +212,7 @@ update_mirror() {
 	[ -n "$GIT_MIRROR" ] || return 0
 	[ -z "$mirror_updated" ] || return 0
 
-	_report "Updating local mirrors"
+	report "Updating local mirrors"
 	mkdir -p "$GIT_MIRROR"
 	pushd "$GIT_MIRROR"
 	if [ ! -d openwrt ]; then
@@ -238,7 +232,7 @@ update_mirror() {
 }
 
 _checkout_init() {
-	_report "Checking out clean OpenWRT repository"
+	report "Checking out clean OpenWRT repository"
 	update_mirror
 	rm -rf .git
 	git init
@@ -262,7 +256,7 @@ _checkout_clean() {
 
 available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
 checkout() {
-	_report "Starting out fresh!"
+	report "Starting out fresh!"
 	_checkout_init
 	local githash
 	githash="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
@@ -279,7 +273,7 @@ checkout() {
 
 available_commands+=( ["repo_checkout"]="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz" )
 repo_checkout() {
-	_report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
+	report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
 	curl "https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
 	_checkout_init
 	git fetch
@@ -303,18 +297,18 @@ repo_checkout() {
 available_commands+=( ["clean_ccache"]="Clean persistent ccache paths" )
 clean_ccache() {
 	if [ "$(which ccache)" ]; then
-		_report "Cleaning ccache"
+		report "Cleaning ccache"
 		[ -z "$CCACHE_HOST_DIR" ]   || CCACHE_DIR="$CCACHE_HOST_DIR"   ccache -C
 		[ -z "$CCACHE_TARGET_DIR" ] || CCACHE_DIR="$CCACHE_TARGET_DIR/$TARGET_ARCH" ccache -C
 	else
-		_report "Not cleaning ccache as you don't have ccache installed"
+		report "Not cleaning ccache as you don't have ccache installed"
 	fi
 }
 
 available_commands+=( ["set_ccache"]="Set persistent ccache paths" )
 set_ccache() {
 	[ -z "$CCACHE_SET" ] || return 0
-	_report "Setting ccache paths"
+	report "Setting ccache paths"
 	CCACHE_SET=y
 	[ -z "$CCACHE_HOST_DIR" ] || sed -i 's|$(STAGING_DIR_HOST)/ccache|'"$CCACHE_HOST_DIR|" include/host-build.mk
 	[ -z "$CCACHE_TARGET_DIR" ] || [ -z "$TARGET_ARCH" ] || sed -i 's|$(STAGING_DIR)/ccache|'"$CCACHE_TARGET_DIR/$TARGET_ARCH|" include/package.mk
@@ -324,7 +318,7 @@ set_ccache() {
 available_commands+=( ["set_local_feeds"]="Change feed URL to their mirror counterparts" )
 set_local_feeds() {
 	[ -n "$GIT_MIRROR" ] || return 0
-	_report "Setting feeds to their local counterparts"
+	report "Setting feeds to their local counterparts"
 	while read -r vcs name url rest; do
 		if [ "$vcs" = src-git ] && [ -d "$GIT_MIRROR/$name" ]; then
 			local branch=""
@@ -353,7 +347,7 @@ mirror_feeds() {
 
 available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
-	_report "Patching OpenWRT repository"
+	report "Patching OpenWRT repository"
 	for patch in "$src_dir/patches/openwrt"/*/*.patch; do
 		_git am --whitespace=nowarn --reject "$patch"
 	done
@@ -373,7 +367,7 @@ _git_remote_hash() {
 
 available_commands+=( ["store_hash"]="Stores hashes of current build" )
 store_hash() {
-	_report "Storing hashes"
+	report "Storing hashes"
 	mkdir -p bin
 	{
 	echo "Project was build from following repositories:"
@@ -390,7 +384,7 @@ store_hash() {
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them" )
 repatch_feeds() {
-	_report "Getting feeds"
+	report "Getting feeds"
 	update_mirror
 	set_local_feeds
 	_perl ./scripts/feeds clean -a
@@ -426,7 +420,7 @@ gen_junit() {
 
 available_commands+=( ["pkgsrepo"]="Extract packages from OpenWRT tree and place them to repository format as they are deployed to Turris servers" )
 pkgsrepo() {
-	_report "Extracting packages to pkgsrepo directory: $OUTPUT_DIR"
+	report "Extracting packages to pkgsrepo directory: $OUTPUT_DIR"
 	rm -rf "$OUTPUT_DIR"
 	mkdir -p "$OUTPUT_DIR"
 	mv bin/packages/*/* "$OUTPUT_DIR"
@@ -450,11 +444,11 @@ _compile() {
 					success="YES!!!"
 				else
 					countdown="$((countdown - 1))"
-					_report "Build job with -j$force_jobs failed (trying $((FORCE - countdown))/$FORCE)..."
+					report "Build job with -j$force_jobs failed (trying $((FORCE - countdown))/$FORCE)..."
 				fi
 			done
 			if [ -z "$success" ]; then
-				_report "Build job with -j$force_jobs failed, decreasing parallelism..."
+				report "Build job with -j$force_jobs failed, decreasing parallelism..."
 				force_jobs="$((force_jobs / 2))"
 			fi
 		done
@@ -466,19 +460,19 @@ _compile() {
 
 available_commands+=( ["compile_tools"]="Compile host tools" )
 compile_tools() {
-	_report "Compiling tools"
+	report "Compiling tools"
 	_compile tools/compile toolchain/compile
 }
 
 available_commands+=( ["compile_target"]="Compile target specific software (Linux kernel)" )
 compile_target() {
-	_report "Compiling target"
+	report "Compiling target"
 	_compile target/compile
 }
 
 available_commands+=( ["compile_packages"]="Compile packages" )
 compile_packages() {
-	_report "Compiling packages"
+	report "Compiling packages"
 	_compile package/compile
 }
 
@@ -496,7 +490,7 @@ sign() {
 
 available_commands+=( ["clean"]="	Clean current build directory" )
 clean() {
-	_report "Cleaning up current build directory"
+	report "Cleaning up current build directory"
 	rm -rf ./build_dir ./tmp ./staging_dir ./logs ./bin
 	mkdir -p tmp
 }
@@ -532,7 +526,7 @@ repo_prepare() {
 
 available_commands+=( ["autopkg"]="	Deploy autopkg scripts that can be used for rolling software development" )
 autopkg() {
-	_report "Deploying autopkg scripts"
+	report "Deploying autopkg scripts"
 	cp "$src_dir"/helpers/autopkg/* "$build_dir"/include/
 	git add include/autopkg-*.mk
 	_git commit -m 'autopkg: Add autopkg scripts'
@@ -617,7 +611,7 @@ while [ $# -gt 0 ]; do
 			;;
 		*)
 			[ -n "${available_commands[$1]}" ] || \
-				_die "There is no such option or command: $1"
+				die "There is no such option or command: $1"
 			steps+=( "$1" )
 			;;
 	esac
