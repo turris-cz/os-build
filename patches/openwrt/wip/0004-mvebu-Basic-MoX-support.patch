@@ -1,4 +1,4 @@
-From 11032b4e88404991fee149a056216fae54f25874 Mon Sep 17 00:00:00 2001
+From 68e81f2d93f89ac04bac9a98491c0dc0e75b0add Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -9,7 +9,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  target/linux/mvebu/config-4.14                |   1 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
- .../patches-4.14/450-reprobe_sfp_phy.patch    |  94 --
  ...ark-allow-to-specify-link-capability.patch |  43 -
  ...ecure-remove-null-check-before-kfree.patch |  34 +
  ...cure-do-not-use-areq-result-for-part.patch |  63 ++
@@ -47,17 +46,17 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...to-inside-secure-hmac-sha256-support.patch | 174 ++++
  ...to-inside-secure-hmac-sha224-support.patch | 110 +++
  ...arvell-armada-37xx-add-a-crypto-node.patch |  42 +
- ...-sfp-display-SFP-module-information.patch} |  17 +-
+ ...-sfp-display-SFP-module-information.patch} |   3 +
  ...0038-net-mvneta-tx-queue-workaround.patch} |  17 +-
  ...90039-net-mvneta-convert-to-phylink.patch} | 264 ++---
  ...0-net-mvneta-hack-fix-phy_interface.patch} |  11 +-
  ...e-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} |  18 +-
  ...a-add-module-EEPROM-reading-support.patch} |  13 +-
  ...d-phy-remove-fixed_phy_update_state.patch} |  17 +-
- ...eprom-ethtool-access-into-netdev-co.patch} |  40 +-
- ...p-use-netdev-sfp_bus-for-start-stop.patch} |   9 +-
+ ...eprom-ethtool-access-into-netdev-co.patch} |  30 +-
+ ...p-use-netdev-sfp_bus-for-start-stop.patch} |   0
  ...-marvell-10G-phy-support-to-use-SFP.patch} |  19 +-
- ...tch => 90047-sfp-add-sfp-compatible.patch} |  11 +-
+ ...tch => 90047-sfp-add-sfp-compatible.patch} |   7 +-
  ...armada-37xx-periph-cosmetic-changes.patch} |  21 +-
  ...37xx-periph-prepare-cpu-clk-to-be-u.patch} |  25 +-
  ...37xx-periph-add-DVFS-support-for-cp.patch} |  20 +-
@@ -141,8 +140,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
  ...m64-restart-Armada-3700-restart-code.patch |   6 +-
- 134 files changed, 14315 insertions(+), 417 deletions(-)
- delete mode 100644 target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
+ 133 files changed, 14290 insertions(+), 311 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -180,17 +178,17 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90034-crypto-inside-secure-hmac-sha256-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90035-crypto-inside-secure-hmac-sha224-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90036-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch
- rename target/linux/mvebu/patches-4.14/{402-sfp-display-SFP-module-information.patch => 90037-sfp-display-SFP-module-information.patch} (94%)
+ rename target/linux/mvebu/patches-4.14/{402-sfp-display-SFP-module-information.patch => 90037-sfp-display-SFP-module-information.patch} (99%)
  rename target/linux/mvebu/patches-4.14/{300-mvneta-tx-queue-workaround.patch => 90038-net-mvneta-tx-queue-workaround.patch} (64%)
  rename target/linux/mvebu/patches-4.14/{403-net-mvneta-convert-to-phylink.patch => 90039-net-mvneta-convert-to-phylink.patch} (91%)
  rename target/linux/mvebu/patches-4.14/{404-net-mvneta-hack-fix-phy_interface.patch => 90040-net-mvneta-hack-fix-phy_interface.patch} (65%)
  rename target/linux/mvebu/patches-4.14/{405-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch => 90041-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} (72%)
  rename target/linux/mvebu/patches-4.14/{406-net-mvneta-add-module-EEPROM-reading-support.patch => 90042-net-mvneta-add-module-EEPROM-reading-support.patch} (74%)
  rename target/linux/mvebu/patches-4.14/{407-phy-fixed-phy-remove-fixed_phy_update_state.patch => 90043-phy-fixed-phy-remove-fixed_phy_update_state.patch} (78%)
- rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (77%)
- rename target/linux/mvebu/patches-4.14/{409-sfp-use-netdev-sfp_bus-for-start-stop.patch => 90045-sfp-use-netdev-sfp_bus-for-start-stop.patch} (79%)
+ rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (83%)
+ rename target/linux/mvebu/patches-4.14/{409-sfp-use-netdev-sfp_bus-for-start-stop.patch => 90045-sfp-use-netdev-sfp_bus-for-start-stop.patch} (100%)
  rename target/linux/mvebu/patches-4.14/{410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch => 90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch} (85%)
- rename target/linux/mvebu/patches-4.14/{411-sfp-add-sfp-compatible.patch => 90047-sfp-add-sfp-compatible.patch} (66%)
+ rename target/linux/mvebu/patches-4.14/{411-sfp-add-sfp-compatible.patch => 90047-sfp-add-sfp-compatible.patch} (84%)
  rename target/linux/mvebu/patches-4.14/{503-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch => 90048-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch} (73%)
  rename target/linux/mvebu/patches-4.14/{504-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch => 90049-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch} (85%)
  rename target/linux/mvebu/patches-4.14/{505-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch => 90050-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch} (93%)
@@ -308,106 +306,6 @@ index 89c3363448..c9ef4b088d 100644
  define Device/armada-3720-db
    KERNEL_NAME := Image
    KERNEL := kernel-bin
-diff --git a/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch b/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
-deleted file mode 100644
-index e9a3d695da..0000000000
---- a/target/linux/mvebu/patches-4.14/450-reprobe_sfp_phy.patch
-+++ /dev/null
-@@ -1,94 +0,0 @@
--From 28baa5e2635285b178326b301f534ed95c65dd01 Mon Sep 17 00:00:00 2001
--From: Jonas Gorski <jonas.gorski@gmail.com>
--Date: Thu, 29 Sep 2016 11:44:39 +0200
--Subject: [PATCH] sfp: retry phy probe if unsuccessful
--
--Some phys seem to take longer than 50 ms to come out of reset, so retry
--until we find a phy.
--
--Signed-off-by: Jonas Gorski <jonas.gorski@gmail.com>
-----
-- drivers/net/phy/sfp.c | 38 +++++++++++++++++++++++++-------------
-- 1 file changed, 25 insertions(+), 13 deletions(-)
--
----- a/drivers/net/phy/sfp.c
--+++ b/drivers/net/phy/sfp.c
--@@ -488,7 +488,7 @@ static void sfp_sm_phy_detach(struct sfp
-- 	sfp->mod_phy = NULL;
-- }
-- 
---static void sfp_sm_probe_phy(struct sfp *sfp)
--+static int sfp_sm_probe_phy(struct sfp *sfp)
-- {
-- 	struct phy_device *phy;
-- 	int err;
--@@ -498,11 +498,11 @@ static void sfp_sm_probe_phy(struct sfp
-- 	phy = mdiobus_scan(sfp->i2c_mii, SFP_PHY_ADDR);
-- 	if (phy == ERR_PTR(-ENODEV)) {
-- 		dev_info(sfp->dev, "no PHY detected\n");
---		return;
--+		return -EAGAIN;
-- 	}
-- 	if (IS_ERR(phy)) {
-- 		dev_err(sfp->dev, "mdiobus scan returned %ld\n", PTR_ERR(phy));
---		return;
--+		return PTR_ERR(phy);
-- 	}
-- 
-- 	err = sfp_add_phy(sfp->sfp_bus, phy);
--@@ -510,11 +510,13 @@ static void sfp_sm_probe_phy(struct sfp
-- 		phy_device_remove(phy);
-- 		phy_device_free(phy);
-- 		dev_err(sfp->dev, "sfp_add_phy failed: %d\n", err);
---		return;
--+		return err;
-- 	}
-- 
-- 	sfp->mod_phy = phy;
-- 	phy_start(phy);
--+
--+	return 0;
-- }
-- 
-- static void sfp_sm_link_up(struct sfp *sfp)
--@@ -560,14 +562,9 @@ static void sfp_sm_fault(struct sfp *sfp
-- 
-- static void sfp_sm_mod_init(struct sfp *sfp)
-- {
---	sfp_module_tx_enable(sfp);
--+	int ret = 0;
-- 
---	/* Wait t_init before indicating that the link is up, provided the
---	 * current state indicates no TX_FAULT.  If TX_FAULT clears before
---	 * this time, that's fine too.
---	 */
---	sfp_sm_next(sfp, SFP_S_INIT, T_INIT_JIFFIES);
---	sfp->sm_retries = 5;
--+	sfp_module_tx_enable(sfp);
-- 
-- 	/* Setting the serdes link mode is guesswork: there's no
-- 	 * field in the EEPROM which indicates what mode should
--@@ -581,7 +578,22 @@ static void sfp_sm_mod_init(struct sfp *
-- 	if (sfp->id.base.e1000_base_t ||
-- 	    sfp->id.base.e100_base_lx ||
-- 	    sfp->id.base.e100_base_fx)
---		sfp_sm_probe_phy(sfp);
--+		ret = sfp_sm_probe_phy(sfp);
--+
--+	if (!ret) {
--+		/* Wait t_init before indicating that the link is up, provided
--+		 * the current state indicates no TX_FAULT.  If TX_FAULT clears
--+		 * this time, that's fine too.
--+		 */
--+		sfp_sm_next(sfp, SFP_S_INIT, T_INIT_JIFFIES);
--+		sfp->sm_retries = 5;
--+		return;
--+	}
--+
--+	if (ret == -EAGAIN)
--+		sfp_sm_set_timer(sfp, T_PROBE_RETRY);
--+	else
--+		sfp_sm_next(sfp, SFP_S_TX_DISABLE, 0);
-- }
-- 
-- static int sfp_sm_mod_probe(struct sfp *sfp)
 diff --git a/target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch b/target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
 deleted file mode 100644
 index fb57f4112a..0000000000
@@ -4270,54 +4168,13 @@ index 0000000000..52bada0fc1
 +2.19.2
 +
 diff --git a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch b/target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
-similarity index 94%
+similarity index 99%
 rename from target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 rename to target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
-index 4f9e2e29b5..42d490fe13 100644
+index eeb6b1ef19..20010488a7 100644
 --- a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 +++ b/target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
-@@ -1,16 +1,18 @@
--From e76632d118659347d9261a4470d9f60bfbe0044c Mon Sep 17 00:00:00 2001
-+From 14fd10488b8066ba019a0306412a70fd80cdcd70 Mon Sep 17 00:00:00 2001
- From: Russell King <rmk+kernel@arm.linux.org.uk>
- Date: Sun, 13 Sep 2015 01:06:31 +0100
--Subject: sfp: display SFP module information
-+Subject: [PATCH 037/125] sfp: display SFP module information
- 
- Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
- ---
-- drivers/net/phy/sfp.c | 254 +++++++++++++++++++++++++++++++++++++++++++++++++-
-+ drivers/net/phy/sfp.c | 254 +++++++++++++++++++++++++++++++++++++++++-
-  1 file changed, 253 insertions(+), 1 deletion(-)
- 
-+diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index 3165bc7b8e1e..abef8e7f155e 100644
- --- a/drivers/net/phy/sfp.c
- +++ b/drivers/net/phy/sfp.c
--@@ -247,6 +247,184 @@ static unsigned int sfp_check(void *buf,
-+@@ -247,6 +247,184 @@ static unsigned int sfp_check(void *buf, size_t len)
-  	return check;
-  }
-  
-@@ -195,7 +197,7 @@ Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
-  /* Helpers */
-  static void sfp_module_tx_disable(struct sfp *sfp)
-  {
--@@ -415,6 +593,7 @@ static int sfp_sm_mod_probe(struct sfp *
-+@@ -415,6 +593,7 @@ static int sfp_sm_mod_probe(struct sfp *sfp)
-  	char sn[17];
-  	char date[9];
-  	char rev[5];
-@@ -203,7 +205,7 @@ Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
-  	u8 check;
-  	int err;
-  
--@@ -458,10 +637,83 @@ static int sfp_sm_mod_probe(struct sfp *
-+@@ -458,10 +637,83 @@ static int sfp_sm_mod_probe(struct sfp *sfp)
-  	rev[4] = '\0';
-  	memcpy(sn, sfp->id.ext.vendor_sn, 16);
-  	sn[16] = '\0';
-@@ -288,3 +290,6 @@ Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
+@@ -288,3 +288,6 @@ Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
   
   	/* We only support SFP modules, not the legacy GBIC modules. */
   	if (sfp->id.base.phys_id != SFP_PHYS_ID_SFP ||
@@ -5203,10 +5060,10 @@ index 71c2f45555..1183a4a182 100644
 +2.19.2
 +
 diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-similarity index 77%
+similarity index 83%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index c31a540228..8397c2aa63 100644
+index f5506a8bdf..cd4710dd8f 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
@@ -5248,42 +5105,7 @@ index c31a540228..8397c2aa63 100644
   	.set_link_ksettings = mvneta_ethtool_set_link_ksettings,
   	.get_wol        = mvneta_ethtool_get_wol,
   	.set_wol        = mvneta_ethtool_set_wol,
-@@ -47,9 +50,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  	.get_eee	= mvneta_ethtool_get_eee,
-  	.set_eee	= mvneta_ethtool_set_eee,
-  };
-+diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
-+index 70ce7da26d1f..4172f61e1ccc 100644
- --- a/drivers/net/phy/phylink.c
- +++ b/drivers/net/phy/phylink.c
--@@ -1045,34 +1045,6 @@ int phylink_ethtool_set_pauseparam(struc
-+@@ -1045,34 +1045,6 @@ int phylink_ethtool_set_pauseparam(struct phylink *pl,
-  }
-  EXPORT_SYMBOL_GPL(phylink_ethtool_set_pauseparam);
-  
-@@ -84,9 +89,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  int phylink_init_eee(struct phylink *pl, bool clk_stop_enable)
-  {
-  	int ret = -EPROTONOSUPPORT;
-+diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
-+index 7ae815bee52d..faa8fddde29c 100644
- --- a/drivers/net/phy/sfp-bus.c
- +++ b/drivers/net/phy/sfp-bus.c
--@@ -278,6 +278,7 @@ static int sfp_register_bus(struct sfp_b
-+@@ -278,6 +278,7 @@ static int sfp_register_bus(struct sfp_bus *bus)
-  	}
-  	if (bus->started)
-  		bus->socket_ops->start(bus->sfp);
-@@ -94,7 +101,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  	bus->registered = true;
-  	return 0;
-  }
--@@ -292,14 +293,13 @@ static void sfp_unregister_bus(struct sf
-+@@ -292,14 +293,13 @@ static void sfp_unregister_bus(struct sfp_bus *bus)
-  		if (bus->phydev && ops && ops->disconnect_phy)
-  			ops->disconnect_phy(bus->upstream);
-  	}
-@@ -119,6 +126,8 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -119,6 +122,8 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	return bus->socket_ops->module_eeprom(bus->sfp, ee, data);
   }
   EXPORT_SYMBOL_GPL(sfp_get_module_eeprom);
@@ -5292,7 +5114,7 @@ index c31a540228..8397c2aa63 100644
  --- a/include/linux/netdevice.h
  +++ b/include/linux/netdevice.h
  @@ -57,6 +57,7 @@ struct device;
-@@ -137,9 +146,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -137,9 +142,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	struct lock_class_key	*qdisc_tx_busylock;
   	struct lock_class_key	*qdisc_running_key;
   	bool			proto_down;
@@ -5305,7 +5127,7 @@ index c31a540228..8397c2aa63 100644
   				    struct ethtool_pauseparam *);
   int phylink_ethtool_set_pauseparam(struct phylink *,
   				   struct ethtool_pauseparam *);
-@@ -149,6 +160,8 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -149,6 +156,8 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   int phylink_init_eee(struct phylink *, bool);
   int phylink_get_eee_err(struct phylink *);
   int phylink_ethtool_get_eee(struct phylink *, struct ethtool_eee *);
@@ -5314,7 +5136,7 @@ index c31a540228..8397c2aa63 100644
  --- a/net/core/ethtool.c
  +++ b/net/core/ethtool.c
  @@ -22,6 +22,7 @@
-@@ -159,7 +172,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -159,7 +168,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   #include <linux/slab.h>
   #include <linux/rtnetlink.h>
   #include <linux/sched/signal.h>
@@ -5323,7 +5145,7 @@ index c31a540228..8397c2aa63 100644
   	const struct ethtool_ops *ops = dev->ethtool_ops;
   	struct phy_device *phydev = dev->phydev;
   
-@@ -169,7 +182,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -169,7 +178,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	if (phydev && phydev->drv && phydev->drv->module_info)
   		return phydev->drv->module_info(phydev, modinfo);
   
@@ -5332,7 +5154,7 @@ index c31a540228..8397c2aa63 100644
   	const struct ethtool_ops *ops = dev->ethtool_ops;
   	struct phy_device *phydev = dev->phydev;
   
-@@ -179,3 +192,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -179,3 +188,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	if (phydev && phydev->drv && phydev->drv->module_eeprom)
   		return phydev->drv->module_eeprom(phydev, ee, data);
   
@@ -5340,37 +5162,9 @@ index c31a540228..8397c2aa63 100644
 +2.19.2
 +
 diff --git a/target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-start-stop.patch b/target/linux/mvebu/patches-4.14/90045-sfp-use-netdev-sfp_bus-for-start-stop.patch
-similarity index 79%
+similarity index 100%
 rename from target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-start-stop.patch
 rename to target/linux/mvebu/patches-4.14/90045-sfp-use-netdev-sfp_bus-for-start-stop.patch
-index 47b71ee4c1..118fb8a542 100644
---- a/target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-start-stop.patch
-+++ b/target/linux/mvebu/patches-4.14/90045-sfp-use-netdev-sfp_bus-for-start-stop.patch
-@@ -1,13 +1,15 @@
--From 883dc66755313e133a787eba4dfde313fe33525b Mon Sep 17 00:00:00 2001
-+From af96cf5233a62e79b898eb7cd2a7cb3ff35c474b Mon Sep 17 00:00:00 2001
- From: Russell King <rmk+kernel@armlinux.org.uk>
- Date: Fri, 14 Apr 2017 16:41:55 +0100
--Subject: sfp: use netdev sfp_bus for start/stop
-+Subject: [PATCH 045/125] sfp: use netdev sfp_bus for start/stop
- 
- Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
- ---
-  drivers/net/phy/phylink.c | 8 ++++----
-  1 file changed, 4 insertions(+), 4 deletions(-)
- 
-+diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
-+index 4172f61e1ccc..808e2420d09b 100644
- --- a/drivers/net/phy/phylink.c
- +++ b/drivers/net/phy/phylink.c
- @@ -760,8 +760,8 @@ void phylink_start(struct phylink *pl)
-@@ -32,3 +34,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  
-  	set_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state);
-  	queue_work(system_power_efficient_wq, &pl->resolve);
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mvebu/patches-4.14/410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch b/target/linux/mvebu/patches-4.14/90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
 similarity index 85%
 rename from target/linux/mvebu/patches-4.14/410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
@@ -5445,10 +5239,10 @@ index 6ca43043fa..84089431e9 100644
 +2.19.2
 +
 diff --git a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch b/target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
-similarity index 66%
+similarity index 84%
 rename from target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 rename to target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
-index b775116cda..30716a79cc 100644
+index 4cbd30a6e2..080c3fa4ed 100644
 --- a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 +++ b/target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
 @@ -1,7 +1,7 @@
@@ -5461,20 +5255,7 @@ index b775116cda..30716a79cc 100644
  
  Add a compatible for SFP+ cages.  SFP+ cages are backwards compatible,
  but the ethernet device behind them may not support the slower speeds
-@@ -12,9 +12,11 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  drivers/net/phy/sfp.c | 1 +
-  1 file changed, 1 insertion(+)
- 
-+diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index abef8e7f155e..d8073311345c 100644
- --- a/drivers/net/phy/sfp.c
- +++ b/drivers/net/phy/sfp.c
--@@ -1136,6 +1136,7 @@ static int sfp_remove(struct platform_de
-+@@ -1136,6 +1136,7 @@ static int sfp_remove(struct platform_device *pdev)
-  
-  static const struct of_device_id sfp_of_match[] = {
-  	{ .compatible = "sff,sfp", },
-@@ -22,3 +24,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
+@@ -22,3 +22,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	{ },
   };
   MODULE_DEVICE_TABLE(of, sfp_of_match);
@@ -16930,5 +16711,5 @@ index b442f71bee..e063bbaca9 100644
 +2.20.1
  
 -- 
-2.20.1
+2.21.0
 
