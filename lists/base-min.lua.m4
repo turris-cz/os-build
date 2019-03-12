@@ -45,6 +45,7 @@ Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 if model:match("^[Tt]urris$") then
 	Install("unbound", "unbound-anchor", { priority = 40 })
+	Install("turris-btrfs", { priority = 40 }) -- Currently only SD card root is supported
 else
 	Install("knot-resolver", { priority = 40 })
 end
