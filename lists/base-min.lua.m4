@@ -66,8 +66,9 @@ Package('switch-branch', { priority = 40 })
 Install("oneshot")
 
 -- Utility
-Install("ip-full", "iptables", "ip6tables", "conntrack", { priority = 40 })
+Install("ip-full", "tc", "genl", "ip-bridge", "ss", "nstat", "devlink", "rdma", { priority = 40 })
 Install("iputils-ping", "iputils-ping6", "iputils-tracepath", "iputils-tracepath6", "iputils-traceroute6", { priority = 40 })
+Install("iptables", "ip6tables", "conntrack", { priority = 40 })
 Install("shadow", "shadow-utils", "uboot-envtools", "i2c-tools", { priority = 40 })
 Install("openssh-client", "openssh-client-utils", "openssh-moduli", "openssh-server", "openssh-sftp-client", "openssh-sftp-server", "openssl-util", { priority = 40 })
 Uninstall("dropbear", { priority = 40 })
