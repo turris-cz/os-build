@@ -3,7 +3,7 @@ include(repository.m4)dnl Include Repository command
 ----------------------------------------------------------------------------------
 
 -- Updater itself
-Install('updater-ng', 'updater-ng-supervisor', { critical = true })
+Install('updater-ng', 'updater-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
 Package('l10n_supported', { replan = 'finished' })
 
@@ -59,9 +59,9 @@ Install("ca-certificates", { priority = 40 })
 _FEATURE_GUARD_
 
 -- Updater utility
-Install("updater-ng-opkg", { priority = 40 })
-Package('updater-ng-opkg', { replan = 'finished' })
-Package('updater-ng-localrepo', { replan = 'finished' })
+Install("updater-opkg-wrapper", { priority = 40 })
+Package('updater-opkg-wrapper', { replan = 'finished' })
+Package('localrepo', { replan = 'finished' })
 Package('switch-branch', { priority = 40 })
 -- Package migration hack
 Install("oneshot")
