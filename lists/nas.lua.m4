@@ -12,7 +12,7 @@ forInstall(kmod-md,linear,multipath,raid0,raid1,raid10,raid456)
 -- Additional kernel drivers
 Install("kmod-usb-storage-extras", "kmod-usb2", "kmod-usb-storage-uas", { priority = 40 })
 if model:match("[Oo]mnia") then
-	Install("kmod-ata-ahci-platform", "kmod-ata-mvebu-ahci", "kmod-crypto-marvell-cesa", "blkdiscard", "fstrim", "asm1062-fix", { priority = 40 })
+	Install("blkdiscard", "fstrim", "asm1062-fix", { priority = 40 })
 elseif model:match("^[Tt]urris$") then
 	Install("kmod-mmc-fsl-p2020", "kmod-fs-reiserfs", "reiserfsprogs", { priority = 40 })
 end
