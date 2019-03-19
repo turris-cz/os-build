@@ -1,28 +1,50 @@
-From b8d494de98ff76fefed6f9403dec2ac75b1e66d3 Mon Sep 17 00:00:00 2001
+From 4a00139eb7f6daf6a2afadd93ac4151c202ad22a Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 27 Dec 2017 17:19:45 +0100
 Subject: [PATCH] kernel: Add Turris 1.X support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Tested on Turris 1.1 and works, but might break other mpc boards, so might need
 some polishing.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
+ target/linux/mpc85xx/Makefile                 |   2 +-
  .../mpc85xx/base-files/etc/board.d/02_network |   6 +
  target/linux/mpc85xx/config-4.14              |   3 +
- .../arch/powerpc/boot/dts/turris.dts          | 252 ++++++++++++++++++
+ .../arch/powerpc/boot/dts/turris-nand-bch.dts |  27 ++
+ .../arch/powerpc/boot/dts/turris.dtsi         | 347 ++++++++++++++++++
  target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
- ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 ++++++++++++++++
- 5 files changed, 517 insertions(+)
- create mode 100644 target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
+ ...sl_elbc-add-support-for-software-ecc.patch | 223 +++++++++++
+ ...-qca8k-fix-internal-phy-mdio-address.patch |  22 ++
+ 8 files changed, 658 insertions(+), 1 deletion(-)
+ create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts
+ create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
- create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
 
+diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
+index 370ef81f15..dd24729d33 100644
+--- a/target/linux/mpc85xx/Makefile
++++ b/target/linux/mpc85xx/Makefile
+@@ -14,7 +14,7 @@ FEATURES:=squashfs ramdisk
+ MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
+ SUBTARGETS:=generic p1020 p2020
+ 
+-KERNEL_PATCHVER:=4.14
++KERNEL_PATCHVER:=4.19
+ 
+ KERNELNAME:=zImage
+ 
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index 19f01a6589..7679728294 100755
+index d6b4eebf14..e6af77047c 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-@@ -18,6 +18,12 @@ tplink,tl-wdr4900-v1)
+@@ -23,6 +23,12 @@ tplink,tl-wdr4900-v1)
  		"0@eth0" "2:lan:1" "3:lan:2" "4:lan:3" "5:lan:4" "1:wan"
  	ucidef_set_interface_macaddr "wan" "$(mtd_get_mac_binary config 332)"
  	;;
@@ -36,22 +58,55 @@ index 19f01a6589..7679728294 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
-index b60133e30e..3cba7aeb87 100644
+index f057e5c910..79480d72da 100644
 --- a/target/linux/mpc85xx/config-4.14
 +++ b/target/linux/mpc85xx/config-4.14
-@@ -369,3 +369,6 @@ CONFIG_WATCHDOG_CORE=y
+@@ -370,3 +370,6 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XPS_USB_HCD_XILINX is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
 +CONFIG_FB_FSL_DIU=n
 +CONFIG_VGA_CONSOLE=y
 +CONFIG_VGACON_SOFT_SCROLLBACK=n
-diff --git a/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
+diff --git a/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts
 new file mode 100644
-index 0000000000..5c5555fde9
+index 0000000000..59ef5fdf2e
 --- /dev/null
-+++ b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
-@@ -0,0 +1,252 @@
++++ b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts
+@@ -0,0 +1,27 @@
++/*
++ * Turris RDB Device Tree Source
++ *
++ * Copyright 2013 CZ.NIC z.s.p.o. (http://www.nic.cz/)
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++/include/ "turris.dtsi"
++
++&lbc {
++	nand@1,0 {
++		nand-ecc-mode = "soft";
++		nand-ecc-algo = "bch";
++	};
++};
++
++/*
++&soc {
++	sdhc@2e000 {
++		status = "disabled";
++	};
++};
++*/
+diff --git a/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
+new file mode 100644
+index 0000000000..bdac590f78
+--- /dev/null
++++ b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
+@@ -0,0 +1,347 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
@@ -78,7 +133,7 @@ index 0000000000..5c5555fde9
 +		pci0 = &pci0;
 +		pci1 = &pci1;
 +		pci2 = &pci2;
-+                spi0 = &spi0;
++		spi0 = &spi0;
 +	};
 +
 +	memory {
@@ -94,51 +149,57 @@ index 0000000000..5c5555fde9
 +			  0x2 0x0 0x0 0xffb00000 0x00020000>;
 +		
 +		nor@0,0 {
-+                        #address-cells = <1>;
-+                        #size-cells = <1>;
-+                        compatible = "cfi-flash";
-+                        reg = <0x0 0x0 0x1000000>;
-+                        bank-width = <2>;
-+                        device-width = <1>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			compatible = "cfi-flash";
++			reg = <0x0 0x0 0x1000000>;
++			bank-width = <2>;
++			device-width = <1>;
 +
-+                        partition@0 {
-+                                /* 128KB for DTB Image */
-+                                reg = <0x0 0x00020000>;
-+                                label = "NOR (RO) DTB Image";
-+                        };
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
 +
-+                        partition@20000 {
-+                                /* 1.7 MB for Linux Kernel Image */
-+                                reg = <0x00020000 0x1A0000>;
-+                                label = "NOR (RO) Linux Kernel Image";
-+                        };
++				partition@0 {
++					/* 128KB for DTB Image */
++					reg = <0x0 0x00020000>;
++					label = "NOR (RO) DTB Image";
++				};
 +
-+                        partition@1C0000 {
-+                                /* 1.5 MB for JFFS2 based Root file System */
-+                                reg = <0x001C0000 0x180000>;
-+                                label = "NOR (RO) JFFS2 Root File System";
-+                        };
++				partition@20000 {
++					/* 1.7 MB for Linux Kernel Image */
++					reg = <0x00020000 0x1A0000>;
++					label = "NOR (RO) Linux Kernel Image";
++				};
 +
-+                        partition@340000 {
-+                                /* for nand fw backup */
-+                                reg = <0x00340000 0xb00000>;
-+                                label = "NOR (RO) NAND FW backup";
-+                        };
++				partition@1C0000 {
++					/* 1.5 MB for JFFS2 based Root file System */
++					reg = <0x001C0000 0x180000>;
++					label = "NOR (RO) JFFS2 Root File System";
++				};
 +
-+                        partition@E40000 {
-+                                /* 128KB for Certificates backup */
-+                                reg = <0xE40000 0x000C0000>;
-+                                label = "NOR (RW) Cert backup";
-+                        };
++				partition@340000 {
++					/* for nand fw backup */
++					reg = <0x00340000 0xb00000>;
++					label = "NOR (RO) NAND FW backup";
++				};
 +
-+                        partition@f00000 {
-+                                /* This location must not be altered  */
-+                                /* 512KB for u-boot Bootloader Image */
-+                                /* 512KB for u-boot Environment Variables */
-+                                reg = <0x00f00000 0x00100000>;
-+                                label = "NOR (RO) U-Boot Image";
-+                        };
-+                };
++				partition@E40000 {
++					/* 128KB for Certificates backup */
++					reg = <0xE40000 0x000C0000>;
++					label = "NOR (RW) Cert backup";
++				};
++
++				partition@f00000 {
++					/* This location must not be altered  */
++					/* 512KB for u-boot Bootloader Image */
++					/* 512KB for u-boot Environment Variables */
++					reg = <0x00f00000 0x00100000>;
++					label = "NOR (RO) U-Boot Image";
++				};
++			};
++		};
 +	
 +		nand@1,0 {
 +			#address-cells = <1>;
@@ -146,15 +207,35 @@ index 0000000000..5c5555fde9
 +			compatible = "fsl,p2020-fcm-nand",
 +				     "fsl,elbc-fcm-nand";
 +			reg = <0x1 0x0 0x00040000>;
-+			nand-ecc-mode = "soft_bch";
-+			nand-ecc-step-size = <512>;
-+			nand-ecc-strength = <4>; 
 +
-+			partition@00 {
-+				reg = <0x00000000 0x10000000>;
-+				label = "rootfs-ubifs";
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				partition@0 {
++					/* 2MB for DTB Image */
++					reg = <0x00000000 0x00200000>;
++					label = "NAND (RW) DTB Image";
++				};
++
++				partition@200000 {
++					/* 5MB for Linux Kernel Image */
++					reg = <0x00200000 0x00500000>;
++					label = "NAND (RW) Linux Kernel Image";
++				};
++
++				partition@700000 {
++					/* 249MB for JFFS2 based Root file System */
++					reg = <0x00700000 0xF900000>;
++					label = "NAND (RW) JFFS2 Root File System";
++				};
++
++				partition@00 {
++					reg = <0x00000000 0x10000000>;
++					label = "rootfs-ubifs";
++				};
 +			};
-+
 +		};
 +
 +	};
@@ -173,64 +254,126 @@ index 0000000000..5c5555fde9
 +			};
 +		};
 +
-+                spi0: spi@7000 {
-+                        spidev@0 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <0>;
-+                        };
-+                        spidev@1 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <1>;
-+                        };
-+                        spidev@2 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <2>;
-+                        };
-+                        spidev@3 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <3>;
-+                        };
-+                };
++		spi0: spi@7000 {
++/*			spidev@0 {
++				compatible = "spidev";
++				spi-max-frequency = <40000000>;
++				reg = <0>;
++			};
++			spidev@1 {
++				compatible = "spidev";
++				spi-max-frequency = <40000000>;
++				reg = <1>;
++			};
++			spidev@2 {
++				compatible = "spidev";
++				spi-max-frequency = <40000000>;
++				reg = <2>;
++			};
++			spidev@3 {
++				compatible = "spidev";
++				spi-max-frequency = <40000000>;
++				reg = <3>;
++			};*/
++		};
 +
 +		usb@22000 {
 +			phy_type = "ulpi";
 +			dr_mode = "host";
 +		};
 +
-+	        mdio@24520 {
-+        	        phy0: ethernet-phy@0 {
-+                	        interrupts = <2 1 0 0>;
-+                        	reg = <0x0>;
-+                              qca,ar8327-initvals = <
-+                                        0x00004 0x07600000 /* PAD0_MODE - eth1 */
-+                                        0x00008 0x01000000 /* PAD5_MODE */
-+                                        0x0000c 0x07600000 /* PAD6_MODE - eth0 */
-+                                        0x00010 0x40000000 /* POWER_ON_STRIP */
-+                                        0x00050 0xcc35cc35 /* LED_CTRL0 */
-+                                        0x00054 0xca35ca35 /* LED_CTRL1 */
-+                                        0x00058 0xc935c935 /* LED_CTRL2 */
-+                                        0x0005c 0x03ffff00 /* LED_CTRL3 */
-+                                        0x0007c 0x0000007e /* PORT0_STATUS */
-+                                        0x00094 0x0000007e /* PORT6 STATUS */
-+                                >;
-+	                };
-+                        phy7: ethernet-phy@7 {
-+                                interrupts = <3 1 0 0>;
-+                                reg = <0x7>;
-+                        };
-+	        };
++		mdio@24520 {
++			switch0@0 {
++				compatible = "qca,qca8337";
++				#size-cells = <0>;
++				#address-cells = <1>;
++				reg = <0>;
 +
-+        	mdio@25520 {
-+                        status = "disabled";
-+	        };
++				mdio {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					phy_port1: phy@0 {
++						reg = <0>;
++					};
++
++					phy_port2: phy@1 {
++						reg = <1>;
++					};
++
++					phy_port3: phy@2 {
++						reg = <2>;
++					};
++
++					phy_port4: phy@3 {
++						reg = <3>;
++					};
++
++					phy_port5: phy@4 {
++						reg = <4>;
++					};
++				};
++
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					port@0 {
++						reg = <0>;
++						label = "cpu";
++						ethernet = <&enet1>;
++						phy-mode = "rgmii";
++						fixed-link {
++							speed = <1000>;
++							full-duplex;
++						};
++					};
++
++					port@1 {
++						reg = <1>;
++						label = "lan5";
++						phy-handle = <&phy_port1>;
++					};
++
++					port@2 {
++						reg = <2>;
++						label = "lan4";
++						phy-handle = <&phy_port2>;
++					};
++
++					port@3 {
++						reg = <3>;
++						label = "lan3";
++						phy-handle = <&phy_port3>;
++					};
++
++					port@4 {
++						reg = <4>;
++						label = "lan2";
++						phy-handle = <&phy_port4>;
++					};
++
++					port@5 {
++						reg = <5>;
++						label = "lan1";
++						phy-handle = <&phy_port5>;
++					};
++				};
++			};
++
++			phy7: ethernet-phy@7 {
++				interrupts = <3 1 0 0>;
++				reg = <0x7>;
++			};
++		};
++
++		mdio@25520 {
++			status = "disabled";
++		};
 +	
-+        	mdio@26520 {
-+                        status = "disabled";
-+        	};
++		mdio@26520 {
++			status = "disabled";
++		};
 +
 +
 +		ptp_clock@24e00 {
@@ -242,71 +385,78 @@ index 0000000000..5c5555fde9
 +			fsl,max-adj = <249999999>;
 +		};
 +
-+	        enet0: ethernet@24000 {
-+                        phy-handle = <&phy0>;
-+	                phy-connection-type = "rgmii-id";
-+        	};
++		enet0: ethernet@24000 {
++			phy-connection-type = "rgmii-id";
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
++			};
++		};
 +
-+	        enet1: ethernet@25000 {
-+	                fixed-link = <6 1 1000 1 0>;
-+        	};
++		enet1: ethernet@25000 {
++			phy-connection-type = "rgmii-id";
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
++			};
++		};
 +
-+	        enet2: ethernet@26000 {
-+                	phy-handle = <&phy7>;
-+	                phy-connection-type = "rgmii-id";
-+        	};
++		enet2: ethernet@26000 {
++			phy-handle = <&phy7>;
++			phy-connection-type = "rgmii-id";
++		};
 +	};
-+        pci2: pcie@ffe08000 {
-+                ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
-+                reg = <0 0xffe08000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0xc0000000
-+                                  0x2000000 0x0 0xc0000000
-+                                  0x0 0x20000000
++	pci2: pcie@ffe08000 {
++		ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
++		reg = <0 0xffe08000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0xc0000000
++				  0x2000000 0x0 0xc0000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
-+        pci1: pcie@ffe09000 {
-+                ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
-+                reg = <0 0xffe09000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0xa0000000
-+                                  0x2000000 0x0 0xa0000000
-+                                  0x0 0x20000000
++	pci1: pcie@ffe09000 {
++		ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
++		reg = <0 0xffe09000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0xa0000000
++				  0x2000000 0x0 0xa0000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
-+        pci0: pcie@ffe0a000 {
-+                ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
-+                reg = <0 0xffe0a000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0x80000000
-+                                  0x2000000 0x0 0x80000000
-+                                  0x0 0x20000000
++	pci0: pcie@ffe0a000 {
++		ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
++		reg = <0 0xffe0a000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0x80000000
++				  0x2000000 0x0 0x80000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
 +};
 +
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/p2020/profiles/turris.mk b/target/linux/mpc85xx/p2020/profiles/turris.mk
 new file mode 100644
-index 0000000000..6c1d5420ce
+index 0000000000..e7c4048e08
 --- /dev/null
 +++ b/target/linux/mpc85xx/p2020/profiles/turris.mk
 @@ -0,0 +1,29 @@
@@ -316,8 +466,8 @@ index 0000000000..6c1d5420ce
 +TURRISNAND_DTS:="turris-bch"
 +TURRISNAND_UBIFS_OPTS:="-m 2048 -e 124KiB -c 2000 -F"
 +TURRISNAND_UBI_OPTS:="-m 2048 -p 128KiB -s 2048"
-+KERNEL_PATCHVER:=4.14
-+KERNELNAME:=zImage turris.dtb
++KERNEL_PATCHVER:=4.19
++KERNELNAME:=zImage turris-nand-bch.dtb
 +
 +define Profile/TURRIS
 +	NAME:=Turris 1.X
@@ -339,17 +489,17 @@ index 0000000000..6c1d5420ce
 +	Package set optimized for the Turris 1.X.
 +endef
 +$(eval $(call Profile,TURRIS))
-diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+diff --git a/target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch b/target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
 new file mode 100644
-index 0000000000..d6616263f3
+index 0000000000..0400c09ebc
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
-@@ -0,0 +1,227 @@
-+Index: a/drivers/mtd/nand/fsl_elbc_nand.c
-+===================================================================
-+--- a/drivers/mtd/nand/fsl_elbc_nand.c
-++++ b/drivers/mtd/nand/fsl_elbc_nand.c
-+@@ -355,6 +355,14 @@ static void fsl_elbc_cmdfunc(struct mtd_
++++ b/target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
+@@ -0,0 +1,223 @@
++diff --git a/drivers/mtd/nand/raw/fsl_elbc_nand.c b/drivers/mtd/nand/raw/fsl_elbc_nand.c
++index 55f449b711fd..941dbe898bc2 100644
++--- a/drivers/mtd/nand/raw/fsl_elbc_nand.c
+++++ b/drivers/mtd/nand/raw/fsl_elbc_nand.c
++@@ -355,6 +355,14 @@ static void fsl_elbc_cmdfunc(struct mtd_info *mtd, unsigned int command,
 + 		fsl_elbc_run_command(mtd);
 + 		return;
 + 
@@ -364,13 +514,13 @@ index 0000000000..d6616263f3
 + 	/* READOOB reads only the OOB because no ECC is performed. */
 + 	case NAND_CMD_READOOB:
 + 		dev_vdbg(priv->dev,
-+@@ -637,75 +645,6 @@ static int fsl_elbc_wait(struct mtd_info
++@@ -637,79 +645,6 @@ static int fsl_elbc_wait(struct mtd_info *mtd, struct nand_chip *chip)
 + 	return (elbc_fcm_ctrl->mdr & 0xff) | NAND_STATUS_WP;
 + }
 + 
-+-static int fsl_elbc_chip_init_tail(struct mtd_info *mtd)
++-static int fsl_elbc_attach_chip(struct nand_chip *chip)
 +-{
-+-	struct nand_chip *chip = mtd_to_nand(mtd);
++-	struct mtd_info *mtd = nand_to_mtd(chip);
 +-	struct fsl_elbc_mtd *priv = nand_get_controller_data(chip);
 +-	struct fsl_lbc_ctrl *ctrl = priv->ctrl;
 +-	struct fsl_lbc_regs __iomem *lbc = ctrl->regs;
@@ -431,58 +581,20 @@ index 0000000000..d6616263f3
 +-		dev_err(priv->dev,
 +-		        "fsl_elbc_init: page size %d is not supported\n",
 +-		        mtd->writesize);
-+-		return -1;
++-		return -ENOTSUPP;
 +-	}
 +-
 +-	return 0;
 +-}
 +-
++-static const struct nand_controller_ops fsl_elbc_controller_ops = {
++-	.attach_chip = fsl_elbc_attach_chip,
++-};
++-
 + static int fsl_elbc_read_page(struct mtd_info *mtd, struct nand_chip *chip,
 + 			      uint8_t *buf, int oob_required, int page)
 + {
-+@@ -748,6 +687,32 @@ static int fsl_elbc_write_subpage(struct
-+ 	return 0;
-+ }
-+ 
-++static int fsl_elbc_ecc_init(struct fsl_elbc_mtd *priv)
-++{
-++	struct nand_chip *chip = &priv->chip;
-++
-++	switch (chip->ecc.mode) {
-++	case NAND_ECC_SOFT:
-++		break;
-++	case NAND_ECC_HW:
-++		chip->ecc.read_page = fsl_elbc_read_page;
-++		chip->ecc.write_page = fsl_elbc_write_page;
-++		chip->ecc.write_subpage = fsl_elbc_write_subpage;
-++		/* put in small page settings and adjust later if needed */
-++		/* chip->ecc.layout = (priv->fmr & FMR_ECCM) ?
-++				&fsl_elbc_oob_sp_eccm1 : &fsl_elbc_oob_sp_eccm0; */
-++		chip->ecc.size = 512;
-++		chip->ecc.bytes = 3;
-++		chip->ecc.strength = 1;
-++		break;
-++	default:
-++		return -EINVAL;
-++	}
-++
-++	return 0;
-++}
-++
-++
-+ static int fsl_elbc_chip_init(struct fsl_elbc_mtd *priv)
-+ {
-+ 	struct fsl_lbc_ctrl *ctrl = priv->ctrl;
-+@@ -755,6 +721,8 @@ static int fsl_elbc_chip_init(struct fsl
-+ 	struct fsl_elbc_fcm_ctrl *elbc_fcm_ctrl = ctrl->nand;
-+ 	struct nand_chip *chip = &priv->chip;
-+ 	struct mtd_info *mtd = nand_to_mtd(chip);
-++	int ret;
-++	unsigned int al;
-+ 
-+ 	dev_dbg(priv->dev, "eLBC Set Information for bank %d\n", priv->bank);
-+ 
-+@@ -787,24 +755,62 @@ static int fsl_elbc_chip_init(struct fsl
++@@ -791,27 +726,108 @@ static int fsl_elbc_chip_init(struct fsl_elbc_mtd *priv)
 + 	chip->controller = &elbc_fcm_ctrl->controller;
 + 	nand_set_controller_data(chip, priv);
 + 
@@ -490,28 +602,49 @@ index 0000000000..d6616263f3
 +-	chip->ecc.write_page = fsl_elbc_write_page;
 +-	chip->ecc.write_subpage = fsl_elbc_write_subpage;
 +-
-+ 	/* If CS Base Register selects full hardware ECC then use it */
-+ 	if ((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
-+ 	    BR_DECC_CHK_GEN) {
-+ 		chip->ecc.mode = NAND_ECC_HW;
++-	/* If CS Base Register selects full hardware ECC then use it */
++-	if ((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
++-	    BR_DECC_CHK_GEN) {
++-		chip->ecc.mode = NAND_ECC_HW;
 +-		mtd_set_ooblayout(mtd, &fsl_elbc_ooblayout_ops);
 +-		chip->ecc.size = 512;
 +-		chip->ecc.bytes = 3;
 +-		chip->ecc.strength = 1;
-+ 	} else {
-+ 		/* otherwise fall back to default software ECC */
-+ 		chip->ecc.mode = NAND_ECC_SOFT;
-+ 		chip->ecc.algo = NAND_ECC_HAMMING;
-+ 	}
-+ 
-++	ret = nand_scan_ident(mtd, 1, NULL);
-++	if (ret)
-++		return ret;
+++	return 0;
+++}
 ++
-++	ret = fsl_elbc_ecc_init(priv);
-++	if (ret) {
-++		dev_err(priv->dev, "ECC init failed: %d\n", ret);
-++		return ret;
+++static int fsl_elbc_attach_chip(struct nand_chip *chip)
+++{
+++	struct mtd_info *mtd = nand_to_mtd(chip);
+++	struct fsl_elbc_mtd *priv = nand_get_controller_data(chip);
+++	struct fsl_lbc_ctrl *ctrl = priv->ctrl;
+++	struct fsl_lbc_regs __iomem *lbc = ctrl->regs;
+++	unsigned int al;
+++
+++	switch (chip->ecc.mode) {
+++	case NAND_ECC_NONE:
+++		/* If CS Base Register selects full hardware ECC then use it */
+++		if ((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
+++		    BR_DECC_CHK_GEN) {
+++			chip->ecc.read_page = fsl_elbc_read_page;
+++			chip->ecc.write_page = fsl_elbc_write_page;
+++			chip->ecc.write_subpage = fsl_elbc_write_subpage;
+++
+++			chip->ecc.mode = NAND_ECC_HW;
+++			mtd_set_ooblayout(mtd, &fsl_elbc_ooblayout_ops);
+++			chip->ecc.size = 512;
+++			chip->ecc.bytes = 3;
+++			chip->ecc.strength = 1;
+++		} else {
+++			/* otherwise fall back to default software ECC */
+++			chip->ecc.mode = NAND_ECC_SOFT;
+++			chip->ecc.algo = NAND_ECC_HAMMING;
+++		}
+++		break;
+++	case NAND_ECC_SOFT:
+++		break;
+++	default:
+++		return -EINVAL;
 ++	}
 ++
 ++	/* calculate FMR Address Length field */
@@ -523,6 +656,41 @@ index 0000000000..d6616263f3
 ++
 ++	priv->fmr |= al << FMR_AL_SHIFT;
 ++
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->numchips = %d\n",
+++	        chip->numchips);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->chipsize = %lld\n",
+++	        chip->chipsize);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->pagemask = %8x\n",
+++	        chip->pagemask);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->chip_delay = %d\n",
+++	        chip->chip_delay);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->badblockpos = %d\n",
+++	        chip->badblockpos);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->chip_shift = %d\n",
+++	        chip->chip_shift);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->page_shift = %d\n",
+++	        chip->page_shift);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->phys_erase_shift = %d\n",
+++	        chip->phys_erase_shift);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.mode = %d\n",
+++	        chip->ecc.mode);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.steps = %d\n",
+++	        chip->ecc.steps);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.bytes = %d\n",
+++	        chip->ecc.bytes);
+++	dev_dbg(priv->dev, "fsl_elbc_init: nand->ecc.total = %d\n",
+++	        chip->ecc.total);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->ooblayout = %p\n",
+++		mtd->ooblayout);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->flags = %08x\n", mtd->flags);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->size = %lld\n", mtd->size);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->erasesize = %d\n",
+++	        mtd->erasesize);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->writesize = %d\n",
+++	        mtd->writesize);
+++	dev_dbg(priv->dev, "fsl_elbc_init: mtd->oobsize = %d\n",
+++	        mtd->oobsize);
+++
 ++	/* adjust Option Register and ECC to match Flash page size */
 ++	if (mtd->writesize == 512) {
 ++		priv->page_size = 0;
@@ -530,48 +698,54 @@ index 0000000000..d6616263f3
 ++	} else if (mtd->writesize == 2048) {
 ++		priv->page_size = 1;
 ++		setbits32(&lbc->bank[priv->bank].or, OR_FCM_PGS);
-++		/* adjust ecc setup if needed */
-++		if (((in_be32(&lbc->bank[priv->bank].br) & BR_DECC) ==
-++		    BR_DECC_CHK_GEN) && (chip->ecc.mode == NAND_ECC_HW)) {
-++			chip->ecc.size = 512;
-++		/*	chip->ecc.layout = (priv->fmr & FMR_ECCM) ?
-++			                   &fsl_elbc_oob_lp_eccm1 :
-++			                   &fsl_elbc_oob_lp_eccm0; */
-++		}
-++	} else {
-++		dev_err(priv->dev, "page size %d is not supported\n",
++ 	} else {
++-		/* otherwise fall back to default software ECC */
++-		chip->ecc.mode = NAND_ECC_SOFT;
++-		chip->ecc.algo = NAND_ECC_HAMMING;
+++		dev_err(priv->dev,
+++		        "fsl_elbc_init: page size %d is not supported\n",
 ++		        mtd->writesize);
-++		return -1;
-++ 	}
-++ 
-++	ret = nand_scan_tail(mtd);
-++	if (ret) {
-++		dev_err(priv->dev, "nand_scan_tail failed: %d\n", ret);
-++		return ret;
-++	}
-++
+++		return -ENOTSUPP;
++ 	}
++ 
 + 	return 0;
 + }
 + 
-+@@ -912,18 +940,6 @@ static int fsl_elbc_nand_probe(struct pl
-+ 	if (ret)
-+ 		goto err;
+++static const struct nand_controller_ops fsl_elbc_controller_ops = {
+++	.attach_chip = fsl_elbc_attach_chip,
+++};
+++
++ static int fsl_elbc_chip_remove(struct fsl_elbc_mtd *priv)
++ {
++ 	struct fsl_elbc_fcm_ctrl *elbc_fcm_ctrl = priv->ctrl->nand;
+diff --git a/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch b/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
+new file mode 100644
+index 0000000000..f2b74cc5d3
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
+@@ -0,0 +1,22 @@
++diff --git a/drivers/net/dsa/qca8k.c b/drivers/net/dsa/qca8k.c
++index cdcde7f8e0b2..eb199193cc3b 100644
++--- a/drivers/net/dsa/qca8k.c
+++++ b/drivers/net/dsa/qca8k.c
++@@ -625,7 +625,7 @@ qca8k_phy_read(struct dsa_switch *ds, int phy, int regnum)
++ {
++ 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
 + 
-+-	ret = nand_scan_ident(mtd, 1, NULL);
-+-	if (ret)
-+-		goto err;
-+-
-+-	ret = fsl_elbc_chip_init_tail(mtd);
-+-	if (ret)
-+-		goto err;
-+-
-+-	ret = nand_scan_tail(mtd);
-+-	if (ret)
-+-		goto err;
-+-
-+ 	/* First look for RedBoot table or partitions on the command
-+ 	 * line, these take precedence over device tree information */
-+ 	mtd_device_parse_register(mtd, part_probe_types, NULL,
++-	return mdiobus_read(priv->bus, phy, regnum);
+++	return mdiobus_read(priv->bus, phy-1, regnum);
++ }
++ 
++ static int
++@@ -633,7 +633,7 @@ qca8k_phy_write(struct dsa_switch *ds, int phy, int regnum, u16 val)
++ {
++ 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
++ 
++-	return mdiobus_write(priv->bus, phy, regnum, val);
+++	return mdiobus_write(priv->bus, phy-1, regnum, val);
++ }
++ 
++ static void
 -- 
-2.20.1
+2.21.0
 
