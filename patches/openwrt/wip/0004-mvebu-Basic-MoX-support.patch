@@ -1,4 +1,4 @@
-From 252d68caa9428b2208c3cf2fb4af67703260ae6e Mon Sep 17 00:00:00 2001
+From 30882897ec15d834ed5df5cbccc55762eef66502 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -102,7 +102,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...xxx-Rename-sgmii-10g-power-functions.patch |  65 ++
  ...x-Add-serdes-register-read-write-hel.patch | 107 ++
  ...x-2500Base-X-uses-the-1000Base-X-SER.patch |  34 +
- ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 413 ++++++++
+ ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 404 ++++++++
  ...x-Power-on-off-SERDES-on-cmode-chang.patch |  53 +
  ...x-link-mv88e6xxx_port-to-mv88e6xxx_c.patch |  48 +
  ...x-Add-SERDES-phydev_mac_change-up-fo.patch | 349 +++++++
@@ -118,8 +118,8 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...8e6xxx-Call-the-common-IRQ-free-code.patch |  31 +
  ...v88e6xxx-Fix-IRQ-when-loading-module.patch |  43 +
  ...x-fix-races-between-lock-and-irq-fre.patch | 102 ++
- ...-dsa-mv88e6xxx-Share-main-switch-IRQ.patch |  29 +
- ...x-Fix-88E6141-6341-2500mbps-SERDES-s.patch | 100 ++
+ ...-dsa-mv88e6xxx-Share-main-switch-IRQ.patch |  35 +
+ ...x-Fix-88E6141-6341-2500mbps-SERDES-s.patch |  91 ++
  ...eta-Fix-napi-structure-mixup-on-arma.patch | 107 ++
  ...fix-mvneta_config_rss-on-armada-3700.patch |  77 ++
  ...-armada-37xx-Correct-mpp-definitions.patch | 108 ++
@@ -137,7 +137,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
  ...m64-restart-Armada-3700-restart-code.patch |   6 +-
- 130 files changed, 14184 insertions(+), 311 deletions(-)
+ 130 files changed, 14172 insertions(+), 311 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -10174,10 +10174,10 @@ index 0000000000..9c78af8124
 +
 diff --git a/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
 new file mode 100644
-index 0000000000..96466035ea
+index 0000000000..f6d66457af
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
-@@ -0,0 +1,413 @@
+@@ -0,0 +1,404 @@
 +From d2dc033b78182476d9a62a12071e2adeb3a8e75a Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:45 +0200
@@ -10354,15 +10354,6 @@ index 0000000000..96466035ea
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -3239,7 +3267,7 @@ static const struct mv88e6xxx_ops mv88e6
-+ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
-+ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
-+ 	.port_set_speed = mv88e6390_port_set_speed,
-+-	.port_tag_remap = mv88e6095_port_tag_remap,
-++	.port_tag_remap = mv87e6095_port_tag_remap,
-+ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
-+ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
-+ 	.port_set_ether_type = mv88e6351_port_set_ether_type,
 +@@ -3249,6 +3277,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -12472,10 +12463,10 @@ index 0000000000..465bebde7d
 +
 diff --git a/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch b/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
 new file mode 100644
-index 0000000000..5716dab8a7
+index 0000000000..427f748664
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,35 @@
 +From 9ae5a7943c547f2c59d4ae189b67358009f798e8 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Fri, 17 Aug 2018 12:09:49 +0200
@@ -12489,11 +12480,11 @@ index 0000000000..5716dab8a7
 + drivers/net/dsa/mv88e6xxx/chip.c | 2 +-
 + 1 file changed, 1 insertion(+), 1 deletion(-)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index 0d2814959f25..b80e3267bb2e 100644
-+--- a/drivers/net/dsa/mv88e6xxx/chip.c
-++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -431,7 +431,7 @@ static int mv88e6xxx_g1_irq_setup(struct mv88e6xxx_chip *chip)
++Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.c
++===================================================================
++--- linux-4.14.106.orig/drivers/net/dsa/mv88e6xxx/chip.c
+++++ linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -447,7 +447,7 @@ static int mv88e6xxx_g1_irq_setup(struct
 + 
 + 	err = request_threaded_irq(chip->irq, NULL,
 + 				   mv88e6xxx_g1_irq_thread_fn,
@@ -12502,15 +12493,21 @@ index 0000000000..5716dab8a7
 + 				   dev_name(chip->dev), chip);
 + 	if (err)
 + 		mv88e6xxx_g1_irq_free_common(chip);
-+-- 
-+2.19.2
-+
++@@ -3366,7 +3366,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_set_link = mv88e6xxx_port_set_link,
++ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
++ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
++-	.port_set_speed = mv88e6390_port_set_speed,
+++	.port_set_speed = mv88e6341_port_set_speed,
++ 	.port_tag_remap = mv88e6095_port_tag_remap,
++ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
++ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
 diff --git a/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
 new file mode 100644
-index 0000000000..ed7326e443
+index 0000000000..8112c7a55f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,91 @@
 +From df8f28f098cc5af9a39f91657d8cd837d35eb147 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Fri, 5 Oct 2018 13:23:05 +0200
@@ -12545,15 +12542,6 @@ index 0000000000..ed7326e443
 +-	.port_set_speed = mv88e6390_port_set_speed,
 ++	.port_set_speed = mv88e6341_port_set_speed,
 + 	.port_tag_remap = mv88e6095_port_tag_remap,
-+ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
-+ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
-+@@ -3366,7 +3366,7 @@ static const struct mv88e6xxx_ops mv88e6
-+ 	.port_set_link = mv88e6xxx_port_set_link,
-+ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
-+ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
-+-	.port_set_speed = mv88e6390_port_set_speed,
-++	.port_set_speed = mv88e6341_port_set_speed,
-+ 	.port_tag_remap = mv87e6095_port_tag_remap,
 + 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
 + 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
 +Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/port.c
