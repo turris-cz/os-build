@@ -22,7 +22,7 @@ elseif model:match("^[Tt]urris$") then
 end
 Install("fstools", { critical = true })
 if model:match("^[Tt]urris$") then
-	Install("turris-support", { critical = true })
+	Install("turris1x-support", { critical = true })
 end
 if model:match("[Oo]mnia") then
 	Install("omnia-support", { critical = true })
