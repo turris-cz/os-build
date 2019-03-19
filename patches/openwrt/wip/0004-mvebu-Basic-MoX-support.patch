@@ -1,11 +1,15 @@
-From 68e81f2d93f89ac04bac9a98491c0dc0e75b0add Mon Sep 17 00:00:00 2001
+From 116658bdbd867e5eb821bd61a501090d7d79a8e7 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
 Adding basic support for CZ.NICs MoX board.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  target/linux/mvebu/config-4.14                |   1 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
@@ -94,15 +98,15 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...0082-net-dsa-Plug-in-PHYLINK-support.patch | 577 +++++++++++
  ...lper-for-configuring-2500BaseX-modes.patch |  74 ++
  ...et-dsa-mv88e6xxx-add-PHYLINK-support.patch | 213 ++++
- ...8e6xxx-Add-support-to-enabling-pause.patch | 171 ++++
- ...et-dsa-mv88e6xxx-add-phylink-support.patch | 705 +++++++++++++
+ ...8e6xxx-Add-support-to-enabling-pause.patch | 401 ++++++++
+ ...et-dsa-mv88e6xxx-add-phylink-support.patch | 422 ++++++++
  ...-mv88e6xxx-Refactor-SERDES-lane-code.patch | 284 ++++++
  ...88e6xxx-6390-vs-6390X-SERDES-support.patch | 126 +++
  ...v88e6xxx-88E6141-6341-SERDES-support.patch |  87 ++
  ...xxx-Rename-sgmii-10g-power-functions.patch |  65 ++
  ...x-Add-serdes-register-read-write-hel.patch | 107 ++
  ...x-2500Base-X-uses-the-1000Base-X-SER.patch |  34 +
- ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 439 +++++++++
+ ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 394 ++++++++
  ...x-Power-on-off-SERDES-on-cmode-chang.patch |  53 +
  ...x-link-mv88e6xxx_port-to-mv88e6xxx_c.patch |  48 +
  ...x-Add-SERDES-phydev_mac_change-up-fo.patch | 361 +++++++
@@ -140,7 +144,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
  ...m64-restart-Armada-3700-restart-code.patch |   6 +-
- 133 files changed, 14290 insertions(+), 311 deletions(-)
+ 133 files changed, 14192 insertions(+), 311 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -5063,7 +5067,7 @@ diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-
 similarity index 83%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index f5506a8bdf..cd4710dd8f 100644
+index 540ef51ba4..78fc7f9787 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
@@ -8620,10 +8624,10 @@ index 0000000000..4356c08f2e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
 new file mode 100644
-index 0000000000..dfbb590265
+index 0000000000..264558981a
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,401 @@
 +From 35f8ef0b440445c44e35f9c0483dcac1a254bbff Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:37 +0200
@@ -8641,11 +8645,9 @@ index 0000000000..dfbb590265
 + drivers/net/dsa/mv88e6xxx/port.h |  2 ++
 + 4 files changed, 48 insertions(+), 4 deletions(-)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index c7de21ee90cf..9bc1be397dee 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -450,7 +450,7 @@ int mv88e6xxx_update(struct mv88e6xxx_chip *chip, int addr, int reg, u16 update)
++@@ -466,7 +466,7 @@ int mv88e6xxx_update(struct mv88e6xxx_ch
 + }
 + 
 + static int mv88e6xxx_port_setup_mac(struct mv88e6xxx_chip *chip, int port,
@@ -8654,7 +8656,7 @@ index 0000000000..dfbb590265
 + 				    phy_interface_t mode)
 + {
 + 	int err;
-+@@ -469,6 +469,12 @@ static int mv88e6xxx_port_setup_mac(struct mv88e6xxx_chip *chip, int port,
++@@ -485,6 +485,12 @@ static int mv88e6xxx_port_setup_mac(stru
 + 			goto restore_link;
 + 	}
 + 
@@ -8667,7 +8669,7 @@ index 0000000000..dfbb590265
 + 	if (chip->info->ops->port_set_duplex) {
 + 		err = chip->info->ops->port_set_duplex(chip, port, duplex);
 + 		if (err && err != -EOPNOTSUPP)
-+@@ -510,7 +516,8 @@ static void mv88e6xxx_adjust_link(struct dsa_switch *ds, int port,
++@@ -526,7 +532,8 @@ static void mv88e6xxx_adjust_link(struct
 + 
 + 	mutex_lock(&chip->reg_lock);
 + 	err = mv88e6xxx_port_setup_mac(chip, port, phydev->link, phydev->speed,
@@ -8677,7 +8679,7 @@ index 0000000000..dfbb590265
 + 	mutex_unlock(&chip->reg_lock);
 + 
 + 	if (err && err != -EOPNOTSUPP)
-+@@ -541,7 +548,7 @@ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++@@ -557,7 +564,7 @@ static void mv88e6xxx_mac_config(struct
 + 				 const struct phylink_link_state *state)
 + {
 + 	struct mv88e6xxx_chip *chip = ds->priv;
@@ -8686,7 +8688,7 @@ index 0000000000..dfbb590265
 + 
 + 	if (mode == MLO_AN_PHY)
 + 		return;
-+@@ -555,9 +562,10 @@ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++@@ -571,9 +578,10 @@ static void mv88e6xxx_mac_config(struct
 + 		duplex = DUPLEX_UNFORCED;
 + 		link = LINK_UNFORCED;
 + 	}
@@ -8698,7 +8700,7 @@ index 0000000000..dfbb590265
 + 				       state->interface);
 + 	mutex_unlock(&chip->reg_lock);
 + 
-+@@ -1795,10 +1803,12 @@ static int mv88e6xxx_setup_port(struct mv88e6xxx_chip *chip, int port)
++@@ -1811,10 +1819,12 @@ static int mv88e6xxx_setup_port(struct m
 + 	if (dsa_is_cpu_port(ds, port) || dsa_is_dsa_port(ds, port))
 + 		err = mv88e6xxx_port_setup_mac(chip, port, LINK_FORCED_UP,
 + 					       SPEED_MAX, DUPLEX_FULL,
@@ -8711,7 +8713,7 @@ index 0000000000..dfbb590265
 + 					       PHY_INTERFACE_MODE_NA);
 + 	if (err)
 + 		return err;
-+@@ -2456,6 +2466,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++@@ -2579,6 +2589,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_jumbo_size = mv88e6165_port_set_jumbo_size,
 + 	.port_egress_rate_limiting = mv88e6097_port_egress_rate_limiting,
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
@@ -8719,19 +8721,258 @@ index 0000000000..dfbb590265
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2713,6 +2724,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
++@@ -2672,6 +2683,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_set_speed = mv88e6185_port_set_speed,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -2774,6 +2786,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -2786,6 +2799,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6176_ops = {
++@@ -2809,6 +2823,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -2822,6 +2837,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6352_serdes_power,
+++	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6185_ops = {
++@@ -2836,6 +2852,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_egress_floods = mv88e6185_port_set_egress_floods,
 + 	.port_egress_rate_limiting = mv88e6095_port_egress_rate_limiting,
 + 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
 ++	.port_set_pause = mv88e6185_port_set_pause,
+++	.port_link_state = mv88e6185_port_link_state,
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
-+index 334f6f7544ba..89e02442fa2f 100644
++@@ -2849,6 +2867,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6185_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6190_ops = {
++@@ -2907,6 +2926,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6390_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -2921,6 +2941,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6191_ops = {
++@@ -2943,6 +2964,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6390_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -2957,6 +2979,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6240_ops = {
++@@ -2980,6 +3003,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -2993,6 +3017,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6352_serdes_power,
+++	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6290_ops = {
++@@ -3016,6 +3041,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_set_cmode = mv88e6390x_port_set_cmode,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -3030,6 +3056,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6320_ops = {
++@@ -3052,6 +3079,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6320_stats_get_strings,
++@@ -3063,6 +3091,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6321_ops = {
++@@ -3085,6 +3114,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6320_stats_get_strings,
++@@ -3094,6 +3124,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6341_ops = {
++@@ -3117,6 +3148,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6320_stats_get_strings,
++@@ -3129,6 +3161,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6350_ops = {
++@@ -3150,6 +3183,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -3162,6 +3196,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6351_ops = {
++@@ -3183,6 +3218,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -3195,6 +3231,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6352_ops = {
++@@ -3218,6 +3255,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6097_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -3231,6 +3269,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6352_serdes_power,
+++	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6390_ops = {
++@@ -3256,6 +3295,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_set_cmode = mv88e6390x_port_set_cmode,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -3270,6 +3310,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++@@ -3295,6 +3336,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_set_cmode = mv88e6390x_port_set_cmode,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -3309,6 +3351,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_info mv88e6xxx_table[] = {
 +--- a/drivers/net/dsa/mv88e6xxx/chip.h
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.h
-+@@ -274,6 +274,13 @@ struct mv88e6xxx_ops {
++@@ -279,6 +279,13 @@ struct mv88e6xxx_ops {
 + 	 */
 + 	int (*port_set_duplex)(struct mv88e6xxx_chip *chip, int port, int dup);
 + 
@@ -8745,11 +8986,9 @@ index 0000000000..dfbb590265
 + #define SPEED_MAX		INT_MAX
 + #define SPEED_UNFORCED		-2
 + 
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index 760b5687d811..daf96c3e104b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.c
 ++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -36,6 +36,29 @@ int mv88e6xxx_port_write(struct mv88e6xxx_chip *chip, int port, int reg,
++@@ -36,6 +36,29 @@ int mv88e6xxx_port_write(struct mv88e6xx
 + 	return mv88e6xxx_write(chip, addr, reg, val);
 + }
 + 
@@ -8779,11 +9018,9 @@ index 0000000000..dfbb590265
 + /* Offset 0x01: MAC (or PCS or Physical) Control Register
 +  *
 +  * Link, Duplex and Flow Control have one force bit, one value bit.
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index 5e1db1b221ca..44916251567b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.h
 ++++ b/drivers/net/dsa/mv88e6xxx/port.h
-+@@ -242,6 +242,8 @@ int mv88e6xxx_port_read(struct mv88e6xxx_chip *chip, int port, int reg,
++@@ -252,6 +252,8 @@ int mv88e6xxx_port_read(struct mv88e6xxx
 + int mv88e6xxx_port_write(struct mv88e6xxx_chip *chip, int port, int reg,
 + 			 u16 val);
 + 
@@ -8792,15 +9029,12 @@ index 0000000000..dfbb590265
 + int mv88e6352_port_set_rgmii_delay(struct mv88e6xxx_chip *chip, int port,
 + 				   phy_interface_t mode);
 + int mv88e6390_port_set_rgmii_delay(struct mv88e6xxx_chip *chip, int port,
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch b/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch
 new file mode 100644
-index 0000000000..f51419e557
+index 0000000000..8d71d5ba08
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch
-@@ -0,0 +1,705 @@
+@@ -0,0 +1,422 @@
 +From ba3d2407bcd03a36403fc00e3090e98472f54908 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Thu, 9 Aug 2018 15:38:39 +0200
@@ -8820,11 +9054,9 @@ index 0000000000..f51419e557
 + drivers/net/dsa/mv88e6xxx/port.h |  18 +++-
 + 4 files changed, 217 insertions(+), 4 deletions(-)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index 9bc1be397dee..e6da51ca8282 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -524,10 +524,92 @@ static void mv88e6xxx_adjust_link(struct dsa_switch *ds, int port,
++@@ -540,10 +540,92 @@ static void mv88e6xxx_adjust_link(struct
 + 		dev_err(ds->dev, "p%d: failed to configure MAC\n", port);
 + }
 + 
@@ -8917,7 +9149,7 @@ index 0000000000..f51419e557
 + }
 + 
 + static int mv88e6xxx_link_state(struct dsa_switch *ds, int port,
-+@@ -537,7 +619,10 @@ static int mv88e6xxx_link_state(struct dsa_switch *ds, int port,
++@@ -553,7 +635,10 @@ static int mv88e6xxx_link_state(struct d
 + 	int err;
 + 
 + 	mutex_lock(&chip->reg_lock);
@@ -8929,7 +9161,7 @@ index 0000000000..f51419e557
 + 	mutex_unlock(&chip->reg_lock);
 + 
 + 	return err;
-+@@ -2352,6 +2437,7 @@ static const struct mv88e6xxx_ops mv88e6085_ops = {
++@@ -2475,6 +2560,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -8937,7 +9169,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2366,6 +2452,7 @@ static const struct mv88e6xxx_ops mv88e6085_ops = {
++@@ -2489,6 +2575,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6185_g1_reset,
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
@@ -8945,7 +9177,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6095_ops = {
-+@@ -2379,6 +2466,7 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++@@ -2502,6 +2589,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_frame_mode = mv88e6085_port_set_frame_mode,
 + 	.port_set_egress_floods = mv88e6185_port_set_egress_floods,
 + 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
@@ -8953,7 +9185,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2389,6 +2477,7 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++@@ -2512,6 +2600,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6185_g1_reset,
 + 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
@@ -8961,7 +9193,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6097_ops = {
-+@@ -2409,6 +2498,7 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++@@ -2532,6 +2621,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -8969,7 +9201,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2421,6 +2511,7 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++@@ -2544,6 +2634,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6352_g1_reset,
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
@@ -8977,7 +9209,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6123_ops = {
-+@@ -2436,6 +2527,7 @@ static const struct mv88e6xxx_ops mv88e6123_ops = {
++@@ -2559,6 +2650,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -8985,7 +9217,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2448,6 +2540,7 @@ static const struct mv88e6xxx_ops mv88e6123_ops = {
++@@ -2571,6 +2663,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6352_g1_reset,
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
@@ -8993,7 +9225,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6131_ops = {
-+@@ -2467,6 +2560,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++@@ -2590,6 +2683,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_egress_rate_limiting = mv88e6097_port_egress_rate_limiting,
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_set_pause = mv88e6185_port_set_pause,
@@ -9001,7 +9233,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2480,6 +2574,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++@@ -2603,6 +2697,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6185_g1_reset,
 + 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
@@ -9009,7 +9241,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6141_ops = {
-+@@ -2503,6 +2598,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++@@ -2626,6 +2721,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -9017,7 +9249,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -2515,6 +2611,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++@@ -2638,6 +2734,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6352_g1_reset,
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
@@ -9025,7 +9257,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6161_ops = {
-+@@ -2535,6 +2632,7 @@ static const struct mv88e6xxx_ops mv88e6161_ops = {
++@@ -2717,6 +2814,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -9033,39 +9265,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2547,6 +2645,7 @@ static const struct mv88e6xxx_ops mv88e6161_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6165_ops = {
-+@@ -2560,6 +2659,7 @@ static const struct mv88e6xxx_ops mv88e6165_ops = {
-+ 	.port_set_speed = mv88e6185_port_set_speed,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2572,6 +2672,7 @@ static const struct mv88e6xxx_ops mv88e6165_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6171_ops = {
-+@@ -2593,6 +2694,7 @@ static const struct mv88e6xxx_ops mv88e6171_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2605,6 +2707,7 @@ static const struct mv88e6xxx_ops mv88e6171_ops = {
++@@ -2729,6 +2827,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.reset = mv88e6352_g1_reset,
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
@@ -9073,7 +9273,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6172_ops = {
-+@@ -2628,6 +2731,7 @@ static const struct mv88e6xxx_ops mv88e6172_ops = {
++@@ -2752,6 +2851,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -9081,7 +9281,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2641,6 +2745,7 @@ static const struct mv88e6xxx_ops mv88e6172_ops = {
++@@ -2765,6 +2865,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6352_serdes_power,
@@ -9089,55 +9289,7 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6175_ops = {
-+@@ -2662,6 +2767,7 @@ static const struct mv88e6xxx_ops mv88e6175_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2674,6 +2780,7 @@ static const struct mv88e6xxx_ops mv88e6175_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6176_ops = {
-+@@ -2697,6 +2804,7 @@ static const struct mv88e6xxx_ops mv88e6176_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2710,6 +2818,7 @@ static const struct mv88e6xxx_ops mv88e6176_ops = {
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6352_serdes_power,
-++	.phylink_validate = mv88e6352_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6185_ops = {
-+@@ -2725,6 +2834,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
-+ 	.port_egress_rate_limiting = mv88e6095_port_egress_rate_limiting,
-+ 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
-+ 	.port_set_pause = mv88e6185_port_set_pause,
-++	.port_link_state = mv88e6185_port_link_state,
-+ 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2738,6 +2848,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
-+ 	.reset = mv88e6185_g1_reset,
-+ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6190_ops = {
-+@@ -2759,6 +2870,7 @@ static const struct mv88e6xxx_ops mv88e6190_ops = {
++@@ -2890,6 +2991,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6390_port_pause_limit,
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
@@ -9145,7 +9297,7 @@ index 0000000000..f51419e557
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2773,6 +2885,7 @@ static const struct mv88e6xxx_ops mv88e6190_ops = {
++@@ -2904,6 +3006,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390_serdes_power,
@@ -9153,203 +9305,9 @@ index 0000000000..f51419e557
 + };
 + 
 + static const struct mv88e6xxx_ops mv88e6190x_ops = {
-+@@ -2794,6 +2907,7 @@ static const struct mv88e6xxx_ops mv88e6190x_ops = {
-+ 	.port_pause_limit = mv88e6390_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2808,6 +2922,7 @@ static const struct mv88e6xxx_ops mv88e6190x_ops = {
-+ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6390_serdes_power,
-++	.phylink_validate = mv88e6390x_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6191_ops = {
-+@@ -2829,6 +2944,7 @@ static const struct mv88e6xxx_ops mv88e6191_ops = {
-+ 	.port_pause_limit = mv88e6390_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2843,6 +2959,7 @@ static const struct mv88e6xxx_ops mv88e6191_ops = {
-+ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6390_serdes_power,
-++	.phylink_validate = mv88e6390_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6240_ops = {
-+@@ -2866,6 +2983,7 @@ static const struct mv88e6xxx_ops mv88e6240_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2879,6 +2997,7 @@ static const struct mv88e6xxx_ops mv88e6240_ops = {
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6352_serdes_power,
-++	.phylink_validate = mv88e6352_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6290_ops = {
-+@@ -2901,6 +3020,7 @@ static const struct mv88e6xxx_ops mv88e6290_ops = {
-+ 	.port_set_cmode = mv88e6390x_port_set_cmode,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2915,6 +3035,7 @@ static const struct mv88e6xxx_ops mv88e6290_ops = {
-+ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6390_serdes_power,
-++	.phylink_validate = mv88e6390_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6320_ops = {
-+@@ -2937,6 +3058,7 @@ static const struct mv88e6xxx_ops mv88e6320_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -2948,6 +3070,7 @@ static const struct mv88e6xxx_ops mv88e6320_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6321_ops = {
-+@@ -2970,6 +3093,7 @@ static const struct mv88e6xxx_ops mv88e6321_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -2979,6 +3103,7 @@ static const struct mv88e6xxx_ops mv88e6321_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6341_ops = {
-+@@ -3002,6 +3127,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -3014,6 +3140,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6390_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6350_ops = {
-+@@ -3035,6 +3162,7 @@ static const struct mv88e6xxx_ops mv88e6350_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3047,6 +3175,7 @@ static const struct mv88e6xxx_ops mv88e6350_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6351_ops = {
-+@@ -3068,6 +3197,7 @@ static const struct mv88e6xxx_ops mv88e6351_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3080,6 +3210,7 @@ static const struct mv88e6xxx_ops mv88e6351_ops = {
-+ 	.reset = mv88e6352_g1_reset,
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-++	.phylink_validate = mv88e6185_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6352_ops = {
-+@@ -3103,6 +3234,7 @@ static const struct mv88e6xxx_ops mv88e6352_ops = {
-+ 	.port_pause_limit = mv88e6097_port_pause_limit,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3116,6 +3248,7 @@ static const struct mv88e6xxx_ops mv88e6352_ops = {
-+ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6352_serdes_power,
-++	.phylink_validate = mv88e6352_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6390_ops = {
-+@@ -3140,6 +3273,7 @@ static const struct mv88e6xxx_ops mv88e6390_ops = {
-+ 	.port_set_cmode = mv88e6390x_port_set_cmode,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -3154,6 +3288,7 @@ static const struct mv88e6xxx_ops mv88e6390_ops = {
-+ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6390_serdes_power,
-++	.phylink_validate = mv88e6390_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_ops mv88e6390x_ops = {
-+@@ -3178,6 +3313,7 @@ static const struct mv88e6xxx_ops mv88e6390x_ops = {
-+ 	.port_set_cmode = mv88e6390x_port_set_cmode,
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-++	.port_link_state = mv88e6352_port_link_state,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -3192,6 +3328,7 @@ static const struct mv88e6xxx_ops mv88e6390x_ops = {
-+ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
-+ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
-+ 	.serdes_power = mv88e6390_serdes_power,
-++	.phylink_validate = mv88e6390x_phylink_validate,
-+ };
-+ 
-+ static const struct mv88e6xxx_info mv88e6xxx_table[] = {
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
-+index 89e02442fa2f..3ea25e0cc98b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.h
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.h
-+@@ -319,6 +319,9 @@ struct mv88e6xxx_ops {
++@@ -324,6 +324,9 @@ struct mv88e6xxx_ops {
 + 	 */
 + 	int (*port_set_upstream_port)(struct mv88e6xxx_chip *chip, int port,
 + 				      int upstream_port);
@@ -9359,7 +9317,7 @@ index 0000000000..f51419e557
 + 
 + 	/* Snapshot the statistics for a port. The statistics can then
 + 	 * be read back a leisure but still with a consistent view.
-+@@ -349,6 +352,11 @@ struct mv88e6xxx_ops {
++@@ -354,6 +357,11 @@ struct mv88e6xxx_ops {
 + 			   struct mv88e6xxx_vtu_entry *entry);
 + 	int (*vtu_loadpurge)(struct mv88e6xxx_chip *chip,
 + 			     struct mv88e6xxx_vtu_entry *entry);
@@ -9371,11 +9329,9 @@ index 0000000000..f51419e557
 + };
 + 
 + struct mv88e6xxx_irq_ops {
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index daf96c3e104b..a2c99b04cd49 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.c
 ++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -387,6 +387,19 @@ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
++@@ -387,6 +387,19 @@ int mv88e6390x_port_set_cmode(struct mv8
 + 	return 0;
 + }
 + 
@@ -9395,7 +9351,7 @@ index 0000000000..f51419e557
 + int mv88e6xxx_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode)
 + {
 + 	int err;
-+@@ -401,7 +414,7 @@ int mv88e6xxx_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode)
++@@ -401,7 +414,7 @@ int mv88e6xxx_port_get_cmode(struct mv88
 + 	return 0;
 + }
 + 
@@ -9404,7 +9360,7 @@ index 0000000000..f51419e557
 + 			      struct phylink_link_state *state)
 + {
 + 	int err;
-+@@ -422,7 +435,7 @@ int mv88e6xxx_port_link_state(struct mv88e6xxx_chip *chip, int port,
++@@ -422,7 +435,7 @@ int mv88e6xxx_port_link_state(struct mv8
 + 		state->speed = SPEED_1000;
 + 		break;
 + 	case MV88E6XXX_PORT_STS_SPEED_10000:
@@ -9413,7 +9369,7 @@ index 0000000000..f51419e557
 + 		    MV88E6XXX_PORT_STS_CMODE_2500BASEX)
 + 			state->speed = SPEED_2500;
 + 		else
-+@@ -439,6 +452,45 @@ int mv88e6xxx_port_link_state(struct mv88e6xxx_chip *chip, int port,
++@@ -439,6 +452,45 @@ int mv88e6xxx_port_link_state(struct mv8
 + 	return 0;
 + }
 + 
@@ -9459,8 +9415,6 @@ index 0000000000..f51419e557
 + /* Offset 0x02: Jamming Control
 +  *
 +  * Do not limit the period of time that this port can be paused for by
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index 44916251567b..9b8d2b229907 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.h
 ++++ b/drivers/net/dsa/mv88e6xxx/port.h
 +@@ -42,14 +42,28 @@
@@ -9492,7 +9446,7 @@ index 0000000000..f51419e557
 + #define MV88E6XXX_PORT_MAC_CTL_FC			0x0080
 + #define MV88E6XXX_PORT_MAC_CTL_FORCE_FC			0x0040
 + #define MV88E6XXX_PORT_MAC_CTL_LINK_UP			0x0020
-+@@ -298,7 +312,9 @@ int mv88e6390_port_pause_limit(struct mv88e6xxx_chip *chip, int port, u8 in,
++@@ -308,7 +322,9 @@ int mv88e6390_port_pause_limit(struct mv
 + int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
 + 			      phy_interface_t mode);
 + int mv88e6xxx_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode);
@@ -9503,9 +9457,6 @@ index 0000000000..f51419e557
 + 			      struct phylink_link_state *state);
 + int mv88e6xxx_port_set_map_da(struct mv88e6xxx_chip *chip, int port);
 + int mv88e6095_port_set_upstream_port(struct mv88e6xxx_chip *chip, int port,
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mvebu/patches-4.14/90087-net-dsa-mv88e6xxx-Refactor-SERDES-lane-code.patch b/target/linux/mvebu/patches-4.14/90087-net-dsa-mv88e6xxx-Refactor-SERDES-lane-code.patch
 new file mode 100644
 index 0000000000..81f8a9ce34
@@ -10247,10 +10198,10 @@ index 0000000000..9c78af8124
 +
 diff --git a/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
 new file mode 100644
-index 0000000000..21199a45a4
+index 0000000000..292d57273f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
-@@ -0,0 +1,439 @@
+@@ -0,0 +1,394 @@
 +From d2dc033b78182476d9a62a12071e2adeb3a8e75a Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:45 +0200
@@ -10269,11 +10220,9 @@ index 0000000000..21199a45a4
 + drivers/net/dsa/mv88e6xxx/serdes.c | 42 +++++-------------------------
 + 5 files changed, 63 insertions(+), 44 deletions(-)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index bd5ec2abc6ce..d81c81334977 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -2155,6 +2155,7 @@ static int mv88e6xxx_g1_setup(struct mv88e6xxx_chip *chip)
++@@ -2272,6 +2272,7 @@ static int mv88e6390_setup_errata(struct
 + static int mv88e6xxx_setup(struct dsa_switch *ds)
 + {
 + 	struct mv88e6xxx_chip *chip = ds->priv;
@@ -10281,9 +10230,9 @@ index 0000000000..21199a45a4
 + 	int err;
 + 	int i;
 + 
-+@@ -2163,6 +2164,17 @@ static int mv88e6xxx_setup(struct dsa_switch *ds)
-+ 
-+ 	mutex_lock(&chip->reg_lock);
++@@ -2286,6 +2287,17 @@ static int mv88e6xxx_setup(struct dsa_sw
++ 			goto unlock;
++ 	}
 + 
 ++	/* Cache the cmode of each port. */
 ++	for (i = 0; i < mv88e6xxx_num_ports(chip); i++) {
@@ -10299,7 +10248,7 @@ index 0000000000..21199a45a4
 + 	/* Setup Switch Port Registers */
 + 	for (i = 0; i < mv88e6xxx_num_ports(chip); i++) {
 + 		err = mv88e6xxx_setup_port(chip, i);
-+@@ -2438,6 +2450,7 @@ static const struct mv88e6xxx_ops mv88e6085_ops = {
++@@ -2561,6 +2573,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10307,7 +10256,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2467,6 +2480,7 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++@@ -2590,6 +2603,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_egress_floods = mv88e6185_port_set_egress_floods,
 + 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
 + 	.port_link_state = mv88e6185_port_link_state,
@@ -10315,7 +10264,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2499,6 +2513,7 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++@@ -2622,6 +2636,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10323,7 +10272,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2528,6 +2543,7 @@ static const struct mv88e6xxx_ops mv88e6123_ops = {
++@@ -2651,6 +2666,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10331,7 +10280,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2561,6 +2577,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++@@ -2684,6 +2700,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
 + 	.port_set_pause = mv88e6185_port_set_pause,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10339,7 +10288,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2599,6 +2616,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++@@ -2722,6 +2739,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10347,15 +10296,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -2634,6 +2652,7 @@ static const struct mv88e6xxx_ops mv88e6161_ops = {
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-+ 	.port_link_state = mv88e6352_port_link_state,
-++	.port_get_cmode = mv88e6185_port_get_cmode,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2661,6 +2680,7 @@ static const struct mv88e6xxx_ops mv88e6165_ops = {
++@@ -2782,6 +2800,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10363,7 +10304,15 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2696,6 +2716,7 @@ static const struct mv88e6xxx_ops mv88e6171_ops = {
++@@ -2816,6 +2835,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
++ 	.port_link_state = mv88e6352_port_link_state,
+++	.port_get_cmode = mv88e6185_port_get_cmode,
++ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6095_stats_get_strings,
++@@ -2889,6 +2909,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10371,7 +10320,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2733,6 +2754,7 @@ static const struct mv88e6xxx_ops mv88e6172_ops = {
++@@ -2926,6 +2947,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10379,23 +10328,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2769,6 +2791,7 @@ static const struct mv88e6xxx_ops mv88e6175_ops = {
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-+ 	.port_link_state = mv88e6352_port_link_state,
-++	.port_get_cmode = mv88e6352_port_get_cmode,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2806,6 +2829,7 @@ static const struct mv88e6xxx_ops mv88e6176_ops = {
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-+ 	.port_link_state = mv88e6352_port_link_state,
-++	.port_get_cmode = mv88e6352_port_get_cmode,
-+ 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
-+ 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
-+ 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2836,6 +2860,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
++@@ -2956,6 +2978,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
 + 	.port_set_pause = mv88e6185_port_set_pause,
 + 	.port_link_state = mv88e6185_port_link_state,
@@ -10403,7 +10336,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2872,6 +2897,7 @@ static const struct mv88e6xxx_ops mv88e6190_ops = {
++@@ -3069,6 +3092,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10411,23 +10344,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2909,6 +2935,7 @@ static const struct mv88e6xxx_ops mv88e6190x_ops = {
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-+ 	.port_link_state = mv88e6352_port_link_state,
-++	.port_get_cmode = mv88e6352_port_get_cmode,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2946,6 +2973,7 @@ static const struct mv88e6xxx_ops mv88e6191_ops = {
-+ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
-+ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
-+ 	.port_link_state = mv88e6352_port_link_state,
-++	.port_get_cmode = mv88e6352_port_get_cmode,
-+ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
-+ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
-+ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -2985,6 +3013,7 @@ static const struct mv88e6xxx_ops mv88e6240_ops = {
++@@ -3108,6 +3132,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10435,7 +10352,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3022,6 +3051,7 @@ static const struct mv88e6xxx_ops mv88e6290_ops = {
++@@ -3146,6 +3171,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10443,7 +10360,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -3060,6 +3090,7 @@ static const struct mv88e6xxx_ops mv88e6320_ops = {
++@@ -3184,6 +3210,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10451,7 +10368,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -3095,6 +3126,7 @@ static const struct mv88e6xxx_ops mv88e6321_ops = {
++@@ -3219,6 +3246,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10459,7 +10376,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -3129,6 +3161,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++@@ -3253,6 +3281,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10467,7 +10384,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6320_stats_get_strings,
-+@@ -3165,6 +3198,7 @@ static const struct mv88e6xxx_ops mv88e6350_ops = {
++@@ -3289,6 +3318,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10475,7 +10392,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3200,6 +3234,7 @@ static const struct mv88e6xxx_ops mv88e6351_ops = {
++@@ -3324,6 +3354,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10483,7 +10400,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3237,6 +3272,7 @@ static const struct mv88e6xxx_ops mv88e6352_ops = {
++@@ -3361,6 +3392,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10491,7 +10408,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6320_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -3276,6 +3312,7 @@ static const struct mv88e6xxx_ops mv88e6390_ops = {
++@@ -3401,6 +3433,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10499,7 +10416,7 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+@@ -3316,6 +3353,7 @@ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++@@ -3442,6 +3475,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
 + 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
 + 	.port_link_state = mv88e6352_port_link_state,
@@ -10507,8 +10424,6 @@ index 0000000000..21199a45a4
 + 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
 + 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
 + 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
-+index 3ea25e0cc98b..8f8c5d9eb763 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.h
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.h
 +@@ -154,6 +154,10 @@ struct mv88e6xxx_irq {
@@ -10532,7 +10447,7 @@ index 0000000000..21199a45a4
 + };
 + 
 + struct mv88e6xxx_bus_ops {
-+@@ -313,6 +320,7 @@ struct mv88e6xxx_ops {
++@@ -318,6 +325,7 @@ struct mv88e6xxx_ops {
 + 	 */
 + 	int (*port_set_cmode)(struct mv88e6xxx_chip *chip, int port,
 + 			      phy_interface_t mode);
@@ -10540,11 +10455,9 @@ index 0000000000..21199a45a4
 + 
 + 	/* Some devices have a per port register indicating what is
 + 	 * the upstream port this port should forward to.
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index a2c99b04cd49..3893b0c060e1 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.c
 ++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -384,11 +384,12 @@ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
++@@ -384,11 +384,12 @@ int mv88e6390x_port_set_cmode(struct mv8
 + 			return err;
 + 	}
 + 
@@ -10559,7 +10472,7 @@ index 0000000000..21199a45a4
 + {
 + 	int err;
 + 	u16 reg;
-+@@ -397,10 +398,12 @@ static int mv88e6185_port_get_cmode(struct mv88e6xxx_chip *chip, int port)
++@@ -397,10 +398,12 @@ static int mv88e6185_port_get_cmode(stru
 + 	if (err)
 + 		return err;
 + 
@@ -10574,7 +10487,7 @@ index 0000000000..21199a45a4
 + {
 + 	int err;
 + 	u16 reg;
-+@@ -456,10 +459,7 @@ int mv88e6185_port_link_state(struct mv88e6xxx_chip *chip, int port,
++@@ -456,10 +459,7 @@ int mv88e6185_port_link_state(struct mv8
 + 			      struct phylink_link_state *state)
 + {
 + 	if (state->interface == PHY_INTERFACE_MODE_1000BASEX) {
@@ -10586,11 +10499,9 @@ index 0000000000..21199a45a4
 + 
 + 		/* When a port is in "Cross-chip serdes" mode, it uses
 + 		 * 1000Base-X full duplex mode, but there is no automatic
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index 9b8d2b229907..f32f56af8e35 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.h
 ++++ b/drivers/net/dsa/mv88e6xxx/port.h
-+@@ -311,7 +311,8 @@ int mv88e6390_port_pause_limit(struct mv88e6xxx_chip *chip, int port, u8 in,
++@@ -321,7 +321,8 @@ int mv88e6390_port_pause_limit(struct mv
 + 			       u8 out);
 + int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
 + 			      phy_interface_t mode);
@@ -10600,11 +10511,9 @@ index 0000000000..21199a45a4
 + int mv88e6185_port_link_state(struct mv88e6xxx_chip *chip, int port,
 + 			      struct phylink_link_state *state);
 + int mv88e6352_port_link_state(struct mv88e6xxx_chip *chip, int port,
-+diff --git a/drivers/net/dsa/mv88e6xxx/serdes.c b/drivers/net/dsa/mv88e6xxx/serdes.c
-+index be72f0e02951..9469bb819a34 100644
 +--- a/drivers/net/dsa/mv88e6xxx/serdes.c
 ++++ b/drivers/net/dsa/mv88e6xxx/serdes.c
-+@@ -73,12 +73,8 @@ static int mv88e6352_serdes_power_set(struct mv88e6xxx_chip *chip, bool on)
++@@ -73,12 +73,8 @@ static int mv88e6352_serdes_power_set(st
 + 
 + int mv88e6352_serdes_power(struct mv88e6xxx_chip *chip, int port, bool on)
 + {
@@ -10618,7 +10527,7 @@ index 0000000000..21199a45a4
 + 
 + 	if ((cmode == MV88E6XXX_PORT_STS_CMODE_100BASE_X) ||
 + 	    (cmode == MV88E6XXX_PORT_STS_CMODE_1000BASE_X) ||
-+@@ -96,12 +92,7 @@ int mv88e6352_serdes_power(struct mv88e6xxx_chip *chip, int port, bool on)
++@@ -96,12 +92,7 @@ int mv88e6352_serdes_power(struct mv88e6
 +  */
 + static int mv88e6390_serdes_get_lane(struct mv88e6xxx_chip *chip, int port)
 + {
@@ -10632,7 +10541,7 @@ index 0000000000..21199a45a4
 + 
 + 	switch (port) {
 + 	case 9:
-+@@ -128,19 +119,10 @@ static int mv88e6390_serdes_get_lane(struct mv88e6xxx_chip *chip, int port)
++@@ -128,19 +119,10 @@ static int mv88e6390_serdes_get_lane(str
 + static int mv88e6390x_serdes_get_lane(struct mv88e6xxx_chip *chip, int port)
 + {
 + 	u8 cmode_port9, cmode_port10, cmode_port;
@@ -10655,7 +10564,7 @@ index 0000000000..21199a45a4
 + 
 + 	switch (port) {
 + 	case 2:
-+@@ -266,12 +248,7 @@ static int mv88e6390_serdes_power_sgmii(struct mv88e6xxx_chip *chip, int lane,
++@@ -266,12 +248,7 @@ static int mv88e6390_serdes_power_sgmii(
 + static int mv88e6390_serdes_power_lane(struct mv88e6xxx_chip *chip, int port,
 + 				       int lane, bool on)
 + {
@@ -10669,7 +10578,7 @@ index 0000000000..21199a45a4
 + 
 + 	switch (cmode) {
 + 	case MV88E6XXX_PORT_STS_CMODE_SGMII:
-+@@ -328,16 +305,11 @@ int mv88e6390x_serdes_power(struct mv88e6xxx_chip *chip, int port, bool on)
++@@ -328,16 +305,11 @@ int mv88e6390x_serdes_power(struct mv88e
 + 
 + int mv88e6341_serdes_power(struct mv88e6xxx_chip *chip, int port, bool on)
 + {
@@ -10687,9 +10596,6 @@ index 0000000000..21199a45a4
 + 	if ((cmode == MV88E6XXX_PORT_STS_CMODE_1000BASE_X) ||
 + 	     (cmode == MV88E6XXX_PORT_STS_CMODE_SGMII) ||
 + 	     (cmode == MV88E6XXX_PORT_STS_CMODE_2500BASEX))
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mvebu/patches-4.14/90094-net-dsa-mv88e6xxx-Power-on-off-SERDES-on-cmode-chang.patch b/target/linux/mvebu/patches-4.14/90094-net-dsa-mv88e6xxx-Power-on-off-SERDES-on-cmode-chang.patch
 new file mode 100644
 index 0000000000..910371be59
