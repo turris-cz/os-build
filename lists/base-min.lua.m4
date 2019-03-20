@@ -1,6 +1,5 @@
 include(utils.m4)dnl Include utility macros
-include(repository.m4)dnl Include Repository command
-----------------------------------------------------------------------------------
+list_script('repository.lua')
 
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
@@ -13,37 +12,29 @@ Install("base-files", "busybox", "dns-resolver", { critical = true })
 Package("kernel", { reboot = "delayed" })
 Package("kmod-mac80211", { reboot = "delayed" })
 forInstallCritical(kmod,file2args(kmod.list))
-if model:match("[Mm][Oo][Xx]") then
+if board == "mox" then
 	forInstallCritical(kmod,file2args(kmod-mox.list))
-elseif model:match("[Oo]mnia") then
-	forInstallCritical(kmod,file2args(kmod-omnia.list))
-elseif model:match("^[Tt]urris$") then
-	forInstallCritical(kmod,file2args(kmod-turris.list))
-end
-Install("fstools", { critical = true })
-if model:match("^[Tt]urris$") then
-	Install("turris1x-support", { critical = true })
-end
-if model:match("[Oo]mnia") then
-	Install("omnia-support", { critical = true })
-elseif model:match("[Mm][Oo][Xx]") then
 	Install("mox-support", { critical = true })
 	Install("zram-swap", { priority = 40 })
+elseif board == "omnia" then
+	forInstallCritical(kmod,file2args(kmod-omnia.list))
+	Install("omnia-support", { critical = true })
+elseif board == "turris1x" then
+	forInstallCritical(kmod,file2args(kmod-turris.list))
+	Install("turris1x-support", { critical = true })
 end
+Install("fstools", { critical = true })
 
 -- OpenWRT minimum
 Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
 Install("ebtables", "odhcpd", "odhcp6c", "rpcd", { priority = 40 })
 Install("opkg", "libustream-openssl", { priority = 40 })
-if model:match("^[Tt]urris$") then
-	Install("swconfig", { critical = true })
-end
 
 -- Turris minimum
 Install("vixie-cron", "syslog-ng", { priority = 40 })
 Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
-if model:match("^[Tt]urris$") then
+if board == "turris1x" then
 	Install("unbound", "unbound-anchor", { priority = 40 })
 	Install("turris-btrfs", { priority = 40 }) -- Currently only SD card root is supported
 else
@@ -86,19 +77,19 @@ if for_l10n then
 	for_l10n("user-notify-l10n-")
 end
 local use_atsha204 = false
-if model:match("[Mm][Oo][Xx]") then
+if board == "mox" then
 	Install("mox-otp", { priority = 40 })
-elseif model:match("[Oo]mnia") then
+elseif board == "omnia" then
 	Install("rainbow-omnia", { priority = 40 })
 	use_atsha204 = true
-elseif model:match("^[Tt]urris$") then
+elseif board == "turris1x" then
 	Install("rainbow", { priority = 40 })
 	use_atsha204 = true
 end
 if use_atsha204 then
 	Install("libatsha204", "update_mac", { priority = 40 })
 end
-if not model:match("^[Tt]urris$") then
+if board ~= "turris1x" then
 	Install("schnapps", { priority = 40 })
 end
 
@@ -106,7 +97,7 @@ end
 -- Wifi
 Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
 Install("ath10k-firmware-qca988x-ct", { priority = 40 })
-if model:match("[Mm][Oo][Xx]") then
+if board == "mox" then
 	Install("mwifiex-sdio-firmware", { priority = 40 })
 end
 
