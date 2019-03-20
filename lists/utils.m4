@@ -53,5 +53,17 @@ function list_script(list)
 		Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/lists/" .. list)
 	end
 end
-list_script("utils.lua")
+
+if not board then
+	local model = model or os_release["LEDE_DEVICE_PRODUCT"]
+	if model:match("[Mm]ox") then
+		board = "mox"
+	elseif model:match("[Oo]mnia") then
+		board = "omnia"
+	elseif model:match("^[Tt]urris$") then
+		board = "turris1x"
+	else
+		DIE("Unsupported Turris model: " .. tostring(model))
+	end
+end
 ----------------------------------------------------------------------------------

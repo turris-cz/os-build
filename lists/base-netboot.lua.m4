@@ -1,5 +1,6 @@
 include(utils.m4)dnl Include utility macros
-list_script('repository.lua')
+include(repository.m4)dnl Include Repository command
+
 list_script('base-min.lua')
 
 _FEATURE_GUARD_
