@@ -1,12 +1,12 @@
 include(utils.m4)dnl Include utility macros
-include(repository.m4)dnl Include Repository command
-Script(repo_base_uri .. "/lists/base-min.lua")
+list_script('repository.lua')
+list_script('base-min.lua')
 
 _FEATURE_GUARD_
 
-Script(repo_base_uri .. "/lists/luci.lua")
-Script(repo_base_uri .. "/lists/foris.lua")
-Script(repo_base_uri .. "/lists/terminal-apps.lua")
+list_script('luci.lua')
+list_script('foris.lua')
+list_script('terminal-apps.lua')
 
 -- IPv6
 Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })

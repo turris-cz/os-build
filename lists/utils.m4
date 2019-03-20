@@ -45,3 +45,13 @@ if not version_match or not self_version or version_match(self_version, "<60.0.1
 	DIE("Minimal required version of Updater-ng for Turris repository is 60.0.1!")
 end
 
+-- Script simplifying lists inclusion when older version of updater is used
+function list_script(list)
+	if features["relative_uri"] then
+		Script(list)
+	else
+		Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/lists/" .. list)
+	end
+end
+list_script("utils.lua")
+----------------------------------------------------------------------------------
