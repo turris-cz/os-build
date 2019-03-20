@@ -1,5 +1,5 @@
 include(utils.m4)dnl Include utility macros
-list_script('repository.lua')
+include(repository.m4)dnl Include Repository command
 
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })

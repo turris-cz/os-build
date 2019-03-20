@@ -1,7 +1,5 @@
 include(utils.m4)dnl Include utility macros
 
-if not turris_repo_included then -- single include guard
-
 local subdirs = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
 
 if features["relative_uri"] then
@@ -25,8 +23,4 @@ for _, subdir in ipairs(subdirs) do
 			rroot .. "/packages-minimal/" .. pkg_board .. "/" .. subdir,
 			{ optional = true })
 	end
-end
-
-turris_repo_included = true
-Export('turris_repo_included')
 end
