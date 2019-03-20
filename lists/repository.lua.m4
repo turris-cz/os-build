@@ -2,10 +2,11 @@ include(utils.m4)dnl Include utility macros
 
 local subdirs = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
 
+local rroot
 if features["relative_uri"] then
-	local rroot = ".."
+	rroot = ".."
 else
-	local rroot = repo_base_uri or "https://repo.turris.cz/hbs"
+	rroot = repo_base_uri or "https://repo.turris.cz/hbs"
 end
 
 local pkg_board = board
