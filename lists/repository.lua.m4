@@ -3,10 +3,13 @@ include(utils.m4)dnl Include utility macros
 local subdirs = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
 
 local rroot
+local optional_extra
 if features["relative_uri"] then
 	rroot = ".."
+	optional_extra = { optional = true }
 else
 	rroot = repo_base_uri or "https://repo.turris.cz/hbs"
+	optional_extra = { ignore = { "missing" } }
 end
 
 local pkg_board = board
@@ -22,6 +25,6 @@ for _, subdir in ipairs(subdirs) do
 	if minimal_builds then
 		Repository("turris-minimal-" .. subdir,
 			rroot .. "/packages-minimal/" .. pkg_board .. "/" .. subdir,
-			{ optional = true })
+			optional_extra)
 	end
 end
