@@ -1,10 +1,10 @@
-From 43e008544c828562e26cd04ffe9f7ce77970f916 Mon Sep 17 00:00:00 2001
+From 2262c819bf407a88db4143de2f4a448fda282665 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 20 Mar 2019 16:42:28 +0100
 Subject: [PATCH] u-boot tools: Add mkimage tool
 
 ---
- .../{uboot-envtools => uboot-tools}/Makefile  | 29 +++++++++++++++++--
+ .../{uboot-envtools => uboot-tools}/Makefile  | 30 ++++++++++++-------
  .../files/apm821xx                            |  0
  .../files/ar71xx                              |  0
  .../files/ath79                               |  0
@@ -23,8 +23,8 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  .../files/ramips                              |  0
  .../files/uboot-envtools.sh                   |  0
  .../patches/001-compile.patch                 |  0
- 19 files changed, 27 insertions(+), 2 deletions(-)
- rename package/boot/{uboot-envtools => uboot-tools}/Makefile (72%)
+ 19 files changed, 20 insertions(+), 10 deletions(-)
+ rename package/boot/{uboot-envtools => uboot-tools}/Makefile (77%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/apm821xx (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/ar71xx (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/ath79 (100%)
@@ -45,10 +45,10 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  rename package/boot/{uboot-envtools => uboot-tools}/patches/001-compile.patch (100%)
 
 diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-tools/Makefile
-similarity index 72%
+similarity index 77%
 rename from package/boot/uboot-envtools/Makefile
 rename to package/boot/uboot-tools/Makefile
-index 71b842b96e..787b83d863 100644
+index 71b842b96e..c88d063253 100644
 --- a/package/boot/uboot-envtools/Makefile
 +++ b/package/boot/uboot-tools/Makefile
 @@ -7,7 +7,7 @@
@@ -60,49 +60,50 @@ index 71b842b96e..787b83d863 100644
  PKG_DISTNAME:=u-boot
  PKG_VERSION:=2018.03
  PKG_RELEASE:=3
-@@ -43,6 +43,19 @@ define Package/uboot-envtools/description
+@@ -43,12 +43,17 @@ define Package/uboot-envtools/description
   This package includes tools to read and modify U-Boot bootloader environment.
  endef
  
+-define Build/Configure
+-	touch $(PKG_BUILD_DIR)/include/config.h
+-	mkdir -p $(PKG_BUILD_DIR)/include/config
+-	touch $(PKG_BUILD_DIR)/include/config/auto.conf
+-	mkdir -p $(PKG_BUILD_DIR)/include/generated
+-	touch $(PKG_BUILD_DIR)/include/generated/autoconf.h
 +define Package/uboot-mkimage
 +  SECTION:=utils
 +  CATEGORY:=Utilities
 +  SUBMENU:=Boot Loaders
 +  TITLE:=create U-Boot bootloader images
 +  URL:=http://www.denx.de/wiki/U-Boot
++  DEPENDS:=+libopenssl
 +endef
 +
 +define Package/uboot-envtools/description
 + This package includes tools to create U-Boot bootloader images.
-+endef
-+
-+
- define Build/Configure
- 	touch $(PKG_BUILD_DIR)/include/config.h
- 	mkdir -p $(PKG_BUILD_DIR)/include/config
-@@ -60,6 +73,12 @@ define Build/Compile
+ endef
+ 
+ TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
+@@ -58,8 +63,7 @@ define Build/Compile
+ 		CROSS_COMPILE="$(TARGET_CROSS)" \
+ 		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
  		HOSTLDFLAGS= \
- 		no-dot-config-targets=envtools \
- 		envtools
-+	mv $(PKG_BUILD_DIR)/tools/env/fw_printenv $(PKG_BUILD_DIR)/tools/env/fw_printenv.bak
-+	$(MAKE) -C $(PKG_BUILD_DIR) \
-+		CROSS_COMPILE="$(TARGET_CROSS)" \
-+		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
-+		HOSTLDFLAGS= \
-+		defconfig cross_tools
+-		no-dot-config-targets=envtools \
+-		envtools
++		defconfig tools-all
  endef
  
  define Package/uboot-envtools/conffiles
-@@ -69,7 +88,7 @@ endef
+@@ -69,7 +73,7 @@ endef
  
  define Package/uboot-envtools/install
  	$(INSTALL_DIR) $(1)/usr/sbin
 -	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/env/fw_printenv $(1)/usr/sbin
-+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/env/fw_printenv.bak $(1)/usr/sbin/fw_printenv
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/env/fw_printenv $(1)/usr/sbin/fw_printenv
  	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
  	$(INSTALL_DIR) $(1)/lib
  	$(INSTALL_DATA) ./files/uboot-envtools.sh $(1)/lib
-@@ -80,4 +99,10 @@ define Package/uboot-envtools/install
+@@ -80,4 +84,10 @@ define Package/uboot-envtools/install
  	)
  endef
  
