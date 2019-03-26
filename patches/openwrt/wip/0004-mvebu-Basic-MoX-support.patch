@@ -1,4 +1,4 @@
-From 30882897ec15d834ed5df5cbccc55762eef66502 Mon Sep 17 00:00:00 2001
+From dd08b8c55a9977a4c79b44ef73e51b16e5311a69 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -94,7 +94,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...0082-net-dsa-Plug-in-PHYLINK-support.patch | 577 +++++++++++
  ...lper-for-configuring-2500BaseX-modes.patch |  74 ++
  ...et-dsa-mv88e6xxx-add-PHYLINK-support.patch | 213 ++++
- ...8e6xxx-Add-support-to-enabling-pause.patch | 171 ++++
+ ...8e6xxx-Add-support-to-enabling-pause.patch | 176 ++++
  ...et-dsa-mv88e6xxx-add-phylink-support.patch | 646 ++++++++++++
  ...-mv88e6xxx-Refactor-SERDES-lane-code.patch | 284 ++++++
  ...88e6xxx-6390-vs-6390X-SERDES-support.patch | 123 +++
@@ -105,7 +105,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...t-dsa-mv88e6xxx-Cache-the-port-cmode.patch | 404 ++++++++
  ...x-Power-on-off-SERDES-on-cmode-chang.patch |  53 +
  ...x-link-mv88e6xxx_port-to-mv88e6xxx_c.patch |  48 +
- ...x-Add-SERDES-phydev_mac_change-up-fo.patch | 349 +++++++
+ ...x-Add-SERDES-phydev_mac_change-up-fo.patch | 352 +++++++
  ...x-Re-setup-interrupts-on-CMODE-chang.patch | 108 ++
  ...e6xxx-Poll-when-no-interrupt-defined.patch | 249 +++++
  ...mv88e6xxx-Add-missing-g1-IRQ-numbers.patch |  41 +
@@ -137,7 +137,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
  ...m64-restart-Armada-3700-restart-code.patch |   6 +-
- 130 files changed, 14172 insertions(+), 311 deletions(-)
+ 130 files changed, 14180 insertions(+), 311 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -8612,10 +8612,10 @@ index 0000000000..4356c08f2e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
 new file mode 100644
-index 0000000000..dfbb590265
+index 0000000000..84d8f4aac0
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
-@@ -0,0 +1,171 @@
+@@ -0,0 +1,176 @@
 +From 35f8ef0b440445c44e35f9c0483dcac1a254bbff Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:37 +0200
@@ -8633,11 +8633,9 @@ index 0000000000..dfbb590265
 + drivers/net/dsa/mv88e6xxx/port.h |  2 ++
 + 4 files changed, 48 insertions(+), 4 deletions(-)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index c7de21ee90cf..9bc1be397dee 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -450,7 +450,7 @@ int mv88e6xxx_update(struct mv88e6xxx_chip *chip, int addr, int reg, u16 update)
++@@ -466,7 +466,7 @@ int mv88e6xxx_update(struct mv88e6xxx_ch
 + }
 + 
 + static int mv88e6xxx_port_setup_mac(struct mv88e6xxx_chip *chip, int port,
@@ -8646,7 +8644,7 @@ index 0000000000..dfbb590265
 + 				    phy_interface_t mode)
 + {
 + 	int err;
-+@@ -469,6 +469,12 @@ static int mv88e6xxx_port_setup_mac(struct mv88e6xxx_chip *chip, int port,
++@@ -485,6 +485,12 @@ static int mv88e6xxx_port_setup_mac(stru
 + 			goto restore_link;
 + 	}
 + 
@@ -8659,7 +8657,7 @@ index 0000000000..dfbb590265
 + 	if (chip->info->ops->port_set_duplex) {
 + 		err = chip->info->ops->port_set_duplex(chip, port, duplex);
 + 		if (err && err != -EOPNOTSUPP)
-+@@ -510,7 +516,8 @@ static void mv88e6xxx_adjust_link(struct dsa_switch *ds, int port,
++@@ -526,7 +532,8 @@ static void mv88e6xxx_adjust_link(struct
 + 
 + 	mutex_lock(&chip->reg_lock);
 + 	err = mv88e6xxx_port_setup_mac(chip, port, phydev->link, phydev->speed,
@@ -8669,7 +8667,7 @@ index 0000000000..dfbb590265
 + 	mutex_unlock(&chip->reg_lock);
 + 
 + 	if (err && err != -EOPNOTSUPP)
-+@@ -541,7 +548,7 @@ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++@@ -557,7 +564,7 @@ static void mv88e6xxx_mac_config(struct
 + 				 const struct phylink_link_state *state)
 + {
 + 	struct mv88e6xxx_chip *chip = ds->priv;
@@ -8678,7 +8676,7 @@ index 0000000000..dfbb590265
 + 
 + 	if (mode == MLO_AN_PHY)
 + 		return;
-+@@ -555,9 +562,10 @@ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++@@ -571,9 +578,10 @@ static void mv88e6xxx_mac_config(struct
 + 		duplex = DUPLEX_UNFORCED;
 + 		link = LINK_UNFORCED;
 + 	}
@@ -8690,7 +8688,7 @@ index 0000000000..dfbb590265
 + 				       state->interface);
 + 	mutex_unlock(&chip->reg_lock);
 + 
-+@@ -1795,10 +1803,12 @@ static int mv88e6xxx_setup_port(struct mv88e6xxx_chip *chip, int port)
++@@ -1811,10 +1819,12 @@ static int mv88e6xxx_setup_port(struct m
 + 	if (dsa_is_cpu_port(ds, port) || dsa_is_dsa_port(ds, port))
 + 		err = mv88e6xxx_port_setup_mac(chip, port, LINK_FORCED_UP,
 + 					       SPEED_MAX, DUPLEX_FULL,
@@ -8703,7 +8701,7 @@ index 0000000000..dfbb590265
 + 					       PHY_INTERFACE_MODE_NA);
 + 	if (err)
 + 		return err;
-+@@ -2456,6 +2466,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++@@ -2579,6 +2589,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_jumbo_size = mv88e6165_port_set_jumbo_size,
 + 	.port_egress_rate_limiting = mv88e6097_port_egress_rate_limiting,
 + 	.port_pause_limit = mv88e6097_port_pause_limit,
@@ -8711,7 +8709,7 @@ index 0000000000..dfbb590265
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+@@ -2713,6 +2724,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
++@@ -2836,6 +2847,7 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.port_set_egress_floods = mv88e6185_port_set_egress_floods,
 + 	.port_egress_rate_limiting = mv88e6095_port_egress_rate_limiting,
 + 	.port_set_upstream_port = mv88e6095_port_set_upstream_port,
@@ -8719,11 +8717,25 @@ index 0000000000..dfbb590265
 + 	.stats_snapshot = mv88e6xxx_g1_stats_snapshot,
 + 	.stats_get_sset_count = mv88e6095_stats_get_sset_count,
 + 	.stats_get_strings = mv88e6095_stats_get_strings,
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
-+index 334f6f7544ba..89e02442fa2f 100644
++@@ -2907,6 +2919,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.port_pause_limit = mv88e6390_port_pause_limit,
++ 	.port_disable_learn_limit = mv88e6xxx_port_disable_learn_limit,
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
+++	.port_link_state = mv88e6352_port_link_state,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_set_histogram = mv88e6390_g1_stats_set_histogram,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++@@ -2921,6 +2934,7 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
+++	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6191_ops = {
 +--- a/drivers/net/dsa/mv88e6xxx/chip.h
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.h
-+@@ -274,6 +274,13 @@ struct mv88e6xxx_ops {
++@@ -279,6 +279,13 @@ struct mv88e6xxx_ops {
 + 	 */
 + 	int (*port_set_duplex)(struct mv88e6xxx_chip *chip, int port, int dup);
 + 
@@ -8737,11 +8749,9 @@ index 0000000000..dfbb590265
 + #define SPEED_MAX		INT_MAX
 + #define SPEED_UNFORCED		-2
 + 
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index 760b5687d811..daf96c3e104b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.c
 ++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -36,6 +36,29 @@ int mv88e6xxx_port_write(struct mv88e6xxx_chip *chip, int port, int reg,
++@@ -36,6 +36,29 @@ int mv88e6xxx_port_write(struct mv88e6xx
 + 	return mv88e6xxx_write(chip, addr, reg, val);
 + }
 + 
@@ -8771,11 +8781,9 @@ index 0000000000..dfbb590265
 + /* Offset 0x01: MAC (or PCS or Physical) Control Register
 +  *
 +  * Link, Duplex and Flow Control have one force bit, one value bit.
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index 5e1db1b221ca..44916251567b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.h
 ++++ b/drivers/net/dsa/mv88e6xxx/port.h
-+@@ -242,6 +242,8 @@ int mv88e6xxx_port_read(struct mv88e6xxx_chip *chip, int port, int reg,
++@@ -252,6 +252,8 @@ int mv88e6xxx_port_read(struct mv88e6xxx
 + int mv88e6xxx_port_write(struct mv88e6xxx_chip *chip, int port, int reg,
 + 			 u16 val);
 + 
@@ -8784,9 +8792,6 @@ index 0000000000..dfbb590265
 + int mv88e6352_port_set_rgmii_delay(struct mv88e6xxx_chip *chip, int port,
 + 				   phy_interface_t mode);
 + int mv88e6390_port_set_rgmii_delay(struct mv88e6xxx_chip *chip, int port,
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch b/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch
 new file mode 100644
 index 0000000000..70e54f1f82
@@ -10697,10 +10702,10 @@ index 0000000000..70e99dc261
 +
 diff --git a/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch b/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch
 new file mode 100644
-index 0000000000..6989c5243b
+index 0000000000..a6908622e9
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch
-@@ -0,0 +1,349 @@
+@@ -0,0 +1,352 @@
 +From 7586bb8b1c894f3d9b7cb3af4e0ee72b109249a5 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:48 +0200
@@ -10723,10 +10728,8 @@ index 0000000000..6989c5243b
 + drivers/net/dsa/mv88e6xxx/serdes.h |  17 +++
 + 4 files changed, 223 insertions(+)
 +
-+Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.c
-+===================================================================
-+--- linux-4.14.106.orig/drivers/net/dsa/mv88e6xxx/chip.c
-++++ linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.c
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
 +@@ -2065,7 +2065,12 @@ static int mv88e6xxx_port_enable(struct
 + 	int err;
 + 
@@ -10754,7 +10757,18 @@ index 0000000000..6989c5243b
 + 	mutex_unlock(&chip->reg_lock);
 + }
 + 
-+@@ -3067,6 +3077,8 @@ static const struct mv88e6xxx_ops mv88e6
++@@ -3031,7 +3041,9 @@ static const struct mv88e6xxx_ops mv88e6
++ 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
++ 	.serdes_power = mv88e6390_serdes_power,
++-	.phylink_validate = mv88e6390x_phylink_validate,
+++	.serdes_irq_setup = mv88e6390_serdes_irq_setup,
+++	.serdes_irq_free = mv88e6390_serdes_irq_free,
+++	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6190x_ops = {
++@@ -3069,6 +3081,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390x_serdes_power,
@@ -10763,7 +10777,7 @@ index 0000000000..6989c5243b
 + 	.phylink_validate = mv88e6390x_phylink_validate,
 + };
 + 
-+@@ -3106,6 +3118,8 @@ static const struct mv88e6xxx_ops mv88e6
++@@ -3108,6 +3122,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390_serdes_power,
@@ -10772,7 +10786,7 @@ index 0000000000..6989c5243b
 + 	.phylink_validate = mv88e6390_phylink_validate,
 + };
 + 
-+@@ -3185,6 +3199,8 @@ static const struct mv88e6xxx_ops mv88e6
++@@ -3187,6 +3203,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390_serdes_power,
@@ -10781,7 +10795,7 @@ index 0000000000..6989c5243b
 + 	.phylink_validate = mv88e6390_phylink_validate,
 + };
 + 
-+@@ -3447,6 +3463,8 @@ static const struct mv88e6xxx_ops mv88e6
++@@ -3449,6 +3467,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390_serdes_power,
@@ -10790,7 +10804,7 @@ index 0000000000..6989c5243b
 + 	.phylink_validate = mv88e6390_phylink_validate,
 + };
 + 
-+@@ -3489,6 +3507,8 @@ static const struct mv88e6xxx_ops mv88e6
++@@ -3491,6 +3511,8 @@ static const struct mv88e6xxx_ops mv88e6
 + 	.vtu_getnext = mv88e6390_g1_vtu_getnext,
 + 	.vtu_loadpurge = mv88e6390_g1_vtu_loadpurge,
 + 	.serdes_power = mv88e6390x_serdes_power,
@@ -10799,10 +10813,8 @@ index 0000000000..6989c5243b
 + 	.phylink_validate = mv88e6390_phylink_validate,
 + };
 + 
-+Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.h
-+===================================================================
-+--- linux-4.14.106.orig/drivers/net/dsa/mv88e6xxx/chip.h
-++++ linux-4.14.106/drivers/net/dsa/mv88e6xxx/chip.h
++--- a/drivers/net/dsa/mv88e6xxx/chip.h
+++++ b/drivers/net/dsa/mv88e6xxx/chip.h
 +@@ -158,6 +158,7 @@ struct mv88e6xxx_port {
 + 	struct mv88e6xxx_chip *chip;
 + 	int port;
@@ -10822,10 +10834,8 @@ index 0000000000..6989c5243b
 + 	/* VLAN Translation Unit operations */
 + 	int (*vtu_getnext)(struct mv88e6xxx_chip *chip,
 + 			   struct mv88e6xxx_vtu_entry *entry);
-+Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/serdes.c
-+===================================================================
-+--- linux-4.14.106.orig/drivers/net/dsa/mv88e6xxx/serdes.c
-++++ linux-4.14.106/drivers/net/dsa/mv88e6xxx/serdes.c
++--- a/drivers/net/dsa/mv88e6xxx/serdes.c
+++++ b/drivers/net/dsa/mv88e6xxx/serdes.c
 +@@ -11,6 +11,8 @@
 +  * (at your option) any later version.
 +  */
@@ -11019,10 +11029,8 @@ index 0000000000..6989c5243b
 + int mv88e6341_serdes_power(struct mv88e6xxx_chip *chip, int port, bool on)
 + {
 + 	u8 cmode = chip->ports[port].cmode;
-+Index: linux-4.14.106/drivers/net/dsa/mv88e6xxx/serdes.h
-+===================================================================
-+--- linux-4.14.106.orig/drivers/net/dsa/mv88e6xxx/serdes.h
-++++ linux-4.14.106/drivers/net/dsa/mv88e6xxx/serdes.h
++--- a/drivers/net/dsa/mv88e6xxx/serdes.h
+++++ b/drivers/net/dsa/mv88e6xxx/serdes.h
 +@@ -43,9 +43,26 @@
 + #define MV88E6390_SGMII_CONTROL_LOOPBACK	BIT(14)
 + #define MV88E6390_SGMII_CONTROL_PDOWN		BIT(11)
