@@ -28,7 +28,7 @@ for _, lang in pairs(l10n or {}) do
 end
 for lang in pairs(luci_i18n) do
 	for _, pkg in pairs({foreach_join(X,`"X"',`, ',$@)}) do
-		Install("luci-i18n-" .. pkg .. "-" .. lang, { ignore = {"missing"}, priority = 40 })
+		Install("luci-i18n-" .. pkg .. "-" .. lang, { optional = true, priority = 40 })
 	end
 end')
 
