@@ -4,12 +4,10 @@ local subdirs = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\
 
 local rroot
 local optional_extra
-if features["relative_uri"] then
+if features.relative_uri then
 	rroot = ".."
-	optional_extra = { optional = true }
 else
 	rroot = repo_base_uri or "https://repo.turris.cz/hbs"
-	optional_extra = { ignore = { "missing" } }
 end
 
 local pkg_board = board
@@ -20,11 +18,4 @@ end
 for _, subdir in ipairs(subdirs) do
 	-- Standard Turris OS package repository
 	Repository("turris-" .. subdir, rroot .. "/packages/" .. pkg_board .. "/" .. subdir)
-
-	-- Minimal faster rolling package repository
-	if minimal_builds then
-		Repository("turris-minimal-" .. subdir,
-			rroot .. "/packages-minimal/" .. pkg_board .. "/" .. subdir,
-			optional_extra)
-	end
 end
