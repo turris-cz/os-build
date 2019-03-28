@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 USIGN_VERSION=ef6419142a3b0fbcddcccf536e3c1880302c6f89
-UPDATER_VERSION=master
+UPDATER_VERSION=uri
 
 SRC_USIGN="https://git.openwrt.org/project/usign.git"
 SRC_UPDATER="https://gitlab.labs.nic.cz/turris/updater/updater.git"
@@ -72,6 +72,7 @@ get_usign() {
 # To be pedantic you should provide target board as second argument but if not
 # provided then mox is used.
 updater_ng_repodetect() {
+	return
 	local REPO="$1"
 	local BOARD="${2:-mox}"
 	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" | \
@@ -89,12 +90,4 @@ get_updater_ng() {
 	fi
 	export PKGUPDATE="$(pwd)/turris-tools/updater-ng/bin/pkgupdate"
 	export OPKG_TRANS="$(pwd)/turris-tools/updater-ng/bin/opkg-trans"
-}
-
-get_turris_keys() {
-	mkdir -p turris-tools/keys
-	for key in release standby test; do
-		wget_get https://gitlab.labs.nic.cz/turris/turris-os-packages/raw/test/cznic/cznic-repo-keys/files/$key.pub turris-tools/keys/$key.pub
-	done
-	export TURRIS_KEYS="$(pwd)/turris-tools/keys/release.pub,$(pwd)/turris-tools/keys/standby.pub,$(pwd)/turris-tools/keys/test.pub"
 }
