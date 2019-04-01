@@ -1,4 +1,4 @@
-From 6177794cbd201913d702b40814f52db15a16405f Mon Sep 17 00:00:00 2001
+From 05b2e751c579ed303270b1add2d3d4f70a2792d0 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 27 Dec 2017 17:19:45 +0100
 Subject: [PATCH] kernel: Add Turris 1.X support
@@ -16,16 +16,18 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-4.14              |   3 +
  .../arch/powerpc/boot/dts/turris-nand-bch.dts |  27 ++
- .../arch/powerpc/boot/dts/turris.dtsi         | 347 ++++++++++++++++++
+ .../arch/powerpc/boot/dts/turris.dtsi         | 322 ++++++++++++++++++
  target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
- ...sl_elbc-add-support-for-software-ecc.patch | 223 +++++++++++
- ...-qca8k-fix-internal-phy-mdio-address.patch |  22 ++
- 8 files changed, 656 insertions(+), 1 deletion(-)
+ ...sl_elbc-add-support-for-software-ecc.patch | 223 ++++++++++++
+ ...-qca8k-remove-leftover-phy-accessors.patch |  62 ++++
+ ...a8k-extend-slave-bus-implementations.patch | 235 +++++++++++++
+ 9 files changed, 906 insertions(+), 1 deletion(-)
  create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts
  create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
  create mode 100644 target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
- create mode 100644 target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
 diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
 index 370ef81f15..dd24729d33 100644
@@ -101,10 +103,10 @@ index 0000000000..59ef5fdf2e
 +*/
 diff --git a/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
 new file mode 100644
-index 0000000000..bdac590f78
+index 0000000000..03c8fc5ade
 --- /dev/null
 +++ b/target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
-@@ -0,0 +1,347 @@
+@@ -0,0 +1,322 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
@@ -144,8 +146,9 @@ index 0000000000..bdac590f78
 +		/* NOR and NAND Flashes */
 +		ranges = <0x0 0x0 0x0 0xef000000 0x01000000
 +			  0x1 0x0 0x0 0xff800000 0x00040000
-+			  0x2 0x0 0x0 0xffb00000 0x00020000>;
-+		
++			  0x3 0x0 0x0 0xffa00000 0x00100000>;
++			  /* 0x2 0x0 0x0 0xffb00000 0x00020000>; */
++
 +		nor@0,0 {
 +			#address-cells = <1>;
 +			#size-cells = <1>;
@@ -198,7 +201,7 @@ index 0000000000..bdac590f78
 +				};
 +			};
 +		};
-+	
++
 +		nand@1,0 {
 +			#address-cells = <1>;
 +			#size-cells = <1>;
@@ -236,6 +239,10 @@ index 0000000000..bdac590f78
 +			};
 +		};
 +
++/*		led-controller@3,0 {
++			compatible = "cznic,turris-leds";
++			reg = <0x3 0x0 0x30>;
++		};*/
 +	};
 +
 +	soc: soc@ffe00000 {
@@ -281,36 +288,11 @@ index 0000000000..bdac590f78
 +		};
 +
 +		mdio@24520 {
-+			switch0@0 {
++			switch0@10 {
 +				compatible = "qca,qca8337";
 +				#size-cells = <0>;
 +				#address-cells = <1>;
-+				reg = <0>;
-+
-+				mdio {
-+					#address-cells = <1>;
-+					#size-cells = <0>;
-+
-+					phy_port1: phy@0 {
-+						reg = <0>;
-+					};
-+
-+					phy_port2: phy@1 {
-+						reg = <1>;
-+					};
-+
-+					phy_port3: phy@2 {
-+						reg = <2>;
-+					};
-+
-+					phy_port4: phy@3 {
-+						reg = <3>;
-+					};
-+
-+					phy_port5: phy@4 {
-+						reg = <4>;
-+					};
-+				};
++				reg = <0x10>;
 +
 +				ports {
 +					#address-cells = <1>;
@@ -330,31 +312,26 @@ index 0000000000..bdac590f78
 +					port@1 {
 +						reg = <1>;
 +						label = "lan5";
-+						phy-handle = <&phy_port1>;
 +					};
 +
 +					port@2 {
 +						reg = <2>;
 +						label = "lan4";
-+						phy-handle = <&phy_port2>;
 +					};
 +
 +					port@3 {
 +						reg = <3>;
 +						label = "lan3";
-+						phy-handle = <&phy_port3>;
 +					};
 +
 +					port@4 {
 +						reg = <4>;
 +						label = "lan2";
-+						phy-handle = <&phy_port4>;
 +					};
 +
 +					port@5 {
 +						reg = <5>;
 +						label = "lan1";
-+						phy-handle = <&phy_port5>;
 +					};
 +				};
 +			};
@@ -716,34 +693,315 @@ index 0000000000..0400c09ebc
 + static int fsl_elbc_chip_remove(struct fsl_elbc_mtd *priv)
 + {
 + 	struct fsl_elbc_fcm_ctrl *elbc_fcm_ctrl = priv->ctrl->nand;
-diff --git a/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch b/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
+diff --git a/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch b/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
 new file mode 100644
-index 0000000000..f2b74cc5d3
+index 0000000000..fde37e772b
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-4.19/231-net-dsa-qca8k-fix-internal-phy-mdio-address.patch
-@@ -0,0 +1,22 @@
++++ b/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
+@@ -0,0 +1,62 @@
++From 0b152d77f7aafd1a48291613a394f12cf514d7a9 Mon Sep 17 00:00:00 2001
++From: Christian Lamparter <chunkeey@gmail.com>
++Date: Fri, 22 Mar 2019 01:05:02 +0100
++Subject: [PATCH 3/4] net: dsa: qca8k: remove leftover phy accessors
++
++This belated patch implements Andrew Lunn's request of
++"remove the phy_read() and phy_write() functions."
++<https://lore.kernel.org/patchwork/comment/902734/>
++
++While seemingly harmless, this causes the switch's user
++port PHYs to get registered twice. This is because the
++DSA subsystem will create a slave mdio-bus not knowing
++that the qca8k_phy_(read|write) accessors operate on
++the external mdio-bus. So the same "bus" gets effectively
++duplicated.
++
++Cc: stable@vger.kernel.org
++Fixes: 6b93fb46480a ("net-next: dsa: add new driver for qca8xxx family")
++Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
++---
++ drivers/net/dsa/qca8k.c | 18 ------------------
++ 1 file changed, 18 deletions(-)
++
 +diff --git a/drivers/net/dsa/qca8k.c b/drivers/net/dsa/qca8k.c
-+index cdcde7f8e0b2..eb199193cc3b 100644
++index cdcde7f8e0b2..bdd8f2df6630 100644
 +--- a/drivers/net/dsa/qca8k.c
 ++++ b/drivers/net/dsa/qca8k.c
-+@@ -625,7 +625,7 @@ qca8k_phy_read(struct dsa_switch *ds, int phy, int regnum)
-+ {
-+ 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
++@@ -620,22 +620,6 @@ qca8k_adjust_link(struct dsa_switch *ds, int port, struct phy_device *phy)
++ 	qca8k_port_set_status(priv, port, 1);
++ }
 + 
++-static int
++-qca8k_phy_read(struct dsa_switch *ds, int phy, int regnum)
++-{
++-	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
++-
 +-	return mdiobus_read(priv->bus, phy, regnum);
-++	return mdiobus_read(priv->bus, phy-1, regnum);
-+ }
-+ 
-+ static int
-+@@ -633,7 +633,7 @@ qca8k_phy_write(struct dsa_switch *ds, int phy, int regnum, u16 val)
-+ {
-+ 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
-+ 
++-}
++-
++-static int
++-qca8k_phy_write(struct dsa_switch *ds, int phy, int regnum, u16 val)
++-{
++-	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
++-
 +-	return mdiobus_write(priv->bus, phy, regnum, val);
-++	return mdiobus_write(priv->bus, phy-1, regnum, val);
++-}
++-
++ static void
++ qca8k_get_strings(struct dsa_switch *ds, int port, u32 stringset, uint8_t *data)
++ {
++@@ -876,8 +860,6 @@ static const struct dsa_switch_ops qca8k_switch_ops = {
++ 	.setup			= qca8k_setup,
++ 	.adjust_link            = qca8k_adjust_link,
++ 	.get_strings		= qca8k_get_strings,
++-	.phy_read		= qca8k_phy_read,
++-	.phy_write		= qca8k_phy_write,
++ 	.get_ethtool_stats	= qca8k_get_ethtool_stats,
++ 	.get_sset_count		= qca8k_get_sset_count,
++ 	.get_mac_eee		= qca8k_get_mac_eee,
++-- 
++2.19.2
++
+diff --git a/target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch b/target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
+new file mode 100644
+index 0000000000..d5aca2e691
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
+@@ -0,0 +1,235 @@
++From ee910c90b118cbfe376d59997210363687181798 Mon Sep 17 00:00:00 2001
++From: Christian Lamparter <chunkeey@gmail.com>
++Date: Fri, 22 Mar 2019 01:05:03 +0100
++Subject: [PATCH 4/4] net: dsa: qca8k: extend slave-bus implementations
++
++This patch implements accessors for the QCA8337 MDIO access
++through the MDIO_MASTER register, which makes it possible to
++access the PHYs on slave-bus through the switch. In cases
++where the switch ports are already mapped via external
++"phy-phandles", the internal mdio-bus is disabled in order to
++prevent a duplicated discovery and enumeration of the same
++PHYs. Don't use mixed external and internal mdio-bus
++configurations, as this is not supported by the hardware.
++
++Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
++---
++ drivers/net/dsa/qca8k.c | 156 +++++++++++++++++++++++++++++++++++++++-
++ drivers/net/dsa/qca8k.h |  13 ++++
++ 2 files changed, 168 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/dsa/qca8k.c b/drivers/net/dsa/qca8k.c
++index bdd8f2df6630..d8d30470feab 100644
++--- a/drivers/net/dsa/qca8k.c
+++++ b/drivers/net/dsa/qca8k.c
++@@ -477,6 +477,155 @@ qca8k_port_set_status(struct qca8k_priv *priv, int port, int enable)
++ 		qca8k_reg_clear(priv, QCA8K_REG_PORT_STATUS(port), mask);
 + }
 + 
-+ static void
+++static u32
+++qca8k_port_to_phy(int port)
+++{
+++	/* From Andrew Lunn:
+++	 * Port 0 has no internal phy.
+++	 * Port 1 has an internal PHY at MDIO address 0.
+++	 * Port 2 has an internal PHY at MDIO address 1.
+++	 * ...
+++	 * Port 5 has an internal PHY at MDIO address 4.
+++	 * Port 6 has no internal PHY.
+++	 */
+++
+++	return port - 1;
+++}
+++
+++static int
+++qca8k_mdio_write(struct qca8k_priv *priv, int port, u32 regnum, u16 data)
+++{
+++	u32 phy, val;
+++
+++	if (regnum >= QCA8K_MDIO_MASTER_MAX_REG)
+++		return -EINVAL;
+++
+++	/* callee is responsible for not passing bad ports,
+++	 * but we still would like to make spills impossible.
+++	 */
+++	phy = qca8k_port_to_phy(port) % PHY_MAX_ADDR;
+++	val = QCA8K_MDIO_MASTER_BUSY | QCA8K_MDIO_MASTER_EN |
+++	      QCA8K_MDIO_MASTER_WRITE | QCA8K_MDIO_MASTER_PHY_ADDR(phy) |
+++	      QCA8K_MDIO_MASTER_REG_ADDR(regnum) |
+++	      QCA8K_MDIO_MASTER_DATA(data);
+++
+++	qca8k_write(priv, QCA8K_MDIO_MASTER_CTRL, val);
+++
+++	return qca8k_busy_wait(priv, QCA8K_MDIO_MASTER_CTRL,
+++		QCA8K_MDIO_MASTER_BUSY);
+++}
+++
+++static int
+++qca8k_mdio_read(struct qca8k_priv *priv, int port, u32 regnum)
+++{
+++	u32 phy, val;
+++
+++	if (regnum >= QCA8K_MDIO_MASTER_MAX_REG)
+++		return -EINVAL;
+++
+++	/* callee is responsible for not passing bad ports,
+++	 * but we still would like to make spills impossible.
+++	 */
+++	phy = qca8k_port_to_phy(port) % PHY_MAX_ADDR;
+++	val = QCA8K_MDIO_MASTER_BUSY | QCA8K_MDIO_MASTER_EN |
+++	      QCA8K_MDIO_MASTER_READ | QCA8K_MDIO_MASTER_PHY_ADDR(phy) |
+++	      QCA8K_MDIO_MASTER_REG_ADDR(regnum);
+++
+++	qca8k_write(priv, QCA8K_MDIO_MASTER_CTRL, val);
+++
+++	if (qca8k_busy_wait(priv, QCA8K_MDIO_MASTER_CTRL,
+++			    QCA8K_MDIO_MASTER_BUSY))
+++		return -ETIMEDOUT;
+++
+++	val = (qca8k_read(priv, QCA8K_MDIO_MASTER_CTRL) &
+++		QCA8K_MDIO_MASTER_DATA_MASK);
+++
+++	return val;
+++}
+++
+++static int
+++qca8k_phy_write(struct dsa_switch *ds, int port, int regnum, u16 data)
+++{
+++	struct qca8k_priv *priv = ds->priv;
+++
+++	return qca8k_mdio_write(priv, port, regnum, data);
+++}
+++
+++static int
+++qca8k_phy_read(struct dsa_switch *ds, int port, int regnum)
+++{
+++	struct qca8k_priv *priv = ds->priv;
+++	int ret;
+++
+++	ret = qca8k_mdio_read(priv, port, regnum);
+++
+++	if (ret < 0)
+++		return 0xffff;
+++
+++	return ret;
+++}
+++
+++static int
+++qca8k_setup_mdio_bus(struct qca8k_priv *priv)
+++{
+++	u32 internal_mdio_mask = 0, external_mdio_mask = 0, reg;
+++	struct device_node *ports, *port;
+++	int err;
+++
+++	ports = of_get_child_by_name(priv->dev->of_node, "ports");
+++	if (!ports)
+++		return -EINVAL;
+++
+++	for_each_available_child_of_node(ports, port) {
+++		err = of_property_read_u32(port, "reg", &reg);
+++		if (err)
+++			return err;
+++
+++		if (!dsa_is_user_port(priv->ds, reg))
+++			continue;
+++
+++		if (of_property_read_bool(port, "phy-handle"))
+++			external_mdio_mask |= BIT(reg);
+++		else
+++			internal_mdio_mask |= BIT(reg);
+++	}
+++
+++	if (!external_mdio_mask && !internal_mdio_mask) {
+++		dev_err(priv->dev, "no PHYs are defined.\n");
+++		return -EINVAL;
+++	}
+++
+++	/* The QCA8K_MDIO_MASTER_EN Bit, which grants access to PHYs through
+++	 * the MDIO_MASTER register also _disconnects_ the external MDC
+++	 * passthrough to the internal PHYs. It's not possible to use both
+++	 * configurations at the same time!
+++	 *
+++	 * Because this came up during the review process:
+++	 * If the external mdio-bus driver is capable magically disabling
+++	 * the QCA8K_MDIO_MASTER_EN and mutex/spin-locking out the qca8k's
+++	 * accessors for the time being, it would be possible to pull this
+++	 * off.
+++	 */
+++	if (!!external_mdio_mask && !!internal_mdio_mask) {
+++		dev_err(priv->dev, "either internal or external mdio bus configuration is supported.\n");
+++		return -EINVAL;
+++	}
+++
+++	if (external_mdio_mask) {
+++		/* Make sure to disable the internal mdio bus in cases
+++		 * a dt-overlay and driver reload changed the configuration
+++		 */
+++
+++		qca8k_reg_clear(priv, QCA8K_MDIO_MASTER_CTRL,
+++				QCA8K_MDIO_MASTER_EN);
+++		return 0;
+++	}
+++
+++	priv->ops.phy_read = qca8k_phy_read;
+++	priv->ops.phy_write = qca8k_phy_write;
+++	return 0;
+++}
+++
++ static int
++ qca8k_setup(struct dsa_switch *ds)
++ {
++@@ -498,6 +647,10 @@ qca8k_setup(struct dsa_switch *ds)
++ 	if (IS_ERR(priv->regmap))
++ 		pr_warn("regmap initialization failed");
++ 
+++	ret = qca8k_setup_mdio_bus(priv);
+++	if (ret)
+++		return ret;
+++
++ 	/* Initialize CPU port pad mode (xMII type, delays...) */
++ 	phy_mode = of_get_phy_mode(ds->ports[QCA8K_CPU_PORT].dn);
++ 	if (phy_mode < 0) {
++@@ -902,7 +1055,8 @@ qca8k_sw_probe(struct mdio_device *mdiodev)
++ 		return -ENOMEM;
++ 
++ 	priv->ds->priv = priv;
++-	priv->ds->ops = &qca8k_switch_ops;
+++	priv->ops = qca8k_switch_ops;
+++	priv->ds->ops = &priv->ops;
++ 	mutex_init(&priv->reg_mutex);
++ 	dev_set_drvdata(&mdiodev->dev, priv);
++ 
++diff --git a/drivers/net/dsa/qca8k.h b/drivers/net/dsa/qca8k.h
++index 613fe5c50236..38d06661f0a8 100644
++--- a/drivers/net/dsa/qca8k.h
+++++ b/drivers/net/dsa/qca8k.h
++@@ -48,6 +48,18 @@
++ #define   QCA8K_MIB_FLUSH				BIT(24)
++ #define   QCA8K_MIB_CPU_KEEP				BIT(20)
++ #define   QCA8K_MIB_BUSY				BIT(17)
+++#define QCA8K_MDIO_MASTER_CTRL				0x3c
+++#define   QCA8K_MDIO_MASTER_BUSY			BIT(31)
+++#define   QCA8K_MDIO_MASTER_EN				BIT(30)
+++#define   QCA8K_MDIO_MASTER_READ			BIT(27)
+++#define   QCA8K_MDIO_MASTER_WRITE			0
+++#define   QCA8K_MDIO_MASTER_SUP_PRE			BIT(26)
+++#define   QCA8K_MDIO_MASTER_PHY_ADDR(x)			((x) << 21)
+++#define   QCA8K_MDIO_MASTER_REG_ADDR(x)			((x) << 16)
+++#define   QCA8K_MDIO_MASTER_DATA(x)			(x)
+++#define   QCA8K_MDIO_MASTER_DATA_MASK			GENMASK(15, 0)
+++#define   QCA8K_MDIO_MASTER_MAX_PORTS			5
+++#define   QCA8K_MDIO_MASTER_MAX_REG			32
++ #define QCA8K_GOL_MAC_ADDR0				0x60
++ #define QCA8K_GOL_MAC_ADDR1				0x64
++ #define QCA8K_REG_PORT_STATUS(_i)			(0x07c + (_i) * 4)
++@@ -168,6 +180,7 @@ struct qca8k_priv {
++ 	struct dsa_switch *ds;
++ 	struct mutex reg_mutex;
++ 	struct device *dev;
+++	struct dsa_switch_ops ops;
++ };
++ 
++ struct qca8k_mib_desc {
++-- 
++2.19.2
++
 -- 
 2.21.0
 
