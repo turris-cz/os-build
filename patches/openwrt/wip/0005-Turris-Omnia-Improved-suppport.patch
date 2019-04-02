@@ -1,15 +1,15 @@
-From a437bfb963630c2b9dd0588031a896afffdffaa0 Mon Sep 17 00:00:00 2001
+From c9e1eb2c22ab4d47c2d27e31ef5b0d214e347e26 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Fri, 22 Feb 2019 08:30:39 +0100
 Subject: [PATCH] Turris Omnia: Improved suppport
 
 ---
- ...nia-Add-separate-DTS-for-SFP-support.patch | 234 +++++++++++++
- ...Omnia-second-ethernet-connection-to-.patch |  39 +++
- .../8890-turris-omnia-led-driver.patch        | 323 ++++++++++++++++++
- ...91-turris-omnia-custom-led-functions.patch | 269 +++++++++++++++
- ...8892-turris-omnia-enable-leds-in-dts.patch | 102 ++++++
- 5 files changed, 967 insertions(+)
+ ...nia-Add-separate-DTS-for-SFP-support.patch | 903 ++++++++++++++++++
+ ...Omnia-second-ethernet-connection-to-.patch |  39 +
+ .../8890-turris-omnia-led-driver.patch        | 323 +++++++
+ ...91-turris-omnia-custom-led-functions.patch | 269 ++++++
+ ...8892-turris-omnia-enable-leds-in-dts.patch | 102 ++
+ 5 files changed, 1636 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch
  create mode 100644 target/linux/mvebu/patches-4.14/8890-turris-omnia-led-driver.patch
@@ -18,10 +18,10 @@ Subject: [PATCH] Turris Omnia: Improved suppport
 
 diff --git a/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch b/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
 new file mode 100644
-index 0000000000..6f98c5c131
+index 0000000000..5b55b55c8f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
-@@ -0,0 +1,234 @@
+@@ -0,0 +1,903 @@
 +From bfc96ed32855077d2959f617aa285d1ec9fbb07d Mon Sep 17 00:00:00 2001
 +From: Tomas Hlavacek <tmshlvck@gmail.com>
 +Date: Sat, 11 Aug 2018 21:21:50 +0200
@@ -56,13 +56,11 @@ index 0000000000..6f98c5c131
 + create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
 + rename arch/arm/boot/dts/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (91%)
 +
-+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
-+index eff87a344566..18fa6064492d 100644
 +--- a/arch/arm/boot/dts/Makefile
 ++++ b/arch/arm/boot/dts/Makefile
-+@@ -1028,7 +1028,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
-+ 	armada-385-linksys-rango.dtb \
++@@ -1029,7 +1029,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
 + 	armada-385-linksys-shelby.dtb \
++ 	armada-385-linksys-venom.dtb \
 + 	armada-385-synology-ds116.dtb \
 +-	armada-385-turris-omnia.dtb \
 ++	armada-385-turris-omnia-phy.dtb \
@@ -70,9 +68,6 @@ index 0000000000..6f98c5c131
 + 	armada-388-clearfog.dtb \
 + 	armada-388-clearfog-base.dtb \
 + 	armada-388-clearfog-pro.dtb \
-+diff --git a/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts b/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
-+new file mode 100644
-+index 000000000000..eb3c573c8038
 +--- /dev/null
 ++++ b/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
 +@@ -0,0 +1,26 @@
@@ -102,9 +97,6 @@ index 0000000000..6f98c5c131
 ++        phy-mode = "sgmii";
 ++        phy = <&phy1>;
 ++};
-+diff --git a/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts b/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
-+new file mode 100644
-+index 000000000000..bb75b1082b31
 +--- /dev/null
 ++++ b/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
 +@@ -0,0 +1,27 @@
@@ -135,105 +127,519 @@ index 0000000000..6f98c5c131
 ++	managed = "in-band-status";
 ++	sfp = <&sfp>;
 ++};
-+diff --git a/arch/arm/boot/dts/armada-385-turris-omnia.dts b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+similarity index 91%
-+rename from arch/arm/boot/dts/armada-385-turris-omnia.dts
-+rename to arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+index 06831e1e3f80..e216c653e013 100644
 +--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
-++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+@@ -2,7 +2,7 @@
-+  * Device Tree file for the Turris Omnia
-+  *
-+  * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++++ /dev/null
++@@ -1,392 +0,0 @@
++-/*
++- * Device Tree file for the Turris Omnia
++- *
++- * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
 +- * Copyright (C) 2016 Tomas Hlavacek <tmshlvkc@gmail.com>
-++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
-+  *
-+  * This file is dual-licensed: you can use it either under the terms
-+  * of the GPL or the X11 license, at your option. Note that this dual
-+@@ -41,8 +41,6 @@
-+  * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
-+  */
-+ 
++- *
++- * This file is dual-licensed: you can use it either under the terms
++- * of the GPL or the X11 license, at your option. Note that this dual
++- * licensing only applies to this file, and not this project as a
++- * whole.
++- *
++- *  a) This file is licensed under the terms of the GNU General Public
++- *     License version 2.  This program is licensed "as is" without
++- *     any warranty of any kind, whether express or implied.
++- *
++- * Or, alternatively,
++- *
++- *  b) Permission is hereby granted, free of charge, to any person
++- *     obtaining a copy of this software and associated documentation
++- *     files (the "Software"), to deal in the Software without
++- *     restriction, including without limitation the rights to use,
++- *     copy, modify, merge, publish, distribute, sublicense, and/or
++- *     sell copies of the Software, and to permit persons to whom the
++- *     Software is furnished to do so, subject to the following
++- *     conditions:
++- *
++- *     The above copyright notice and this permission notice shall be
++- *     included in all copies or substantial portions of the Software.
++- *
++- *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
++- *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
++- *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
++- *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
++- *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
++- *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
++- *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
++- *     OTHER DEALINGS IN THE SOFTWARE.
++- */
++-
++-/*
++- * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
++- */
++-
 +-/dts-v1/;
 +-
-+ #include <dt-bindings/gpio/gpio.h>
-+ #include <dt-bindings/input/input.h>
-+ #include "armada-385.dtsi"
-+@@ -117,8 +115,9 @@
-+ 	};
-+ };
-+ 
-++/* Disable eth0 unless there is DSA driver supporting two CPU ports. */
-+ /* Connected to 88E6176 switch, port 6 */
-+-&eth0 {
-++/* &eth0 {
-+ 	pinctrl-names = "default";
-+ 	pinctrl-0 = <&ge0_rgmii_pins>;
-+ 	status = "okay";
-+@@ -128,7 +127,7 @@
-+ 		speed = <1000>;
-+ 		full-duplex;
-+ 	};
++-#include <dt-bindings/gpio/gpio.h>
++-#include <dt-bindings/input/input.h>
++-#include "armada-385.dtsi"
++-
++-/ {
++-	model = "Turris Omnia";
++-	compatible = "cznic,turris-omnia", "marvell,armada385", "marvell,armada380";
++-
++-	chosen {
++-		stdout-path = &uart0;
++-	};
++-
++-	memory {
++-		device_type = "memory";
++-		reg = <0x00000000 0x40000000>; /* 1024 MB */
++-	};
++-
++-	soc {
++-		ranges = <MBUS_ID(0xf0, 0x01) 0 0xf1000000 0x100000
++-			  MBUS_ID(0x01, 0x1d) 0 0xfff00000 0x100000
++-			  MBUS_ID(0x09, 0x19) 0 0xf1100000 0x10000
++-			  MBUS_ID(0x09, 0x15) 0 0xf1110000 0x10000>;
++-
++-		internal-regs {
++-
++-			/* USB part of the PCIe2/USB 2.0 port */
++-			usb@58000 {
++-				status = "okay";
++-			};
++-
++-			sata@a8000 {
++-				status = "okay";
++-			};
++-
++-			sdhci@d8000 {
++-				pinctrl-names = "default";
++-				pinctrl-0 = <&sdhci_pins>;
++-				status = "okay";
++-
++-				bus-width = <8>;
++-				no-1-8-v;
++-				non-removable;
++-			};
++-
++-			usb3@f0000 {
++-				status = "okay";
++-			};
++-
++-			usb3@f8000 {
++-				status = "okay";
++-			};
++-		};
++-
++-		pcie {
++-			status = "okay";
++-
++-			pcie@1,0 {
++-				/* Port 0, Lane 0 */
++-				status = "okay";
++-			};
++-
++-			pcie@2,0 {
++-				/* Port 1, Lane 0 */
++-				status = "okay";
++-			};
++-
++-			pcie@3,0 {
++-				/* Port 2, Lane 0 */
++-				status = "okay";
++-			};
++-		};
++-	};
 +-};
-++}; */
-+ 
-+ /* Connected to 88E6176 switch, port 5 */
-+ &eth1 {
-+@@ -143,11 +142,9 @@
-+ 	};
-+ };
-+ 
++-
++-/* Connected to 88E6176 switch, port 6 */
++-&eth0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&ge0_rgmii_pins>;
++-	status = "okay";
++-	phy-mode = "rgmii";
++-
++-	fixed-link {
++-		speed = <1000>;
++-		full-duplex;
++-	};
++-};
++-
++-/* Connected to 88E6176 switch, port 5 */
++-&eth1 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&ge1_rgmii_pins>;
++-	status = "okay";
++-	phy-mode = "rgmii";
++-
++-	fixed-link {
++-		speed = <1000>;
++-		full-duplex;
++-	};
++-};
++-
 +-/* WAN port */
-++/* WAN dual-personality port */
-+ &eth2 {
++-&eth2 {
 +-	status = "okay";
 +-	phy-mode = "sgmii";
 +-	phy = <&phy1>;
-++        status = "okay";
-+ };
-+ 
-+ &i2c0 {
-+@@ -210,7 +207,7 @@
-+ 			/* routed to PCIe2 connector (CN62A) */
-+ 		};
-+ 
-+-		i2c@4 {
-++		i2csfp: i2c@4 {
-+ 			#address-cells = <1>;
-+ 			#size-cells = <0>;
-+ 			reg = <4>;
-+@@ -239,7 +236,7 @@
-+ 			#size-cells = <0>;
-+ 			reg = <7>;
-+ 
-+-			pcawan: gpio@71 {
-++			sfpgpio: gpio@71 {
-+ 				/*
-+ 				 * GPIO expander for SFP+ signals and
-+ 				 * and phy irq
-+@@ -248,7 +245,7 @@
-+ 				reg = <0x71>;
-+ 
-+ 				pinctrl-names = "default";
-+-				pinctrl-0 = <&pcawan_pins>;
-++				pinctrl-0 = <&wanint_pins>;
-+ 
-+ 				interrupt-parent = <&gpio1>;
-+ 				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
-+@@ -266,7 +263,7 @@
-+ 	status = "okay";
-+ 
-+ 	phy1: phy@1 {
++-};
++-
++-&i2c0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&i2c0_pins>;
++-	status = "okay";
++-
++-	i2cmux@70 {
++-		compatible = "nxp,pca9547";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		reg = <0x70>;
 +-		status = "okay";
-++		status = "disabled";
-+ 		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
-+ 		reg = <1>;
-+ 
-+@@ -326,10 +323,21 @@
-+ 			/* port 6 is connected to eth0 */
-+ 		};
-+ 	};
++-
++-		i2c@0 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <0>;
++-
++-			/* STM32F0 command interface at address 0x2a */
++-			/* leds device (in STM32F0) at address 0x2b */
++-
++-			eeprom@54 {
++-				compatible = "atmel,24c64";
++-				reg = <0x54>;
++-
++-				/* The EEPROM contains data for bootloader.
++-				 * Contents:
++-				 * 	struct omnia_eeprom {
++-				 * 		u32 magic; (=0x0341a034 in LE)
++-				 *		u32 ramsize; (in GiB)
++-				 * 		char regdomain[4];
++-				 * 		u32 crc32;
++-				 * 	};
++-				 */
++-			};
++-		};
++-
++-		i2c@1 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <1>;
++-
++-			/* routed to PCIe0/mSATA connector (CN7A) */
++-		};
++-
++-		i2c@2 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <2>;
++-
++-			/* routed to PCIe1/USB2 connector (CN61A) */
++-		};
++-
++-		i2c@3 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <3>;
++-
++-			/* routed to PCIe2 connector (CN62A) */
++-		};
++-
++-		i2c@4 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <4>;
++-
++-			/* routed to SFP+ */
++-		};
++-
++-		i2c@5 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <5>;
++-
++-			/* ATSHA204A at address 0x64 */
++-		};
++-
++-		i2c@6 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <6>;
++-
++-			/* exposed on pin header */
++-		};
++-
++-		i2c@7 {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-			reg = <7>;
++-
++-			pcawan: gpio@71 {
++-				/*
++-				 * GPIO expander for SFP+ signals and
++-				 * and phy irq
++-				 */
++-				compatible = "nxp,pca9538";
++-				reg = <0x71>;
++-
++-				pinctrl-names = "default";
++-				pinctrl-0 = <&pcawan_pins>;
++-
++-				interrupt-parent = <&gpio1>;
++-				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
++-
++-				gpio-controller;
++-				#gpio-cells = <2>;
++-			};
++-		};
++-	};
++-};
++-
++-&mdio {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&mdio_pins>;
++-	status = "okay";
++-
++-	phy1: phy@1 {
++-		status = "okay";
++-		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
++-		reg = <1>;
++-
++-		/* irq is connected to &pcawan pin 7 */
++-	};
++-
++-	/* Switch MV88E6176 at address 0x10 */
++-	switch@10 {
++-		compatible = "marvell,mv88e6085";
++-		#address-cells = <1>;
++-		#size-cells = <0>;
++-		dsa,member = <0 0>;
++-
++-		reg = <0x10>;
++-
++-		ports {
++-			#address-cells = <1>;
++-			#size-cells = <0>;
++-
++-			ports@0 {
++-				reg = <0>;
++-				label = "lan0";
++-			};
++-
++-			ports@1 {
++-				reg = <1>;
++-				label = "lan1";
++-			};
++-
++-			ports@2 {
++-				reg = <2>;
++-				label = "lan2";
++-			};
++-
++-			ports@3 {
++-				reg = <3>;
++-				label = "lan3";
++-			};
++-
++-			ports@4 {
++-				reg = <4>;
++-				label = "lan4";
++-			};
++-
++-			ports@5 {
++-				reg = <5>;
++-				label = "cpu";
++-				ethernet = <&eth1>;
++-				phy-mode = "rgmii-id";
++-
++-				fixed-link {
++-					speed = <1000>;
++-					full-duplex;
++-				};
++-			};
++-
++-			/* port 6 is connected to eth0 */
++-		};
++-	};
++-};
++-
++-&pinctrl {
++-	pcawan_pins: pcawan-pins {
++-		marvell,pins = "mpp46";
++-		marvell,function = "gpio";
++-	};
++-
++-	spi0cs0_pins: spi0cs0-pins {
++-		marvell,pins = "mpp25";
++-		marvell,function = "spi0";
++-	};
++-
++-	spi0cs1_pins: spi0cs1-pins {
++-		marvell,pins = "mpp26";
++-		marvell,function = "spi0";
++-	};
++-};
++-
++-&spi0 {
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&spi0_pins &spi0cs0_pins>;
++-	status = "okay";
++-
++-	spi-nor@0 {
++-		compatible = "spansion,s25fl164k", "jedec,spi-nor";
++-		#address-cells = <1>;
++-		#size-cells = <1>;
++-		reg = <0>;
++-		spi-max-frequency = <40000000>;
++-
++-		partitions {
++-			compatible = "fixed-partitions";
++-			#address-cells = <1>;
++-			#size-cells = <1>;
++-
++-			partition@0 {
++-				reg = <0x0 0x00100000>;
++-				label = "U-Boot";
++-			};
++-
++-			partition@100000 {
++-				reg = <0x00100000 0x00700000>;
++-				label = "Rescue system";
++-			};
++-		};
++-	};
++-
++-	/* MISO, MOSI, SCLK and CS1 are routed to pin header CN11 */
++-};
++-
++-&uart0 {
++-	/* Pin header CN10 */
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&uart0_pins>;
++-	status = "okay";
++-};
++-
++-&uart1 {
++-	/* Pin header CN11 */
++-	pinctrl-names = "default";
++-	pinctrl-0 = <&uart1_pins>;
++-	status = "okay";
++-};
++--- /dev/null
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++@@ -0,0 +1,400 @@
+++/*
+++ * Device Tree file for the Turris Omnia
+++ *
+++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
+++ *
+++ * This file is dual-licensed: you can use it either under the terms
+++ * of the GPL or the X11 license, at your option. Note that this dual
+++ * licensing only applies to this file, and not this project as a
+++ * whole.
+++ *
+++ *  a) This file is licensed under the terms of the GNU General Public
+++ *     License version 2.  This program is licensed "as is" without
+++ *     any warranty of any kind, whether express or implied.
+++ *
+++ * Or, alternatively,
+++ *
+++ *  b) Permission is hereby granted, free of charge, to any person
+++ *     obtaining a copy of this software and associated documentation
+++ *     files (the "Software"), to deal in the Software without
+++ *     restriction, including without limitation the rights to use,
+++ *     copy, modify, merge, publish, distribute, sublicense, and/or
+++ *     sell copies of the Software, and to permit persons to whom the
+++ *     Software is furnished to do so, subject to the following
+++ *     conditions:
+++ *
+++ *     The above copyright notice and this permission notice shall be
+++ *     included in all copies or substantial portions of the Software.
+++ *
+++ *     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+++ *     EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+++ *     OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+++ *     NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+++ *     HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+++ *     WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+++ *     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+++ *     OTHER DEALINGS IN THE SOFTWARE.
+++ */
+++
+++/*
+++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
+++ */
+++
+++#include <dt-bindings/gpio/gpio.h>
+++#include <dt-bindings/input/input.h>
+++#include "armada-385.dtsi"
+++
+++/ {
+++	model = "Turris Omnia";
+++	compatible = "cznic,turris-omnia", "marvell,armada385", "marvell,armada380";
+++
+++	chosen {
+++		stdout-path = &uart0;
+++	};
+++
+++	memory {
+++		device_type = "memory";
+++		reg = <0x00000000 0x40000000>; /* 1024 MB */
+++	};
+++
+++	soc {
+++		ranges = <MBUS_ID(0xf0, 0x01) 0 0xf1000000 0x100000
+++			  MBUS_ID(0x01, 0x1d) 0 0xfff00000 0x100000
+++			  MBUS_ID(0x09, 0x19) 0 0xf1100000 0x10000
+++			  MBUS_ID(0x09, 0x15) 0 0xf1110000 0x10000>;
+++
+++		internal-regs {
+++
+++			/* USB part of the PCIe2/USB 2.0 port */
+++			usb@58000 {
+++				status = "okay";
+++			};
+++
+++			sata@a8000 {
+++				status = "okay";
+++			};
+++
+++			sdhci@d8000 {
+++				pinctrl-names = "default";
+++				pinctrl-0 = <&sdhci_pins>;
+++				status = "okay";
+++
+++				bus-width = <8>;
+++				no-1-8-v;
+++				non-removable;
+++			};
+++
+++			usb3@f0000 {
+++				status = "okay";
+++			};
+++
+++			usb3@f8000 {
+++				status = "okay";
+++			};
+++		};
+++
+++		pcie {
+++			status = "okay";
+++
+++			pcie@1,0 {
+++				/* Port 0, Lane 0 */
+++				status = "okay";
+++			};
+++
+++			pcie@2,0 {
+++				/* Port 1, Lane 0 */
+++				status = "okay";
+++			};
+++
+++			pcie@3,0 {
+++				/* Port 2, Lane 0 */
+++				status = "okay";
+++			};
+++		};
+++	};
 ++
 ++	sfp: sfp {
 ++		compatible = "sff,sfp";
@@ -245,17 +651,280 @@ index 0000000000..6f98c5c131
 ++		los-gpios = <&sfpgpio 3 GPIO_ACTIVE_HIGH>;
 ++		mod-def0-gpios = <&sfpgpio 4 GPIO_ACTIVE_LOW>;
 ++	};
-+ };
-+ 
-+ &pinctrl {
-+-	pcawan_pins: pcawan-pins {
+++};
+++
+++/* Disable eth0 unless there is DSA driver supporting two CPU ports. */
+++/* Connected to 88E6176 switch, port 6 */
+++/* &eth0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&ge0_rgmii_pins>;
+++	status = "okay";
+++	phy-mode = "rgmii";
+++
+++	fixed-link {
+++		speed = <1000>;
+++		full-duplex;
+++	};
+++}; */
+++
+++/* Connected to 88E6176 switch, port 5 */
+++&eth1 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&ge1_rgmii_pins>;
+++	status = "okay";
+++	phy-mode = "rgmii";
+++
+++	fixed-link {
+++		speed = <1000>;
+++		full-duplex;
+++	};
+++};
+++
+++/* WAN dual-personality port */
+++&eth2 {
+++        status = "okay";
+++};
+++
+++&i2c0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&i2c0_pins>;
+++	status = "okay";
+++
+++	i2cmux@70 {
+++		compatible = "nxp,pca9547";
+++		#address-cells = <1>;
+++		#size-cells = <0>;
+++		reg = <0x70>;
+++		status = "okay";
+++
+++		i2c@0 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <0>;
+++
+++			/* STM32F0 command interface at address 0x2a */
+++			/* leds device (in STM32F0) at address 0x2b */
+++
+++			eeprom@54 {
+++				compatible = "atmel,24c64";
+++				reg = <0x54>;
+++
+++				/* The EEPROM contains data for bootloader.
+++				 * Contents:
+++				 * 	struct omnia_eeprom {
+++				 * 		u32 magic; (=0x0341a034 in LE)
+++				 *		u32 ramsize; (in GiB)
+++				 * 		char regdomain[4];
+++				 * 		u32 crc32;
+++				 * 	};
+++				 */
+++			};
+++		};
+++
+++		i2c@1 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <1>;
+++
+++			/* routed to PCIe0/mSATA connector (CN7A) */
+++		};
+++
+++		i2c@2 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <2>;
+++
+++			/* routed to PCIe1/USB2 connector (CN61A) */
+++		};
+++
+++		i2c@3 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <3>;
+++
+++			/* routed to PCIe2 connector (CN62A) */
+++		};
+++
+++		i2csfp: i2c@4 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <4>;
+++
+++			/* routed to SFP+ */
+++		};
+++
+++		i2c@5 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <5>;
+++
+++			/* ATSHA204A at address 0x64 */
+++		};
+++
+++		i2c@6 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <6>;
+++
+++			/* exposed on pin header */
+++		};
+++
+++		i2c@7 {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++			reg = <7>;
+++
+++			sfpgpio: gpio@71 {
+++				/*
+++				 * GPIO expander for SFP+ signals and
+++				 * and phy irq
+++				 */
+++				compatible = "nxp,pca9538";
+++				reg = <0x71>;
+++
+++				pinctrl-names = "default";
+++				pinctrl-0 = <&wanint_pins>;
+++
+++				interrupt-parent = <&gpio1>;
+++				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
+++
+++				gpio-controller;
+++				#gpio-cells = <2>;
+++			};
+++		};
+++	};
+++};
+++
+++&mdio {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&mdio_pins>;
+++	status = "okay";
+++
+++	phy1: phy@1 {
+++		status = "disabled";
+++		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
+++		reg = <1>;
+++
+++		/* irq is connected to &pcawan pin 7 */
+++	};
+++
+++	/* Switch MV88E6176 at address 0x10 */
+++	switch@10 {
+++		compatible = "marvell,mv88e6085";
+++		#address-cells = <1>;
+++		#size-cells = <0>;
+++		dsa,member = <0 0>;
+++
+++		reg = <0x10>;
+++
+++		ports {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++
+++			ports@0 {
+++				reg = <0>;
+++				label = "lan0";
+++			};
+++
+++			ports@1 {
+++				reg = <1>;
+++				label = "lan1";
+++			};
+++
+++			ports@2 {
+++				reg = <2>;
+++				label = "lan2";
+++			};
+++
+++			ports@3 {
+++				reg = <3>;
+++				label = "lan3";
+++			};
+++
+++			ports@4 {
+++				reg = <4>;
+++				label = "lan4";
+++			};
+++
+++			ports@5 {
+++				reg = <5>;
+++				label = "cpu";
+++				ethernet = <&eth1>;
+++				phy-mode = "rgmii-id";
+++
+++				fixed-link {
+++					speed = <1000>;
+++					full-duplex;
+++				};
+++			};
+++
+++			/* port 6 is connected to eth0 */
+++		};
+++	};
+++};
+++
+++&pinctrl {
 ++	wanint_pins: wanint-pins {
-+ 		marvell,pins = "mpp46";
-+ 		marvell,function = "gpio";
-+ 	};
-+-- 
-+2.21.0
-+
+++		marvell,pins = "mpp46";
+++		marvell,function = "gpio";
+++	};
+++
+++	spi0cs0_pins: spi0cs0-pins {
+++		marvell,pins = "mpp25";
+++		marvell,function = "spi0";
+++	};
+++
+++	spi0cs1_pins: spi0cs1-pins {
+++		marvell,pins = "mpp26";
+++		marvell,function = "spi0";
+++	};
+++};
+++
+++&spi0 {
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&spi0_pins &spi0cs0_pins>;
+++	status = "okay";
+++
+++	spi-nor@0 {
+++		compatible = "spansion,s25fl164k", "jedec,spi-nor";
+++		#address-cells = <1>;
+++		#size-cells = <1>;
+++		reg = <0>;
+++		spi-max-frequency = <40000000>;
+++
+++		partitions {
+++			compatible = "fixed-partitions";
+++			#address-cells = <1>;
+++			#size-cells = <1>;
+++
+++			partition@0 {
+++				reg = <0x0 0x00100000>;
+++				label = "U-Boot";
+++			};
+++
+++			partition@100000 {
+++				reg = <0x00100000 0x00700000>;
+++				label = "Rescue system";
+++			};
+++		};
+++	};
+++
+++	/* MISO, MOSI, SCLK and CS1 are routed to pin header CN11 */
+++};
+++
+++&uart0 {
+++	/* Pin header CN10 */
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&uart0_pins>;
+++	status = "okay";
+++};
+++
+++&uart1 {
+++	/* Pin header CN11 */
+++	pinctrl-names = "default";
+++	pinctrl-0 = <&uart1_pins>;
+++	status = "okay";
+++};
 diff --git a/target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch b/target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch
 new file mode 100644
 index 0000000000..fc7f13eafc
