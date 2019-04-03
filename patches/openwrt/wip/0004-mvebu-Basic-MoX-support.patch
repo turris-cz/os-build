@@ -1,7 +1,7 @@
-From 42e6bb43223f2aa9cddce5201d04dc3fcf682d3f Mon Sep 17 00:00:00 2001
+From 21fe20a336a081ed06ff577489302c2ec36a1833 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
-Subject: [PATCH] mvebu: Basic MoX support
+Subject: [PATCH 1/6] mvebu: Basic MoX support
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -144,7 +144,8 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  ...37xx-periph-Fix-switching-CPU-rate-.patch} |   0
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
- 133 files changed, 14184 insertions(+), 330 deletions(-)
+ ...9-net-dsa-mv88x6xxx-mv88e6390-errata.patch | 232 +++++
+ 134 files changed, 14416 insertions(+), 330 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -276,6 +277,7 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  rename target/linux/mvebu/patches-4.14/{510-clk-mvebu-armada-37xx-periph-Fix-switching-CPU-rate-.patch => 99510-clk-mvebu-armada-37xx-periph-Fix-switching-CPU-rate-.patch} (100%)
  rename target/linux/mvebu/patches-4.14/{511-clk-mvebu-armada-37xx-periph-Fix-wrong-return-value-.patch => 99511-clk-mvebu-armada-37xx-periph-Fix-wrong-return-value-.patch} (100%)
  rename target/linux/mvebu/patches-4.14/{512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch => 99512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch} (100%)
+ create mode 100644 target/linux/mvebu/patches-4.14/99999-net-dsa-mv88x6xxx-mv88e6390-errata.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
 index 7b26c9b619..1cfce9662c 100644
@@ -16733,6 +16735,244 @@ diff --git a/target/linux/mvebu/patches-4.14/512-clk-mvebu-armada-37xx-periph-Re
 similarity index 100%
 rename from target/linux/mvebu/patches-4.14/512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
 rename to target/linux/mvebu/patches-4.14/99512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
+diff --git a/target/linux/mvebu/patches-4.14/99999-net-dsa-mv88x6xxx-mv88e6390-errata.patch b/target/linux/mvebu/patches-4.14/99999-net-dsa-mv88x6xxx-mv88e6390-errata.patch
+new file mode 100644
+index 0000000000..0192319bb9
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/99999-net-dsa-mv88x6xxx-mv88e6390-errata.patch
+@@ -0,0 +1,232 @@
++From ffd2e8a3f6b66691154c0b0220e1cf02381a3180 Mon Sep 17 00:00:00 2001
++From: Andrew Lunn <andrew@lunn.ch>
++Date: Wed, 9 Jan 2019 00:24:03 +0100
++Subject: net: dsa: mv88x6xxx: mv88e6390 errata
++
++[ Upstream commit ea89098ef9a574bceca00d3b5df14aaf0b3f9ccf ]
++
++The 6390 copper ports have an errata which require poking magic values
++into undocumented magic registers and then performing a software
++reset.
++
++Signed-off-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 113 +++++++++++++++++++++++++++++++++++++++
++ drivers/net/dsa/mv88e6xxx/chip.h |   5 ++
++ drivers/net/dsa/mv88e6xxx/port.h |  10 ++++
++ 3 files changed, 128 insertions(+)
++
++(limited to 'drivers/net/dsa/mv88e6xxx')
++
++Index: linux-4.14.109/drivers/net/dsa/mv88e6xxx/chip.c
++===================================================================
++--- linux-4.14.109.orig/drivers/net/dsa/mv88e6xxx/chip.c
+++++ linux-4.14.109/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -2252,107 +2252,6 @@ static int mv88e6xxx_g1_setup(struct mv8
++ 	return 0;
++ }
++ 
++-/* The mv88e6390 has some hidden registers used for debug and
++- * development. The errata also makes use of them.
++- */
++-static int mv88e6390_hidden_write(struct mv88e6xxx_chip *chip, int port,
++-				  int reg, u16 val)
++-{
++-	u16 ctrl;
++-	int err;
++-
++-	err = mv88e6xxx_port_write(chip, PORT_RESERVED_1A_DATA_PORT,
++-				   PORT_RESERVED_1A, val);
++-	if (err)
++-		return err;
++-
++-	ctrl = PORT_RESERVED_1A_BUSY | PORT_RESERVED_1A_WRITE |
++-	       PORT_RESERVED_1A_BLOCK | port << PORT_RESERVED_1A_PORT_SHIFT |
++-	       reg;
++-
++-	return mv88e6xxx_port_write(chip, PORT_RESERVED_1A_CTRL_PORT,
++-				    PORT_RESERVED_1A, ctrl);
++-}
++-
++-static int mv88e6390_hidden_wait(struct mv88e6xxx_chip *chip)
++-{
++-	return mv88e6xxx_wait(chip, PORT_RESERVED_1A_CTRL_PORT,
++-			      PORT_RESERVED_1A, PORT_RESERVED_1A_BUSY);
++-}
++-
++-
++-static int mv88e6390_hidden_read(struct mv88e6xxx_chip *chip, int port,
++-				  int reg, u16 *val)
++-{
++-	u16 ctrl;
++-	int err;
++-
++-	ctrl = PORT_RESERVED_1A_BUSY | PORT_RESERVED_1A_READ |
++-	       PORT_RESERVED_1A_BLOCK | port << PORT_RESERVED_1A_PORT_SHIFT |
++-	       reg;
++-
++-	err = mv88e6xxx_port_write(chip, PORT_RESERVED_1A_CTRL_PORT,
++-				   PORT_RESERVED_1A, ctrl);
++-	if (err)
++-		return err;
++-
++-	err = mv88e6390_hidden_wait(chip);
++-	if (err)
++-		return err;
++-
++-	return 	mv88e6xxx_port_read(chip, PORT_RESERVED_1A_DATA_PORT,
++-				    PORT_RESERVED_1A, val);
++-}
++-
++-/* Check if the errata has already been applied. */
++-static bool mv88e6390_setup_errata_applied(struct mv88e6xxx_chip *chip)
++-{
++-	int port;
++-	int err;
++-	u16 val;
++-
++-	for (port = 0; port < mv88e6xxx_num_ports(chip); port++) {
++-		err = mv88e6390_hidden_read(chip, port, 0, &val);
++-		if (err) {
++-			dev_err(chip->dev,
++-				"Error reading hidden register: %d\n", err);
++-			return false;
++-		}
++-		if (val != 0x01c0)
++-			return false;
++-	}
++-
++-	return true;
++-}
++-
++-/* The 6390 copper ports have an errata which require poking magic
++- * values into undocumented hidden registers and then performing a
++- * software reset.
++- */
++-static int mv88e6390_setup_errata(struct mv88e6xxx_chip *chip)
++-{
++-	int port;
++-	int err;
++-
++-	if (mv88e6390_setup_errata_applied(chip))
++-		return 0;
++-
++-	/* Set the ports into blocking mode */
++-	for (port = 0; port < mv88e6xxx_num_ports(chip); port++) {
++-		err = mv88e6xxx_port_set_state(chip, port, BR_STATE_DISABLED);
++-		if (err)
++-			return err;
++-	}
++-
++-	for (port = 0; port < mv88e6xxx_num_ports(chip); port++) {
++-		err = mv88e6390_hidden_write(chip, port, 0, 0x01c0);
++-		if (err)
++-			return err;
++-	}
++-
++-	return mv88e6xxx_software_reset(chip);
++-}
++-
++ static int mv88e6xxx_setup(struct dsa_switch *ds)
++ {
++ 	struct mv88e6xxx_chip *chip = ds->priv;
++@@ -2365,12 +2264,6 @@ static int mv88e6xxx_setup(struct dsa_sw
++ 
++ 	mutex_lock(&chip->reg_lock);
++ 
++-	if (chip->info->ops->setup_errata) {
++-		err = chip->info->ops->setup_errata(chip);
++-		if (err)
++-			goto unlock;
++-	}
++-
++ 	/* Cache the cmode of each port. */
++ 	for (i = 0; i < mv88e6xxx_num_ports(chip); i++) {
++ 		if (chip->info->ops->port_get_cmode) {
++@@ -3087,7 +2980,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6190_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++@@ -3123,7 +3015,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6190x_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++@@ -3162,7 +3053,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6191_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++@@ -3242,7 +3132,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6290_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++@@ -3504,7 +3393,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6390_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++@@ -3547,7 +3435,6 @@ static const struct mv88e6xxx_ops mv88e6
++ 
++ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++ 	/* MV88E6XXX_FAMILY_6390 */
++-	.setup_errata = mv88e6390_setup_errata,
++ 	.irl_init_all = mv88e6390_g2_irl_init_all,
++ 	.get_eeprom = mv88e6xxx_g2_get_eeprom8,
++ 	.set_eeprom = mv88e6xxx_g2_set_eeprom8,
++Index: linux-4.14.109/drivers/net/dsa/mv88e6xxx/chip.h
++===================================================================
++--- linux-4.14.109.orig/drivers/net/dsa/mv88e6xxx/chip.h
+++++ linux-4.14.109/drivers/net/dsa/mv88e6xxx/chip.h
++@@ -237,11 +237,6 @@ struct mv88e6xxx_mdio_bus {
++ };
++ 
++ struct mv88e6xxx_ops {
++-	/* Switch Setup Errata, called early in the switch setup to
++-	 * allow any errata actions to be performed
++-	 */
++-	int (*setup_errata)(struct mv88e6xxx_chip *chip);
++-
++ 	/* Ingress Rate Limit unit (IRL) operations */
++ 	int (*irl_init_all)(struct mv88e6xxx_chip *chip, int port);
++ 
++Index: linux-4.14.109/drivers/net/dsa/mv88e6xxx/port.h
++===================================================================
++--- linux-4.14.109.orig/drivers/net/dsa/mv88e6xxx/port.h
+++++ linux-4.14.109/drivers/net/dsa/mv88e6xxx/port.h
++@@ -251,16 +251,6 @@
++ /* Offset 0x19: Port IEEE Priority Remapping Registers (4-7) */
++ #define MV88E6095_PORT_IEEE_PRIO_REMAP_4567	0x19
++ 
++-/* Offset 0x1a: Magic undocumented errata register */
++-#define PORT_RESERVED_1A			0x1a
++-#define PORT_RESERVED_1A_BUSY			BIT(15)
++-#define PORT_RESERVED_1A_WRITE			BIT(14)
++-#define PORT_RESERVED_1A_READ			0
++-#define PORT_RESERVED_1A_PORT_SHIFT		5
++-#define PORT_RESERVED_1A_BLOCK			(0xf << 10)
++-#define PORT_RESERVED_1A_CTRL_PORT		4
++-#define PORT_RESERVED_1A_DATA_PORT		5
++-
++ int mv88e6xxx_port_read(struct mv88e6xxx_chip *chip, int port, int reg,
++ 			u16 *val);
++ int mv88e6xxx_port_write(struct mv88e6xxx_chip *chip, int port, int reg,
 -- 
 2.21.0
 
