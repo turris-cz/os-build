@@ -1,4 +1,4 @@
-From 667fdaccd20858fdd0b9d120efaf484c5a907b5c Mon Sep 17 00:00:00 2001
+From b07e9c9140e710d1b676c5372543952ce3680cba Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -136,8 +136,9 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-Add-Turris-Mox-rWTM-firmware-driver.patch | 454 +++++++++
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...64-restart-Armada-3700-restart-code.patch} |   6 +-
+ ..._register_socket-call-from-sfp_remov.patch |  55 ++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 130 files changed, 14316 insertions(+), 324 deletions(-)
+ 131 files changed, 14371 insertions(+), 324 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -265,6 +266,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
  rename target/linux/mvebu/patches-4.14/{9999-arm64-restart-Armada-3700-restart-code.patch => 90126-arm64-restart-Armada-3700-restart-code.patch} (89%)
+ create mode 100644 target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
  rename target/linux/mvebu/patches-4.14/{508-cpufreq-armada-37xx-Fix-clock-leak.patch => 9508-cpufreq-armada-37xx-Fix-clock-leak.patch} (100%)
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
@@ -350,14 +352,14 @@ index fb57f4112a..0000000000
 - 	/* Set lane X1 */
 diff --git a/target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch b/target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
 new file mode 100644
-index 0000000000..54d3142206
+index 0000000000..248c467e27
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
 @@ -0,0 +1,34 @@
 +From 54d412c96f00249ea9f561843e1400ace9e3ee18 Mon Sep 17 00:00:00 2001
 +From: Himanshu Jha <himanshujha199640@gmail.com>
 +Date: Sun, 27 Aug 2017 02:45:30 +0530
-+Subject: [PATCH 001/126] crypto: inside-secure - remove null check before
++Subject: [PATCH 001/127] crypto: inside-secure - remove null check before
 + kfree
 +
 +Kfree on NULL pointer is a no-op and therefore checking is redundant.
@@ -390,14 +392,14 @@ index 0000000000..54d3142206
 +
 diff --git a/target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch b/target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
 new file mode 100644
-index 0000000000..b845ade2f5
+index 0000000000..0585aa259d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
 @@ -0,0 +1,63 @@
 +From a619454a13ccfe855c4a968ddbcbd4fb01e3d72c Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Mon, 11 Dec 2017 12:10:58 +0100
-+Subject: [PATCH 002/126] crypto: inside-secure - do not use areq->result for
++Subject: [PATCH 002/127] crypto: inside-secure - do not use areq->result for
 + partial results
 +
 +This patches update the SafeXcel driver to stop using the crypto
@@ -459,14 +461,14 @@ index 0000000000..b845ade2f5
 +
 diff --git a/target/linux/mvebu/patches-4.14/90003-crypto-inside-secure-remove-extra-empty-line.patch b/target/linux/mvebu/patches-4.14/90003-crypto-inside-secure-remove-extra-empty-line.patch
 new file mode 100644
-index 0000000000..45698aa7a8
+index 0000000000..ff46a7948c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90003-crypto-inside-secure-remove-extra-empty-line.patch
 @@ -0,0 +1,28 @@
 +From 2290a7921f4f798754e89c171322e912f500505e Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:43 +0100
-+Subject: [PATCH 003/126] crypto: inside-secure - remove extra empty line
++Subject: [PATCH 003/127] crypto: inside-secure - remove extra empty line
 +
 +Cosmetic patch removing an extra empty line between header inclusions.
 +
@@ -493,14 +495,14 @@ index 0000000000..45698aa7a8
 +
 diff --git a/target/linux/mvebu/patches-4.14/90004-crypto-inside-secure-fix-typo-in-a-comment.patch b/target/linux/mvebu/patches-4.14/90004-crypto-inside-secure-fix-typo-in-a-comment.patch
 new file mode 100644
-index 0000000000..b7f716cda8
+index 0000000000..24b1caa977
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90004-crypto-inside-secure-fix-typo-in-a-comment.patch
 @@ -0,0 +1,29 @@
 +From 565e38295d82ed2845817f31ac0353683d47a57a Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:44 +0100
-+Subject: [PATCH 004/126] crypto: inside-secure - fix typo in a comment
++Subject: [PATCH 004/127] crypto: inside-secure - fix typo in a comment
 +
 +Cosmetic patch fixing one typo in one of the driver's comments.
 +
@@ -528,14 +530,14 @@ index 0000000000..b7f716cda8
 +
 diff --git a/target/linux/mvebu/patches-4.14/90005-crypto-inside-secure-remove-useless-memset.patch b/target/linux/mvebu/patches-4.14/90005-crypto-inside-secure-remove-useless-memset.patch
 new file mode 100644
-index 0000000000..acd329f96b
+index 0000000000..d7a3861f21
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90005-crypto-inside-secure-remove-useless-memset.patch
 @@ -0,0 +1,30 @@
 +From fdbd3a52cdd843e43d3f0202b2664715f05b715b Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:45 +0100
-+Subject: [PATCH 005/126] crypto: inside-secure - remove useless memset
++Subject: [PATCH 005/127] crypto: inside-secure - remove useless memset
 +
 +This patch removes an useless memset in the ahash_export function, as
 +the zeroed buffer will be entirely overridden the next line.
@@ -564,14 +566,14 @@ index 0000000000..acd329f96b
 +
 diff --git a/target/linux/mvebu/patches-4.14/90006-crypto-inside-secure-refrain-from-unneeded-invalidat.patch b/target/linux/mvebu/patches-4.14/90006-crypto-inside-secure-refrain-from-unneeded-invalidat.patch
 new file mode 100644
-index 0000000000..257ddae00c
+index 0000000000..80abaee942
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90006-crypto-inside-secure-refrain-from-unneeded-invalidat.patch
 @@ -0,0 +1,91 @@
 +From 69f773763fd9d11cc7b9fd1cb0990f8f3070689e Mon Sep 17 00:00:00 2001
 +From: Ofer Heifetz <oferh@marvell.com>
 +Date: Thu, 14 Dec 2017 15:26:47 +0100
-+Subject: [PATCH 006/126] crypto: inside-secure - refrain from unneeded
++Subject: [PATCH 006/127] crypto: inside-secure - refrain from unneeded
 + invalidations
 +
 +The check to know if an invalidation is needed (i.e. when the context
@@ -661,14 +663,14 @@ index 0000000000..257ddae00c
 +
 diff --git a/target/linux/mvebu/patches-4.14/90007-crypto-inside-secure-EBUSY-is-not-an-error-on-async-.patch b/target/linux/mvebu/patches-4.14/90007-crypto-inside-secure-EBUSY-is-not-an-error-on-async-.patch
 new file mode 100644
-index 0000000000..121f9dec54
+index 0000000000..9acda6b9a3
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90007-crypto-inside-secure-EBUSY-is-not-an-error-on-async-.patch
 @@ -0,0 +1,35 @@
 +From f824118314de0dc82137ce531dc5fdcf4739e77d Mon Sep 17 00:00:00 2001
 +From: Ofer Heifetz <oferh@marvell.com>
 +Date: Thu, 14 Dec 2017 15:26:48 +0100
-+Subject: [PATCH 007/126] crypto: inside-secure - EBUSY is not an error on
++Subject: [PATCH 007/127] crypto: inside-secure - EBUSY is not an error on
 + async request
 +
 +When initializing the IVs crypto_ahash_update() is called, which at some
@@ -702,14 +704,14 @@ index 0000000000..121f9dec54
 +
 diff --git a/target/linux/mvebu/patches-4.14/90008-crypto-inside-secure-move-cipher-crypto-mode-to-requ.patch b/target/linux/mvebu/patches-4.14/90008-crypto-inside-secure-move-cipher-crypto-mode-to-requ.patch
 new file mode 100644
-index 0000000000..5a45ff5282
+index 0000000000..5fb7d7502e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90008-crypto-inside-secure-move-cipher-crypto-mode-to-requ.patch
 @@ -0,0 +1,76 @@
 +From a89a2c002de40ab39933cd559e10c74b4b8dc087 Mon Sep 17 00:00:00 2001
 +From: Ofer Heifetz <oferh@marvell.com>
 +Date: Thu, 14 Dec 2017 15:26:49 +0100
-+Subject: [PATCH 008/126] crypto: inside-secure - move cipher crypto mode to
++Subject: [PATCH 008/127] crypto: inside-secure - move cipher crypto mode to
 + request context
 +
 +The cipher direction can be different for requests within the same
@@ -784,14 +786,14 @@ index 0000000000..5a45ff5282
 +
 diff --git a/target/linux/mvebu/patches-4.14/90009-crypto-inside-secure-remove-unused-parameter-in-inva.patch b/target/linux/mvebu/patches-4.14/90009-crypto-inside-secure-remove-unused-parameter-in-inva.patch
 new file mode 100644
-index 0000000000..a2611833b7
+index 0000000000..ade2b07621
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90009-crypto-inside-secure-remove-unused-parameter-in-inva.patch
 @@ -0,0 +1,74 @@
 +From 77e5f1e1abb7deac33a6edd8018e0c97531ae8bf Mon Sep 17 00:00:00 2001
 +From: Ofer Heifetz <oferh@marvell.com>
 +Date: Thu, 14 Dec 2017 15:26:50 +0100
-+Subject: [PATCH 009/126] crypto: inside-secure - remove unused parameter in
++Subject: [PATCH 009/127] crypto: inside-secure - remove unused parameter in
 + invalidate_cache
 +
 +The SafeXcel context isn't used in the cache invalidation function. This
@@ -864,14 +866,14 @@ index 0000000000..a2611833b7
 +
 diff --git a/target/linux/mvebu/patches-4.14/90010-crypto-inside-secure-move-request-dequeueing-into-a-.patch b/target/linux/mvebu/patches-4.14/90010-crypto-inside-secure-move-request-dequeueing-into-a-.patch
 new file mode 100644
-index 0000000000..70ad9ff399
+index 0000000000..bea10585ab
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90010-crypto-inside-secure-move-request-dequeueing-into-a-.patch
 @@ -0,0 +1,204 @@
 +From 5caa241a3f690a1aed65cc66386691dbd7ab6591 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:51 +0100
-+Subject: [PATCH 010/126] crypto: inside-secure - move request dequeueing into
++Subject: [PATCH 010/127] crypto: inside-secure - move request dequeueing into
 + a workqueue
 +
 +This patch moves the request dequeueing into a workqueue to improve the
@@ -1074,14 +1076,14 @@ index 0000000000..70ad9ff399
 +
 diff --git a/target/linux/mvebu/patches-4.14/90011-crypto-inside-secure-use-threaded-IRQs-for-result-ha.patch b/target/linux/mvebu/patches-4.14/90011-crypto-inside-secure-use-threaded-IRQs-for-result-ha.patch
 new file mode 100644
-index 0000000000..d436acbc06
+index 0000000000..a19f88ba7a
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90011-crypto-inside-secure-use-threaded-IRQs-for-result-ha.patch
 @@ -0,0 +1,136 @@
 +From 4680010064da542a862cdd5fd80ead909756afa9 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:52 +0100
-+Subject: [PATCH 011/126] crypto: inside-secure - use threaded IRQs for result
++Subject: [PATCH 011/127] crypto: inside-secure - use threaded IRQs for result
 + handling
 +
 +This patch moves the result handling from an IRQ handler to a threaded
@@ -1216,14 +1218,14 @@ index 0000000000..d436acbc06
 +
 diff --git a/target/linux/mvebu/patches-4.14/90012-crypto-inside-secure-dequeue-all-requests-at-once.patch b/target/linux/mvebu/patches-4.14/90012-crypto-inside-secure-dequeue-all-requests-at-once.patch
 new file mode 100644
-index 0000000000..45b98da2db
+index 0000000000..39fa47ca9c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90012-crypto-inside-secure-dequeue-all-requests-at-once.patch
 @@ -0,0 +1,179 @@
 +From bbf1ff250ef8969b2d1cec851f3972ec3d4be91e Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:53 +0100
-+Subject: [PATCH 012/126] crypto: inside-secure - dequeue all requests at once
++Subject: [PATCH 012/127] crypto: inside-secure - dequeue all requests at once
 +
 +This patch updates the dequeueing logic to dequeue all requests at once.
 +Since we can have many requests in the queue, the interrupt coalescing
@@ -1401,14 +1403,14 @@ index 0000000000..45b98da2db
 +
 diff --git a/target/linux/mvebu/patches-4.14/90013-crypto-inside-secure-increase-the-ring-size.patch b/target/linux/mvebu/patches-4.14/90013-crypto-inside-secure-increase-the-ring-size.patch
 new file mode 100644
-index 0000000000..c2ab1f2e5b
+index 0000000000..392451344e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90013-crypto-inside-secure-increase-the-ring-size.patch
 @@ -0,0 +1,37 @@
 +From 11cdfe43fdb19cfa29f48529a9f005b678651fe5 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:54 +0100
-+Subject: [PATCH 013/126] crypto: inside-secure - increase the ring size
++Subject: [PATCH 013/127] crypto: inside-secure - increase the ring size
 +
 +Increase the ring size to handle more requests in parallel, while
 +keeping the batch size (for interrupt coalescing) to its previous value.
@@ -1444,14 +1446,14 @@ index 0000000000..c2ab1f2e5b
 +
 diff --git a/target/linux/mvebu/patches-4.14/90014-crypto-inside-secure-acknowledge-the-result-requests.patch b/target/linux/mvebu/patches-4.14/90014-crypto-inside-secure-acknowledge-the-result-requests.patch
 new file mode 100644
-index 0000000000..90ebdfb50f
+index 0000000000..e6d8e35795
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90014-crypto-inside-secure-acknowledge-the-result-requests.patch
 @@ -0,0 +1,62 @@
 +From 4b5dc615542a9bf66d8b66421afac873f4d1f82e Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:55 +0100
-+Subject: [PATCH 014/126] crypto: inside-secure - acknowledge the result
++Subject: [PATCH 014/127] crypto: inside-secure - acknowledge the result
 + requests all at once
 +
 +This patches moves the result request acknowledgment from a per request
@@ -1512,14 +1514,14 @@ index 0000000000..90ebdfb50f
 +
 diff --git a/target/linux/mvebu/patches-4.14/90015-crypto-inside-secure-handle-more-result-requests-whe.patch b/target/linux/mvebu/patches-4.14/90015-crypto-inside-secure-handle-more-result-requests-whe.patch
 new file mode 100644
-index 0000000000..c5b2a10e2f
+index 0000000000..d74665d2f6
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90015-crypto-inside-secure-handle-more-result-requests-whe.patch
 @@ -0,0 +1,70 @@
 +From 1ec6f0340ffe77b29925952d8bc79ee3edba02c2 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:56 +0100
-+Subject: [PATCH 015/126] crypto: inside-secure - handle more result requests
++Subject: [PATCH 015/127] crypto: inside-secure - handle more result requests
 + when counter is full
 +
 +This patch modifies the result handling logic to continue handling
@@ -1588,14 +1590,14 @@ index 0000000000..c5b2a10e2f
 +
 diff --git a/target/linux/mvebu/patches-4.14/90016-crypto-inside-secure-retry-to-proceed-the-request-la.patch b/target/linux/mvebu/patches-4.14/90016-crypto-inside-secure-retry-to-proceed-the-request-la.patch
 new file mode 100644
-index 0000000000..de3525c42a
+index 0000000000..394ecca5e7
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90016-crypto-inside-secure-retry-to-proceed-the-request-la.patch
 @@ -0,0 +1,103 @@
 +From 5177f64dae7f8f22f9501890b885ae5248e626e2 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:57 +0100
-+Subject: [PATCH 016/126] crypto: inside-secure - retry to proceed the request
++Subject: [PATCH 016/127] crypto: inside-secure - retry to proceed the request
 + later on fail
 +
 +The dequeueing function was putting back a request in the crypto queue
@@ -1697,14 +1699,14 @@ index 0000000000..de3525c42a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90017-crypto-inside-secure-EIP97-support.patch b/target/linux/mvebu/patches-4.14/90017-crypto-inside-secure-EIP97-support.patch
 new file mode 100644
-index 0000000000..a53d4876ab
+index 0000000000..56a0af584b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90017-crypto-inside-secure-EIP97-support.patch
 @@ -0,0 +1,841 @@
 +From a560994a9a76cdacb83bb07cb8e8480ce756db20 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Antoine=20T=C3=A9nart?= <antoine.tenart@free-electrons.com>
 +Date: Thu, 14 Dec 2017 15:26:58 +0100
-+Subject: [PATCH 017/126] crypto: inside-secure - EIP97 support
++Subject: [PATCH 017/127] crypto: inside-secure - EIP97 support
 +
 +The Inside Secure SafeXcel driver was firstly designed to support the
 +EIP197 cryptographic engine which is an evolution (with much more
@@ -2544,14 +2546,14 @@ index 0000000000..a53d4876ab
 +
 diff --git a/target/linux/mvebu/patches-4.14/90018-crypto-inside-secure-make-function-safexcel_try_push.patch b/target/linux/mvebu/patches-4.14/90018-crypto-inside-secure-make-function-safexcel_try_push.patch
 new file mode 100644
-index 0000000000..9387646239
+index 0000000000..78ec5a70e2
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90018-crypto-inside-secure-make-function-safexcel_try_push.patch
 @@ -0,0 +1,38 @@
 +From 938939e81b621c102b10022f9ae070ade0d9df83 Mon Sep 17 00:00:00 2001
 +From: Colin Ian King <colin.king@canonical.com>
 +Date: Tue, 16 Jan 2018 08:41:58 +0100
-+Subject: [PATCH 018/126] crypto: inside-secure - make function
++Subject: [PATCH 018/127] crypto: inside-secure - make function
 + safexcel_try_push_requests static
 +
 +The function safexcel_try_push_requests  is local to the source and does
@@ -2588,14 +2590,14 @@ index 0000000000..9387646239
 +
 diff --git a/target/linux/mvebu/patches-4.14/90019-crypto-inside-secure-do-not-overwrite-the-threshold-.patch b/target/linux/mvebu/patches-4.14/90019-crypto-inside-secure-do-not-overwrite-the-threshold-.patch
 new file mode 100644
-index 0000000000..560b43a34e
+index 0000000000..14b757eb1f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90019-crypto-inside-secure-do-not-overwrite-the-threshold-.patch
 @@ -0,0 +1,40 @@
 +From 1af1254859cc67b07e64547f6e3635ad41824d03 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Tue, 13 Feb 2018 09:26:51 +0100
-+Subject: [PATCH 019/126] crypto: inside-secure - do not overwrite the
++Subject: [PATCH 019/127] crypto: inside-secure - do not overwrite the
 + threshold value
 +
 +This patch fixes the Inside Secure SafeXcel driver not to overwrite the
@@ -2634,14 +2636,14 @@ index 0000000000..560b43a34e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90020-crypto-inside-secure-keep-the-requests-push-pop-sync.patch b/target/linux/mvebu/patches-4.14/90020-crypto-inside-secure-keep-the-requests-push-pop-sync.patch
 new file mode 100644
-index 0000000000..77a9b79615
+index 0000000000..19ff329374
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90020-crypto-inside-secure-keep-the-requests-push-pop-sync.patch
 @@ -0,0 +1,136 @@
 +From 730b546b41883ab7b9112d3d6519506c73122c44 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Tue, 13 Feb 2018 09:26:56 +0100
-+Subject: [PATCH 020/126] crypto: inside-secure - keep the requests push/pop
++Subject: [PATCH 020/127] crypto: inside-secure - keep the requests push/pop
 + synced
 +
 +This patch updates the Inside Secure SafeXcel driver to avoid being
@@ -2776,14 +2778,14 @@ index 0000000000..77a9b79615
 +
 diff --git a/target/linux/mvebu/patches-4.14/90021-crypto-inside-secure-unmap-the-result-in-the-hash-se.patch b/target/linux/mvebu/patches-4.14/90021-crypto-inside-secure-unmap-the-result-in-the-hash-se.patch
 new file mode 100644
-index 0000000000..a8cce746f5
+index 0000000000..9812efd06d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90021-crypto-inside-secure-unmap-the-result-in-the-hash-se.patch
 @@ -0,0 +1,42 @@
 +From 5c41b26c94e8522502e636e9c60fcc791ce33f2e Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Tue, 13 Feb 2018 09:26:57 +0100
-+Subject: [PATCH 021/126] crypto: inside-secure - unmap the result in the hash
++Subject: [PATCH 021/127] crypto: inside-secure - unmap the result in the hash
 + send error path
 +
 +This patch adds a label to unmap the result buffer in the hash send
@@ -2824,14 +2826,14 @@ index 0000000000..a8cce746f5
 +
 diff --git a/target/linux/mvebu/patches-4.14/90022-crypto-inside-secure-move-hash-result-dma-mapping-to.patch b/target/linux/mvebu/patches-4.14/90022-crypto-inside-secure-move-hash-result-dma-mapping-to.patch
 new file mode 100644
-index 0000000000..fabc54c425
+index 0000000000..a0858554d5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90022-crypto-inside-secure-move-hash-result-dma-mapping-to.patch
 @@ -0,0 +1,115 @@
 +From 96966195365e654f6a563c3f79ad565b0696ad1a Mon Sep 17 00:00:00 2001
 +From: Ofer Heifetz <oferh@marvell.com>
 +Date: Mon, 26 Feb 2018 14:45:10 +0100
-+Subject: [PATCH 022/126] crypto: inside-secure - move hash result dma mapping
++Subject: [PATCH 022/127] crypto: inside-secure - move hash result dma mapping
 + to request
 +
 +In heavy traffic the DMA mapping is overwritten by multiple requests as
@@ -2945,14 +2947,14 @@ index 0000000000..fabc54c425
 +
 diff --git a/target/linux/mvebu/patches-4.14/90023-crypto-inside-secure-move-cache-result-dma-mapping-t.patch b/target/linux/mvebu/patches-4.14/90023-crypto-inside-secure-move-cache-result-dma-mapping-t.patch
 new file mode 100644
-index 0000000000..1f9c2a8d6a
+index 0000000000..fbcba7ccba
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90023-crypto-inside-secure-move-cache-result-dma-mapping-t.patch
 @@ -0,0 +1,152 @@
 +From d5a0796d76e865d8123d773e163194c0bfb2b752 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 26 Feb 2018 14:45:11 +0100
-+Subject: [PATCH 023/126] crypto: inside-secure - move cache result dma mapping
++Subject: [PATCH 023/127] crypto: inside-secure - move cache result dma mapping
 + to request
 +
 +In heavy traffic the DMA mapping is overwritten by multiple requests as
@@ -3103,14 +3105,14 @@ index 0000000000..1f9c2a8d6a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90024-crypto-inside-secure-fix-missing-unlock-on-error-in-.patch b/target/linux/mvebu/patches-4.14/90024-crypto-inside-secure-fix-missing-unlock-on-error-in-.patch
 new file mode 100644
-index 0000000000..1e319a7f18
+index 0000000000..412753b008
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90024-crypto-inside-secure-fix-missing-unlock-on-error-in-.patch
 @@ -0,0 +1,36 @@
 +From 716fab484fcc7258b1f9a5c9b270cdfcbb6bdae2 Mon Sep 17 00:00:00 2001
 +From: "weiyongjun \\(A\\)" <weiyongjun1@huawei.com>
 +Date: Tue, 13 Mar 2018 14:54:03 +0000
-+Subject: [PATCH 024/126] crypto: inside-secure - fix missing unlock on error
++Subject: [PATCH 024/127] crypto: inside-secure - fix missing unlock on error
 + in safexcel_ahash_send_req()
 +
 +Add the missing unlock before return from function
@@ -3145,14 +3147,14 @@ index 0000000000..1e319a7f18
 +
 diff --git a/target/linux/mvebu/patches-4.14/90025-crypto-inside-secure-improve-clock-initialization.patch b/target/linux/mvebu/patches-4.14/90025-crypto-inside-secure-improve-clock-initialization.patch
 new file mode 100644
-index 0000000000..d3d149224a
+index 0000000000..d2697f1206
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90025-crypto-inside-secure-improve-clock-initialization.patch
 @@ -0,0 +1,48 @@
 +From 242f5d4c83c93accdcfdc56e61b090a667db3932 Mon Sep 17 00:00:00 2001
 +From: Gregory CLEMENT <gregory.clement@bootlin.com>
 +Date: Tue, 13 Mar 2018 17:48:41 +0100
-+Subject: [PATCH 025/126] crypto: inside-secure - improve clock initialization
++Subject: [PATCH 025/127] crypto: inside-secure - improve clock initialization
 +
 +The clock is optional, but if it is present we should managed it. If
 +there is an error while trying getting it, we should exit and report this
@@ -3199,14 +3201,14 @@ index 0000000000..d3d149224a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90026-crypto-inside-secure-fix-clock-resource-by-adding-a-.patch b/target/linux/mvebu/patches-4.14/90026-crypto-inside-secure-fix-clock-resource-by-adding-a-.patch
 new file mode 100644
-index 0000000000..93c7366ddf
+index 0000000000..03c235d8e4
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90026-crypto-inside-secure-fix-clock-resource-by-adding-a-.patch
 @@ -0,0 +1,146 @@
 +From 1d3fa47145163bae30e6b37312a54e61c72caef4 Mon Sep 17 00:00:00 2001
 +From: Gregory CLEMENT <gregory.clement@bootlin.com>
 +Date: Tue, 13 Mar 2018 17:48:42 +0100
-+Subject: [PATCH 026/126] crypto: inside-secure - fix clock resource by adding
++Subject: [PATCH 026/127] crypto: inside-secure - fix clock resource by adding
 + a register clock
 +
 +On Armada 7K/8K we need to explicitly enable the register clock. This
@@ -3351,14 +3353,14 @@ index 0000000000..93c7366ddf
 +
 diff --git a/target/linux/mvebu/patches-4.14/90027-crypto-inside-secure-move-the-digest-to-the-request-.patch b/target/linux/mvebu/patches-4.14/90027-crypto-inside-secure-move-the-digest-to-the-request-.patch
 new file mode 100644
-index 0000000000..79e9d44193
+index 0000000000..41bd9ad88b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90027-crypto-inside-secure-move-the-digest-to-the-request-.patch
 @@ -0,0 +1,161 @@
 +From 1291b116682aa598cadfad67abfe55246c43c97e Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:13 +0100
-+Subject: [PATCH 027/126] crypto: inside-secure - move the digest to the
++Subject: [PATCH 027/127] crypto: inside-secure - move the digest to the
 + request context
 +
 +This patches moves the digest information from the transformation
@@ -3518,14 +3520,14 @@ index 0000000000..79e9d44193
 +
 diff --git a/target/linux/mvebu/patches-4.14/90028-crypto-inside-secure-fix-typo-s-allways-always-in-a-.patch b/target/linux/mvebu/patches-4.14/90028-crypto-inside-secure-fix-typo-s-allways-always-in-a-.patch
 new file mode 100644
-index 0000000000..7dc4d0d556
+index 0000000000..c37e337f72
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90028-crypto-inside-secure-fix-typo-s-allways-always-in-a-.patch
 @@ -0,0 +1,45 @@
 +From 544f9477abccae5b8c252e93ed42eaccd23d8a31 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:14 +0100
-+Subject: [PATCH 028/126] crypto: inside-secure - fix typo s/allways/always/ in
++Subject: [PATCH 028/127] crypto: inside-secure - fix typo s/allways/always/ in
 + a define
 +
 +Small cosmetic patch fixing one typo in the
@@ -3569,14 +3571,14 @@ index 0000000000..7dc4d0d556
 +
 diff --git a/target/linux/mvebu/patches-4.14/90029-crypto-inside-secure-fix-a-typo-in-a-register-name.patch b/target/linux/mvebu/patches-4.14/90029-crypto-inside-secure-fix-a-typo-in-a-register-name.patch
 new file mode 100644
-index 0000000000..a47f710b3e
+index 0000000000..0291579cb5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90029-crypto-inside-secure-fix-a-typo-in-a-register-name.patch
 @@ -0,0 +1,45 @@
 +From 891ec507fffb08982be12a4aba40eeccb9f883ae Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:15 +0100
-+Subject: [PATCH 029/126] crypto: inside-secure - fix a typo in a register name
++Subject: [PATCH 029/127] crypto: inside-secure - fix a typo in a register name
 +
 +This patch fixes a typo in the EIP197_HIA_xDR_WR_CTRL_BUG register name,
 +as it should be EIP197_HIA_xDR_WR_CTRL_BUF. This is a cosmetic only
@@ -3620,14 +3622,14 @@ index 0000000000..a47f710b3e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90030-crypto-inside-secure-improve-the-send-error-path.patch b/target/linux/mvebu/patches-4.14/90030-crypto-inside-secure-improve-the-send-error-path.patch
 new file mode 100644
-index 0000000000..6c9f7bda40
+index 0000000000..39c9ad6ee8
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90030-crypto-inside-secure-improve-the-send-error-path.patch
 @@ -0,0 +1,50 @@
 +From 494622bc98b372c6bce8aeea1905924957490720 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:16 +0100
-+Subject: [PATCH 030/126] crypto: inside-secure - improve the send error path
++Subject: [PATCH 030/127] crypto: inside-secure - improve the send error path
 +
 +This patch improves the send error path as it wasn't handling all error
 +cases. A new label is added, and some of the goto are updated to point
@@ -3676,14 +3678,14 @@ index 0000000000..6c9f7bda40
 +
 diff --git a/target/linux/mvebu/patches-4.14/90031-crypto-inside-secure-do-not-access-buffers-mapped-to.patch b/target/linux/mvebu/patches-4.14/90031-crypto-inside-secure-do-not-access-buffers-mapped-to.patch
 new file mode 100644
-index 0000000000..84ce86e5a2
+index 0000000000..001fd13827
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90031-crypto-inside-secure-do-not-access-buffers-mapped-to.patch
 @@ -0,0 +1,46 @@
 +From 50f4fa52611cc3161e42874caea9d41df79d9718 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:17 +0100
-+Subject: [PATCH 031/126] crypto: inside-secure - do not access buffers mapped
++Subject: [PATCH 031/127] crypto: inside-secure - do not access buffers mapped
 + to the device
 +
 +This patches update the way the digest is copied from the state buffer
@@ -3728,14 +3730,14 @@ index 0000000000..84ce86e5a2
 +
 diff --git a/target/linux/mvebu/patches-4.14/90032-crypto-inside-secure-improve-the-skcipher-token.patch b/target/linux/mvebu/patches-4.14/90032-crypto-inside-secure-improve-the-skcipher-token.patch
 new file mode 100644
-index 0000000000..5b2a44cb37
+index 0000000000..14dca6e35d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90032-crypto-inside-secure-improve-the-skcipher-token.patch
 @@ -0,0 +1,36 @@
 +From 2739e466552c871441625e4d3c801f2fc0efab2b Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:18 +0100
-+Subject: [PATCH 032/126] crypto: inside-secure - improve the skcipher token
++Subject: [PATCH 032/127] crypto: inside-secure - improve the skcipher token
 +
 +The token used for encryption and decryption of skcipher algorithms sets
 +its stat field to "last packet". As it's a cipher only algorithm, there
@@ -3770,14 +3772,14 @@ index 0000000000..5b2a44cb37
 +
 diff --git a/target/linux/mvebu/patches-4.14/90033-crypto-inside-secure-the-context-ipad-opad-should-us.patch b/target/linux/mvebu/patches-4.14/90033-crypto-inside-secure-the-context-ipad-opad-should-us.patch
 new file mode 100644
-index 0000000000..875ed5b5f3
+index 0000000000..cf8f14772f
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90033-crypto-inside-secure-the-context-ipad-opad-should-us.patch
 @@ -0,0 +1,42 @@
 +From ed9801b1f644ae6aa0763247b6a568db19aac31a Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:19 +0100
-+Subject: [PATCH 033/126] crypto: inside-secure - the context ipad/opad should
++Subject: [PATCH 033/127] crypto: inside-secure - the context ipad/opad should
 + use the state sz
 +
 +This patches uses the state size of the algorithms instead of their
@@ -3818,14 +3820,14 @@ index 0000000000..875ed5b5f3
 +
 diff --git a/target/linux/mvebu/patches-4.14/90034-crypto-inside-secure-hmac-sha256-support.patch b/target/linux/mvebu/patches-4.14/90034-crypto-inside-secure-hmac-sha256-support.patch
 new file mode 100644
-index 0000000000..3d9db16f35
+index 0000000000..3a3c35ddc9
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90034-crypto-inside-secure-hmac-sha256-support.patch
 @@ -0,0 +1,174 @@
 +From 312b9bccbe46d8384a409f063380f4c46f632115 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:20 +0100
-+Subject: [PATCH 034/126] crypto: inside-secure - hmac(sha256) support
++Subject: [PATCH 034/127] crypto: inside-secure - hmac(sha256) support
 +
 +This patch adds the hmac(sha256) support to the Inside Secure
 +cryptographic engine driver.
@@ -3998,14 +4000,14 @@ index 0000000000..3d9db16f35
 +
 diff --git a/target/linux/mvebu/patches-4.14/90035-crypto-inside-secure-hmac-sha224-support.patch b/target/linux/mvebu/patches-4.14/90035-crypto-inside-secure-hmac-sha224-support.patch
 new file mode 100644
-index 0000000000..d2d7f138c0
+index 0000000000..590e6300c6
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90035-crypto-inside-secure-hmac-sha224-support.patch
 @@ -0,0 +1,110 @@
 +From 1a708614467fb5376e67e1540eacd9b156fd776d Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@bootlin.com>
 +Date: Mon, 19 Mar 2018 09:21:21 +0100
-+Subject: [PATCH 035/126] crypto: inside-secure - hmac(sha224) support
++Subject: [PATCH 035/127] crypto: inside-secure - hmac(sha224) support
 +
 +This patch adds the hmac(sha224) support to the Inside Secure
 +cryptographic engine driver.
@@ -4114,14 +4116,14 @@ index 0000000000..d2d7f138c0
 +
 diff --git a/target/linux/mvebu/patches-4.14/90036-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch b/target/linux/mvebu/patches-4.14/90036-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch
 new file mode 100644
-index 0000000000..4d36ec833f
+index 0000000000..feac752152
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90036-arm64-dts-marvell-armada-37xx-add-a-crypto-node.patch
 @@ -0,0 +1,42 @@
 +From f2422e411550f9809e416ff799af518c5e3149d4 Mon Sep 17 00:00:00 2001
 +From: Antoine Tenart <antoine.tenart@free-electrons.com>
 +Date: Tue, 26 Dec 2017 17:16:53 +0100
-+Subject: [PATCH 036/126] arm64: dts: marvell: armada-37xx: add a crypto node
++Subject: [PATCH 036/127] arm64: dts: marvell: armada-37xx: add a crypto node
 +
 +This patch adds a crypto node describing the EIP97 engine found in
 +Armada 37xx SoCs. The cryptographic engine is enabled by default.
@@ -4164,7 +4166,7 @@ diff --git a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-informat
 similarity index 94%
 rename from target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 rename to target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
-index eeb6b1ef19..b08cf76f99 100644
+index eeb6b1ef19..0d4fb2bb46 100644
 --- a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 +++ b/target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
 @@ -1,16 +1,18 @@
@@ -4173,7 +4175,7 @@ index eeb6b1ef19..b08cf76f99 100644
  From: Russell King <rmk+kernel@arm.linux.org.uk>
  Date: Sun, 13 Sep 2015 01:06:31 +0100
 -Subject: sfp: display SFP module information
-+Subject: [PATCH 037/126] sfp: display SFP module information
++Subject: [PATCH 037/127] sfp: display SFP module information
  
  Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
  ---
@@ -4219,14 +4221,14 @@ diff --git a/target/linux/mvebu/patches-4.14/300-mvneta-tx-queue-workaround.patc
 similarity index 64%
 rename from target/linux/mvebu/patches-4.14/300-mvneta-tx-queue-workaround.patch
 rename to target/linux/mvebu/patches-4.14/90038-net-mvneta-tx-queue-workaround.patch
-index f21f8083ee..e94248546d 100644
+index f21f8083ee..e48c3acee3 100644
 --- a/target/linux/mvebu/patches-4.14/300-mvneta-tx-queue-workaround.patch
 +++ b/target/linux/mvebu/patches-4.14/90038-net-mvneta-tx-queue-workaround.patch
 @@ -1,3 +1,8 @@
 +From 7c48344dd635ce39cc4b00a2362b7e5133e5ea01 Mon Sep 17 00:00:00 2001
 +From: Felix Fietkau <nbd@nbd.name>
 +Date: Wed, 16 Sep 2015 21:27:10 +0100
-+Subject: [PATCH 038/126] net: mvneta: tx queue workaround
++Subject: [PATCH 038/127] net: mvneta: tx queue workaround
 +
  The hardware queue scheduling is apparently configured with fixed
  priorities, which creates a nasty fairness issue where traffic from one
@@ -4267,7 +4269,7 @@ diff --git a/target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.p
 similarity index 91%
 rename from target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.patch
 rename to target/linux/mvebu/patches-4.14/90039-net-mvneta-convert-to-phylink.patch
-index ea51cc2ef0..a587ef6aac 100644
+index ea51cc2ef0..729692689c 100644
 --- a/target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.patch
 +++ b/target/linux/mvebu/patches-4.14/90039-net-mvneta-convert-to-phylink.patch
 @@ -1,7 +1,7 @@
@@ -4276,7 +4278,7 @@ index ea51cc2ef0..a587ef6aac 100644
  From: Russell King <rmk+kernel@arm.linux.org.uk>
  Date: Wed, 16 Sep 2015 21:27:10 +0100
 -Subject: net: mvneta: convert to phylink
-+Subject: [PATCH 039/126] net: mvneta: convert to phylink
++Subject: [PATCH 039/127] net: mvneta: convert to phylink
  
  Convert mvneta to use phylink, which models the MAC to PHY link in
  a generic, reusable form.
@@ -4887,7 +4889,7 @@ diff --git a/target/linux/mvebu/patches-4.14/404-net-mvneta-hack-fix-phy_interfa
 similarity index 65%
 rename from target/linux/mvebu/patches-4.14/404-net-mvneta-hack-fix-phy_interface.patch
 rename to target/linux/mvebu/patches-4.14/90040-net-mvneta-hack-fix-phy_interface.patch
-index 906c163ac9..6cc9256cbd 100644
+index 906c163ac9..d323b6429e 100644
 --- a/target/linux/mvebu/patches-4.14/404-net-mvneta-hack-fix-phy_interface.patch
 +++ b/target/linux/mvebu/patches-4.14/90040-net-mvneta-hack-fix-phy_interface.patch
 @@ -1,13 +1,15 @@
@@ -4896,7 +4898,7 @@ index 906c163ac9..6cc9256cbd 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Tue, 16 May 2017 11:55:58 +0100
 -Subject: net: mvneta: hack fix phy_interface
-+Subject: [PATCH 040/126] net: mvneta: hack fix phy_interface
++Subject: [PATCH 040/127] net: mvneta: hack fix phy_interface
  
  Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
  ---
@@ -4928,7 +4930,7 @@ diff --git a/target/linux/mvebu/patches-4.14/405-net-mvneta-disable-MVNETA_CAUSE
 similarity index 72%
 rename from target/linux/mvebu/patches-4.14/405-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch
 rename to target/linux/mvebu/patches-4.14/90041-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch
-index 7d02b0a93b..6739589e42 100644
+index 7d02b0a93b..25e473d7fa 100644
 --- a/target/linux/mvebu/patches-4.14/405-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch
 +++ b/target/linux/mvebu/patches-4.14/90041-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch
 @@ -1,7 +1,8 @@
@@ -4937,7 +4939,7 @@ index 7d02b0a93b..6739589e42 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Sat, 24 Dec 2016 10:27:08 +0000
 -Subject: net: mvneta: disable MVNETA_CAUSE_PSC_SYNC_CHANGE interrupt
-+Subject: [PATCH 041/126] net: mvneta: disable MVNETA_CAUSE_PSC_SYNC_CHANGE
++Subject: [PATCH 041/127] net: mvneta: disable MVNETA_CAUSE_PSC_SYNC_CHANGE
 + interrupt
  
  The PSC sync change interrupt can fire multiple times while the link is
@@ -4993,7 +4995,7 @@ diff --git a/target/linux/mvebu/patches-4.14/406-net-mvneta-add-module-EEPROM-re
 similarity index 74%
 rename from target/linux/mvebu/patches-4.14/406-net-mvneta-add-module-EEPROM-reading-support.patch
 rename to target/linux/mvebu/patches-4.14/90042-net-mvneta-add-module-EEPROM-reading-support.patch
-index 39eb33ac2c..98ce4a7480 100644
+index 39eb33ac2c..4af0747c3d 100644
 --- a/target/linux/mvebu/patches-4.14/406-net-mvneta-add-module-EEPROM-reading-support.patch
 +++ b/target/linux/mvebu/patches-4.14/90042-net-mvneta-add-module-EEPROM-reading-support.patch
 @@ -1,16 +1,18 @@
@@ -5002,7 +5004,7 @@ index 39eb33ac2c..98ce4a7480 100644
  From: Russell King <rmk+kernel@arm.linux.org.uk>
  Date: Thu, 1 Oct 2015 23:32:39 +0100
 -Subject: net: mvneta: add module EEPROM reading support
-+Subject: [PATCH 042/126] net: mvneta: add module EEPROM reading support
++Subject: [PATCH 042/127] net: mvneta: add module EEPROM reading support
  
  Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
  ---
@@ -5038,7 +5040,7 @@ diff --git a/target/linux/mvebu/patches-4.14/407-phy-fixed-phy-remove-fixed_phy_
 similarity index 78%
 rename from target/linux/mvebu/patches-4.14/407-phy-fixed-phy-remove-fixed_phy_update_state.patch
 rename to target/linux/mvebu/patches-4.14/90043-phy-fixed-phy-remove-fixed_phy_update_state.patch
-index 71c2f45555..e04204a45d 100644
+index 71c2f45555..c45f34d791 100644
 --- a/target/linux/mvebu/patches-4.14/407-phy-fixed-phy-remove-fixed_phy_update_state.patch
 +++ b/target/linux/mvebu/patches-4.14/90043-phy-fixed-phy-remove-fixed_phy_update_state.patch
 @@ -1,7 +1,7 @@
@@ -5047,7 +5049,7 @@ index 71c2f45555..e04204a45d 100644
  From: Russell King <rmk+kernel@arm.linux.org.uk>
  Date: Fri, 2 Oct 2015 22:46:54 +0100
 -Subject: phy: fixed-phy: remove fixed_phy_update_state()
-+Subject: [PATCH 043/126] phy: fixed-phy: remove fixed_phy_update_state()
++Subject: [PATCH 043/127] phy: fixed-phy: remove fixed_phy_update_state()
  
  mvneta is the only user of fixed_phy_update_state(), which has been
  converted to use phylink instead.  Remove fixed_phy_update_state().
@@ -5097,7 +5099,7 @@ diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-
 similarity index 76%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index 540ef51ba4..7a0e259117 100644
+index 540ef51ba4..df9c9c4157 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
@@ -5106,7 +5108,7 @@ index 540ef51ba4..7a0e259117 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Fri, 14 Apr 2017 15:26:32 +0100
 -Subject: sfp: move module eeprom ethtool access into netdev core ethtool
-+Subject: [PATCH 044/126] sfp: move module eeprom ethtool access into netdev
++Subject: [PATCH 044/127] sfp: move module eeprom ethtool access into netdev
 + core ethtool
  
  Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
@@ -5243,7 +5245,7 @@ diff --git a/target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-star
 similarity index 79%
 rename from target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-start-stop.patch
 rename to target/linux/mvebu/patches-4.14/90045-sfp-use-netdev-sfp_bus-for-start-stop.patch
-index 4db3867c4e..81378bed34 100644
+index 4db3867c4e..4a058f0271 100644
 --- a/target/linux/mvebu/patches-4.14/409-sfp-use-netdev-sfp_bus-for-start-stop.patch
 +++ b/target/linux/mvebu/patches-4.14/90045-sfp-use-netdev-sfp_bus-for-start-stop.patch
 @@ -1,13 +1,15 @@
@@ -5252,7 +5254,7 @@ index 4db3867c4e..81378bed34 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Fri, 14 Apr 2017 16:41:55 +0100
 -Subject: sfp: use netdev sfp_bus for start/stop
-+Subject: [PATCH 045/126] sfp: use netdev sfp_bus for start/stop
++Subject: [PATCH 045/127] sfp: use netdev sfp_bus for start/stop
  
  Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
  ---
@@ -5275,7 +5277,7 @@ diff --git a/target/linux/mvebu/patches-4.14/410-sfp-hack-allow-marvell-10G-phy-
 similarity index 85%
 rename from target/linux/mvebu/patches-4.14/410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
 rename to target/linux/mvebu/patches-4.14/90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
-index 6ca43043fa..7443b94fb9 100644
+index 6ca43043fa..5b45ef5f4f 100644
 --- a/target/linux/mvebu/patches-4.14/410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
 +++ b/target/linux/mvebu/patches-4.14/90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch
 @@ -1,7 +1,7 @@
@@ -5284,7 +5286,7 @@ index 6ca43043fa..7443b94fb9 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Fri, 14 Apr 2017 14:21:25 +0100
 -Subject: sfp: hack: allow marvell 10G phy support to use SFP
-+Subject: [PATCH 046/126] sfp: hack: allow marvell 10G phy support to use SFP
++Subject: [PATCH 046/127] sfp: hack: allow marvell 10G phy support to use SFP
  
  Allow the Marvell 10G PHY to register with the SFP bus, so that SFP+
  cages can work.  This bypasses phylink, meaning that socket status
@@ -5348,7 +5350,7 @@ diff --git a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch b/
 similarity index 66%
 rename from target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 rename to target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
-index 4cbd30a6e2..a67b47e9f2 100644
+index 4cbd30a6e2..cba9dc9ad0 100644
 --- a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 +++ b/target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
 @@ -1,7 +1,7 @@
@@ -5357,7 +5359,7 @@ index 4cbd30a6e2..a67b47e9f2 100644
  From: Russell King <rmk+kernel@armlinux.org.uk>
  Date: Fri, 14 Apr 2017 20:17:13 +0100
 -Subject: sfp: add sfp+ compatible
-+Subject: [PATCH 047/126] sfp: add sfp+ compatible
++Subject: [PATCH 047/127] sfp: add sfp+ compatible
  
  Add a compatible for SFP+ cages.  SFP+ cages are backwards compatible,
  but the ethernet device behind them may not support the slower speeds
@@ -5385,7 +5387,7 @@ diff --git a/target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-co
 similarity index 73%
 rename from target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
 rename to target/linux/mvebu/patches-4.14/90048-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
-index 7343e01d19..ac7c721c4d 100644
+index 7343e01d19..d872e2874c 100644
 --- a/target/linux/mvebu/patches-4.14/500-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
 +++ b/target/linux/mvebu/patches-4.14/90048-clk-mvebu-armada-37xx-periph-cosmetic-changes.patch
 @@ -1,7 +1,7 @@
@@ -5394,7 +5396,7 @@ index 7343e01d19..ac7c721c4d 100644
  From: Gregory CLEMENT <gregory.clement@free-electrons.com>
  Date: Thu, 30 Nov 2017 14:40:27 +0100
 -Subject: clk: mvebu: armada-37xx-periph: cosmetic changes
-+Subject: [PATCH 048/126] clk: mvebu: armada-37xx-periph: cosmetic changes
++Subject: [PATCH 048/127] clk: mvebu: armada-37xx-periph: cosmetic changes
  
  This patches fixes few cosmetic issues such as alignment, blank lines
  and required space.
@@ -5467,7 +5469,7 @@ diff --git a/target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-pr
 similarity index 85%
 rename from target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
 rename to target/linux/mvebu/patches-4.14/90049-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
-index f9dec9f2ee..fdfcd91798 100644
+index f9dec9f2ee..90903eac37 100644
 --- a/target/linux/mvebu/patches-4.14/501-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
 +++ b/target/linux/mvebu/patches-4.14/90049-clk-mvebu-armada-37xx-periph-prepare-cpu-clk-to-be-u.patch
 @@ -1,7 +1,7 @@
@@ -5476,7 +5478,7 @@ index f9dec9f2ee..fdfcd91798 100644
  From: Gregory CLEMENT <gregory.clement@free-electrons.com>
  Date: Thu, 30 Nov 2017 14:40:28 +0100
 -Subject: clk: mvebu: armada-37xx-periph: prepare cpu clk to be
-+Subject: [PATCH 049/126] clk: mvebu: armada-37xx-periph: prepare cpu clk to be
++Subject: [PATCH 049/127] clk: mvebu: armada-37xx-periph: prepare cpu clk to be
   used with DVFS
  
  When DVFS will be enabled then the cpu clk will use a different set of
@@ -5567,7 +5569,7 @@ diff --git a/target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-ad
 similarity index 93%
 rename from target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
 rename to target/linux/mvebu/patches-4.14/90050-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
-index 2065e788af..9cd18a39fe 100644
+index 2065e788af..e36c5b4bd3 100644
 --- a/target/linux/mvebu/patches-4.14/502-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
 +++ b/target/linux/mvebu/patches-4.14/90050-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch
 @@ -1,7 +1,8 @@
@@ -5576,7 +5578,7 @@ index 2065e788af..9cd18a39fe 100644
  From: Gregory CLEMENT <gregory.clement@free-electrons.com>
  Date: Thu, 30 Nov 2017 14:40:29 +0100
 -Subject: clk: mvebu: armada-37xx-periph: add DVFS support for cpu clocks
-+Subject: [PATCH 050/126] clk: mvebu: armada-37xx-periph: add DVFS support for
++Subject: [PATCH 050/127] clk: mvebu: armada-37xx-periph: add DVFS support for
 + cpu clocks
  
  When DVFS is enabled the CPU clock setting is done using an other set of
@@ -5641,7 +5643,7 @@ diff --git a/target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Ar
 similarity index 93%
 rename from target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
 rename to target/linux/mvebu/patches-4.14/90051-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
-index 11562c582b..509529050a 100644
+index 11562c582b..89725aec46 100644
 --- a/target/linux/mvebu/patches-4.14/503-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
 +++ b/target/linux/mvebu/patches-4.14/90051-cpufreq-Add-DVFS-support-for-Armada-37xx.patch
 @@ -1,7 +1,7 @@
@@ -5650,7 +5652,7 @@ index 11562c582b..509529050a 100644
  From: Gregory CLEMENT <gregory.clement@free-electrons.com>
  Date: Thu, 14 Dec 2017 16:00:05 +0100
 -Subject: cpufreq: Add DVFS support for Armada 37xx
-+Subject: [PATCH 051/126] cpufreq: Add DVFS support for Armada 37xx
++Subject: [PATCH 051/127] cpufreq: Add DVFS support for Armada 37xx
  
  This patch adds DVFS support for the Armada 37xx SoCs
  
@@ -5702,7 +5704,7 @@ diff --git a/target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-befor
 similarity index 74%
 rename from target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
 rename to target/linux/mvebu/patches-4.14/90052-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
-index 3ac7091188..a26ec53abe 100644
+index 3ac7091188..4b1ceacc26 100644
 --- a/target/linux/mvebu/patches-4.14/504-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
 +++ b/target/linux/mvebu/patches-4.14/90052-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch
 @@ -1,7 +1,8 @@
@@ -5711,7 +5713,7 @@ index 3ac7091188..a26ec53abe 100644
  From: Maxime Chevallier <maxime.chevallier@smile.fr>
  Date: Tue, 10 Oct 2017 10:43:18 +0200
 -Subject: spi: a3700: Change SPI mode before asserting chip-select
-+Subject: [PATCH 052/126] spi: a3700: Change SPI mode before asserting
++Subject: [PATCH 052/127] spi: a3700: Change SPI mode before asserting
 + chip-select
  
  The spi device mode should be configured in the controller before the
@@ -5767,7 +5769,7 @@ diff --git a/target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UAR
 similarity index 73%
 rename from target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
 rename to target/linux/mvebu/patches-4.14/90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-index 9e2b1c14eb..bc7795f38a 100644
+index 9e2b1c14eb..4e7d8dc850 100644
 --- a/target/linux/mvebu/patches-4.14/505-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
 +++ b/target/linux/mvebu/patches-4.14/90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
 @@ -1,7 +1,7 @@
@@ -5776,7 +5778,7 @@ index 9e2b1c14eb..bc7795f38a 100644
  From: allen yan <yanwei@marvell.com>
  Date: Thu, 7 Sep 2017 15:04:53 +0200
 -Subject: arm64: dts: marvell: Fix A37xx UART0 register size
-+Subject: [PATCH 053/126] arm64: dts: marvell: Fix A37xx UART0 register size
++Subject: [PATCH 053/127] arm64: dts: marvell: Fix A37xx UART0 register size
  
  Armada-37xx UART0 registers are 0x200 bytes wide. Right next to them are
  the UART1 registers that should not be declared in this node.
@@ -5809,7 +5811,7 @@ diff --git a/target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-a
 similarity index 74%
 rename from target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
 rename to target/linux/mvebu/patches-4.14/90054-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
-index 47e0751c5f..88137c264e 100644
+index 47e0751c5f..45b0b0b75b 100644
 --- a/target/linux/mvebu/patches-4.14/506-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
 +++ b/target/linux/mvebu/patches-4.14/90054-arm64-dts-marvell-armada-37xx-add-UART-clock.patch
 @@ -1,7 +1,7 @@
@@ -5818,7 +5820,7 @@ index 47e0751c5f..88137c264e 100644
  From: Miquel Raynal <miquel.raynal@free-electrons.com>
  Date: Fri, 13 Oct 2017 11:01:57 +0200
 -Subject: arm64: dts: marvell: armada-37xx: add UART clock
-+Subject: [PATCH 054/126] arm64: dts: marvell: armada-37xx: add UART clock
++Subject: [PATCH 054/127] arm64: dts: marvell: armada-37xx: add UART clock
  
  Add the missing clock property to armada-3700 UART node.
  
@@ -5842,7 +5844,7 @@ diff --git a/target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-a
 similarity index 73%
 rename from target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
 rename to target/linux/mvebu/patches-4.14/90055-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
-index dd3727c554..7cbbd93448 100644
+index dd3727c554..834089f91f 100644
 --- a/target/linux/mvebu/patches-4.14/507-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
 +++ b/target/linux/mvebu/patches-4.14/90055-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch
 @@ -1,8 +1,8 @@
@@ -5852,7 +5854,7 @@ index dd3727c554..7cbbd93448 100644
  Date: Thu, 14 Dec 2017 16:00:06 +0100
 -Subject: arm64: dts: marvell: armada-37xx: add nodes allowing cpufreq
 - support
-+Subject: [PATCH 055/126] arm64: dts: marvell: armada-37xx: add nodes allowing
++Subject: [PATCH 055/127] arm64: dts: marvell: armada-37xx: add nodes allowing
 + cpufreq support
  
  In order to be able to use cpu freq, we need to associate a clock to each
@@ -5886,7 +5888,7 @@ diff --git a/target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Ad
 similarity index 59%
 rename from target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
 rename to target/linux/mvebu/patches-4.14/90056-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
-index 206caf2fce..eedfdcd9aa 100644
+index 206caf2fce..c27fad6376 100644
 --- a/target/linux/mvebu/patches-4.14/520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
 +++ b/target/linux/mvebu/patches-4.14/90056-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch
 @@ -1,13 +1,15 @@
@@ -5895,7 +5897,7 @@ index 206caf2fce..eedfdcd9aa 100644
  From: Kevin Mihelich <kevin@archlinuxarm.org>
  Date: Tue, 4 Jul 2017 19:25:28 -0600
 -Subject: arm64: dts: marvell: armada37xx: Add eth0 alias
-+Subject: [PATCH 056/126] arm64: dts: marvell: armada37xx: Add eth0 alias
++Subject: [PATCH 056/127] arm64: dts: marvell: armada37xx: Add eth0 alias
  
  Signed-off-by: Kevin Mihelich <kevin@archlinuxarm.org>
  ---
@@ -5918,7 +5920,7 @@ diff --git a/target/linux/mvebu/patches-4.14/524-PCI-aardvark-set-host-and-devic
 similarity index 72%
 rename from target/linux/mvebu/patches-4.14/524-PCI-aardvark-set-host-and-device-to-the-same-MAX-payload-size.patch
 rename to target/linux/mvebu/patches-4.14/90057-PCI-aardvark-set-host-and-device-to-the-same-MAX-pay.patch
-index 74e78d3b54..1499e36b3e 100644
+index 74e78d3b54..e5630c2a41 100644
 --- a/target/linux/mvebu/patches-4.14/524-PCI-aardvark-set-host-and-device-to-the-same-MAX-payload-size.patch
 +++ b/target/linux/mvebu/patches-4.14/90057-PCI-aardvark-set-host-and-device-to-the-same-MAX-pay.patch
 @@ -1,27 +1,8 @@
@@ -5948,7 +5950,7 @@ index 74e78d3b54..1499e36b3e 100644
 +From b706337af2471b1ad8c4b4beb0eeaac3867e01d8 Mon Sep 17 00:00:00 2001
  From: Victor Gu <xigu@marvell.com>
 +Date: Thu, 28 Sep 2017 14:58:34 +0200
-+Subject: [PATCH 057/126] PCI: aardvark: set host and device to the same MAX
++Subject: [PATCH 057/127] PCI: aardvark: set host and device to the same MAX
 + payload size
  
  Since the Aardvark does not implement a PCIe root bus, the Linux PCIe
@@ -6013,7 +6015,7 @@ diff --git a/target/linux/mvebu/patches-4.14/526-PCI-aardvark-disable-LOS-state-
 similarity index 50%
 rename from target/linux/mvebu/patches-4.14/526-PCI-aardvark-disable-LOS-state-by-default.patch
 rename to target/linux/mvebu/patches-4.14/90058-PCI-aardvark-disable-LOS-state-by-default.patch
-index 0ee4af4e8d..8da1297b8f 100644
+index 0ee4af4e8d..e424910faf 100644
 --- a/target/linux/mvebu/patches-4.14/526-PCI-aardvark-disable-LOS-state-by-default.patch
 +++ b/target/linux/mvebu/patches-4.14/90058-PCI-aardvark-disable-LOS-state-by-default.patch
 @@ -1,26 +1,7 @@
@@ -6042,7 +6044,7 @@ index 0ee4af4e8d..8da1297b8f 100644
 +From 2c2aeb87f73d9bc0fd811b60d38dd120fc810424 Mon Sep 17 00:00:00 2001
  From: Victor Gu <xigu@marvell.com>
 +Date: Thu, 28 Sep 2017 14:58:36 +0200
-+Subject: [PATCH 058/126] PCI: aardvark: disable LOS state by default
++Subject: [PATCH 058/127] PCI: aardvark: disable LOS state by default
  
  Some PCIe devices do not support LOS, and will cause timeouts if the
  root complex forces the LOS state. This patch disables the LOS state
@@ -6068,14 +6070,14 @@ index 0ee4af4e8d..8da1297b8f 100644
 +
 diff --git a/target/linux/mvebu/patches-4.14/90059-net-mvneta-move-port-configuration.patch b/target/linux/mvebu/patches-4.14/90059-net-mvneta-move-port-configuration.patch
 new file mode 100644
-index 0000000000..bd203423c5
+index 0000000000..152496ae47
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90059-net-mvneta-move-port-configuration.patch
 @@ -0,0 +1,106 @@
 +From 76506913e4a2f777b7698136c5c37b16ffee2af5 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Tue, 2 Jan 2018 17:24:49 +0000
-+Subject: [PATCH 059/126] net: mvneta: move port configuration
++Subject: [PATCH 059/127] net: mvneta: move port configuration
 +
 +Move the port configuration and release of reset to mvneta_mac_config()
 +along side the rest of the port mode configuration.
@@ -6180,14 +6182,14 @@ index 0000000000..bd203423c5
 +
 diff --git a/target/linux/mvebu/patches-4.14/90060-net-mvneta-add-1000BaseX-support.patch b/target/linux/mvebu/patches-4.14/90060-net-mvneta-add-1000BaseX-support.patch
 new file mode 100644
-index 0000000000..b0df54b399
+index 0000000000..c1555e7674
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90060-net-mvneta-add-1000BaseX-support.patch
 @@ -0,0 +1,65 @@
 +From 71316864d24bcb8f64201af42bc7b577b9f624df Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@arm.linux.org.uk>
 +Date: Tue, 2 Jan 2018 17:24:54 +0000
-+Subject: [PATCH 060/126] net: mvneta: add 1000BaseX support
++Subject: [PATCH 060/127] net: mvneta: add 1000BaseX support
 +
 +Add support for 1000BaseX link modes.
 +
@@ -6251,14 +6253,14 @@ index 0000000000..b0df54b399
 +
 diff --git a/target/linux/mvebu/patches-4.14/90061-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch b/target/linux/mvebu/patches-4.14/90061-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch
 new file mode 100644
-index 0000000000..2cd1445e15
+index 0000000000..9af099b3ee
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90061-pinctrl-armada-37xx-account-for-const-type-of-of_dev.patch
 @@ -0,0 +1,40 @@
 +From 9eb155c9b61e893dd8eece840f52362032529777 Mon Sep 17 00:00:00 2001
 +From: Julia Lawall <Julia.Lawall@lip6.fr>
 +Date: Tue, 2 Jan 2018 14:28:01 +0100
-+Subject: [PATCH 061/126] pinctrl: armada-37xx: account for const type of
++Subject: [PATCH 061/127] pinctrl: armada-37xx: account for const type of
 + of_device_id.data
 +
 +The data field of an of_device_id structure has type const void *, so
@@ -6297,14 +6299,14 @@ index 0000000000..2cd1445e15
 +
 diff --git a/target/linux/mvebu/patches-4.14/90062-spi-a3700-Set-frequency-limits-at-startup.patch b/target/linux/mvebu/patches-4.14/90062-spi-a3700-Set-frequency-limits-at-startup.patch
 new file mode 100644
-index 0000000000..d4dea9f3bc
+index 0000000000..3e9a0eb37b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90062-spi-a3700-Set-frequency-limits-at-startup.patch
 @@ -0,0 +1,46 @@
 +From ef6b6b8555c181df8e40994ae0cac82bd7ca08f6 Mon Sep 17 00:00:00 2001
 +From: Maxime Chevallier <maxime.chevallier@smile.fr>
 +Date: Wed, 17 Jan 2018 17:15:26 +0100
-+Subject: [PATCH 062/126] spi: a3700: Set frequency limits at startup
++Subject: [PATCH 062/127] spi: a3700: Set frequency limits at startup
 +
 +Armada 3700 SPI controller has an internal clock divider which can
 +divide the parent clock frequency by up to 30.
@@ -6349,14 +6351,14 @@ index 0000000000..d4dea9f3bc
 +
 diff --git a/target/linux/mvebu/patches-4.14/90063-spi-a3700-Allow-to-enable-or-disable-FIFO-mode.patch b/target/linux/mvebu/patches-4.14/90063-spi-a3700-Allow-to-enable-or-disable-FIFO-mode.patch
 new file mode 100644
-index 0000000000..0fb20765d3
+index 0000000000..b13cc7edfb
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90063-spi-a3700-Allow-to-enable-or-disable-FIFO-mode.patch
 @@ -0,0 +1,51 @@
 +From 13efe77a5072c17be1a2948f1900c86a8fc7ef37 Mon Sep 17 00:00:00 2001
 +From: Maxime Chevallier <maxime.chevallier@smile.fr>
 +Date: Wed, 17 Jan 2018 17:15:27 +0100
-+Subject: [PATCH 063/126] spi: a3700: Allow to enable or disable FIFO mode
++Subject: [PATCH 063/127] spi: a3700: Allow to enable or disable FIFO mode
 +
 +The armada 3700 SPI controller allows to make transfers without using
 +the 32 bytes RFIFO and WFIFO.
@@ -6406,14 +6408,14 @@ index 0000000000..0fb20765d3
 +
 diff --git a/target/linux/mvebu/patches-4.14/90064-spi-a3700-Add-full-duplex-support.patch b/target/linux/mvebu/patches-4.14/90064-spi-a3700-Add-full-duplex-support.patch
 new file mode 100644
-index 0000000000..c12c3ee662
+index 0000000000..c27d44a64e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90064-spi-a3700-Add-full-duplex-support.patch
 @@ -0,0 +1,169 @@
 +From 56576a05882c9e117316a4c736b4094e0785c7ff Mon Sep 17 00:00:00 2001
 +From: Maxime Chevallier <maxime.chevallier@smile.fr>
 +Date: Wed, 17 Jan 2018 17:15:28 +0100
-+Subject: [PATCH 064/126] spi: a3700: Add full-duplex support
++Subject: [PATCH 064/127] spi: a3700: Add full-duplex support
 +
 +The armada 3700 SPI controller has support for full-duplex transfers,
 +but it can only be done without using the hardware FIFOs.
@@ -6581,14 +6583,14 @@ index 0000000000..c12c3ee662
 +
 diff --git a/target/linux/mvebu/patches-4.14/90065-spi-a3700-Remove-endianness-swapping-functions-when-.patch b/target/linux/mvebu/patches-4.14/90065-spi-a3700-Remove-endianness-swapping-functions-when-.patch
 new file mode 100644
-index 0000000000..bd2ec1a66c
+index 0000000000..2b3766823c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90065-spi-a3700-Remove-endianness-swapping-functions-when-.patch
 @@ -0,0 +1,51 @@
 +From 47f4b866c6775c9ef31d19cb780140aebb4f64af Mon Sep 17 00:00:00 2001
 +From: Maxime Chevallier <maxime.chevallier@smile.fr>
 +Date: Wed, 24 Jan 2018 15:10:47 +0100
-+Subject: [PATCH 065/126] spi: a3700: Remove endianness swapping functions when
++Subject: [PATCH 065/127] spi: a3700: Remove endianness swapping functions when
 + accessing FIFOs
 +
 +Fixes the following sparse warnings :
@@ -6638,14 +6640,14 @@ index 0000000000..bd2ec1a66c
 +
 diff --git a/target/linux/mvebu/patches-4.14/90066-spi-a3700-Remove-endianness-swapping-for-full-duplex.patch b/target/linux/mvebu/patches-4.14/90066-spi-a3700-Remove-endianness-swapping-for-full-duplex.patch
 new file mode 100644
-index 0000000000..12a10daf84
+index 0000000000..0e54d3e344
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90066-spi-a3700-Remove-endianness-swapping-for-full-duplex.patch
 @@ -0,0 +1,66 @@
 +From adfd337e7ad806e73ef86263ae2d30ff09c939e3 Mon Sep 17 00:00:00 2001
 +From: Maxime Chevallier <maxime.chevallier@smile.fr>
 +Date: Wed, 24 Jan 2018 15:10:48 +0100
-+Subject: [PATCH 066/126] spi: a3700: Remove endianness swapping for
++Subject: [PATCH 066/127] spi: a3700: Remove endianness swapping for
 + full-duplex transfers
 +
 +Fixes the following sparse warnings :
@@ -6710,14 +6712,14 @@ index 0000000000..12a10daf84
 +
 diff --git a/target/linux/mvebu/patches-4.14/90067-pinctrl-armada-37xx-Add-edge-both-type-gpio-irq-supp.patch b/target/linux/mvebu/patches-4.14/90067-pinctrl-armada-37xx-Add-edge-both-type-gpio-irq-supp.patch
 new file mode 100644
-index 0000000000..b999d6651f
+index 0000000000..7c218b7416
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90067-pinctrl-armada-37xx-Add-edge-both-type-gpio-irq-supp.patch
 @@ -0,0 +1,109 @@
 +From 790277cb0c42ade3b262cbbd21b60cc0436f7771 Mon Sep 17 00:00:00 2001
 +From: Ken Ma <make@marvell.com>
 +Date: Thu, 19 Oct 2017 15:10:03 +0200
-+Subject: [PATCH 067/126] pinctrl: armada-37xx: Add edge both type gpio irq
++Subject: [PATCH 067/127] pinctrl: armada-37xx: Add edge both type gpio irq
 + support
 +
 +Current edge both type gpio irqs which need to swap polarity in each
@@ -6825,14 +6827,14 @@ index 0000000000..b999d6651f
 +
 diff --git a/target/linux/mvebu/patches-4.14/90068-pinctrl-armada-37xx-Stop-using-struct-gpio_chip.irq_.patch b/target/linux/mvebu/patches-4.14/90068-pinctrl-armada-37xx-Stop-using-struct-gpio_chip.irq_.patch
 new file mode 100644
-index 0000000000..87038139da
+index 0000000000..ce2b4866ac
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90068-pinctrl-armada-37xx-Stop-using-struct-gpio_chip.irq_.patch
 @@ -0,0 +1,49 @@
 +From 6ac2248c03ba775796d4a4b6f5b5cf91aafc3daa Mon Sep 17 00:00:00 2001
 +From: Thierry Reding <treding@nvidia.com>
 +Date: Mon, 16 Oct 2017 14:40:23 +0200
-+Subject: [PATCH 068/126] pinctrl: armada-37xx: Stop using struct
++Subject: [PATCH 068/127] pinctrl: armada-37xx: Stop using struct
 + gpio_chip.irq_base
 +
 +The Armada 37xx driver always initializes the IRQ base to 0, hence the
@@ -6880,14 +6882,14 @@ index 0000000000..87038139da
 +
 diff --git a/target/linux/mvebu/patches-4.14/90069-pinctrl-armada-37xx-remove-unused-variable.patch b/target/linux/mvebu/patches-4.14/90069-pinctrl-armada-37xx-remove-unused-variable.patch
 new file mode 100644
-index 0000000000..b788b1856a
+index 0000000000..fcbc70b39b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90069-pinctrl-armada-37xx-remove-unused-variable.patch
 @@ -0,0 +1,35 @@
 +From f6b3e75c2a2d604952c5350b126b818bc4333cde Mon Sep 17 00:00:00 2001
 +From: Arnd Bergmann <arnd@arndb.de>
 +Date: Thu, 2 Nov 2017 15:29:13 +0100
-+Subject: [PATCH 069/126] pinctrl: armada-37xx: remove unused variable
++Subject: [PATCH 069/127] pinctrl: armada-37xx: remove unused variable
 +
 +A cleanup left behind a temporary variable that is now unused:
 +
@@ -6921,14 +6923,14 @@ index 0000000000..b788b1856a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90070-net-dsa-mv88e6xxx-Fix-name-of-switch-88E6141.patch b/target/linux/mvebu/patches-4.14/90070-net-dsa-mv88e6xxx-Fix-name-of-switch-88E6141.patch
 new file mode 100644
-index 0000000000..f54f2d2845
+index 0000000000..c58c36407b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90070-net-dsa-mv88e6xxx-Fix-name-of-switch-88E6141.patch
 @@ -0,0 +1,35 @@
 +From 5a429594bac6ebffede0251d497a441d20025d8d Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig?= <u.kleine-koenig@pengutronix.de>
 +Date: Tue, 20 Mar 2018 10:44:40 +0100
-+Subject: [PATCH 070/126] net: dsa: mv88e6xxx: Fix name of switch 88E6141
++Subject: [PATCH 070/127] net: dsa: mv88e6xxx: Fix name of switch 88E6141
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -6962,14 +6964,14 @@ index 0000000000..f54f2d2845
 +
 diff --git a/target/linux/mvebu/patches-4.14/90071-phy-add-phy_interface_mode_is_8023z-helper.patch b/target/linux/mvebu/patches-4.14/90071-phy-add-phy_interface_mode_is_8023z-helper.patch
 new file mode 100644
-index 0000000000..c5980889d9
+index 0000000000..aa7ae60a06
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90071-phy-add-phy_interface_mode_is_8023z-helper.patch
 @@ -0,0 +1,59 @@
 +From 4e0b5317eb3da73e74b232782c31962f432fa178 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Fri, 1 Dec 2017 10:24:16 +0000
-+Subject: [PATCH 071/126] phy: add phy_interface_mode_is_8023z() helper
++Subject: [PATCH 071/127] phy: add phy_interface_mode_is_8023z() helper
 +
 +Add and use phy_interface_mode_is_8023z() helper to identify the
 +interface modes that use 802.3z negotiation.  Use it in phylink's
@@ -7027,14 +7029,14 @@ index 0000000000..c5980889d9
 +
 diff --git a/target/linux/mvebu/patches-4.14/90072-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch b/target/linux/mvebu/patches-4.14/90072-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch
 new file mode 100644
-index 0000000000..80fb48d390
+index 0000000000..ce86850eec
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90072-net-phy-Cosmetic-fixes-to-phylink-sfp-sfp-bus.c.patch
 @@ -0,0 +1,246 @@
 +From 1fc64772bfb2179a44b622b03c597ed6303d621a Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Mon, 30 Oct 2017 21:42:57 -0700
-+Subject: [PATCH 072/126] net: phy: Cosmetic fixes to phylink/sfp/sfp-bus.c
++Subject: [PATCH 072/127] net: phy: Cosmetic fixes to phylink/sfp/sfp-bus.c
 +
 +Perform a number of stylistic changes to phylink.c, sfp.c and sfp-bus.c:
 +
@@ -7279,14 +7281,14 @@ index 0000000000..80fb48d390
 +
 diff --git a/target/linux/mvebu/patches-4.14/90073-sfp-fix-sparse-warning.patch b/target/linux/mvebu/patches-4.14/90073-sfp-fix-sparse-warning.patch
 new file mode 100644
-index 0000000000..901951f602
+index 0000000000..da5f28b38a
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90073-sfp-fix-sparse-warning.patch
 @@ -0,0 +1,30 @@
 +From 2de4d6fa6b53359ff3305523c86f74e097ff6c2b Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Fri, 1 Dec 2017 10:24:58 +0000
-+Subject: [PATCH 073/126] sfp: fix sparse warning
++Subject: [PATCH 073/127] sfp: fix sparse warning
 +
 +drivers/net/phy/sfp-bus.c:298:13: warning: context imbalance in 'sfp_bus_release' - wrong count at exit
 +
@@ -7315,14 +7317,14 @@ index 0000000000..901951f602
 +
 diff --git a/target/linux/mvebu/patches-4.14/90074-sfp-don-t-guess-support-from-connector-type.patch b/target/linux/mvebu/patches-4.14/90074-sfp-don-t-guess-support-from-connector-type.patch
 new file mode 100644
-index 0000000000..dbd65a8582
+index 0000000000..64f210f12d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90074-sfp-don-t-guess-support-from-connector-type.patch
 @@ -0,0 +1,57 @@
 +From ec218ef9e62783bb83fb10c8afbb5ecff555c5c4 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Fri, 29 Dec 2017 12:15:17 +0000
-+Subject: [PATCH 074/126] sfp: don't guess support from connector type
++Subject: [PATCH 074/127] sfp: don't guess support from connector type
 +
 +Don't try to guess the support mask from the connector type - this is
 +mostly irrelevant to the speeds that the transceiver supports.
@@ -7378,14 +7380,14 @@ index 0000000000..dbd65a8582
 +
 diff --git a/target/linux/mvebu/patches-4.14/90075-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch b/target/linux/mvebu/patches-4.14/90075-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch
 new file mode 100644
-index 0000000000..385c0fc5ea
+index 0000000000..48669f3503
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90075-sfp-add-support-for-1000Base-PX-and-1000Base-BX10.patch
 @@ -0,0 +1,60 @@
 +From 37f774883d4bf543413cd80c42e2d79942415eda Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Fri, 29 Dec 2017 12:15:23 +0000
-+Subject: [PATCH 075/126] sfp: add support for 1000Base-PX and 1000Base-BX10
++Subject: [PATCH 075/127] sfp: add support for 1000Base-PX and 1000Base-BX10
 +
 +Add support for decoding the transceiver information for 1000Base-PX and
 +1000Base-BX10.  These use 1000BASE-X protocol.
@@ -7444,14 +7446,14 @@ index 0000000000..385c0fc5ea
 +
 diff --git a/target/linux/mvebu/patches-4.14/90076-net-dsa-Add-PHYLINK-switch-operations.patch b/target/linux/mvebu/patches-4.14/90076-net-dsa-Add-PHYLINK-switch-operations.patch
 new file mode 100644
-index 0000000000..be82891f2a
+index 0000000000..46ba114522
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90076-net-dsa-Add-PHYLINK-switch-operations.patch
 @@ -0,0 +1,102 @@
 +From c4d80b5c828eadf96827ed2b10fb769745898b1a Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Thu, 10 May 2018 13:17:32 -0700
-+Subject: [PATCH 076/126] net: dsa: Add PHYLINK switch operations
++Subject: [PATCH 076/127] net: dsa: Add PHYLINK switch operations
 +
 +In preparation for adding support for PHYLINK within DSA, define a number of
 +operations that we will need and that switch drivers can start implementing.
@@ -7552,14 +7554,14 @@ index 0000000000..be82891f2a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90077-net-dsa-Eliminate-dsa_slave_get_link.patch b/target/linux/mvebu/patches-4.14/90077-net-dsa-Eliminate-dsa_slave_get_link.patch
 new file mode 100644
-index 0000000000..0146ec7cc1
+index 0000000000..9a294ace7d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90077-net-dsa-Eliminate-dsa_slave_get_link.patch
 @@ -0,0 +1,50 @@
 +From 2bbe15ce77bfe8913750a4ecfda3f68edb14ef40 Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Thu, 10 May 2018 13:17:34 -0700
-+Subject: [PATCH 077/126] net: dsa: Eliminate dsa_slave_get_link()
++Subject: [PATCH 077/127] net: dsa: Eliminate dsa_slave_get_link()
 +
 +Since we use PHYLIB to manage the per-port link indication, this will
 +also be reflected correctly in the network device's carrier state, so we
@@ -7608,14 +7610,14 @@ index 0000000000..0146ec7cc1
 +
 diff --git a/target/linux/mvebu/patches-4.14/90078-net-phy-phylink-Provide-PHY-interface-to-mac_link_-u.patch b/target/linux/mvebu/patches-4.14/90078-net-phy-phylink-Provide-PHY-interface-to-mac_link_-u.patch
 new file mode 100644
-index 0000000000..1db6698bfa
+index 0000000000..9df8e9aa96
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90078-net-phy-phylink-Provide-PHY-interface-to-mac_link_-u.patch
 @@ -0,0 +1,84 @@
 +From 6fb63181946b5fae8b757cd2f2c363c2b7a47388 Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Wed, 28 Mar 2018 15:44:15 -0700
-+Subject: [PATCH 078/126] net: phy: phylink: Provide PHY interface to
++Subject: [PATCH 078/127] net: phy: phylink: Provide PHY interface to
 + mac_link_{up, down}
 +
 +In preparation for having DSA transition entirely to PHYLINK, we need to pass a
@@ -7698,14 +7700,14 @@ index 0000000000..1db6698bfa
 +
 diff --git a/target/linux/mvebu/patches-4.14/90079-net-phy-phylink-Allow-specifying-PHY-device-flags.patch b/target/linux/mvebu/patches-4.14/90079-net-phy-phylink-Allow-specifying-PHY-device-flags.patch
 new file mode 100644
-index 0000000000..5916a0e617
+index 0000000000..9130db0845
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90079-net-phy-phylink-Allow-specifying-PHY-device-flags.patch
 @@ -0,0 +1,71 @@
 +From 3e301ce5884a77dae23207dcbda9a24e85f42de7 Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Tue, 12 Dec 2017 16:00:25 -0800
-+Subject: [PATCH 079/126] net: phy: phylink: Allow specifying PHY device flags
++Subject: [PATCH 079/127] net: phy: phylink: Allow specifying PHY device flags
 +
 +In order to let subsystems like DSA fully utilize PHYLINK, we need to be able
 +to communicate phy_device::flags from of_phy_{connect,attach} even when using
@@ -7775,14 +7777,14 @@ index 0000000000..5916a0e617
 +
 diff --git a/target/linux/mvebu/patches-4.14/90080-net-phy-phylink-Use-PHY-device-interface-if-N-A.patch b/target/linux/mvebu/patches-4.14/90080-net-phy-phylink-Use-PHY-device-interface-if-N-A.patch
 new file mode 100644
-index 0000000000..d5f7b4f14c
+index 0000000000..5b55b70aad
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90080-net-phy-phylink-Use-PHY-device-interface-if-N-A.patch
 @@ -0,0 +1,35 @@
 +From 174428567d991f4123c536b6dde0e97c21d6b98f Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Tue, 12 Dec 2017 16:00:26 -0800
-+Subject: [PATCH 080/126] net: phy: phylink: Use PHY device interface if N/A
++Subject: [PATCH 080/127] net: phy: phylink: Use PHY device interface if N/A
 +
 +We may not always be able to resolve a correct phy_interface_t value before
 +actually connecting to the PHY device, when that happens, just have
@@ -7816,14 +7818,14 @@ index 0000000000..d5f7b4f14c
 +
 diff --git a/target/linux/mvebu/patches-4.14/90081-net-phy-phylink-Remove-error-message.patch b/target/linux/mvebu/patches-4.14/90081-net-phy-phylink-Remove-error-message.patch
 new file mode 100644
-index 0000000000..aa06713e3e
+index 0000000000..7003be1cb2
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90081-net-phy-phylink-Remove-error-message.patch
 @@ -0,0 +1,35 @@
 +From ee69787b4f2cbe2fc60e08b5288e0879cc328503 Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Tue, 12 Dec 2017 16:00:27 -0800
-+Subject: [PATCH 081/126] net: phy: phylink: Remove error message
++Subject: [PATCH 081/127] net: phy: phylink: Remove error message
 +
 +Some subsystems like DSA may be trying to connect to a PHY through OF first,
 +and then attempt a connect using a local MDIO bus, remove the error message:
@@ -7857,14 +7859,14 @@ index 0000000000..aa06713e3e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90082-net-dsa-Plug-in-PHYLINK-support.patch b/target/linux/mvebu/patches-4.14/90082-net-dsa-Plug-in-PHYLINK-support.patch
 new file mode 100644
-index 0000000000..0f33035e23
+index 0000000000..e038fa3723
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90082-net-dsa-Plug-in-PHYLINK-support.patch
 @@ -0,0 +1,577 @@
 +From 1895108370e472e0102a8c90b3ab0d973649e0d3 Mon Sep 17 00:00:00 2001
 +From: Florian Fainelli <f.fainelli@gmail.com>
 +Date: Thu, 10 May 2018 13:17:36 -0700
-+Subject: [PATCH 082/126] net: dsa: Plug in PHYLINK support
++Subject: [PATCH 082/127] net: dsa: Plug in PHYLINK support
 +
 +Add support for PHYLINK within the DSA subsystem in order to support more
 +complex devices such as pluggable (SFP) and non-pluggable (SFF) modules, 10G
@@ -8440,14 +8442,14 @@ index 0000000000..0f33035e23
 +
 diff --git a/target/linux/mvebu/patches-4.14/90083-phylink-add-helper-for-configuring-2500BaseX-modes.patch b/target/linux/mvebu/patches-4.14/90083-phylink-add-helper-for-configuring-2500BaseX-modes.patch
 new file mode 100644
-index 0000000000..d7930b751e
+index 0000000000..6de710f52d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90083-phylink-add-helper-for-configuring-2500BaseX-modes.patch
 @@ -0,0 +1,74 @@
 +From 67902d64ac8b609286b084ae0d32219b95590464 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Fri, 15 Dec 2017 17:24:45 +0000
-+Subject: [PATCH 083/126] phylink: add helper for configuring 2500BaseX modes
++Subject: [PATCH 083/127] phylink: add helper for configuring 2500BaseX modes
 +
 +Add a helper for MAC drivers to use in their validate callback to deal
 +with 2500BaseX vs 1000BaseX modes, where the hardware supports both
@@ -8520,14 +8522,14 @@ index 0000000000..d7930b751e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90084-net-dsa-mv88e6xxx-add-PHYLINK-support.patch b/target/linux/mvebu/patches-4.14/90084-net-dsa-mv88e6xxx-add-PHYLINK-support.patch
 new file mode 100644
-index 0000000000..aa83d83902
+index 0000000000..7163c85ceb
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90084-net-dsa-mv88e6xxx-add-PHYLINK-support.patch
 @@ -0,0 +1,213 @@
 +From 4527d32443e37c28e2055983f61d79311d4f49fd Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Thu, 10 May 2018 13:17:35 -0700
-+Subject: [PATCH 084/126] net: dsa: mv88e6xxx: add PHYLINK support
++Subject: [PATCH 084/127] net: dsa: mv88e6xxx: add PHYLINK support
 +
 +Add rudimentary phylink support to mv88e6xxx. This allows the driver
 +using user ports with fixed links to keep operating normally. User ports
@@ -8739,14 +8741,14 @@ index 0000000000..aa83d83902
 +
 diff --git a/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
 new file mode 100644
-index 0000000000..c549c875d6
+index 0000000000..abd71d1f69
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90085-net-dsa-mv88e6xxx-Add-support-to-enabling-pause.patch
 @@ -0,0 +1,171 @@
 +From b6bd83fc50c6c7587d76c748a1e5728663a1307f Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:37 +0200
-+Subject: [PATCH 085/126] net: dsa: mv88e6xxx: Add support to enabling pause
++Subject: [PATCH 085/127] net: dsa: mv88e6xxx: Add support to enabling pause
 +
 +The 6185 can enable/disable 802.3z pause be setting the MyPause bit in
 +the port status register. Add an op to support this.
@@ -8916,14 +8918,14 @@ index 0000000000..c549c875d6
 +
 diff --git a/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch b/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch
 new file mode 100644
-index 0000000000..45c3baf591
+index 0000000000..c0cfd91cc7
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90086-net-dsa-mv88e6xxx-add-phylink-support.patch
 @@ -0,0 +1,705 @@
 +From 9861270c061bd1893bcdb0aa92c85a9871f2c758 Mon Sep 17 00:00:00 2001
 +From: Russell King <rmk+kernel@armlinux.org.uk>
 +Date: Thu, 9 Aug 2018 15:38:39 +0200
-+Subject: [PATCH 086/126] net: dsa: mv88e6xxx: add phylink support
++Subject: [PATCH 086/127] net: dsa: mv88e6xxx: add phylink support
 +
 +Add rudimentary phylink support to mv88e6xxx.
 +
@@ -9627,14 +9629,14 @@ index 0000000000..45c3baf591
 +
 diff --git a/target/linux/mvebu/patches-4.14/90087-net-dsa-mv88e6xxx-Refactor-SERDES-lane-code.patch b/target/linux/mvebu/patches-4.14/90087-net-dsa-mv88e6xxx-Refactor-SERDES-lane-code.patch
 new file mode 100644
-index 0000000000..28e357cfa6
+index 0000000000..1d44eb3e41
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90087-net-dsa-mv88e6xxx-Refactor-SERDES-lane-code.patch
 @@ -0,0 +1,284 @@
 +From d3a4ff01fb15fc08c3edbf9d3baf457af47d4403 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:40 +0200
-+Subject: [PATCH 087/126] net: dsa: mv88e6xxx: Refactor SERDES lane code
++Subject: [PATCH 087/127] net: dsa: mv88e6xxx: Refactor SERDES lane code
 +
 +The 6390 family has 8 SERDES lanes. What ports use these lanes depends
 +on how ports 9 and 10 are configured. If 9 and 10 does not make use of
@@ -9917,14 +9919,14 @@ index 0000000000..28e357cfa6
 +
 diff --git a/target/linux/mvebu/patches-4.14/90088-net-dsa-mv88e6xxx-6390-vs-6390X-SERDES-support.patch b/target/linux/mvebu/patches-4.14/90088-net-dsa-mv88e6xxx-6390-vs-6390X-SERDES-support.patch
 new file mode 100644
-index 0000000000..fd31f301ef
+index 0000000000..fd3d664a23
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90088-net-dsa-mv88e6xxx-6390-vs-6390X-SERDES-support.patch
 @@ -0,0 +1,126 @@
 +From d2e12da262c207b5abe8278248aff3d3fc5e1bb3 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:41 +0200
-+Subject: [PATCH 088/126] net: dsa: mv88e6xxx: 6390 vs 6390X SERDES support
++Subject: [PATCH 088/127] net: dsa: mv88e6xxx: 6390 vs 6390X SERDES support
 +
 +The 6390 has two SERDES interfaces, used by ports 9 and 10.  The 6390X
 +has eight SERDES interfaces. These allow ports 9 and 10 to do 10G. Or
@@ -10049,14 +10051,14 @@ index 0000000000..fd31f301ef
 +
 diff --git a/target/linux/mvebu/patches-4.14/90089-net-dsa-mv88e6xxx-88E6141-6341-SERDES-support.patch b/target/linux/mvebu/patches-4.14/90089-net-dsa-mv88e6xxx-88E6141-6341-SERDES-support.patch
 new file mode 100644
-index 0000000000..a755ae94fd
+index 0000000000..82e2ae6f25
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90089-net-dsa-mv88e6xxx-88E6141-6341-SERDES-support.patch
 @@ -0,0 +1,87 @@
 +From 40d97086cccb0cbc9e83deaadcfd4124eb39b11a Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Thu, 3 May 2018 16:23:53 +0200
-+Subject: [PATCH 089/126] net: dsa: mv88e6xxx: 88E6141/6341 SERDES support
++Subject: [PATCH 089/127] net: dsa: mv88e6xxx: 88E6141/6341 SERDES support
 +
 +The 88E6141/6341 switches (also known as Topaz) have 1 SGMII lane,
 +which can be configured the same way as the SERDES lane on 88E6390.
@@ -10142,14 +10144,14 @@ index 0000000000..a755ae94fd
 +
 diff --git a/target/linux/mvebu/patches-4.14/90090-net-dsa-mv88e6xxx-Rename-sgmii-10g-power-functions.patch b/target/linux/mvebu/patches-4.14/90090-net-dsa-mv88e6xxx-Rename-sgmii-10g-power-functions.patch
 new file mode 100644
-index 0000000000..4cd2bed293
+index 0000000000..06e34f5943
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90090-net-dsa-mv88e6xxx-Rename-sgmii-10g-power-functions.patch
 @@ -0,0 +1,65 @@
 +From 76afb16c9d4b48d057ff68984fac766a95f874b0 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:42 +0200
-+Subject: [PATCH 090/126] net: dsa: mv88e6xxx: Rename sgmii/10g power functions
++Subject: [PATCH 090/127] net: dsa: mv88e6xxx: Rename sgmii/10g power functions
 +
 +There is a need to add more functions manipulating the SERDES
 +interfaces. Cleanup the namespace.
@@ -10213,14 +10215,14 @@ index 0000000000..4cd2bed293
 +
 diff --git a/target/linux/mvebu/patches-4.14/90091-net-dsa-mv88e6xxx-Add-serdes-register-read-write-hel.patch b/target/linux/mvebu/patches-4.14/90091-net-dsa-mv88e6xxx-Add-serdes-register-read-write-hel.patch
 new file mode 100644
-index 0000000000..870deb6d20
+index 0000000000..515b5c6ba9
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90091-net-dsa-mv88e6xxx-Add-serdes-register-read-write-hel.patch
 @@ -0,0 +1,107 @@
 +From 48e064e620263fabba4ed31509386b60073d5a7d Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:43 +0200
-+Subject: [PATCH 091/126] net: dsa: mv88e6xxx: Add serdes register read/write
++Subject: [PATCH 091/127] net: dsa: mv88e6xxx: Add serdes register read/write
 + helper
 +
 +Add a helper for accessing SERDES registers of the 6390 family.
@@ -10326,14 +10328,14 @@ index 0000000000..870deb6d20
 +
 diff --git a/target/linux/mvebu/patches-4.14/90092-net-dsa-mv88e6xxx-2500Base-X-uses-the-1000Base-X-SER.patch b/target/linux/mvebu/patches-4.14/90092-net-dsa-mv88e6xxx-2500Base-X-uses-the-1000Base-X-SER.patch
 new file mode 100644
-index 0000000000..89e1a46fff
+index 0000000000..cbdb15e245
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90092-net-dsa-mv88e6xxx-2500Base-X-uses-the-1000Base-X-SER.patch
 @@ -0,0 +1,34 @@
 +From 6ee5c154b5b9a6fd7f07ec087f03e14a5b6ab667 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:44 +0200
-+Subject: [PATCH 092/126] net: dsa: mv88e6xxx: 2500Base-X uses the 1000Base-X
++Subject: [PATCH 092/127] net: dsa: mv88e6xxx: 2500Base-X uses the 1000Base-X
 + SERDES
 +
 +The 6390 has three different SERDES interface types. 2500Base-X is
@@ -10366,14 +10368,14 @@ index 0000000000..89e1a46fff
 +
 diff --git a/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
 new file mode 100644
-index 0000000000..5bd4ece130
+index 0000000000..56711dc37c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90093-net-dsa-mv88e6xxx-Cache-the-port-cmode.patch
 @@ -0,0 +1,439 @@
 +From 12344a79a9537a38b30eecddccb88596a1bcad03 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:45 +0200
-+Subject: [PATCH 093/126] net: dsa: mv88e6xxx: Cache the port cmode
++Subject: [PATCH 093/127] net: dsa: mv88e6xxx: Cache the port cmode
 +
 +The ports CMODE indicates the type of link between the MAC and the
 +PHY. It is used often in the SERDES code. Rather than read it each
@@ -10811,14 +10813,14 @@ index 0000000000..5bd4ece130
 +
 diff --git a/target/linux/mvebu/patches-4.14/90094-net-dsa-mv88e6xxx-Power-on-off-SERDES-on-cmode-chang.patch b/target/linux/mvebu/patches-4.14/90094-net-dsa-mv88e6xxx-Power-on-off-SERDES-on-cmode-chang.patch
 new file mode 100644
-index 0000000000..4611fc0226
+index 0000000000..1d69ded434
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90094-net-dsa-mv88e6xxx-Power-on-off-SERDES-on-cmode-chang.patch
 @@ -0,0 +1,53 @@
 +From 1f684c1eeed93c8acc38fbfa5a64b0bfb0260a02 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:46 +0200
-+Subject: [PATCH 094/126] net: dsa: mv88e6xxx: Power on/off SERDES on cmode
++Subject: [PATCH 094/127] net: dsa: mv88e6xxx: Power on/off SERDES on cmode
 + change
 +
 +The 6390 family has a number of SERDES interfaces per port. When the
@@ -10870,14 +10872,14 @@ index 0000000000..4611fc0226
 +
 diff --git a/target/linux/mvebu/patches-4.14/90095-net-dsa-mv88e6xxx-link-mv88e6xxx_port-to-mv88e6xxx_c.patch b/target/linux/mvebu/patches-4.14/90095-net-dsa-mv88e6xxx-link-mv88e6xxx_port-to-mv88e6xxx_c.patch
 new file mode 100644
-index 0000000000..c6cd7ff235
+index 0000000000..3dd83a8391
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90095-net-dsa-mv88e6xxx-link-mv88e6xxx_port-to-mv88e6xxx_c.patch
 @@ -0,0 +1,48 @@
 +From cf237556ee1e91fe575767c6fa2342b323aa2af5 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:47 +0200
-+Subject: [PATCH 095/126] net: dsa: mv88e6xxx: link mv88e6xxx_port to
++Subject: [PATCH 095/127] net: dsa: mv88e6xxx: link mv88e6xxx_port to
 + mv88e6xxx_chip
 +
 +An up coming change will register interrupts for individual switch
@@ -10924,14 +10926,14 @@ index 0000000000..c6cd7ff235
 +
 diff --git a/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch b/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch
 new file mode 100644
-index 0000000000..69d06636ce
+index 0000000000..92cc16afbb
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90096-net-dsa-mv88e6xxx-Add-SERDES-phydev_mac_change-up-fo.patch
 @@ -0,0 +1,361 @@
 +From bc17145f0452d8cdc9d234e5df932bc3fdc9cc8f Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:48 +0200
-+Subject: [PATCH 096/126] net: dsa: mv88e6xxx: Add SERDES phydev_mac_change up
++Subject: [PATCH 096/127] net: dsa: mv88e6xxx: Add SERDES phydev_mac_change up
 + for 6390
 +
 +phylink wants to know when the MAC layers notices a change in the
@@ -11291,14 +11293,14 @@ index 0000000000..69d06636ce
 +
 diff --git a/target/linux/mvebu/patches-4.14/90097-net-dsa-mv88e6xxx-Re-setup-interrupts-on-CMODE-chang.patch b/target/linux/mvebu/patches-4.14/90097-net-dsa-mv88e6xxx-Re-setup-interrupts-on-CMODE-chang.patch
 new file mode 100644
-index 0000000000..ef80f7f411
+index 0000000000..de3ab3407d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90097-net-dsa-mv88e6xxx-Re-setup-interrupts-on-CMODE-chang.patch
 @@ -0,0 +1,108 @@
 +From 1a33f37354b514c5a3642492474ad37ac2e0af52 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 9 Aug 2018 15:38:49 +0200
-+Subject: [PATCH 097/126] net: dsa: mv88e6xxx: Re-setup interrupts on CMODE
++Subject: [PATCH 097/127] net: dsa: mv88e6xxx: Re-setup interrupts on CMODE
 + change.
 +
 +When a port changes CMODE, the SERDES interface being used can change.
@@ -11405,14 +11407,14 @@ index 0000000000..ef80f7f411
 +
 diff --git a/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch b/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch
 new file mode 100644
-index 0000000000..1fa9e00ccf
+index 0000000000..81bb0e2102
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch
 @@ -0,0 +1,249 @@
 +From dbf391453f922c1fba9f1cbefe72f1a334c7825e Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 22 Feb 2018 22:58:32 +0100
-+Subject: [PATCH 098/126] net: dsa: mv88e6xxx: Poll when no interrupt defined
++Subject: [PATCH 098/127] net: dsa: mv88e6xxx: Poll when no interrupt defined
 +
 +Not all boards have the interrupt output from the switch connected to
 +a GPIO line. In such cases, phylib has to poll the internal PHYs,
@@ -11660,14 +11662,14 @@ index 0000000000..1fa9e00ccf
 +
 diff --git a/target/linux/mvebu/patches-4.14/90099-net-dsa-mv88e6xxx-Add-missing-g1-IRQ-numbers.patch b/target/linux/mvebu/patches-4.14/90099-net-dsa-mv88e6xxx-Add-missing-g1-IRQ-numbers.patch
 new file mode 100644
-index 0000000000..2e54ea3826
+index 0000000000..390b5290b6
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90099-net-dsa-mv88e6xxx-Add-missing-g1-IRQ-numbers.patch
 @@ -0,0 +1,41 @@
 +From d0bda55c7cc657e8f556bd3eacd304a1ebc54873 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sat, 17 Mar 2018 20:32:03 +0100
-+Subject: [PATCH 099/126] net: dsa: mv88e6xxx: Add missing g1 IRQ numbers
++Subject: [PATCH 099/127] net: dsa: mv88e6xxx: Add missing g1 IRQ numbers
 +
 +With the recent change to polling for interrupts, it is important that
 +the number of global 1 interrupts is listed. Without it, the driver
@@ -11707,14 +11709,14 @@ index 0000000000..2e54ea3826
 +
 diff --git a/target/linux/mvebu/patches-4.14/90100-net-dsa-mv88e6xxx-Add-number-of-internal-PHYs.patch b/target/linux/mvebu/patches-4.14/90100-net-dsa-mv88e6xxx-Add-number-of-internal-PHYs.patch
 new file mode 100644
-index 0000000000..eec016b450
+index 0000000000..a49c5b1dce
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90100-net-dsa-mv88e6xxx-Add-number-of-internal-PHYs.patch
 @@ -0,0 +1,257 @@
 +From fad30d16054828f200bcacc71ef10f7c907e8c2f Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sat, 17 Mar 2018 20:32:04 +0100
-+Subject: [PATCH 100/126] net: dsa: mv88e6xxx: Add number of internal PHYs
++Subject: [PATCH 100/127] net: dsa: mv88e6xxx: Add number of internal PHYs
 +
 +Add to the info structure the number of internal PHYs, if they generate
 +interrupts. Some of the older generations of switches have internal
@@ -11970,14 +11972,14 @@ index 0000000000..eec016b450
 +
 diff --git a/target/linux/mvebu/patches-4.14/90101-net-dsa-mv88e6xxx-Add-MDIO-interrupts-for-internal-P.patch b/target/linux/mvebu/patches-4.14/90101-net-dsa-mv88e6xxx-Add-MDIO-interrupts-for-internal-P.patch
 new file mode 100644
-index 0000000000..b2d94ec926
+index 0000000000..a558dfe7ac
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90101-net-dsa-mv88e6xxx-Add-MDIO-interrupts-for-internal-P.patch
 @@ -0,0 +1,135 @@
 +From 2399e39cdbc22cbf937307288f3a580767518bf2 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sat, 17 Mar 2018 20:32:05 +0100
-+Subject: [PATCH 101/126] net: dsa: mv88e6xxx: Add MDIO interrupts for internal
++Subject: [PATCH 101/127] net: dsa: mv88e6xxx: Add MDIO interrupts for internal
 + PHYs
 +
 +When registering an MDIO bus, it is possible to pass an array of
@@ -12111,14 +12113,14 @@ index 0000000000..b2d94ec926
 +
 diff --git a/target/linux/mvebu/patches-4.14/90102-net-dsa-mv88e6xxx-Fix-PHY-interrupts-by-parameterisi.patch b/target/linux/mvebu/patches-4.14/90102-net-dsa-mv88e6xxx-Fix-PHY-interrupts-by-parameterisi.patch
 new file mode 100644
-index 0000000000..f969983d99
+index 0000000000..e7afd125f0
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90102-net-dsa-mv88e6xxx-Fix-PHY-interrupts-by-parameterisi.patch
 @@ -0,0 +1,263 @@
 +From d918fd360d2907e81bd096f4ec3c357c6509ed60 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sat, 5 May 2018 20:58:22 +0200
-+Subject: [PATCH 102/126] net: dsa: mv88e6xxx: Fix PHY interrupts by
++Subject: [PATCH 102/127] net: dsa: mv88e6xxx: Fix PHY interrupts by
 + parameterising PHY base address
 +
 +Most of the mv88e6xxx switches have the PHYs at address 0, 1, 2, ...
@@ -12380,14 +12382,14 @@ index 0000000000..f969983d99
 +
 diff --git a/target/linux/mvebu/patches-4.14/90103-net-dsa-mv88e6xxx-Fix-interrupt-name-for-g2-irq.patch b/target/linux/mvebu/patches-4.14/90103-net-dsa-mv88e6xxx-Fix-interrupt-name-for-g2-irq.patch
 new file mode 100644
-index 0000000000..b01d158ebd
+index 0000000000..d51e6987e9
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90103-net-dsa-mv88e6xxx-Fix-interrupt-name-for-g2-irq.patch
 @@ -0,0 +1,41 @@
 +From caa8f17b134d1ed638b2a2b069691f09032b7cd0 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig?= <u.kleine-koenig@pengutronix.de>
 +Date: Tue, 20 Mar 2018 10:44:42 +0100
-+Subject: [PATCH 103/126] net: dsa: mv88e6xxx: Fix interrupt name for g2 irq
++Subject: [PATCH 103/127] net: dsa: mv88e6xxx: Fix interrupt name for g2 irq
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -12427,14 +12429,14 @@ index 0000000000..b01d158ebd
 +
 diff --git a/target/linux/mvebu/patches-4.14/90104-net-dsa-mv88e6xxx-Fix-irq-free-ing.patch b/target/linux/mvebu/patches-4.14/90104-net-dsa-mv88e6xxx-Fix-irq-free-ing.patch
 new file mode 100644
-index 0000000000..b75c6ca280
+index 0000000000..92aac8e07b
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90104-net-dsa-mv88e6xxx-Fix-irq-free-ing.patch
 @@ -0,0 +1,31 @@
 +From 449552974d9f46837db2eb70e9314efe7eea683c Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 8 Mar 2018 21:21:36 +0100
-+Subject: [PATCH 104/126] net: dsa: mv88e6xxx: Fix irq free'ing
++Subject: [PATCH 104/127] net: dsa: mv88e6xxx: Fix irq free'ing
 +
 +Call the common irq free function, rather than going recursive and
 +blowing away the stack, followed by the machine.
@@ -12464,14 +12466,14 @@ index 0000000000..b75c6ca280
 +
 diff --git a/target/linux/mvebu/patches-4.14/90105-net-dsa-mv88e6xxx-Use-the-DT-IRQ-trigger-mode.patch b/target/linux/mvebu/patches-4.14/90105-net-dsa-mv88e6xxx-Use-the-DT-IRQ-trigger-mode.patch
 new file mode 100644
-index 0000000000..984dff0b5e
+index 0000000000..730d388aa2
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90105-net-dsa-mv88e6xxx-Use-the-DT-IRQ-trigger-mode.patch
 @@ -0,0 +1,38 @@
 +From 83f5636f9b2d927e9e0c4d80ea13711899b87431 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sun, 25 Mar 2018 23:43:14 +0200
-+Subject: [PATCH 105/126] net: dsa: mv88e6xxx: Use the DT IRQ trigger mode
++Subject: [PATCH 105/127] net: dsa: mv88e6xxx: Use the DT IRQ trigger mode
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -12508,14 +12510,14 @@ index 0000000000..984dff0b5e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90106-net-dsa-mv88e6xxx-Call-the-common-IRQ-free-code.patch b/target/linux/mvebu/patches-4.14/90106-net-dsa-mv88e6xxx-Call-the-common-IRQ-free-code.patch
 new file mode 100644
-index 0000000000..a0b5f20c1d
+index 0000000000..d222fc6e10
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90106-net-dsa-mv88e6xxx-Call-the-common-IRQ-free-code.patch
 @@ -0,0 +1,31 @@
 +From f7399689867c46c8e8d060adca10baa17eed8c8e Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sun, 25 Mar 2018 23:43:15 +0200
-+Subject: [PATCH 106/126] net: dsa: mv88e6xxx: Call the common IRQ free code
++Subject: [PATCH 106/127] net: dsa: mv88e6xxx: Call the common IRQ free code
 +
 +When free'ing the polled IRQs, call the common irq free code.
 +Otherwise the interrupts are left registered, and when we come to load
@@ -12545,14 +12547,14 @@ index 0000000000..a0b5f20c1d
 +
 diff --git a/target/linux/mvebu/patches-4.14/90107-net-dsa-mv88e6xxx-Fix-IRQ-when-loading-module.patch b/target/linux/mvebu/patches-4.14/90107-net-dsa-mv88e6xxx-Fix-IRQ-when-loading-module.patch
 new file mode 100644
-index 0000000000..7f8d1bd918
+index 0000000000..2b9b28854c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90107-net-dsa-mv88e6xxx-Fix-IRQ-when-loading-module.patch
 @@ -0,0 +1,43 @@
 +From 6dc27d8bb965b895eee531fd36dd4ced2b89d9c1 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Sat, 17 Mar 2018 20:21:09 +0100
-+Subject: [PATCH 107/126] net: dsa: mv88e6xxx: Fix IRQ when loading module
++Subject: [PATCH 107/127] net: dsa: mv88e6xxx: Fix IRQ when loading module
 +
 +Handle polled interrupts correctly when loading the module.
 +
@@ -12594,14 +12596,14 @@ index 0000000000..7f8d1bd918
 +
 diff --git a/target/linux/mvebu/patches-4.14/90108-net-dsa-mv88e6xxx-fix-races-between-lock-and-irq-fre.patch b/target/linux/mvebu/patches-4.14/90108-net-dsa-mv88e6xxx-fix-races-between-lock-and-irq-fre.patch
 new file mode 100644
-index 0000000000..c9f17a0380
+index 0000000000..07ca113f06
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90108-net-dsa-mv88e6xxx-fix-races-between-lock-and-irq-fre.patch
 @@ -0,0 +1,102 @@
 +From a89b059be36ef1d221f9a6faa986d56a94b1a7ea Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig?= <u.kleine-koenig@pengutronix.de>
 +Date: Fri, 20 Jul 2018 11:53:15 +0200
-+Subject: [PATCH 108/126] net: dsa: mv88e6xxx: fix races between lock and irq
++Subject: [PATCH 108/127] net: dsa: mv88e6xxx: fix races between lock and irq
 + freeing
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -12702,14 +12704,14 @@ index 0000000000..c9f17a0380
 +
 diff --git a/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch b/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
 new file mode 100644
-index 0000000000..6734b93484
+index 0000000000..24bc034311
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
 @@ -0,0 +1,29 @@
 +From 0ed95c830283285145f8f3bb2b1ccbcb722c64a5 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Fri, 17 Aug 2018 12:09:49 +0200
-+Subject: [PATCH 109/126] net: dsa: mv88e6xxx: Share main switch IRQ
++Subject: [PATCH 109/127] net: dsa: mv88e6xxx: Share main switch IRQ
 +
 +On some boards the interrupt can be shared between multiple devices.
 +For example on Turris Mox the interrupt is shared between all switches.
@@ -12737,14 +12739,14 @@ index 0000000000..6734b93484
 +
 diff --git a/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
 new file mode 100644
-index 0000000000..9b86f5dab1
+index 0000000000..543e63faa5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
 @@ -0,0 +1,103 @@
 +From dc9c03cbf564ef633cc00038f3a00698e620daad Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Fri, 5 Oct 2018 13:23:05 +0200
-+Subject: [PATCH 110/126] net: dsa: mc88e6xxx: Fix 88E6141/6341 2500mbps SERDES
++Subject: [PATCH 110/127] net: dsa: mc88e6xxx: Fix 88E6141/6341 2500mbps SERDES
 + speed
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -12846,14 +12848,14 @@ index 0000000000..9b86f5dab1
 +
 diff --git a/target/linux/mvebu/patches-4.14/90111-net-ethernet-mvneta-Fix-napi-structure-mixup-on-arma.patch b/target/linux/mvebu/patches-4.14/90111-net-ethernet-mvneta-Fix-napi-structure-mixup-on-arma.patch
 new file mode 100644
-index 0000000000..5e58ed3242
+index 0000000000..73d1e6ee84
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90111-net-ethernet-mvneta-Fix-napi-structure-mixup-on-arma.patch
 @@ -0,0 +1,107 @@
 +From cb0da3adfe03f7275dbbf4574b46137cb8a23f66 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Fri, 13 Jul 2018 18:18:35 +0200
-+Subject: [PATCH 111/126] net: ethernet: mvneta: Fix napi structure mixup on
++Subject: [PATCH 111/127] net: ethernet: mvneta: Fix napi structure mixup on
 + armada 3700
 +
 +The mvneta Ethernet driver is used on a few different Marvell SoCs.
@@ -12959,14 +12961,14 @@ index 0000000000..5e58ed3242
 +
 diff --git a/target/linux/mvebu/patches-4.14/90112-net-mvneta-fix-mvneta_config_rss-on-armada-3700.patch b/target/linux/mvebu/patches-4.14/90112-net-mvneta-fix-mvneta_config_rss-on-armada-3700.patch
 new file mode 100644
-index 0000000000..6fc5b61bcf
+index 0000000000..5788ab06ec
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90112-net-mvneta-fix-mvneta_config_rss-on-armada-3700.patch
 @@ -0,0 +1,77 @@
 +From 5f1089e57642c9df9452a5a0c1108080e858b9d0 Mon Sep 17 00:00:00 2001
 +From: Jisheng Zhang <Jisheng.Zhang@synaptics.com>
 +Date: Fri, 10 Aug 2018 11:36:27 +0800
-+Subject: [PATCH 112/126] net: mvneta: fix mvneta_config_rss on armada 3700
++Subject: [PATCH 112/127] net: mvneta: fix mvneta_config_rss on armada 3700
 +
 +The mvneta Ethernet driver is used on a few different Marvell SoCs.
 +Some SoCs have per cpu interrupts for Ethernet events, the driver uses
@@ -13042,14 +13044,14 @@ index 0000000000..6fc5b61bcf
 +
 diff --git a/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch b/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
 new file mode 100644
-index 0000000000..79a841aabb
+index 0000000000..070af3a5f4
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
 @@ -0,0 +1,108 @@
 +From 841332d49b280dd92f2ad42b6e34f6b64a387d78 Mon Sep 17 00:00:00 2001
 +From: Ken Ma <make@marvell.com>
 +Date: Thu, 3 May 2018 14:31:41 +0200
-+Subject: [PATCH 113/126] pinctrl: armada-37xx: Correct mpp definitions
++Subject: [PATCH 113/127] pinctrl: armada-37xx: Correct mpp definitions
 +
 +This patch icorrects below mpp definitions:
 + - The sdio_sb group is composed of 6 pins and not 5;
@@ -13156,14 +13158,14 @@ index 0000000000..79a841aabb
 +
 diff --git a/target/linux/mvebu/patches-4.14/90114-arm64-dts-marvell-armada-37xx-mark-the-gpio-controll.patch b/target/linux/mvebu/patches-4.14/90114-arm64-dts-marvell-armada-37xx-mark-the-gpio-controll.patch
 new file mode 100644
-index 0000000000..61095aef93
+index 0000000000..5444d85606
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90114-arm64-dts-marvell-armada-37xx-mark-the-gpio-controll.patch
 @@ -0,0 +1,56 @@
 +From b1b1740310ae80041b8b6f963076c216bc99bbaf Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Uwe=20Kleine-K=C3=B6nig?= <u.kleine-koenig@pengutronix.de>
 +Date: Wed, 21 Mar 2018 11:50:03 +0100
-+Subject: [PATCH 114/126] arm64: dts: marvell: armada-37xx: mark the gpio
++Subject: [PATCH 114/127] arm64: dts: marvell: armada-37xx: mark the gpio
 + controllers as irq controller
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -13218,14 +13220,14 @@ index 0000000000..61095aef93
 +
 diff --git a/target/linux/mvebu/patches-4.14/90115-drivers-mfd-Add-support-for-Moxtet-bus.patch b/target/linux/mvebu/patches-4.14/90115-drivers-mfd-Add-support-for-Moxtet-bus.patch
 new file mode 100644
-index 0000000000..eb53c5dd34
+index 0000000000..d72e52fd86
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90115-drivers-mfd-Add-support-for-Moxtet-bus.patch
 @@ -0,0 +1,764 @@
 +From f090da3ea5975a0d13dcf2c3c3ca3b4790dbaede Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 8 Aug 2018 16:02:13 +0200
-+Subject: [PATCH 115/126] drivers: mfd: Add support for Moxtet bus
++Subject: [PATCH 115/127] drivers: mfd: Add support for Moxtet bus
 +
 +On the Turris Mox router there can be connected different modules to
 +the main CPU board, currently a module with a SFP cage, a module with
@@ -13988,14 +13990,14 @@ index 0000000000..eb53c5dd34
 +
 diff --git a/target/linux/mvebu/patches-4.14/90116-drivers-gpio-Add-support-for-GPIOs-over-Moxtet-bus.patch b/target/linux/mvebu/patches-4.14/90116-drivers-gpio-Add-support-for-GPIOs-over-Moxtet-bus.patch
 new file mode 100644
-index 0000000000..8004b0548b
+index 0000000000..f177bac676
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90116-drivers-gpio-Add-support-for-GPIOs-over-Moxtet-bus.patch
 @@ -0,0 +1,280 @@
 +From f38a007d4d31dafcb911b5d49f401d05dd9f3c76 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 8 Aug 2018 16:14:52 +0200
-+Subject: [PATCH 116/126] drivers: gpio: Add support for GPIOs over Moxtet bus
++Subject: [PATCH 116/127] drivers: gpio: Add support for GPIOs over Moxtet bus
 +
 +This adds support for interpreting the input and output bits of one
 +device on Moxtet bus as GPIOs.
@@ -14274,14 +14276,14 @@ index 0000000000..8004b0548b
 +
 diff --git a/target/linux/mvebu/patches-4.14/90117-watchdog-Add-support-for-Armada-37xx-CPU-watchdog.patch b/target/linux/mvebu/patches-4.14/90117-watchdog-Add-support-for-Armada-37xx-CPU-watchdog.patch
 new file mode 100644
-index 0000000000..d2cf1e0417
+index 0000000000..c8f8fe45a3
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90117-watchdog-Add-support-for-Armada-37xx-CPU-watchdog.patch
 @@ -0,0 +1,461 @@
 +From aff32743eabfb165e15b3a623e241cddeaa55ce3 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Sun, 2 Sep 2018 21:45:21 +0200
-+Subject: [PATCH 117/126] watchdog: Add support for Armada 37xx CPU watchdog
++Subject: [PATCH 117/127] watchdog: Add support for Armada 37xx CPU watchdog
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -14741,14 +14743,14 @@ index 0000000000..d2cf1e0417
 +
 diff --git a/target/linux/mvebu/patches-4.14/90118-dt-bindings-watchdog-Document-armada-37xx-wdt-bindin.patch b/target/linux/mvebu/patches-4.14/90118-dt-bindings-watchdog-Document-armada-37xx-wdt-bindin.patch
 new file mode 100644
-index 0000000000..0fe19ea6e6
+index 0000000000..bc958dff57
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90118-dt-bindings-watchdog-Document-armada-37xx-wdt-bindin.patch
 @@ -0,0 +1,52 @@
 +From 3d324b197a937ea27149f8e7808950ec2d7558dc Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Sun, 2 Sep 2018 21:49:24 +0200
-+Subject: [PATCH 118/126] dt-bindings: watchdog: Document armada-37xx-wdt
++Subject: [PATCH 118/127] dt-bindings: watchdog: Document armada-37xx-wdt
 + binding
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -14799,14 +14801,14 @@ index 0000000000..0fe19ea6e6
 +
 diff --git a/target/linux/mvebu/patches-4.14/90119-documentation-watchdog-add-documentation-for-armada-.patch b/target/linux/mvebu/patches-4.14/90119-documentation-watchdog-add-documentation-for-armada-.patch
 new file mode 100644
-index 0000000000..d0eaf6c95d
+index 0000000000..ab699c6042
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90119-documentation-watchdog-add-documentation-for-armada-.patch
 @@ -0,0 +1,37 @@
 +From 24003e346a2216b681081fd04a3326dd7b38a465 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Sun, 2 Sep 2018 21:53:00 +0200
-+Subject: [PATCH 119/126] documentation: watchdog: add documentation for
++Subject: [PATCH 119/127] documentation: watchdog: add documentation for
 + armada-37xx-wdt
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -14842,14 +14844,14 @@ index 0000000000..d0eaf6c95d
 +
 diff --git a/target/linux/mvebu/patches-4.14/90120-arm64-dts-marvell-armada-37xx-add-nodes-to-support-w.patch b/target/linux/mvebu/patches-4.14/90120-arm64-dts-marvell-armada-37xx-add-nodes-to-support-w.patch
 new file mode 100644
-index 0000000000..7527bb051c
+index 0000000000..363b67279c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90120-arm64-dts-marvell-armada-37xx-add-nodes-to-support-w.patch
 @@ -0,0 +1,44 @@
 +From cd2c543d7c18dbd47844558330fc68f3cd280b36 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Sun, 2 Sep 2018 21:54:41 +0200
-+Subject: [PATCH 120/126] arm64: dts: marvell: armada-37xx: add nodes to
++Subject: [PATCH 120/127] arm64: dts: marvell: armada-37xx: add nodes to
 + support watchdog
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -14892,14 +14894,14 @@ index 0000000000..7527bb051c
 +
 diff --git a/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 new file mode 100644
-index 0000000000..d0767bbbbb
+index 0000000000..5f7f8ebdb7
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
 @@ -0,0 +1,121 @@
 +From 96d797e5903817474c467140f2e01e9736934693 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 16:55:11 +0200
-+Subject: [PATCH 121/126] PCI: aadrvark: warm reset the cores and card
++Subject: [PATCH 121/127] PCI: aadrvark: warm reset the cores and card
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -15019,14 +15021,14 @@ index 0000000000..d0767bbbbb
 +
 diff --git a/target/linux/mvebu/patches-4.14/90122-mailbox-Add-support-for-Armada-37xx-rWTM-mailbox.patch b/target/linux/mvebu/patches-4.14/90122-mailbox-Add-support-for-Armada-37xx-rWTM-mailbox.patch
 new file mode 100644
-index 0000000000..dbfc36734a
+index 0000000000..aa8bbb6191
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90122-mailbox-Add-support-for-Armada-37xx-rWTM-mailbox.patch
 @@ -0,0 +1,328 @@
 +From 9d79a3d17da4a7a3a9ce2127a0ab9855e8b0ce63 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Nov 2018 12:17:35 +0100
-+Subject: [PATCH 122/126] mailbox: Add support for Armada 37xx rWTM mailbox
++Subject: [PATCH 122/127] mailbox: Add support for Armada 37xx rWTM mailbox
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -15353,14 +15355,14 @@ index 0000000000..dbfc36734a
 +
 diff --git a/target/linux/mvebu/patches-4.14/90123-arm64-dts-marvell-armada37xx-add-rWTM-mailbox-node.patch b/target/linux/mvebu/patches-4.14/90123-arm64-dts-marvell-armada37xx-add-rWTM-mailbox-node.patch
 new file mode 100644
-index 0000000000..c065b66458
+index 0000000000..cfbe64f600
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90123-arm64-dts-marvell-armada37xx-add-rWTM-mailbox-node.patch
 @@ -0,0 +1,38 @@
 +From a29a9e62c9bad5b868f78e4ee80292abcc40c76a Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Nov 2018 12:21:44 +0100
-+Subject: [PATCH 123/126] arm64: dts: marvell: armada37xx: add rWTM mailbox
++Subject: [PATCH 123/127] arm64: dts: marvell: armada37xx: add rWTM mailbox
 + node
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -15397,14 +15399,14 @@ index 0000000000..c065b66458
 +
 diff --git a/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch b/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
 new file mode 100644
-index 0000000000..b606460a96
+index 0000000000..5625f96e64
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
 @@ -0,0 +1,454 @@
 +From 30ed67c5a721bd7c0967a6fee472d14fb056d306 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Nov 2018 12:23:05 +0100
-+Subject: [PATCH 124/126] crypto: Add Turris Mox rWTM firmware driver
++Subject: [PATCH 124/127] crypto: Add Turris Mox rWTM firmware driver
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -15857,14 +15859,14 @@ index 0000000000..b606460a96
 +
 diff --git a/target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch b/target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
 new file mode 100644
-index 0000000000..785206af1a
+index 0000000000..0c9608983d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
 @@ -0,0 +1,931 @@
 +From 49ba023db8bed0af25f2fb6b8d0ccd8e1e310610 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 24 Oct 2018 17:01:12 +0200
-+Subject: [PATCH 125/126] ARM64: dts: marvell: Add DTS file for Turris Mox
++Subject: [PATCH 125/127] ARM64: dts: marvell: Add DTS file for Turris Mox
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -16796,7 +16798,7 @@ diff --git a/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-rest
 similarity index 89%
 rename from target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch
 rename to target/linux/mvebu/patches-4.14/90126-arm64-restart-Armada-3700-restart-code.patch
-index b442f71bee..2a9460e740 100644
+index b442f71bee..112fbfc3c2 100644
 --- a/target/linux/mvebu/patches-4.14/9999-arm64-restart-Armada-3700-restart-code.patch
 +++ b/target/linux/mvebu/patches-4.14/90126-arm64-restart-Armada-3700-restart-code.patch
 @@ -1,7 +1,7 @@
@@ -16805,7 +16807,7 @@ index b442f71bee..2a9460e740 100644
  From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
  Date: Mon, 14 Jan 2019 17:00:04 +0100
 -Subject: [PATCH] arm64: restart: Armada 3700 restart code
-+Subject: [PATCH 126/126] arm64: restart: Armada 3700 restart code
++Subject: [PATCH 126/127] arm64: restart: Armada 3700 restart code
  MIME-Version: 1.0
  Content-Type: text/plain; charset=UTF-8
  Content-Transfer-Encoding: 8bit
@@ -16816,6 +16818,67 @@ index b442f71bee..2a9460e740 100644
 -2.19.2
 +2.21.0
  
+diff --git a/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch b/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
+new file mode 100644
+index 0000000000..adb024da43
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
+@@ -0,0 +1,55 @@
++From f71972752ee3252fc7bbf35a3401bb68ba057003 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Fri, 5 Apr 2019 10:52:57 +0200
++Subject: [PATCH 127/127] net: sfp: move sfp_register_socket call from
++ sfp_remove to sfp_probe
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Commit c4ba68b8691e4 backported from upstream to 4.14 stable was
++probably applied wrongly, and instead of calling sfp_register_socket in
++sfp_probe, the socket registering code was put into sfp_remove. This is
++obviously wrong.
++
++The commit first appeared in 4.14.104. Fix it for the next 4.14 release.
++
++Fixes: c4ba68b8691e4 ("net: sfp: do not probe SFP module before we're attached")
++Cc: stable <stable@vger.kernel.org>
++Cc: Russell King <rmk+kernel@armlinux.org.uk>
++Cc: David S. Miller <davem@davemloft.net>
++Cc: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/sfp.c | 8 ++++----
++ 1 file changed, 4 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index ebb4cbd46bd9..1818c566f45a 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -1129,6 +1129,10 @@ static int sfp_probe(struct platform_device *pdev)
++ 	if (poll)
++ 		mod_delayed_work(system_wq, &sfp->poll, poll_jiffies);
++ 
+++	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
+++	if (!sfp->sfp_bus)
+++		return -ENOMEM;
+++
++ 	return 0;
++ }
++ 
++@@ -1138,10 +1142,6 @@ static int sfp_remove(struct platform_device *pdev)
++ 
++ 	sfp_unregister_socket(sfp->sfp_bus);
++ 
++-	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
++-	if (!sfp->sfp_bus)
++-		return -ENOMEM;
++-
++ 	return 0;
++ }
++ 
++-- 
++2.21.0
++
 diff --git a/target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-leak.patch b/target/linux/mvebu/patches-4.14/9508-cpufreq-armada-37xx-Fix-clock-leak.patch
 similarity index 100%
 rename from target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-leak.patch
