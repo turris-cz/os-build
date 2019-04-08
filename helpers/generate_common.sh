@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 USIGN_VERSION=ef6419142a3b0fbcddcccf536e3c1880302c6f89
-UPDATER_VERSION=uri
+UPDATER_VERSION=master
 
 SRC_USIGN="https://git.openwrt.org/project/usign.git"
 SRC_UPDATER="https://gitlab.labs.nic.cz/turris/updater/updater.git"
@@ -72,7 +72,6 @@ get_usign() {
 # To be pedantic you should provide target board as second argument but if not
 # provided then mox is used.
 updater_ng_repodetect() {
-	return
 	local REPO="$1"
 	local BOARD="${2:-mox}"
 	local VERSION="$(curl "https://repo.turris.cz/$REPO/packages/$BOARD/turrispackages/Packages" | \
