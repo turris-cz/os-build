@@ -26,7 +26,6 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
  create mode 100644 target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
- create mode 100644 target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
  create mode 100644 target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
 diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
@@ -693,74 +692,6 @@ index 0000000000..0400c09ebc
 + static int fsl_elbc_chip_remove(struct fsl_elbc_mtd *priv)
 + {
 + 	struct fsl_elbc_fcm_ctrl *elbc_fcm_ctrl = priv->ctrl->nand;
-diff --git a/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch b/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
-new file mode 100644
-index 0000000000..fde37e772b
---- /dev/null
-+++ b/target/linux/mpc85xx/patches-4.19/232-net-dsa-qca8k-remove-leftover-phy-accessors.patch
-@@ -0,0 +1,62 @@
-+From 0b152d77f7aafd1a48291613a394f12cf514d7a9 Mon Sep 17 00:00:00 2001
-+From: Christian Lamparter <chunkeey@gmail.com>
-+Date: Fri, 22 Mar 2019 01:05:02 +0100
-+Subject: [PATCH 3/4] net: dsa: qca8k: remove leftover phy accessors
-+
-+This belated patch implements Andrew Lunn's request of
-+"remove the phy_read() and phy_write() functions."
-+<https://lore.kernel.org/patchwork/comment/902734/>
-+
-+While seemingly harmless, this causes the switch's user
-+port PHYs to get registered twice. This is because the
-+DSA subsystem will create a slave mdio-bus not knowing
-+that the qca8k_phy_(read|write) accessors operate on
-+the external mdio-bus. So the same "bus" gets effectively
-+duplicated.
-+
-+Cc: stable@vger.kernel.org
-+Fixes: 6b93fb46480a ("net-next: dsa: add new driver for qca8xxx family")
-+Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
-+---
-+ drivers/net/dsa/qca8k.c | 18 ------------------
-+ 1 file changed, 18 deletions(-)
-+
-+diff --git a/drivers/net/dsa/qca8k.c b/drivers/net/dsa/qca8k.c
-+index cdcde7f8e0b2..bdd8f2df6630 100644
-+--- a/drivers/net/dsa/qca8k.c
-++++ b/drivers/net/dsa/qca8k.c
-+@@ -620,22 +620,6 @@ qca8k_adjust_link(struct dsa_switch *ds, int port, struct phy_device *phy)
-+ 	qca8k_port_set_status(priv, port, 1);
-+ }
-+ 
-+-static int
-+-qca8k_phy_read(struct dsa_switch *ds, int phy, int regnum)
-+-{
-+-	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
-+-
-+-	return mdiobus_read(priv->bus, phy, regnum);
-+-}
-+-
-+-static int
-+-qca8k_phy_write(struct dsa_switch *ds, int phy, int regnum, u16 val)
-+-{
-+-	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
-+-
-+-	return mdiobus_write(priv->bus, phy, regnum, val);
-+-}
-+-
-+ static void
-+ qca8k_get_strings(struct dsa_switch *ds, int port, u32 stringset, uint8_t *data)
-+ {
-+@@ -876,8 +860,6 @@ static const struct dsa_switch_ops qca8k_switch_ops = {
-+ 	.setup			= qca8k_setup,
-+ 	.adjust_link            = qca8k_adjust_link,
-+ 	.get_strings		= qca8k_get_strings,
-+-	.phy_read		= qca8k_phy_read,
-+-	.phy_write		= qca8k_phy_write,
-+ 	.get_ethtool_stats	= qca8k_get_ethtool_stats,
-+ 	.get_sset_count		= qca8k_get_sset_count,
-+ 	.get_mac_eee		= qca8k_get_mac_eee,
-+-- 
-+2.19.2
-+
 diff --git a/target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch b/target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
 new file mode 100644
 index 0000000000..d5aca2e691
