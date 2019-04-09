@@ -17,9 +17,9 @@ end
 -- Note: this is named as model for backward compatibility with variable provided
 -- by updater version <63
 model = os.getenv('BOARD')
-if not board then
+if not model then
 	-- TODO we might ask interactively
-	DIE("Target board has to be provided by BOARD environment variable.")
+	DIE("Target model has to be provided by BOARD environment variable.")
 end
 Export('model')
 
