@@ -36,22 +36,6 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 	breaks otherwise.
 	]]
 
-else
-
-	function for_l10n(fragment)
-		-- Dummy function. Languages are ignored and installed later on.
-	end
-	Export('for_l10n')
-
-	-- We have not yet updated base-files so we do not have /etc/os-release
-	-- tos3to4.sh instead provides us with environment variable MODEL
-	model = os.getenv('MODEL')
-	Export('model')
-
-	-- Call base script to update rest of the base system
-	Script("base.lua")
-	-- TODO add package containing migration script
-
 end
 
 -- We are potentially migrating from uClibc so reinstall everything depending
