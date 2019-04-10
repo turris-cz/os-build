@@ -43,6 +43,11 @@ else
 	end
 	Export('for_l10n')
 
+	-- We have not yet updated base-files so we do not have /etc/os-release
+	-- tos3to4.sh instead provides us with environment variable MODEL
+	model = os.getenv('MODEL')
+	Export('model')
+
 	-- Call base script to update rest of the base system
 	Script("base.lua")
 	-- TODO add package containing migration script
