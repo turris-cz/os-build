@@ -29,14 +29,11 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 
 	Package('updater-ng', {
 		replan = 'immediate',
-		deps = { 'libgcc', 'base-files' }
+		deps = { 'libgcc' }
 	})
 	--[[
 	Updater package does not depend on libgcc but it requires it and dependency
 	breaks otherwise.
-
-	We also added base-files because that contains file /etc/os-release. We need
-	this file to detect target board (as a replacement to model variable).
 	]]
 
 else
