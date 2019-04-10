@@ -13,11 +13,3 @@ list_script('terminal-apps.lua')
 Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })
 
 _END_FEATURE_GUARD_
-
---[[
-We are migrating from uClibc to musl, so reinstall everything depending on libc.
-]]
-if installed['turris-version'] and version_match(installed['turris-version'].version, '<4.0') then
-	Package("libc", { abi_change_deep = true })
-	Package('updater-ng', { deps = { 'libgcc' } })
-end
