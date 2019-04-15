@@ -1,0 +1,69 @@
+From 4853f2000fa85c4522897f60cbabfe793dc33cc6 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 15 Apr 2019 15:31:04 +0200
+Subject: [PATCH] syslong-ng: rotate default log with logrotate
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This adds dependency on logrotate and configuration for logrotate. It is
+set to rotate log file weekly (default from logrotate) or if it exceeds
+10M. Number of preserved logs is limited to 4 from default logrotate
+configuration so this means that at most four weeks of backlog or 40M is
+preserved.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+---
+ admin/syslog-ng/Makefile             | 6 ++++--
+ admin/syslog-ng/files/logrotate.conf | 8 ++++++++
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+ create mode 100644 admin/syslog-ng/files/logrotate.conf
+
+diff --git a/admin/syslog-ng/Makefile b/admin/syslog-ng/Makefile
+index 98a743a74..401d33726 100644
+--- a/admin/syslog-ng/Makefile
++++ b/admin/syslog-ng/Makefile
+@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=syslog-ng
+ PKG_VERSION:=3.20.1
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ 
+ PKG_MAINTAINER:=Josef Schlehofer <josef.schlehofer@nic.cz>
+ PKG_LICENSE:=LGPL-2.1+
+@@ -25,7 +25,7 @@ include $(INCLUDE_DIR)/nls.mk
+ define Package/syslog-ng
+   SECTION:=admin
+   CATEGORY:=Administration
+-  DEPENDS:=+libpcre +glib2 +libopenssl +libpthread +librt +zlib +libdbi +libjson-c +libcurl +libuuid
++  DEPENDS:=+libpcre +glib2 +libopenssl +libpthread +librt +zlib +libdbi +libjson-c +libcurl +libuuid +logrotate
+   TITLE:=A powerful syslog daemon
+   URL:=https://www.syslog-ng.com/products/open-source-log-management/
+ endef
+@@ -85,6 +85,8 @@ define Package/syslog-ng/install
+ 	touch $(1)/etc/syslog-ng.d/.keep
+ 
+ 	$(INSTALL_BIN) ./files/logread $(1)/usr/sbin
++	$(INSTALL_DIR) $(1)/etc/logrotate.d
++	$(INSTALL_BIN) ./files/logrotate.conf $(1)/etc/logrotate.d/syslog-ng.conf
+ endef
+ 
+ define Package/syslog-ng/postinst
+diff --git a/admin/syslog-ng/files/logrotate.conf b/admin/syslog-ng/files/logrotate.conf
+new file mode 100644
+index 000000000..ce1e087c4
+--- /dev/null
++++ b/admin/syslog-ng/files/logrotate.conf
+@@ -0,0 +1,8 @@
++/var/log/messages {
++	maxsize 1M
++	compress
++	delaycompress
++	postrotate
++		/etc/init.d/syslog-ng restart
++	endscript
++}
+-- 
+2.21.0
+
