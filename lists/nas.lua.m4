@@ -42,7 +42,7 @@ Install("luci-mod-admin-full", { priority = 40 })
 _LUCI_I18N_(hd-idle, minidlna, samba)
 
 -- Encryption --
-Install("cryptsetup-openssl", "kmod-cryptodev", "kmod-crypto-user", { priority = 40 })
+Install("cryptsetup", "kmod-cryptodev", "kmod-crypto-user", { priority = 40 })
 forInstall(kmod-crypto,cbc,ctr,pcbc,des,ecb,xts)
 forInstall(kmod-crypto,cmac,crc32c,sha1,sha256,sha512,md4,md5,hmac)
 forInstall(kmod-crypto,seqiv,ccm,deflate)
