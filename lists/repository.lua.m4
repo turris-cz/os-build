@@ -1,6 +1,6 @@
 include(utils.m4)dnl Include utility macros
 
-local subdirs = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
+local feeds = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
 
 local rroot
 local optional_extra
@@ -15,7 +15,7 @@ if pkg_board == "turris1x" then
 	pkg_board = "turris"
 end
 
-for _, subdir in ipairs(subdirs) do
+for _, feed in ipairs(feeds) do
 	-- Standard Turris OS package repository
-	Repository("turris-" .. subdir, rroot .. "/packages/" .. pkg_board .. "/" .. subdir)
+	Repository(feed, rroot .. "/packages/" .. pkg_board .. "/" .. feed)
 end
