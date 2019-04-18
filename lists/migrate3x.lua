@@ -22,6 +22,7 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 	]]
 	-- TODO move it to hbs when we have v63.0 in hbs
 	Repository("turris", "https://repo.turris.cz/hbk/packages/" .. board, {
+		priority = 60,
 		subdirs = { "base", "core", "packages", "turrispackages"}
 	})
 
