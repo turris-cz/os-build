@@ -1,4 +1,4 @@
-From f7bd512a43117b45e4cad14c98c79b1f318860fa Mon Sep 17 00:00:00 2001
+From b7992270c264f04bbb48825e8a0ae84330491fee Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Wed, 17 Apr 2019 10:53:59 +0200
 Subject: [PATCH] ubus: force restart in case ubus is not able to communicate
@@ -9,7 +9,7 @@ communicate with running ubusd we have to restart ubusd to run new
 updated version. We are sure that we are running updated version after
 restart because it is a dependency of ubus it self so it is installed
 before it. We are not able to just reload it because ubus is run by
-procd and we are not able to reload pid 1. Fortunately procd restart
+procd and we are not able to reload pid 1. Fortunately procd restarts
 ubusd when it crashes. We can abuse that and restart it by killing it.
 This effectively reloads it.
 We don't want to do it on every update becuase killing ubus might have
@@ -34,17 +34,17 @@ few minutes long update this makes it few hours long update.
  1 file changed, 7 insertions(+)
 
 diff --git a/package/system/ubus/Makefile b/package/system/ubus/Makefile
-index 6653132351..5e20e6b67d 100644
+index ef492d2c65..4e44c8183f 100644
 --- a/package/system/ubus/Makefile
 +++ b/package/system/ubus/Makefile
-@@ -73,6 +73,13 @@ define Package/libubus-lua/install
+@@ -72,6 +72,13 @@ define Package/libubus-lua/install
  	$(CP) $(PKG_BUILD_DIR)/lua/ubus.so $(1)/usr/lib/lua/
  endef
  
 +define Package/ubus/postinst
 +[ -n "$${IPKG_INSTROOT}" ] || {
 +# Force restart of ubusd when ubus utility is no longer able to communicate with it
-+ubus list 2>/dev/null >&2 || killall ubusd
++ubus call system info 2>/dev/null >&2 || killall ubusd
 +}
 +endef
 +
