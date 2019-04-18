@@ -50,7 +50,7 @@ the same time this script is left out of all following updater executions becaus
 tos3to4 is going to be removed.
 ]]
 Install("tos3to4")
-Package("tos3to4", { replan = "later" })
+Package("tos3to4", { replan = "finished" })
 
 --[[
 We are potentially migrating from uClibc so reinstall everything depending on it.
