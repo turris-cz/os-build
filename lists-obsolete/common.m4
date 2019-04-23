@@ -15,8 +15,8 @@ if not board then
 end
 
 if features["relative_uri"] then
-	Script("../" .. board .. "/lists/patsubst(__file__, `\.m4$', `')")
+	Script("../" .. board .. "/lists/patsubst(__file__, `^.*/\([^/]*\)\.m4$', `\1')")
 else
-	Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/" .. board .. "/lists/patsubst(__file__, `\.m4$', `')")
+	Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/" .. board .. "/lists/patsubst(__file__, `^.*/\([^/]*\)\.m4$', `\1')")
 end
 ')dnl
