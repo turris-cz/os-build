@@ -13,16 +13,6 @@ if root_dir == "/" then
 	DIE("Bootstrap is not allowed on root.")
 end
 
--- Get target board
--- Note: this is named as model for backward compatibility with variable provided
--- by updater version <63
-model = os.getenv('BOARD')
-if not model then
-	-- TODO we might ask interactively
-	DIE("Target model has to be provided by BOARD environment variable.")
-end
-Export('model')
-
 -- Load requested localizations
 l10n = {}
 for lang in os.getenv('L10N'):gmatch('[^,]+') do
