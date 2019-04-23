@@ -1,4 +1,4 @@
-From e65d81fd006bd094f884efe9779b6b03817611fb Mon Sep 17 00:00:00 2001
+From 1ea0f7d48c5ea7d0888c45744ddfcaedce4625c8 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -136,9 +136,8 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-Add-Turris-Mox-rWTM-firmware-driver.patch | 454 +++++++++
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...64-restart-Armada-3700-restart-code.patch} |   6 +-
- ..._register_socket-call-from-sfp_remov.patch |  55 ++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 131 files changed, 14369 insertions(+), 322 deletions(-)
+ 130 files changed, 14314 insertions(+), 322 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -266,7 +265,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90125-ARM64-dts-marvell-Add-DTS-file-for-Turris-Mox.patch
  rename target/linux/mvebu/patches-4.14/{9999-arm64-restart-Armada-3700-restart-code.patch => 90126-arm64-restart-Armada-3700-restart-code.patch} (89%)
- create mode 100644 target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
  rename target/linux/mvebu/patches-4.14/{508-cpufreq-armada-37xx-Fix-clock-leak.patch => 9508-cpufreq-armada-37xx-Fix-clock-leak.patch} (100%)
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
@@ -16800,67 +16798,6 @@ index b442f71bee..112fbfc3c2 100644
 -2.19.2
 +2.21.0
  
-diff --git a/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch b/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
-new file mode 100644
-index 0000000000..adb024da43
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90127-net-sfp-move-sfp_register_socket-call-from-sfp_remov.patch
-@@ -0,0 +1,55 @@
-+From f71972752ee3252fc7bbf35a3401bb68ba057003 Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Fri, 5 Apr 2019 10:52:57 +0200
-+Subject: [PATCH 127/127] net: sfp: move sfp_register_socket call from
-+ sfp_remove to sfp_probe
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+Commit c4ba68b8691e4 backported from upstream to 4.14 stable was
-+probably applied wrongly, and instead of calling sfp_register_socket in
-+sfp_probe, the socket registering code was put into sfp_remove. This is
-+obviously wrong.
-+
-+The commit first appeared in 4.14.104. Fix it for the next 4.14 release.
-+
-+Fixes: c4ba68b8691e4 ("net: sfp: do not probe SFP module before we're attached")
-+Cc: stable <stable@vger.kernel.org>
-+Cc: Russell King <rmk+kernel@armlinux.org.uk>
-+Cc: David S. Miller <davem@davemloft.net>
-+Cc: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ drivers/net/phy/sfp.c | 8 ++++----
-+ 1 file changed, 4 insertions(+), 4 deletions(-)
-+
-+diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index ebb4cbd46bd9..1818c566f45a 100644
-+--- a/drivers/net/phy/sfp.c
-++++ b/drivers/net/phy/sfp.c
-+@@ -1129,6 +1129,10 @@ static int sfp_probe(struct platform_device *pdev)
-+ 	if (poll)
-+ 		mod_delayed_work(system_wq, &sfp->poll, poll_jiffies);
-+ 
-++	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
-++	if (!sfp->sfp_bus)
-++		return -ENOMEM;
-++
-+ 	return 0;
-+ }
-+ 
-+@@ -1138,10 +1142,6 @@ static int sfp_remove(struct platform_device *pdev)
-+ 
-+ 	sfp_unregister_socket(sfp->sfp_bus);
-+ 
-+-	sfp->sfp_bus = sfp_register_socket(sfp->dev, sfp, &sfp_module_ops);
-+-	if (!sfp->sfp_bus)
-+-		return -ENOMEM;
-+-
-+ 	return 0;
-+ }
-+ 
-+-- 
-+2.21.0
-+
 diff --git a/target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-leak.patch b/target/linux/mvebu/patches-4.14/9508-cpufreq-armada-37xx-Fix-clock-leak.patch
 similarity index 100%
 rename from target/linux/mvebu/patches-4.14/508-cpufreq-armada-37xx-Fix-clock-leak.patch
