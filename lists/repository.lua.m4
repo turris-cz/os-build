@@ -7,15 +7,14 @@ local optional_extra
 if features.relative_uri then
 	rroot = ".."
 else
-	rroot = repo_base_uri or "https://repo.turris.cz/hbs"
-end
-
-local pkg_board = board
-if pkg_board == "turris1x" then
-	pkg_board = "turris"
+	local pkg_board = board
+	if pkg_board == "turris1x" then
+		pkg_board = "turris"
+	end
+	rroot = repo_base_uri or "https://repo.turris.cz/hbs/" .. pkg_board
 end
 
 for _, feed in ipairs(feeds) do
 	-- Standard Turris OS package repository
-	Repository(feed, rroot .. "/packages/" .. pkg_board .. "/" .. feed)
+	Repository(feed, rroot .. "/packages/" .. feed)
 end
