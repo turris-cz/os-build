@@ -1,4 +1,4 @@
-From b07e9c9140e710d1b676c5372543952ce3680cba Mon Sep 17 00:00:00 2001
+From e65d81fd006bd094f884efe9779b6b03817611fb Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -53,7 +53,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...e-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} |  18 +-
  ...a-add-module-EEPROM-reading-support.patch} |  13 +-
  ...d-phy-remove-fixed_phy_update_state.patch} |  17 +-
- ...eprom-ethtool-access-into-netdev-co.patch} |  42 +-
+ ...eprom-ethtool-access-into-netdev-co.patch} |  38 +-
  ...p-use-netdev-sfp_bus-for-start-stop.patch} |   9 +-
  ...-marvell-10G-phy-support-to-use-SFP.patch} |  19 +-
  ...tch => 90047-sfp-add-sfp-compatible.patch} |  11 +-
@@ -138,7 +138,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...64-restart-Armada-3700-restart-code.patch} |   6 +-
  ..._register_socket-call-from-sfp_remov.patch |  55 ++
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 131 files changed, 14371 insertions(+), 324 deletions(-)
+ 131 files changed, 14369 insertions(+), 322 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -183,7 +183,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  rename target/linux/mvebu/patches-4.14/{405-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch => 90041-net-mvneta-disable-MVNETA_CAUSE_PSC_SYNC_CHANGE-inte.patch} (72%)
  rename target/linux/mvebu/patches-4.14/{406-net-mvneta-add-module-EEPROM-reading-support.patch => 90042-net-mvneta-add-module-EEPROM-reading-support.patch} (74%)
  rename target/linux/mvebu/patches-4.14/{407-phy-fixed-phy-remove-fixed_phy_update_state.patch => 90043-phy-fixed-phy-remove-fixed_phy_update_state.patch} (78%)
- rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (76%)
+ rename target/linux/mvebu/patches-4.14/{408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch => 90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch} (78%)
  rename target/linux/mvebu/patches-4.14/{409-sfp-use-netdev-sfp_bus-for-start-stop.patch => 90045-sfp-use-netdev-sfp_bus-for-start-stop.patch} (79%)
  rename target/linux/mvebu/patches-4.14/{410-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch => 90046-sfp-hack-allow-marvell-10G-phy-support-to-use-SFP.patch} (85%)
  rename target/linux/mvebu/patches-4.14/{411-sfp-add-sfp-compatible.patch => 90047-sfp-add-sfp-compatible.patch} (66%)
@@ -5096,10 +5096,10 @@ index 71c2f45555..c45f34d791 100644
 +2.21.0
 +
 diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-similarity index 76%
+similarity index 78%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index 540ef51ba4..df9c9c4157 100644
+index 1de8caab8b..d9c87ee622 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
@@ -5216,24 +5216,6 @@ index 540ef51ba4..df9c9c4157 100644
  --- a/net/core/ethtool.c
  +++ b/net/core/ethtool.c
  @@ -22,6 +22,7 @@
-@@ -159,7 +172,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  #include <linux/slab.h>
-  #include <linux/rtnetlink.h>
-  #include <linux/sched/signal.h>
--@@ -2190,6 +2191,9 @@ static int __ethtool_get_module_info(str
-+@@ -2190,6 +2191,9 @@ static int __ethtool_get_module_info(struct net_device *dev,
-  	const struct ethtool_ops *ops = dev->ethtool_ops;
-  	struct phy_device *phydev = dev->phydev;
-  
-@@ -169,7 +182,7 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
-  	if (phydev && phydev->drv && phydev->drv->module_info)
-  		return phydev->drv->module_info(phydev, modinfo);
-  
--@@ -2224,6 +2228,9 @@ static int __ethtool_get_module_eeprom(s
-+@@ -2224,6 +2228,9 @@ static int __ethtool_get_module_eeprom(struct net_device *dev,
-  	const struct ethtool_ops *ops = dev->ethtool_ops;
-  	struct phy_device *phydev = dev->phydev;
-  
 @@ -179,3 +192,6 @@ Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
   	if (phydev && phydev->drv && phydev->drv->module_eeprom)
   		return phydev->drv->module_eeprom(phydev, ee, data);
