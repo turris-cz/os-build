@@ -16,12 +16,18 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 		DIE("Unsupported Turris model: " .. tostring(model))
 	end
 
+	-- TODO move it to hbs when we have v63.0 in hbs
+	local branch = "hbk"
+	if board == "turris" then
+		-- Turris 1.x is only supported in HBK for now
+		branch = "hbd"
+	end
+
 	--[[
 	We provide access to only HBS repository and to only minimal set of feeds. We
 	don't need anything more to update updater.
 	]]
-	-- TODO move it to hbs when we have v63.0 in hbs
-	Repository("turris", "https://repo.turris.cz/hbk/packages/" .. board, {
+	Repository("turris", "https://repo.turris.cz/" .. branch .. "/packages/" .. board, {
 		priority = 60,
 		subdirs = { "base", "core", "packages", "turrispackages"}
 	})
