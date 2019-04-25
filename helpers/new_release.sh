@@ -21,7 +21,7 @@ set -e
 
 # Constants
 REPO="https://repo.turris.cz"
-BOARDS=('mox' 'omnia' 'turris')
+BOARDS=('mox' 'omnia' 'turris1x') # Note that first board in this is considered as primary (authoritative) one
 DEFAULT_VERIFY_BRANCH="hbk"
 DEFAULT_RELEASE_BRANCH="hbs"
 
@@ -71,12 +71,12 @@ fetch_files() {
 	FETCH_DIR="$(mktemp -d)"
 	GIT_HASH_LISTS="$FETCH_DIR/git-hash-lists"
 	GIT_HASH_PACKAGES="$FETCH_DIR/git-hash-packages"
-	VERSION_LISTS="$FETCH_DIR/version-lists"
+	TOS_VERSION="$FETCH_DIR/tos-version"
 
-	curl -s "$REPO/$branch/lists/git-hash" >"$GIT_HASH_LISTS"
-	curl -s "$REPO/$branch/lists/turris-version" >"$VERSION_LISTS"
 	for board in "${BOARDS[@]}"; do
-		curl -s "$REPO/$branch/packages/$board/git-hash" >"$GIT_HASH_PACKAGES-$board"
+		curl -s "$REPO/$branch/lists/turris-version" >"$TOS_VERSION-$board"
+		curl -s "$REPO/$branch/$board/lists/git-hash" >"$GIT_HASH_LISTS-$board"
+		curl -s "$REPO/$branch/$board/packages/git-hash" >"$GIT_HASH_PACKAGES-$board"
 	done
 }
 
@@ -87,13 +87,17 @@ git_hash() {
 }
 
 # Get turris-build hash
-# (version is primarily sourced from lists so consider lists as authoritative)
 tb_hash() {
 	local ec=0
-	local l_hash b_hash
-	l_hash="$(cat "$GIT_HASH_LISTS")"
+	local p_hash l_hash b_hash
 	for board in "${BOARDS[@]}"; do
+		l_hash="$(cat "$GIT_HASH_LISTS-$board")"
 		b_hash="$(git_hash "$board" "turris-build")"
+		[ -n "$p_hash" ] || p_hash="$l_hash" # First board is considered primary and lists are authoritative
+		[ "$p_hash" = "$l_hash" ] || {
+			error "Turris build used to generate lists is not same as for ${BOARDS[0]} board: $board ($l_hash / $p_hash)"
+			ec=1
+		}
 		[ "$b_hash" = "$l_hash" ] || {
 			error "Turris build used to generate lists is not same as for packages for board: $board ($l_hash / $b_hash)"
 			ec=1
@@ -106,17 +110,16 @@ tb_hash() {
 # Get hash for openwrt
 owrt_hash() {
 	local ec=0
-	local hsh="" t_hsh
-	# TODO this is not optimal and better would be to decide which is authoritative (newer?)
+	local p_hash t_hash
 	for board in "${BOARDS[@]}"; do
-		t_hsh="$(git_hash "$board" openwrt)"
-		[ -n "$hsh" ] || hsh="$t_hsh"
-		if [ "$t_hsh" != "$hsh" ]; then
-			error "Different OpenWRT commit build for board: $board ($hsh / $t_hsh)"
+		t_hash="$(git_hash "$board" openwrt)"
+		[ -n "$p_hash" ] || p_hash="$t_hash" # first board is primary one
+		[ "$p_hash" = "$t_hash" ] || {
+			error "Different OpenWRT commit build for board: $board ($t_hash / $p_hash)"
 			ec=1
-		fi
+		}
 	done
-	echo "$hsh"
+	echo "$p_hash"
 	return $ec
 }
 
@@ -124,16 +127,15 @@ owrt_hash() {
 # Caller should define associative array FEEDS
 feeds() {
 	local ec=0
-	# TODO this is not optimal and better would be to decide which is authoritative (newer?)
 	for board in "${BOARDS[@]}"; do
 		local lines feed hsh
 		lines="$(sed -En 's|^ \* feeds/([^:]+): ([^\s]+)|\1 \2|p' "$GIT_HASH_PACKAGES-$board")"
 		while read -r feed hsh; do
 			if [[ -v "FEEDS[$feed]" ]]; then
-				if [ "$hsh" != "${FEEDS["$feed"]}" ]; then
+				[ "$hsh" = "${FEEDS["$feed"]}" ] || {
 					error "Different feed ($feed) commit compiled for $board (${FEEDS["$feed"]} / $hsh)"
 					ec=1
-				fi
+				}
 			else
 				FEEDS["$feed"]="$hsh"
 			fi
