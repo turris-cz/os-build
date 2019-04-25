@@ -53,8 +53,6 @@ Install("updater-opkg-wrapper", { priority = 40 })
 Package('updater-opkg-wrapper', { replan = 'finished' })
 Package('localrepo', { replan = 'finished' })
 Package('switch-branch', { priority = 40 })
--- Package migration hack
-Install("oneshot")
 
 -- Utility
 Install("ip-full", "tc", "genl", "ip-bridge", "ss", "nstat", "devlink", "rdma", { priority = 40 })
