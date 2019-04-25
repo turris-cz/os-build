@@ -2,7 +2,6 @@ include(utils.m4)dnl Include utility macros
 _FEATURE_GUARD_
 
 Install("foris", "foris-diagnostics-plugin", "turris-webapps", "lighttpd-https-cert", { priority = 40 })
-Install("server-nouplink", { priority = 10 })
 if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n("foris-diagnostics-plugin-l10n-")
