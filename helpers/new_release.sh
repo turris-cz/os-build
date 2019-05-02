@@ -179,7 +179,7 @@ release() {
 	declare -A FEEDS
 	fetch_files "$branch"
 
-	tversion="$(cat "$VERSION_LISTS")"
+	tversion="$(cat "$TOS_VERSION-${BOARDS[0]}")"
 	target_hsh="$(tb_hash)" || ask "turris-build hashes do not match. Planning to use: $target_hsh"
 	owrt_hsh="$(owrt_hash)" || ask "openwrt hashes do not match. Planning to use: $owrt_hsh"
 	feeds || ask "feed hashes do not match. Please review difference."
