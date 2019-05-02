@@ -1,4 +1,4 @@
-From 54271a06157c37f177486d9a6c169efe5c9f5f5d Mon Sep 17 00:00:00 2001
+From 34f6bac83a383131c3e303c8248a4b58b30ad0a6 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 29 May 2018 16:13:18 +0200
 Subject: [PATCH] base-files: do not automatically activate services and
@@ -14,11 +14,33 @@ We also restart services when updated instead of just starting them.
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
 ---
+ package/base-files/Makefile                  | 10 ++++
  package/base-files/files/etc/services_wanted | 54 ++++++++++++++++++++
  package/base-files/files/lib/functions.sh    | 16 +++---
- 2 files changed, 64 insertions(+), 6 deletions(-)
+ 3 files changed, 74 insertions(+), 6 deletions(-)
  create mode 100644 package/base-files/files/etc/services_wanted
 
+diff --git a/package/base-files/Makefile b/package/base-files/Makefile
+index 2923a1c6ac..aef62219a7 100644
+--- a/package/base-files/Makefile
++++ b/package/base-files/Makefile
+@@ -195,6 +195,16 @@ define Package/base-files/install
+ 		$(VERSION_SED_SCRIPT) $(1)/etc/opkg/distfeeds.conf)
+ endef
+ 
++define Package/base-files/postinst
++[ -n "$$IPKG_INSTROOT" ] || {
++	while read L; do
++		if [ -f "/etc/init.d/$L" ]; then
++			"/etc/init.d/$L" enable
++		fi
++	done < /etc/services_wanted
++}
++endef
++
+ ifneq ($(DUMP),1)
+   -include $(PLATFORM_DIR)/base-files.mk
+   -include $(PLATFORM_SUBDIR)/base-files.mk
 diff --git a/package/base-files/files/etc/services_wanted b/package/base-files/files/etc/services_wanted
 new file mode 100644
 index 0000000000..5f613d4f47
@@ -108,5 +130,5 @@ index edce75e8ff..6bd07011cf 100755
  	done
  
 -- 
-2.20.1
+2.21.0
 
