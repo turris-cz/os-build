@@ -36,7 +36,7 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 
 	Package('updater-ng', {
 		replan = 'immediate',
-		deps = { 'libgcc', 'tos3to4-early', 'base-files' }
+		deps = { 'libgcc', 'tos3to4-early' }
 	})
 	--[[
 	Updater package does not depend on libgcc but it requires it and dependency
@@ -45,10 +45,6 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 	We added additional dependency in form of package tos3to4-early which contains
 	script to migrate updater configuration. That means that when new updater is
 	being installed the configuration is also migrated at the same time.
-
-	Additional dependency on base-files is there to ensure that all packages are
-	updaed with new base-files. Primarilly new /lib/functions.sh and
-	/etc/services_wanted.
 	]]
 
 end
