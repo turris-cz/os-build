@@ -1,0 +1,319 @@
+From 28a279ecd5aa259cadab486670877487c246d21c Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Fri, 3 May 2019 16:38:11 +0200
+Subject: [PATCH] lxc: Update and make it work somehow
+
+---
+ utils/lxc/Makefile                            | 36 ++++--------------
+ utils/lxc/files/systemd-workaround            |  4 ++
+ ...01-nl-avoid-NULL-pointer-dereference.patch | 37 -------------------
+ utils/lxc/patches/002-compile.patch           | 10 -----
+ utils/lxc/patches/003-compile.patch           | 11 ------
+ utils/lxc/patches/010-compile.patch           | 37 -------------------
+ utils/lxc/patches/020-lxc-checkconfig.patch   |  4 +-
+ .../025-remove-unsupported-option.patch       | 20 +++++-----
+ utils/lxc/patches/030-turris-servers.patch    |  6 +--
+ 9 files changed, 27 insertions(+), 138 deletions(-)
+ create mode 100644 utils/lxc/files/systemd-workaround
+ delete mode 100644 utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
+ delete mode 100644 utils/lxc/patches/002-compile.patch
+ delete mode 100644 utils/lxc/patches/003-compile.patch
+ delete mode 100644 utils/lxc/patches/010-compile.patch
+
+diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
+index 8f0798c..bbcae56 100644
+--- a/utils/lxc/Makefile
++++ b/utils/lxc/Makefile
+@@ -8,17 +8,16 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=lxc
+-PKG_VERSION:=2.1.1
+-PKG_RELEASE:=2
++PKG_VERSION:=3.0.3
++PKG_RELEASE:=0
+ 
+ PKG_LICENSE:=LGPL-2.1+ BSD-2-Clause GPL-2.0
+ PKG_MAINTAINER:=Marko Ratkaj <marko.ratkaj@sartura.hr>
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://linuxcontainers.org/downloads/lxc/
+-PKG_HASH:=68663a67450a8d6734e137eac54cc7077209fb15c456eec401a2c26e6386eff6
++PKG_HASH:=620cb832cc02c63bf4d330657bf6176544e145da281ee384a34d689635a19841
+ 
+-PKG_BUILD_DEPENDS:=lua
+ PKG_BUILD_PARALLEL:=1
+ 
+ PKG_INSTALL:=1
+@@ -127,12 +126,6 @@ define Package/liblxc
+   DEPENDS:= lxc +libcap +libpthread +LXC_SECCOMP:libseccomp
+ endef
+ 
+-define Package/lxc-lua
+-  $(call Package/lxc/Default)
+-  TITLE:=LXC Lua bindings
+-  DEPENDS:= lxc +liblua +liblxc
+-endef
+-
+ define Package/lxc-init
+   $(call Package/lxc/Default)
+   TITLE:=LXC Lua bindings
+@@ -144,8 +137,9 @@ CONFIGURE_ARGS += \
+ 	--disable-apparmor \
+ 	--disable-doc \
+ 	--disable-examples \
+-	--enable-lua=yes \
+-	--with-lua-pc="$(STAGING_DIR)/usr/lib/pkgconfig/lua.pc"
++	--with-distro=gentoo \
++	--with-runtime-path=/var/run \
++	--with-config-path=/srv/lxc
+ 
+ ifeq ($(CONFIG_LXC_SECCOMP),y)
+ CONFIGURE_ARGS += --enable-seccomp
+@@ -153,11 +147,6 @@ else
+ CONFIGURE_ARGS += --disable-seccomp
+ endif
+ 
+-MAKE_FLAGS += \
+-	LUA_INSTALL_CMOD="/usr/lib/lua" \
+-	LUA_INSTALL_LMOD="/usr/lib/lua"
+-
+-
+ define Build/InstallDev
+ 	$(INSTALL_DIR) $(1)/usr/include/lxc/
+ 	$(CP) \
+@@ -220,6 +209,7 @@ define Package/lxc-hooks/install
+ 	$(CP) \
+ 		$(PKG_INSTALL_DIR)/usr/share/lxc/hooks/* \
+ 		$(1)/usr/share/lxc/hooks/
++	$(INSTALL_BIN) files/systemd-workaround $(1)/usr/share/lxc/hooks/
+ endef
+ 
+ define Package/lxc-templates/install
+@@ -243,17 +233,6 @@ define Package/liblxc/install
+ 		$(1)/usr/lib/
+ endef
+ 
+-define Package/lxc-lua/install
+-	$(INSTALL_DIR) $(1)/usr/lib/lua
+-	$(CP) \
+-		$(PKG_INSTALL_DIR)/usr/share/lua/5.1/lxc.lua \
+-		$(1)/usr/lib/lua/
+-	$(INSTALL_DIR) $(1)/usr/lib/lua/lxc
+-	$(CP) \
+-		$(PKG_INSTALL_DIR)/usr/lib/lua/5.1/lxc/core.so \
+-		$(1)/usr/lib/lua/lxc/
+-endef
+-
+ define Package/lxc-init/install
+ 	$(INSTALL_DIR) $(1)/sbin
+ 	$(CP) \
+@@ -285,7 +264,6 @@ $(eval $(call BuildPackage,lxc-hooks))
+ $(eval $(call BuildPackage,lxc-configs))
+ $(eval $(call BuildPackage,lxc-templates))
+ $(eval $(call BuildPackage,liblxc))
+-$(eval $(call BuildPackage,lxc-lua))
+ $(eval $(call BuildPackage,lxc-init))
+ $(eval $(call BuildPackage,lxc-auto))
+ $(eval $(call BuildPackage,lxc-unprivileged))
+diff --git a/utils/lxc/files/systemd-workaround b/utils/lxc/files/systemd-workaround
+new file mode 100644
+index 0000000..2e343dc
+--- /dev/null
++++ b/utils/lxc/files/systemd-workaround
+@@ -0,0 +1,4 @@
++#!/bin/sh
++[ -d /sys/fs/cgroup/systemd ] || {
++mkdir /sys/fs/cgroup/systemd && mount -t cgroup -o none,name=systemd systemd /sys/fs/cgroup/systemd/
++}
+diff --git a/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch b/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
+deleted file mode 100644
+index 4c402a0..0000000
+--- a/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
++++ /dev/null
+@@ -1,37 +0,0 @@
+-From c8f05589644d6b719e5a2c7fc548604f248be9be Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
+-Date: Sun, 29 Jul 2018 17:44:06 +0200
+-Subject: [PATCH] nl: avoid NULL pointer dereference
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-It's a valid case to call nla_put() with NULL data and 0 len. It's done e.g. in
+-the nla_put_attr().
+-
+-There has to be a check for data in nla_put() as passing NULL to the memcpy()
+-is not allowed. Even if length is 0, both pointers have to be valid.
+-
+-For a reference see C99 standard (7.21.1/2), it says: "pointer arguments on
+-such a call shall still have valid values".
+-
+-Reported-by: Daniel Gimpelevich <daniel@gimpelevich.san-francisco.ca.us>
+-Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
+-[christian.brauner@ubuntu.com: adapted commit message]
+-Signed-off-by: Christian Brauner <christian.brauner@ubuntu.com>
+----
+- src/lxc/nl.c | 3 ++-
+- 1 file changed, 2 insertions(+), 1 deletion(-)
+-
+---- a/src/lxc/nl.c
+-+++ b/src/lxc/nl.c
+-@@ -61,7 +61,8 @@ static int nla_put(struct nlmsg *nlmsg,
+- 	rta = NLMSG_TAIL(nlmsg->nlmsghdr);
+- 	rta->rta_type = attr;
+- 	rta->rta_len = rtalen;
+--	memcpy(RTA_DATA(rta), data, len);
+-+	if (data && len)
+-+		memcpy(RTA_DATA(rta), data, len);
+- 	nlmsg->nlmsghdr->nlmsg_len = tlen;
+- 	return 0;
+- }
+diff --git a/utils/lxc/patches/002-compile.patch b/utils/lxc/patches/002-compile.patch
+deleted file mode 100644
+index 9a98777..0000000
+--- a/utils/lxc/patches/002-compile.patch
++++ /dev/null
+@@ -1,10 +0,0 @@
+---- a/src/lxc/storage/aufs.h
+-+++ b/src/lxc/storage/aufs.h
+-@@ -24,7 +24,6 @@
+- #ifndef __LXC_AUFS_H
+- #define __LXC_AUFS_H
+- 
+--#define _GNU_SOURCE
+- #include <stdbool.h>
+- #include <stdio.h>
+- #include <stdint.h>
+diff --git a/utils/lxc/patches/003-compile.patch b/utils/lxc/patches/003-compile.patch
+deleted file mode 100644
+index b26b78d..0000000
+--- a/utils/lxc/patches/003-compile.patch
++++ /dev/null
+@@ -1,11 +0,0 @@
+---- a/src/lxc/confile_utils.c
+-+++ b/src/lxc/confile_utils.c
+-@@ -677,7 +677,7 @@
+- 	char *endptr = NULL;
+- 
+- 	if (strncmp(*value, "unlimited", sizeof("unlimited") - 1) == 0) {
+--		*res = RLIM_INFINITY;
+-+		*res = (unsigned long)RLIM_INFINITY;
+- 		*value += sizeof("unlimited") - 1;
+- 		return true;
+- 	}
+diff --git a/utils/lxc/patches/010-compile.patch b/utils/lxc/patches/010-compile.patch
+deleted file mode 100644
+index 903e4cd..0000000
+--- a/utils/lxc/patches/010-compile.patch
++++ /dev/null
+@@ -1,37 +0,0 @@
+---- a/configure.ac
+-+++ b/configure.ac
+-@@ -47,34 +47,6 @@ AC_GNU_SOURCE
+- LT_INIT
+- AC_SUBST([LIBTOOL_DEPS])
+- 
+--# Detect the distribution. This is used for the default configuration and
+--# for some distro-specific build options.
+--AC_MSG_CHECKING([host distribution])
+--AC_ARG_WITH(distro, AS_HELP_STRING([--with-distro=DISTRO], [Specify the Linux distribution to target: One of redhat, oracle, centos, fedora, suse, gentoo, debian, arch, slackware, plamo, paldo, openmandriva, pardus, sparclinux, altlinux.]))
+--if type lsb_release >/dev/null 2>&1 && test "z$with_distro" = "z"; then
+--	with_distro=`lsb_release -is`
+--fi
+--if test "z$with_distro" = "z"; then
+--	AC_CHECK_FILE(/etc/redhat-release,with_distro="redhat")
+--	AC_CHECK_FILE(/etc/oracle-release,with_distro="oracle")
+--	AC_CHECK_FILE(/etc/sparclinux-release,with_distro="sparclinux")
+--	AC_CHECK_FILE(/etc/centos-release,with_distro="centos")
+--	AC_CHECK_FILE(/etc/fedora-release,with_distro="fedora")
+--	AC_CHECK_FILE(/etc/SuSE-release,with_distro="suse")
+--	AC_CHECK_FILE(/etc/gentoo-release,with_distro="gentoo")
+--	AC_CHECK_FILE(/etc/debian_version,with_distro="debian")
+--	AC_CHECK_FILE(/etc/arch-release,with_distro="arch")
+--	AC_CHECK_FILE(/etc/slackware-version,with_distro="slackware")
+--	AC_CHECK_FILE(/etc/plamo-version,with_distro="plamo")
+--	AC_CHECK_FILE(/etc/frugalware-release,with_distro="frugalware")
+--	AC_CHECK_FILE(/etc/mandrakelinux-release, with_distro="openmandriva")
+--	AC_CHECK_FILE(/etc/mandriva-release,with_distro="openmandriva")
+--	AC_CHECK_FILE(/etc/pardus-release,with_distro="pardus")
+--	AC_CHECK_FILE(/etc/altlinux-release,with_distro="altlinux")
+--	AC_CHECK_FILE(/etc/pld-release,with_distro="pld")
+--fi
+--with_distro=`echo ${with_distro} | tr '[[:upper:]]' '[[:lower:]]'`
+--
+- if test "z$with_distro" = "zforsparc"; then
+- 	with_distro="sparclinux"
+- fi
+diff --git a/utils/lxc/patches/020-lxc-checkconfig.patch b/utils/lxc/patches/020-lxc-checkconfig.patch
+index 0e644ea..79fb682 100644
+--- a/utils/lxc/patches/020-lxc-checkconfig.patch
++++ b/utils/lxc/patches/020-lxc-checkconfig.patch
+@@ -1,5 +1,5 @@
+---- a/src/lxc/tools/lxc-checkconfig.in
+-+++ b/src/lxc/tools/lxc-checkconfig.in
++--- a/src/lxc/cmd/lxc-checkconfig.in
+++++ b/src/lxc/cmd/lxc-checkconfig.in
+ @@ -3,6 +3,17 @@
+  # Allow environment variables to override config
+  : ${CONFIG:=/proc/config.gz}
+diff --git a/utils/lxc/patches/025-remove-unsupported-option.patch b/utils/lxc/patches/025-remove-unsupported-option.patch
+index b208708..4e7b584 100644
+--- a/utils/lxc/patches/025-remove-unsupported-option.patch
++++ b/utils/lxc/patches/025-remove-unsupported-option.patch
+@@ -1,15 +1,17 @@
+---- a/templates/lxc-download.in
+-+++ b/templates/lxc-download.in
+-@@ -505,20 +505,7 @@ fi
++Index: lxc-3.0.3/templates/lxc-download.in
++===================================================================
++--- lxc-3.0.3.orig/templates/lxc-download.in
+++++ lxc-3.0.3/templates/lxc-download.in
++@@ -500,20 +500,7 @@ fi
+  # Unpack the rootfs
+  echo "Unpacking the rootfs"
+  
+ -EXCLUDES=""
+ -excludelist=$(relevant_file excludes)
+ -if [ -f "${excludelist}" ]; then
+--    while read -r line; do
+--        EXCLUDES="${EXCLUDES} --exclude=${line}"
+--    done < "${excludelist}"
++-  while read -r line; do
++-    EXCLUDES="${EXCLUDES} --exclude=${line}"
++-  done < "${excludelist}"
+ -fi
+ -
+ -# Do not surround ${EXCLUDES} by quotes. This does not work. The solution could
+@@ -17,8 +19,8 @@
+ -# is to use a function wrapper, but the latter can't be used here as the args
+ -# are dynamic. We thus need to ignore the warning brought by shellcheck.
+ -# shellcheck disable=SC2086
+--tar  --anchored ${EXCLUDES} --numeric-owner -xpJf \
+-+tar --numeric-owner -xpJf \
+-     "${LXC_CACHE_PATH}/rootfs.tar.xz" -C "${LXC_ROOTFS}"
++-tar  --anchored ${EXCLUDES} --numeric-owner -xpJf "${LXC_CACHE_PATH}/rootfs.tar.xz" -C "${LXC_ROOTFS}"
+++tar --numeric-owner -xpJf "${LXC_CACHE_PATH}/rootfs.tar.xz" -C "${LXC_ROOTFS}"
+  
+  mkdir -p "${LXC_ROOTFS}/dev/pts/"
++ 
+diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
+index a674b3f..0f351ea 100644
+--- a/utils/lxc/patches/030-turris-servers.patch
++++ b/utils/lxc/patches/030-turris-servers.patch
+@@ -8,9 +8,9 @@ Index: lxc-2.1.1/config/etc/default.conf.unknown
+ +lxc.net.0.link = br-lan
+ +lxc.net.0.flags = up
+ +lxc.net.0.name = eth0
+-+# Debian workaround
+-+lxc.tty.max = 4
+-+lxc.pty.max = 1024
+++# Some workarounds
+++lxc.include = /usr/share/lxc/config/common.conf
+++lxc.hook.start-host = /usr/share/lxc/hooks/systemd-workaround
+ +# Template to generate fixed MAC address
+ +lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
+ Index: lxc-2.1.1/templates/lxc-download.in
+-- 
+2.21.0
+
