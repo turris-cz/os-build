@@ -70,15 +70,18 @@ mkdir -p "$output_path"
 "$tb/helpers/turris-version.sh" version > "$output_path/turris-version"
 ( cd "$tb" && git rev-parse HEAD > "$output_path/git-hash" )
 
-m4args=( "--include=$tb/lists$obsolete" "-D_INCLUDE_=$tb/lists$obsolete/" "-D_FEEDS_=$tb/feeds.conf" )
+listsdir="$tb/lists$obsolete"
+m4args=( "--include=$listsdir" "-D_INCLUDE_=$listsdir/" "-D_FEEDS_=$tb/feeds.conf" )
 
-for f in "$tb"/lists$obsolete/*.lua.m4; do
-	[ -f "$f" ] || continue
-	m4 "${m4args[@]}" "$f" > "$output_path/$(basename "$f" | sed s/\.m4$//)"
+find "$listsdir" -name '*.lua.m4' -print0 | while read -r -d '' f; do
+	output="$output_path/${f##$listsdir/}"
+	mkdir -p "${output%/*}"
+	m4 "${m4args[@]}" "$f" > "${output%.m4}"
 done
-for f in "$tb"/lists$obsolete/*.lua; do
-	[ -f "$f" ] || continue
-	cp "$f" "$output_path/$(basename "$f")"
+find "$listsdir" -name '*.lua' -print0 | while read -r -d '' f; do
+	output="$output_path/${f##$listsdir/}"
+	mkdir -p "${output%/*}"
+	cp "$f" "${output}"
 done
 
 if [ -n "$sign_key" ]; then
