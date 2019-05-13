@@ -1,4 +1,4 @@
-From 05b2e751c579ed303270b1add2d3d4f70a2792d0 Mon Sep 17 00:00:00 2001
+From c59526219dfbefd7c4accdd749921eb0f52413d0 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 27 Dec 2017 17:19:45 +0100
 Subject: [PATCH] kernel: Add Turris 1.X support
@@ -12,35 +12,20 @@ some polishing.
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
- target/linux/mpc85xx/Makefile                 |   2 +-
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-4.14              |   3 +
  .../arch/powerpc/boot/dts/turris-nand-bch.dts |  27 ++
  .../arch/powerpc/boot/dts/turris.dtsi         | 322 ++++++++++++++++++
  target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
  ...sl_elbc-add-support-for-software-ecc.patch | 223 ++++++++++++
- ...-qca8k-remove-leftover-phy-accessors.patch |  62 ++++
  ...a8k-extend-slave-bus-implementations.patch | 235 +++++++++++++
- 9 files changed, 906 insertions(+), 1 deletion(-)
+ 7 files changed, 843 insertions(+)
  create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris-nand-bch.dts
  create mode 100644 target/linux/mpc85xx/files-4.19/arch/powerpc/boot/dts/turris.dtsi
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
  create mode 100644 target/linux/mpc85xx/patches-4.19/230-mtd-rawnand-fsl_elbc-add-support-for-software-ecc.patch
  create mode 100644 target/linux/mpc85xx/patches-4.19/233-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
-diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
-index 370ef81f15..dd24729d33 100644
---- a/target/linux/mpc85xx/Makefile
-+++ b/target/linux/mpc85xx/Makefile
-@@ -14,7 +14,7 @@ FEATURES:=squashfs ramdisk
- MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
- SUBTARGETS:=generic p1020 p2020
- 
--KERNEL_PATCHVER:=4.14
-+KERNEL_PATCHVER:=4.19
- 
- KERNELNAME:=zImage
- 
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 index d6b4eebf14..53a92bf341 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
@@ -57,10 +42,10 @@ index d6b4eebf14..53a92bf341 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
-index f057e5c910..79480d72da 100644
+index f2337210d4..ce953e4532 100644
 --- a/target/linux/mpc85xx/config-4.14
 +++ b/target/linux/mpc85xx/config-4.14
-@@ -370,3 +370,6 @@ CONFIG_WATCHDOG_CORE=y
+@@ -363,3 +363,6 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XPS_USB_HCD_XILINX is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
