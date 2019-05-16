@@ -14,3 +14,6 @@ for _, feed in ipairs(feeds) do
 	-- Standard Turris OS package repository
 	Repository(feed, rroot .. "/packages/" .. feed)
 end
+
+INFO("Target Turris OS: _TURRIS_OS_VERSION_")
+DBG("Current Turris OS: " .. tostring(os_release.VERSION))
