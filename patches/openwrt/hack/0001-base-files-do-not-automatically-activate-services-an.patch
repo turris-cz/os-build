@@ -1,4 +1,4 @@
-From 6d58509233d21545427431455e5f6bb16ba87f54 Mon Sep 17 00:00:00 2001
+From 320514cb6417b3eb237b127b298f799fb518d1dc Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 29 May 2018 16:13:18 +0200
 Subject: [PATCH] base-files: do not automatically activate services and
@@ -14,22 +14,23 @@ We also restart services when updated instead of just starting them.
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
 ---
- package/base-files/Makefile                  | 10 ++++
+ package/base-files/Makefile                  | 11 ++++
  package/base-files/files/etc/services_wanted | 54 ++++++++++++++++++++
  package/base-files/files/lib/functions.sh    | 16 +++---
- 3 files changed, 74 insertions(+), 6 deletions(-)
+ 3 files changed, 75 insertions(+), 6 deletions(-)
  create mode 100644 package/base-files/files/etc/services_wanted
 
 diff --git a/package/base-files/Makefile b/package/base-files/Makefile
-index 2923a1c6ac..9eb020fa9f 100644
+index 2923a1c6ac..f96228aacd 100644
 --- a/package/base-files/Makefile
 +++ b/package/base-files/Makefile
-@@ -195,6 +195,16 @@ define Package/base-files/install
+@@ -195,6 +195,17 @@ define Package/base-files/install
  		$(VERSION_SED_SCRIPT) $(1)/etc/opkg/distfeeds.conf)
  endef
  
 +define Package/base-files/postinst
 +[ -n "$$IPKG_INSTROOT" ] || {
++	# Enable wanted services
 +	while read L; do
 +		if [ -f "/etc/init.d/$$L" ]; then
 +			"/etc/init.d/$$L" enable
@@ -43,7 +44,7 @@ index 2923a1c6ac..9eb020fa9f 100644
    -include $(PLATFORM_SUBDIR)/base-files.mk
 diff --git a/package/base-files/files/etc/services_wanted b/package/base-files/files/etc/services_wanted
 new file mode 100644
-index 0000000000..5f613d4f47
+index 0000000000..96ddfb2d6e
 --- /dev/null
 +++ b/package/base-files/files/etc/services_wanted
 @@ -0,0 +1,54 @@
@@ -101,7 +102,6 @@ index 0000000000..5f613d4f47
 +urandom_seed
 +usbmode
 +watchdog_adjust
-+zram
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
 index edce75e8ff..6bd07011cf 100755
 --- a/package/base-files/files/lib/functions.sh
