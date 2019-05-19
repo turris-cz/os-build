@@ -62,7 +62,7 @@ define Package/turris-version/postinst
 #!/bin/sh
 # Danger: spaces are not ordinary spaces, but special unicode ones
 [ -n "\$\$IPKG_INSTROOT" ] || {
-create_notification -s news "$(news_text | sed 's/"/\\"/')"
+create_notification -s news "$(news_text | sed 's/"/\\"/g')"
 }
 endef
 
