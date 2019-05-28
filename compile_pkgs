@@ -75,7 +75,6 @@ openwrt_feed() {
 # Configuration variables
 . "$src_dir/defaults.sh"
 FORCE="" # Force build
-EVERYTHING="" # Set this variable to build all packages not only minimal set
 CLONE_DEEP="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
 BUILD_ARGS=() # Additional arguments passed to OpenWRT make call (note that this is for all make calls in OpenWRT)
 BUILD_JOBS="$(nproc)" # Number of jobs to be passed to make calls
@@ -188,8 +187,6 @@ available_commands+=( ["configure"]="Recreates configuration for target boards" 
 configure() {
 	_report "Creating default configuration"
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
-	local everything
-	[ "$EVERYTHING" = yes ] && everything=y || everything=n
 	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
 	{
 		echo "CONFIG_DEVEL=y"
@@ -201,8 +198,8 @@ configure() {
 		echo "CONFIG_VERSION_HOME_URL=\"https://www.turris.cz/\""
 		echo "CONFIG_VERSION_BUG_URL=\"https://gitlab.labs.nic.cz/groups/turris/-/issues\""
 		echo "CONFIG_VERSION_SUPPORT_URL=\"https://www.turris.cz/support/\""
-		echo "CONFIG_ALL_KMODS=$everything"
-		echo "CONFIG_ALL=$everything"
+		echo "CONFIG_ALL_KMODS=y"
+		echo "CONFIG_ALL=y"
 	} >> .config
 	_make defconfig diffconfig
 	OPENWRT_ARCH="$(sed -n 's|^CONFIG_TARGET_BOARD="\([^"]*\)"|\1|p' .config)"
@@ -562,7 +559,6 @@ print_help() {
 	echo "Compile TurrisOS packages. This script fetches, patches and configures OpenWRT tree."
 	echo
 	echo "Primary options:"
-	echo "	-e		Build everything, not just minimal set"
 	echo "	-t BOARD	Set target board to BOARD. This is required for almost all commands."
 	echo "	-jNUM		Number of jobs in paralel to be run. In default number of CPUs is used."
 	echo "	-a ARG		Add build arguments - passed directly to make. This option can be specified multiple times."
@@ -591,7 +587,7 @@ steps=()
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-e)
-			EVERYTHING="yes"
+			echo "-e option is obsoleted and execution now always runs as with this option." >&2
 			;;
 		-j*)
 			BUILD_JOBS="${1#-j}"
@@ -647,8 +643,9 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
+[ "$(id -u)" != 0 ] || _die "Build should not be run under root!"
 
+[ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
 for step in "${steps[@]}"; do
 	"$step"
 done
