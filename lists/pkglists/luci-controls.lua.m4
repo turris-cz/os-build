@@ -1,7 +1,7 @@
 include(utils.m4)dnl Include utility macros
 _FEATURE_GUARD_
 
-forInstall(luci-app,ahcp,firewall,minidlna,mjpg-streamer,statistics,tinyproxy,transmission,upnp)
+forInstall(luci-app,ahcp,adblock,bcp38,firewall,minidlna,mjpg-streamer,sqm,statistics,tinyproxy,transmission,upnp)
 forInstall(luci-proto,openconnect,relay,vpnc)
 Install("luci-theme-bootstrap", { priority = 40 })
 if board == "omnia" or board == "turris1x" then
