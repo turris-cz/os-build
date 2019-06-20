@@ -50,6 +50,22 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 end
 
 --[[
+Ubus is used by init scripts to communicate with procd. The problem this creates
+is that new version of ubus is unable to communicate with old ubusd. This means
+that we have restart ubusd as soon as possible. We do it in postinst of ubus
+package but there can be multiple service restarts before that and every such call
+to ubus takes few minutes because of ubus timeouts. It also causes action to not
+be executed. This uses replan to trick updater to update ubus as soon as possible
+without updating anything else. First updater is updated. Then ubus is updated and
+then rest of the system.
+]]
+if version_match and installed and installed["ubus"]  and
+		version_match(self_version, ">=63.0") and
+		version_match(installed["ubus"].version, "<2018") then
+	Package("ubus", { replan = 'immediate' })
+end
+
+--[[
 This same package as in Turris OS 3.x which contains script pulling in this
 script. The difference is that Turris OS 4.x contains version 2.x of this package
 to ensure update and that it does not contain noted script. Instead it contains
