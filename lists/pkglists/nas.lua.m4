@@ -25,15 +25,6 @@ Install("blockd" , "smartd", "smartmontools", { priority = 40 })
 Install("swap-utils", { priority = 40 })
 Install("foris-storage-plugin", { priority = 40 })
 
--- Additional software available from storage plugin --
-if uci then
-    local cursor = uci.cursor()
-    nextcloud = cursor:get("storage", "software", "nextcloud")
-    if nextcloud and nextcloud == "1" then
-        Install("nextcloud-install")
-    end
-end
-
 -- File systems
 Install("lvm2", "mdadm", "dosfstools", "mkhfs", "btrfs-progs", "davfs2", "e2fsprogs", "fuse-utils", "xfs-mkfs", { priority = 40 })
 Install("block-mount", "badblocks", "cifsmount", "hfsfsck", "xfs-fsck", "xfs-growfs", { priority = 40 })
