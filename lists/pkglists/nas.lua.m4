@@ -23,7 +23,6 @@ Install("fdisk", "cfdisk", "hdparm", "resize2fs", "partx-utils", { priority = 40
 Install("acl", "attr", { priority = 40 })
 Install("blockd" , "smartd", "smartmontools", { priority = 40 })
 Install("swap-utils", { priority = 40 })
-Install("foris-storage-plugin", { priority = 40 })
 
 -- File systems
 Install("lvm2", "mdadm", "dosfstools", "mkhfs", "btrfs-progs", "davfs2", "e2fsprogs", "fuse-utils", "xfs-mkfs", { priority = 40 })
