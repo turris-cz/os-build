@@ -1,4 +1,4 @@
-From 465edd0b26ed57f1d7024b7d5f59a57aac1c6f7a Mon Sep 17 00:00:00 2001
+From 8d8468a921f83716bfdebd21b44273723a8cf9d0 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -107,7 +107,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...x-link-mv88e6xxx_port-to-mv88e6xxx_c.patch |  48 +
  ...x-Add-SERDES-phydev_mac_change-up-fo.patch | 361 +++++++
  ...x-Re-setup-interrupts-on-CMODE-chang.patch | 108 ++
- ...e6xxx-Poll-when-no-interrupt-defined.patch | 249 +++++
+ ...e6xxx-Poll-when-no-interrupt-defined.patch | 253 +++++
  ...mv88e6xxx-Add-missing-g1-IRQ-numbers.patch |  41 +
  ...v88e6xxx-Add-number-of-internal-PHYs.patch | 257 +++++
  ...x-Add-MDIO-interrupts-for-internal-P.patch | 135 +++
@@ -137,7 +137,7 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  ...-marvell-Add-DTS-file-for-Turris-Mox.patch | 931 ++++++++++++++++++
  ...64-restart-Armada-3700-restart-code.patch} |   6 +-
  ...-cpufreq-armada-37xx-Fix-clock-leak.patch} |   0
- 130 files changed, 14295 insertions(+), 307 deletions(-)
+ 130 files changed, 14299 insertions(+), 307 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -4226,7 +4226,7 @@ diff --git a/target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.p
 similarity index 92%
 rename from target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.patch
 rename to target/linux/mvebu/patches-4.14/90039-net-mvneta-convert-to-phylink.patch
-index 577317a..a809027 100644
+index 34a2d34..3827dc0 100644
 --- a/target/linux/mvebu/patches-4.14/403-net-mvneta-convert-to-phylink.patch
 +++ b/target/linux/mvebu/patches-4.14/90039-net-mvneta-convert-to-phylink.patch
 @@ -1,7 +1,7 @@
@@ -11261,11 +11261,11 @@ index 0000000..de3ab34
 +
 diff --git a/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch b/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch
 new file mode 100644
-index 0000000..81bb0e2
+index 0000000..80aa5c0
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90098-net-dsa-mv88e6xxx-Poll-when-no-interrupt-defined.patch
-@@ -0,0 +1,249 @@
-+From dbf391453f922c1fba9f1cbefe72f1a334c7825e Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,253 @@
++From a588f1ac00ef32d64f24b142b47d1b410fb879fb Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
 +Date: Thu, 22 Feb 2018 22:58:32 +0100
 +Subject: [PATCH 098/127] net: dsa: mv88e6xxx: Poll when no interrupt defined
@@ -11290,12 +11290,12 @@ index 0000000..81bb0e2
 +Signed-off-by: Andrew Lunn <andrew@lunn.ch>
 +Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
-+ drivers/net/dsa/mv88e6xxx/chip.c | 124 +++++++++++++++++++++++--------
++ drivers/net/dsa/mv88e6xxx/chip.c | 126 +++++++++++++++++++++++--------
 + drivers/net/dsa/mv88e6xxx/chip.h |   3 +
-+ 2 files changed, 96 insertions(+), 31 deletions(-)
++ 2 files changed, 97 insertions(+), 32 deletions(-)
 +
 +diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index 78a436f0cb54..0bf5de536880 100644
++index 78a436f0cb54..2c1d77785c1e 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
 +@@ -252,9 +252,8 @@ static void mv88e6xxx_g1_irq_unmask(struct irq_data *d)
@@ -11473,8 +11473,12 @@ index 0000000..81bb0e2
 + 	}
 + 
 + 	err = mv88e6xxx_mdios_register(chip, np);
-+@@ -4358,11 +4419,12 @@ static int mv88e6xxx_probe(struct mdio_device *mdiodev)
-+ 	if (chip->info->g2_irqs > 0 && chip->irq > 0)
++@@ -4355,14 +4416,15 @@ static int mv88e6xxx_probe(struct mdio_device *mdiodev)
++ out_mdio:
++ 	mv88e6xxx_mdios_unregister(chip);
++ out_g2_irq:
++-	if (chip->info->g2_irqs > 0 && chip->irq > 0)
+++	if (chip->info->g2_irqs > 0)
 + 		mv88e6xxx_g2_irq_free(chip);
 + out_g1_irq:
 +-	if (chip->irq > 0) {
