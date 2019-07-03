@@ -1,4 +1,4 @@
-From 806b4ee8716ca47130bf88cb9515b1e72aebd7f1 Mon Sep 17 00:00:00 2001
+From b34c11ad7d871f7ab63274bce8e5b913365f6290 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 27 Dec 2017 17:19:45 +0100
 Subject: [PATCH] kernel: Add Turris 1.X support
@@ -11,21 +11,23 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  target/linux/mpc85xx/Makefile                 |   4 +-
  .../mpc85xx/base-files/etc/board.d/02_network |   6 +
  target/linux/mpc85xx/config-4.14              | 375 ++++++++++++++++++
- .../arch/powerpc/boot/dts/turris.dts          | 252 ++++++++++++
+ .../arch/powerpc/boot/dts/turris.dts          | 296 ++++++++++++++
  target/linux/mpc85xx/p2020/config-default     | 101 +++++
  target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
  target/linux/mpc85xx/p2020/target.mk          |   6 +
  ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 +++++++++++
- 8 files changed, 998 insertions(+), 2 deletions(-)
+ ...a8k-extend-slave-bus-implementations.patch | 243 ++++++++++++
+ 9 files changed, 1285 insertions(+), 2 deletions(-)
  create mode 100644 target/linux/mpc85xx/config-4.14
  create mode 100644 target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
  create mode 100644 target/linux/mpc85xx/p2020/config-default
  create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
  create mode 100644 target/linux/mpc85xx/p2020/target.mk
  create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
 diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
-index b181e67c0e..924572b1de 100644
+index b181e67..924572b 100644
 --- a/target/linux/mpc85xx/Makefile
 +++ b/target/linux/mpc85xx/Makefile
 @@ -12,9 +12,9 @@ BOARDNAME:=Freescale MPC85xx
@@ -41,7 +43,7 @@ index b181e67c0e..924572b1de 100644
  KERNELNAME:=zImage
  
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index 19f01a6589..7679728294 100755
+index 19f01a6..7679728 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -18,6 +18,12 @@ tplink,tl-wdr4900-v1)
@@ -59,7 +61,7 @@ index 19f01a6589..7679728294 100755
  	;;
 diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
 new file mode 100644
-index 0000000000..79480d72da
+index 0000000..79480d7
 --- /dev/null
 +++ b/target/linux/mpc85xx/config-4.14
 @@ -0,0 +1,375 @@
@@ -440,10 +442,10 @@ index 0000000000..79480d72da
 +CONFIG_VGACON_SOFT_SCROLLBACK=n
 diff --git a/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
 new file mode 100644
-index 0000000000..5c5555fde9
+index 0000000..b5128a3
 --- /dev/null
 +++ b/target/linux/mpc85xx/files-4.14/arch/powerpc/boot/dts/turris.dts
-@@ -0,0 +1,252 @@
+@@ -0,0 +1,296 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
@@ -470,7 +472,7 @@ index 0000000000..5c5555fde9
 +		pci0 = &pci0;
 +		pci1 = &pci1;
 +		pci2 = &pci2;
-+                spi0 = &spi0;
++		spi0 = &spi0;
 +	};
 +
 +	memory {
@@ -484,71 +486,98 @@ index 0000000000..5c5555fde9
 +		ranges = <0x0 0x0 0x0 0xef000000 0x01000000
 +			  0x1 0x0 0x0 0xff800000 0x00040000
 +			  0x2 0x0 0x0 0xffb00000 0x00020000>;
-+		
++
 +		nor@0,0 {
-+                        #address-cells = <1>;
-+                        #size-cells = <1>;
-+                        compatible = "cfi-flash";
-+                        reg = <0x0 0x0 0x1000000>;
-+                        bank-width = <2>;
-+                        device-width = <1>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			compatible = "cfi-flash";
++			reg = <0x0 0x0 0x1000000>;
++			bank-width = <2>;
++			device-width = <1>;
 +
-+                        partition@0 {
-+                                /* 128KB for DTB Image */
-+                                reg = <0x0 0x00020000>;
-+                                label = "NOR (RO) DTB Image";
-+                        };
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
 +
-+                        partition@20000 {
-+                                /* 1.7 MB for Linux Kernel Image */
-+                                reg = <0x00020000 0x1A0000>;
-+                                label = "NOR (RO) Linux Kernel Image";
-+                        };
++				partition@0 {
++					/* 128KB for DTB Image */
++					reg = <0x0 0x00020000>;
++					label = "NOR (RO) DTB Image";
++				};
 +
-+                        partition@1C0000 {
-+                                /* 1.5 MB for JFFS2 based Root file System */
-+                                reg = <0x001C0000 0x180000>;
-+                                label = "NOR (RO) JFFS2 Root File System";
-+                        };
++				partition@20000 {
++					/* 1.7 MB for Linux Kernel Image */
++					reg = <0x00020000 0x1A0000>;
++					label = "NOR (RO) Linux Kernel Image";
++				};
 +
-+                        partition@340000 {
-+                                /* for nand fw backup */
-+                                reg = <0x00340000 0xb00000>;
-+                                label = "NOR (RO) NAND FW backup";
-+                        };
++				partition@1C0000 {
++					/* 1.5 MB for JFFS2 based Root file System */
++					reg = <0x001C0000 0x180000>;
++					label = "NOR (RO) JFFS2 Root File System";
++				};
 +
-+                        partition@E40000 {
-+                                /* 128KB for Certificates backup */
-+                                reg = <0xE40000 0x000C0000>;
-+                                label = "NOR (RW) Cert backup";
-+                        };
++				partition@340000 {
++					/* for nand fw backup */
++					reg = <0x00340000 0xb00000>;
++					label = "NOR (RO) NAND FW backup";
++				};
 +
-+                        partition@f00000 {
-+                                /* This location must not be altered  */
-+                                /* 512KB for u-boot Bootloader Image */
-+                                /* 512KB for u-boot Environment Variables */
-+                                reg = <0x00f00000 0x00100000>;
-+                                label = "NOR (RO) U-Boot Image";
-+                        };
-+                };
-+	
++				partition@E40000 {
++					/* 128KB for Certificates backup */
++					reg = <0xE40000 0x000C0000>;
++					label = "NOR (RW) Cert backup";
++				};
++
++				partition@f00000 {
++					/* This location must not be altered  */
++					/* 512KB for u-boot Bootloader Image */
++					/* 512KB for u-boot Environment Variables */
++					reg = <0x00f00000 0x00100000>;
++					label = "NOR (RO) U-Boot Image";
++				};
++			};
++		};
++
 +		nand@1,0 {
 +			#address-cells = <1>;
 +			#size-cells = <1>;
 +			compatible = "fsl,p2020-fcm-nand",
 +				     "fsl,elbc-fcm-nand";
 +			reg = <0x1 0x0 0x00040000>;
-+			nand-ecc-mode = "soft_bch";
-+			nand-ecc-step-size = <512>;
-+			nand-ecc-strength = <4>; 
++			nand-ecc-mode = "soft";
++			nand-ecc-algo = "bch";
 +
-+			partition@00 {
-+				reg = <0x00000000 0x10000000>;
-+				label = "rootfs-ubifs";
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				partition@0 {
++					/* 2MB for DTB Image */
++					reg = <0x00000000 0x00200000>;
++					label = "NAND (RW) DTB Image";
++				};
++
++				partition@200000 {
++					/* 5MB for Linux Kernel Image */
++					reg = <0x00200000 0x00500000>;
++					label = "NAND (RW) Linux Kernel Image";
++				};
++
++				partition@700000 {
++					/* 249MB for JFFS2 based Root file System */
++					reg = <0x00700000 0xF900000>;
++					label = "NAND (RW) JFFS2 Root File System";
++				};
++
++				partition@00 {
++					reg = <0x00000000 0x10000000>;
++					label = "rootfs-ubifs";
++				};
 +			};
-+
 +		};
-+
 +	};
 +
 +	soc: soc@ffe00000 {
@@ -565,64 +594,74 @@ index 0000000000..5c5555fde9
 +			};
 +		};
 +
-+                spi0: spi@7000 {
-+                        spidev@0 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <0>;
-+                        };
-+                        spidev@1 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <1>;
-+                        };
-+                        spidev@2 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <2>;
-+                        };
-+                        spidev@3 {
-+                                compatible = "spidev";
-+                                spi-max-frequency = <40000000>;
-+                                reg = <3>;
-+                        };
-+                };
-+
 +		usb@22000 {
 +			phy_type = "ulpi";
 +			dr_mode = "host";
 +		};
 +
-+	        mdio@24520 {
-+        	        phy0: ethernet-phy@0 {
-+                	        interrupts = <2 1 0 0>;
-+                        	reg = <0x0>;
-+                              qca,ar8327-initvals = <
-+                                        0x00004 0x07600000 /* PAD0_MODE - eth1 */
-+                                        0x00008 0x01000000 /* PAD5_MODE */
-+                                        0x0000c 0x07600000 /* PAD6_MODE - eth0 */
-+                                        0x00010 0x40000000 /* POWER_ON_STRIP */
-+                                        0x00050 0xcc35cc35 /* LED_CTRL0 */
-+                                        0x00054 0xca35ca35 /* LED_CTRL1 */
-+                                        0x00058 0xc935c935 /* LED_CTRL2 */
-+                                        0x0005c 0x03ffff00 /* LED_CTRL3 */
-+                                        0x0007c 0x0000007e /* PORT0_STATUS */
-+                                        0x00094 0x0000007e /* PORT6 STATUS */
-+                                >;
-+	                };
-+                        phy7: ethernet-phy@7 {
-+                                interrupts = <3 1 0 0>;
-+                                reg = <0x7>;
-+                        };
-+	        };
++		mdio@24520 {
++			switch0@10 {
++				compatible = "qca,qca8337";
++				#size-cells = <0>;
++				#address-cells = <1>;
++				interrupts = <2 1 0 0>;
++				reg = <0x10>;
 +
-+        	mdio@25520 {
-+                        status = "disabled";
-+	        };
++				ports {
++					#address-cells = <1>;
++					#size-cells = <0>;
++
++					port@0 {
++						reg = <0>;
++						label = "cpu";
++						ethernet = <&enet1>;
++						phy-mode = "rgmii";
++						fixed-link {
++							speed = <1000>;
++							full-duplex;
++						};
++					};
++
++					port@1 {
++						reg = <1>;
++						label = "lan5";
++					};
++
++					port@2 {
++						reg = <2>;
++						label = "lan4";
++					};
++
++					port@3 {
++						reg = <3>;
++						label = "lan3";
++					};
++
++					port@4 {
++						reg = <4>;
++						label = "lan2";
++					};
++
++					port@5 {
++						reg = <5>;
++						label = "lan1";
++					};
++				};
++			};
++
++			phy7: ethernet-phy@7 {
++				interrupts = <3 1 0 0>;
++				reg = <0x7>;
++			};
++		};
++
++		mdio@25520 {
++			status = "disabled";
++		};
 +	
-+        	mdio@26520 {
-+                        status = "disabled";
-+        	};
++		mdio@26520 {
++			status = "disabled";
++		};
 +
 +
 +		ptp_clock@24e00 {
@@ -634,71 +673,78 @@ index 0000000000..5c5555fde9
 +			fsl,max-adj = <249999999>;
 +		};
 +
-+	        enet0: ethernet@24000 {
-+                        phy-handle = <&phy0>;
-+	                phy-connection-type = "rgmii-id";
-+        	};
++		enet0: ethernet@24000 {
++			phy-connection-type = "rgmii-id";
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
++			};
++		};
 +
-+	        enet1: ethernet@25000 {
-+	                fixed-link = <6 1 1000 1 0>;
-+        	};
++		enet1: ethernet@25000 {
++			phy-connection-type = "rgmii-id";
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
++			};
++		};
 +
-+	        enet2: ethernet@26000 {
-+                	phy-handle = <&phy7>;
-+	                phy-connection-type = "rgmii-id";
-+        	};
++		enet2: ethernet@26000 {
++			phy-handle = <&phy7>;
++			phy-connection-type = "rgmii-id";
++		};
 +	};
-+        pci2: pcie@ffe08000 {
-+                ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
-+                reg = <0 0xffe08000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0xc0000000
-+                                  0x2000000 0x0 0xc0000000
-+                                  0x0 0x20000000
++	pci2: pcie@ffe08000 {
++		ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
++		reg = <0 0xffe08000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0xc0000000
++				  0x2000000 0x0 0xc0000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
-+        pci1: pcie@ffe09000 {
-+                ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
-+                reg = <0 0xffe09000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0xa0000000
-+                                  0x2000000 0x0 0xa0000000
-+                                  0x0 0x20000000
++	pci1: pcie@ffe09000 {
++		ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
++		reg = <0 0xffe09000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0xa0000000
++				  0x2000000 0x0 0xa0000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
-+        pci0: pcie@ffe0a000 {
-+                ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
-+                          0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
-+                reg = <0 0xffe0a000 0 0x1000>;
-+                pcie@0 {
-+                        ranges = <0x2000000 0x0 0x80000000
-+                                  0x2000000 0x0 0x80000000
-+                                  0x0 0x20000000
++	pci0: pcie@ffe0a000 {
++		ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
++			  0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
++		reg = <0 0xffe0a000 0 0x1000>;
++		pcie@0 {
++			ranges = <0x2000000 0x0 0x80000000
++				  0x2000000 0x0 0x80000000
++				  0x0 0x20000000
 +
-+                                  0x1000000 0x0 0x0
-+                                  0x1000000 0x0 0x0
-+                                  0x0 0x10000>;
-+                };
-+        };
++				  0x1000000 0x0 0x0
++				  0x1000000 0x0 0x0
++				  0x0 0x10000>;
++		};
++	};
 +
 +};
 +
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
 new file mode 100644
-index 0000000000..67702003b0
+index 0000000..6770200
 --- /dev/null
 +++ b/target/linux/mpc85xx/p2020/config-default
 @@ -0,0 +1,101 @@
@@ -805,7 +851,7 @@ index 0000000000..67702003b0
 +CONFIG_CPU_HOTPLUG_STATE_CONTROL=n
 diff --git a/target/linux/mpc85xx/p2020/profiles/turris.mk b/target/linux/mpc85xx/p2020/profiles/turris.mk
 new file mode 100644
-index 0000000000..6c1d5420ce
+index 0000000..6c1d542
 --- /dev/null
 +++ b/target/linux/mpc85xx/p2020/profiles/turris.mk
 @@ -0,0 +1,29 @@
@@ -840,7 +886,7 @@ index 0000000000..6c1d5420ce
 +$(eval $(call Profile,TURRIS))
 diff --git a/target/linux/mpc85xx/p2020/target.mk b/target/linux/mpc85xx/p2020/target.mk
 new file mode 100644
-index 0000000000..aa39263309
+index 0000000..aa39263
 --- /dev/null
 +++ b/target/linux/mpc85xx/p2020/target.mk
 @@ -0,0 +1,6 @@
@@ -852,7 +898,7 @@ index 0000000000..aa39263309
 +endef
 diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 new file mode 100644
-index 0000000000..d6616263f3
+index 0000000..d661626
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 @@ -0,0 +1,227 @@
@@ -1083,6 +1129,255 @@ index 0000000000..d6616263f3
 + 	/* First look for RedBoot table or partitions on the command
 + 	 * line, these take precedence over device tree information */
 + 	mtd_device_parse_register(mtd, part_probe_types, NULL,
+diff --git a/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch b/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
+new file mode 100644
+index 0000000..9a24bee
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
+@@ -0,0 +1,243 @@
++From c13c700885cf9cdfe52a67124168671cbb843f2c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 3 Jul 2019 10:57:02 +0200
++Subject: [PATCH] net: dsa: qca8k: extend slave-bus implementations
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++commit db460c54b67fc2cbe6dcef88b7bf3cba8e07f80e upstream
++
++This patch implements accessors for the QCA8337 MDIO access
++through the MDIO_MASTER register, which makes it possible to
++access the PHYs on slave-bus through the switch. In cases
++where the switch ports are already mapped via external
++"phy-phandles", the internal mdio-bus is disabled in order to
++prevent a duplicated discovery and enumeration of the same
++PHYs. Don't use mixed external and internal mdio-bus
++configurations, as this is not supported by the hardware.
++
++Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/dsa/qca8k.c | 157 +++++++++++++++++++++++++++++++++++++++-
++ drivers/net/dsa/qca8k.h |  13 ++++
++ 2 files changed, 169 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/dsa/qca8k.c b/drivers/net/dsa/qca8k.c
++index c3c9d7e33bd6..d5f40d3c75e3 100644
++--- a/drivers/net/dsa/qca8k.c
+++++ b/drivers/net/dsa/qca8k.c
++@@ -485,6 +485,156 @@ qca8k_port_set_status(struct qca8k_priv *priv, int port, int enable)
++ 		qca8k_reg_clear(priv, QCA8K_REG_PORT_STATUS(port), mask);
++ }
++ 
+++static u32
+++qca8k_port_to_phy(int port)
+++{
+++	/* From Andrew Lunn:
+++	 * Port 0 has no internal phy.
+++	 * Port 1 has an internal PHY at MDIO address 0.
+++	 * Port 2 has an internal PHY at MDIO address 1.
+++	 * ...
+++	 * Port 5 has an internal PHY at MDIO address 4.
+++	 * Port 6 has no internal PHY.
+++	 */
+++
+++	return port - 1;
+++}
+++
+++static int
+++qca8k_mdio_write(struct qca8k_priv *priv, int port, u32 regnum, u16 data)
+++{
+++	u32 phy, val;
+++
+++	if (regnum >= QCA8K_MDIO_MASTER_MAX_REG)
+++		return -EINVAL;
+++
+++	/* callee is responsible for not passing bad ports,
+++	 * but we still would like to make spills impossible.
+++	 */
+++	phy = qca8k_port_to_phy(port) % PHY_MAX_ADDR;
+++	val = QCA8K_MDIO_MASTER_BUSY | QCA8K_MDIO_MASTER_EN |
+++	      QCA8K_MDIO_MASTER_WRITE | QCA8K_MDIO_MASTER_PHY_ADDR(phy) |
+++	      QCA8K_MDIO_MASTER_REG_ADDR(regnum) |
+++	      QCA8K_MDIO_MASTER_DATA(data);
+++
+++	qca8k_write(priv, QCA8K_MDIO_MASTER_CTRL, val);
+++
+++	return qca8k_busy_wait(priv, QCA8K_MDIO_MASTER_CTRL,
+++		QCA8K_MDIO_MASTER_BUSY);
+++}
+++
+++static int
+++qca8k_mdio_read(struct qca8k_priv *priv, int port, u32 regnum)
+++{
+++	u32 phy, val;
+++
+++	if (regnum >= QCA8K_MDIO_MASTER_MAX_REG)
+++		return -EINVAL;
+++
+++	/* callee is responsible for not passing bad ports,
+++	 * but we still would like to make spills impossible.
+++	 */
+++	phy = qca8k_port_to_phy(port) % PHY_MAX_ADDR;
+++	val = QCA8K_MDIO_MASTER_BUSY | QCA8K_MDIO_MASTER_EN |
+++	      QCA8K_MDIO_MASTER_READ | QCA8K_MDIO_MASTER_PHY_ADDR(phy) |
+++	      QCA8K_MDIO_MASTER_REG_ADDR(regnum);
+++
+++	qca8k_write(priv, QCA8K_MDIO_MASTER_CTRL, val);
+++
+++	if (qca8k_busy_wait(priv, QCA8K_MDIO_MASTER_CTRL,
+++			    QCA8K_MDIO_MASTER_BUSY))
+++		return -ETIMEDOUT;
+++
+++	val = (qca8k_read(priv, QCA8K_MDIO_MASTER_CTRL) &
+++		QCA8K_MDIO_MASTER_DATA_MASK);
+++
+++	return val;
+++}
+++
+++static int
+++qca8k_phy_write(struct dsa_switch *ds, int port, int regnum, u16 data)
+++{
+++	struct qca8k_priv *priv = ds->priv;
+++
+++	return qca8k_mdio_write(priv, port, regnum, data);
+++}
+++
+++static int
+++qca8k_phy_read(struct dsa_switch *ds, int port, int regnum)
+++{
+++	struct qca8k_priv *priv = ds->priv;
+++	int ret;
+++
+++	ret = qca8k_mdio_read(priv, port, regnum);
+++
+++	if (ret < 0)
+++		return 0xffff;
+++
+++	return ret;
+++}
+++
+++static int
+++qca8k_setup_mdio_bus(struct qca8k_priv *priv)
+++{
+++	u32 internal_mdio_mask = 0, external_mdio_mask = 0, reg;
+++	struct device_node *ports, *port;
+++	int err;
+++
+++	ports = of_get_child_by_name(priv->dev->of_node, "ports");
+++	if (!ports)
+++		return -EINVAL;
+++
+++	for_each_available_child_of_node(ports, port) {
+++		err = of_property_read_u32(port, "reg", &reg);
+++		if (err)
+++			return err;
+++
+++		if (dsa_is_cpu_port(priv->ds, reg) ||
+++		    dsa_is_dsa_port(priv->ds, reg))
+++			continue;
+++
+++		if (of_property_read_bool(port, "phy-handle"))
+++			external_mdio_mask |= BIT(reg);
+++		else
+++			internal_mdio_mask |= BIT(reg);
+++	}
+++
+++	if (!external_mdio_mask && !internal_mdio_mask) {
+++		dev_err(priv->dev, "no PHYs are defined.\n");
+++		return -EINVAL;
+++	}
+++
+++	/* The QCA8K_MDIO_MASTER_EN Bit, which grants access to PHYs through
+++	 * the MDIO_MASTER register also _disconnects_ the external MDC
+++	 * passthrough to the internal PHYs. It's not possible to use both
+++	 * configurations at the same time!
+++	 *
+++	 * Because this came up during the review process:
+++	 * If the external mdio-bus driver is capable magically disabling
+++	 * the QCA8K_MDIO_MASTER_EN and mutex/spin-locking out the qca8k's
+++	 * accessors for the time being, it would be possible to pull this
+++	 * off.
+++	 */
+++	if (!!external_mdio_mask && !!internal_mdio_mask) {
+++		dev_err(priv->dev, "either internal or external mdio bus configuration is supported.\n");
+++		return -EINVAL;
+++	}
+++
+++	if (external_mdio_mask) {
+++		/* Make sure to disable the internal mdio bus in cases
+++		 * a dt-overlay and driver reload changed the configuration
+++		 */
+++
+++		qca8k_reg_clear(priv, QCA8K_MDIO_MASTER_CTRL,
+++				QCA8K_MDIO_MASTER_EN);
+++		return 0;
+++	}
+++
+++	priv->ops.phy_read = qca8k_phy_read;
+++	priv->ops.phy_write = qca8k_phy_write;
+++	return 0;
+++}
+++
++ static int
++ qca8k_setup(struct dsa_switch *ds)
++ {
++@@ -506,6 +656,10 @@ qca8k_setup(struct dsa_switch *ds)
++ 	if (IS_ERR(priv->regmap))
++ 		pr_warn("regmap initialization failed");
++ 
+++	ret = qca8k_setup_mdio_bus(priv);
+++	if (ret)
+++		return ret;
+++
++ 	/* Initialize CPU port pad mode (xMII type, delays...) */
++ 	phy_mode = of_get_phy_mode(ds->dst->cpu_dp->dn);
++ 	if (phy_mode < 0) {
++@@ -905,7 +1059,8 @@ qca8k_sw_probe(struct mdio_device *mdiodev)
++ 		return -ENOMEM;
++ 
++ 	priv->ds->priv = priv;
++-	priv->ds->ops = &qca8k_switch_ops;
+++	priv->ops = qca8k_switch_ops;
+++	priv->ds->ops = &priv->ops;
++ 	mutex_init(&priv->reg_mutex);
++ 	dev_set_drvdata(&mdiodev->dev, priv);
++ 
++diff --git a/drivers/net/dsa/qca8k.h b/drivers/net/dsa/qca8k.h
++index 613fe5c50236..38d06661f0a8 100644
++--- a/drivers/net/dsa/qca8k.h
+++++ b/drivers/net/dsa/qca8k.h
++@@ -48,6 +48,18 @@
++ #define   QCA8K_MIB_FLUSH				BIT(24)
++ #define   QCA8K_MIB_CPU_KEEP				BIT(20)
++ #define   QCA8K_MIB_BUSY				BIT(17)
+++#define QCA8K_MDIO_MASTER_CTRL				0x3c
+++#define   QCA8K_MDIO_MASTER_BUSY			BIT(31)
+++#define   QCA8K_MDIO_MASTER_EN				BIT(30)
+++#define   QCA8K_MDIO_MASTER_READ			BIT(27)
+++#define   QCA8K_MDIO_MASTER_WRITE			0
+++#define   QCA8K_MDIO_MASTER_SUP_PRE			BIT(26)
+++#define   QCA8K_MDIO_MASTER_PHY_ADDR(x)			((x) << 21)
+++#define   QCA8K_MDIO_MASTER_REG_ADDR(x)			((x) << 16)
+++#define   QCA8K_MDIO_MASTER_DATA(x)			(x)
+++#define   QCA8K_MDIO_MASTER_DATA_MASK			GENMASK(15, 0)
+++#define   QCA8K_MDIO_MASTER_MAX_PORTS			5
+++#define   QCA8K_MDIO_MASTER_MAX_REG			32
++ #define QCA8K_GOL_MAC_ADDR0				0x60
++ #define QCA8K_GOL_MAC_ADDR1				0x64
++ #define QCA8K_REG_PORT_STATUS(_i)			(0x07c + (_i) * 4)
++@@ -168,6 +180,7 @@ struct qca8k_priv {
++ 	struct dsa_switch *ds;
++ 	struct mutex reg_mutex;
++ 	struct device *dev;
+++	struct dsa_switch_ops ops;
++ };
++ 
++ struct qca8k_mib_desc {
++-- 
++2.21.0
++
 -- 
-2.20.1
+2.21.0
 
