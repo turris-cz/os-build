@@ -20,18 +20,6 @@ define(`foreach_join',`ifelse(eval($#>3),1,`pushdef(`$1',`$4')$2`'ifelse(eval($#
 define(`forInstall',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',shift($@)), { priority = 40 })')
 define(`forInstallCritical',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',shift($@)), { critical = true })')
 
-# Add languages packages for Luci
-# Usage: _LUCI_I18N_(APP)
-define(`_LUCI_I18N_',`local luci_i18n = {["en"] = true} -- we always install English localization
-for _, lang in pairs(l10n or {}) do
-	luci_i18n[lang] = true
-end
-for lang in pairs(luci_i18n) do
-	for _, pkg in pairs({foreach_join(X,`"X"',`, ',$@)}) do
-		Install("luci-i18n-" .. pkg .. "-" .. lang, { optional = true, priority = 40 })
-	end
-end')
-
 # Feature guard
 # Some packages might not be installable without some features. Skipping every
 # additional packages ensures that at least updater is updated.

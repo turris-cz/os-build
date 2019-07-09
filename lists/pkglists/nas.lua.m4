@@ -38,8 +38,6 @@ Install("wget", "rsync", "rsyncd", "samba36-client", "samba36-server", { priorit
 forInstall(luci-app,hd-idle,minidlna,samba)
 Install("luci-mod-admin-full", { priority = 40 })
 
-_LUCI_I18N_(hd-idle, minidlna, samba)
-
 -- Encryption --
 Install("cryptsetup", "kmod-cryptodev", "kmod-crypto-user", { priority = 40 })
 forInstall(kmod-crypto,cbc,ctr,pcbc,des,ecb,xts)
