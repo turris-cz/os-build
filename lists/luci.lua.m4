@@ -123,6 +123,13 @@ if l10n then
 			for lang in pairs(luci_i18n) do
 				Install("luci-i18n-" .. app .. "-" .. lang, { optional = true, priority = 20 })
 			end
+		else
+			--[[
+			We are not aware that we should install i18n unless it is installed
+			already so we instead request replan on finish to install missing i18n
+			packages.
+			]]
+			Package("luci-app-" .. app, { replan = "finished"})
 		end
 	end
 end
