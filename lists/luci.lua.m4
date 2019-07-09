@@ -104,25 +104,16 @@ local luci_i18n_en = {
 	["wol"] = true,
 }
 
-if l10n then
-	local luci_i18n = {}
-	for _, lang in pairs(l10n or {}) do
-		luci_i18n[lang] = true
-	end
+if for_l10n then
+	Install("luci-i18n-base-en", { optional = true })
+	for_l10n("luci-i18n-base-")
 
-	Install("luci-i18n-base-en", { optional = true, priority = 20 })
-	for lang in pairs(luci_i18n) do
-		Install("luci-i18n-base-" .. lang, { optional = true, priority = 20 })
-	end
-
-	for _, app in pairs(luci_i18n_pkgs) do
+	for _, app in pairs(luci_apps) do
 		if installed["luci-app-" .. app] then
 			if luci_i18n_en[app] then
-				Install("luci-i18n-" .. app .. "-en", { optional = true, priority = 20 })
+				Install("luci-i18n-" .. app .. "-en", { optional = true })
 			end
-			for lang in pairs(luci_i18n) do
-				Install("luci-i18n-" .. app .. "-" .. lang, { optional = true, priority = 20 })
-			end
+			for_l10n("luci-i18n-" .. app .. "-")
 		else
 			--[[
 			We are not aware that we should install i18n unless it is installed
