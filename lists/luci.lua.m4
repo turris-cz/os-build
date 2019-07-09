@@ -10,7 +10,7 @@ All packages with localization packages
 Generated using:
  curl https://repo.turris.cz/hbd/omnia/packages/luci/Packages | sed -n 's/^Package: luci-i18n-\([^-]\+\).*/\1/p' | sort | uniq | sed 's/^/"/;s/$/",/'
 ]]
-luci_i18n_pkgs = {
+local luci_i18n_pkgs = {
 	"adblock",
 	"advanced",
 	"ahcp",
