@@ -24,7 +24,7 @@ if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n('pkglists-l10n-')
 	for _, plugin in pairs(foris_plugins) do
-		if installed[plugin] then
+		if installed["foris-" .. plugin .. "-plugin"] then
 			for_l10n("foris-" .. plugin .. "-plugin-l10n-")
 		end
 	end
