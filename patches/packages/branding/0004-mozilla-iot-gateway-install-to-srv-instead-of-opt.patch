@@ -1,0 +1,71 @@
+From 4f424398bd0233ec12fffd4e1b20e23d57c1b11b Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Thu, 28 Mar 2019 17:46:18 +0100
+Subject: [PATCH] mozilla-iot-gateway: install to /srv instead of /opt
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+/srv is supported and expected location for permanent storage on Turris
+routers. We do not expect /opt and we have systems in place to allow
+user to not store /src content on internal storage so we prefer /src
+overall.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+---
+ lang/node-mozilla-iot-gateway/Makefile               | 12 ++++++++----
+ .../files/mozilla-iot-gateway.init                   |  4 ++--
+ 2 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/lang/node-mozilla-iot-gateway/Makefile b/lang/node-mozilla-iot-gateway/Makefile
+index 558e55f..a56a534 100644
+--- a/lang/node-mozilla-iot-gateway/Makefile
++++ b/lang/node-mozilla-iot-gateway/Makefile
+@@ -63,14 +63,18 @@ define Build/Compile
+ endef
+ 
+ define Package/node-mozilla-iot-gateway/install
+-	$(INSTALL_DIR) $(1)/opt/mozilla-iot/gateway/
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/node_modules/webthings-gateway/* $(1)/opt/mozilla-iot/gateway
++	$(INSTALL_DIR) $(1)/srv/mozilla-iot/gateway/
++	$(CP) $(PKG_INSTALL_DIR)/usr/lib/node_modules/webthings-gateway/* $(1)/srv/mozilla-iot/gateway
+ 	$(MAKE_VARS) \
+ 	$(MAKE_FLAGS) \
+-	$(STAGING_DIR_HOSTPKG)/bin/npm --prefix=$(1)/opt/mozilla-iot/gateway install \
+-		--build-from-source --target_arch=$(CPU) $(1)/opt/mozilla-iot/gateway
++	$(STAGING_DIR_HOSTPKG)/bin/npm --prefix=$(1)/srv/mozilla-iot/gateway install \
++		--build-from-source --target_arch=$(CPU) $(1)/srv/mozilla-iot/gateway
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+ 	$(INSTALL_BIN) ./files/mozilla-iot-gateway.init $(1)/etc/init.d/mozilla-iot-gateway
++
++	# Custom configuration
++	sed -i "s|home = .*|home = '/srv/mozilla-iot-home';|" $(1)/srv/mozilla-iot/gateway/config/default.js
++	sed -i "s|behindForwarding:.*|behindForwarding: false,|" $(1)/srv/mozilla-iot/gateway/config/default.js
+ endef
+ 
+ $(eval $(call BuildPackage,node-mozilla-iot-gateway))
+diff --git a/lang/node-mozilla-iot-gateway/files/mozilla-iot-gateway.init b/lang/node-mozilla-iot-gateway/files/mozilla-iot-gateway.init
+index 8ed67fc..c7626b8 100644
+--- a/lang/node-mozilla-iot-gateway/files/mozilla-iot-gateway.init
++++ b/lang/node-mozilla-iot-gateway/files/mozilla-iot-gateway.init
+@@ -6,7 +6,7 @@ USE_PROCD=1
+ 
+ HOME=/root
+ MOZIOT_HOME="${HOME}/.mozilla-iot"
+-export PATH="/opt/mozilla-iot/gateway/tools:${PATH}"
++export PATH="/srv/mozilla-iot/gateway/tools:${PATH}"
+ 
+ start_service()
+ {
+@@ -14,7 +14,7 @@ start_service()
+ 	ln -sf /etc/openzwave /usr/etc/openzwave
+ 
+ 	procd_open_instance mozilla-iot-gateway
+-	procd_set_param command /usr/bin/npm start --prefix /opt/mozilla-iot/gateway
++	procd_set_param command /usr/bin/npm start --prefix /srv/mozilla-iot/gateway
+ 	procd_set_param stdout 1
+ 	procd_set_param stderr 1
+ 	procd_close_instance
+-- 
+2.22.0
+
