@@ -24,7 +24,7 @@ if for_l10n then
 	for_l10n("foris-l10n-")
 	for_l10n('pkglists-l10n-')
 	for _, plugin in pairs(foris_plugins) do
-		local fplugin = "foris-" .. plugin "-plugin"
+		local fplugin = "foris-" .. plugin .. "-plugin"
 		if installed[fplugin] then
 			for_l10n(fplugin "-l10n-")
 		else
