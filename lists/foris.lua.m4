@@ -26,7 +26,7 @@ if for_l10n then
 	for _, plugin in pairs(foris_plugins) do
 		local fplugin = "foris-" .. plugin .. "-plugin"
 		if installed[fplugin] then
-			for_l10n(fplugin "-l10n-")
+			for_l10n(fplugin .. "-l10n-")
 		else
 			--[[
 			We are not aware that we should install l10n unless it is installed
