@@ -1,0 +1,764 @@
+From ae21f4990d1a9acca982dc660be91f64782549c7 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Mon, 22 Jul 2019 10:06:48 +0200
+Subject: [PATCH] python3: update to version 3.6.9
+
+3.6.9 is the latest security fix release of Python 3.6.
+
+- Fixes: CVE-2018-20852, CVE-2019-9948, CVE-2019-9740, CVE-2019-5010
+- Refreshed patches
+- Removed a few backports patches
+
+https://github.com/openwrt/packages/pull/9534
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ lang/python/python3-version.mk                |  10 +-
+ lang/python/python3/Makefile                  |   4 +-
+ .../python3/patches/001-enable-zlib.patch     |   2 +-
+ .../003-do-not-run-distutils-tests.patch      |   4 +-
+ ...06-remove-multi-arch-and-local-paths.patch |   2 +-
+ ...L_SetHashSalt-in-_elementtree-GH-914.patch |  88 --------
+ ...ntion-CVE-2018-14647-in-news-entry-G.patch |  31 ---
+ ...add-rt-lib-dirs-when-cross-compiling.patch |   2 +-
+ ...uildinfo-date-time-source-date-epoch.patch |   4 +-
+ .../014-remove-platform-so-suffix.patch       |   4 +-
+ .../patches/015-abort-on-failed-modules.patch |   2 +-
+ .../patches/016-adjust-config-paths.patch     |   8 +-
+ .../patches/017_lib2to3_fix_pyc_search.patch  |   4 +-
+ ...-Avoid-relying-on-signed-overflow-in.patch | 206 ------------------
+ ...hat-normalize-to-separators-GH-12215.patch | 173 ---------------
+ 15 files changed, 22 insertions(+), 522 deletions(-)
+ delete mode 100644 lang/python/python3/patches/008-bpo-34623-Use-XML_SetHashSalt-in-_elementtree-GH-914.patch
+ delete mode 100644 lang/python/python3/patches/009-3.6-bpo-34623-Mention-CVE-2018-14647-in-news-entry-G.patch
+ delete mode 100644 lang/python/python3/patches/018-closes-bpo-34656-Avoid-relying-on-signed-overflow-in.patch
+ delete mode 100644 lang/python/python3/patches/019-bpo-36216-Add-check-for-characters-in-netloc-that-normalize-to-separators-GH-12215.patch
+
+diff --git a/lang/python/python3-version.mk b/lang/python/python3-version.mk
+index 522971758..953e4b3ed 100644
+--- a/lang/python/python3-version.mk
++++ b/lang/python/python3-version.mk
+@@ -8,12 +8,12 @@
+ # Note: keep in sync with setuptools & pip
+ PYTHON3_VERSION_MAJOR:=3
+ PYTHON3_VERSION_MINOR:=6
+-PYTHON3_VERSION_MICRO:=5
++PYTHON3_VERSION_MICRO:=9
+
+ PYTHON3_VERSION:=$(PYTHON3_VERSION_MAJOR).$(PYTHON3_VERSION_MINOR)
+
+-PYTHON3_SETUPTOOLS_PKG_RELEASE:=2
+-PYTHON3_PIP_PKG_RELEASE:=2
++PYTHON3_SETUPTOOLS_PKG_RELEASE:=1
++PYTHON3_PIP_PKG_RELEASE:=1
+
+-PYTHON3_SETUPTOOLS_VERSION:=39.0.1
+-PYTHON3_PIP_VERSION:=9.0.3
++PYTHON3_SETUPTOOLS_VERSION:=40.6.2
++PYTHON3_PIP_VERSION:=18.1
+diff --git a/lang/python/python3/Makefile b/lang/python/python3/Makefile
+index 3d6d12c03..be7e29e62 100644
+--- a/lang/python/python3/Makefile
++++ b/lang/python/python3/Makefile
+@@ -14,12 +14,12 @@ PYTHON_VERSION:=$(PYTHON3_VERSION)
+ PYTHON_VERSION_MICRO:=$(PYTHON3_VERSION_MICRO)
+
+ PKG_NAME:=python3
+-PKG_RELEASE:=5
++PKG_RELEASE:=1
+ PKG_VERSION:=$(PYTHON_VERSION).$(PYTHON_VERSION_MICRO)
+
+ PKG_SOURCE:=Python-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=https://www.python.org/ftp/python/$(PKG_VERSION)
+-PKG_HASH:=f434053ba1b5c8a5cc597e966ead3c5143012af827fd3f0697d21450bb8d87a6
++PKG_HASH:=5e2f5f554e3f8f7f0296f7e73d8600c4e9acbaee6b2555b83206edf5153870da
+
+ PKG_LICENSE:=PSF
+ PKG_LICENSE_FILES:=LICENSE Modules/_ctypes/libffi_msvc/LICENSE Modules/_ctypes/darwin/LICENSE Modules/_ctypes/libffi/LICENSE Modules/_ctypes/libffi_osx/LICENSE Tools/pybench/LICENSE
+diff --git a/lang/python/python3/patches/001-enable-zlib.patch b/lang/python/python3/patches/001-enable-zlib.patch
+index 1a2a68ebf..654983caf 100644
+--- a/lang/python/python3/patches/001-enable-zlib.patch
++++ b/lang/python/python3/patches/001-enable-zlib.patch
+@@ -17,4 +17,4 @@ Subject: [PATCH] enable zlib
+ +zlib zlibmodule.c -lz
+
+  # Interface to the Expat XML parser
+- #
++ # More information on Expat can be found at www.libexpat.org.
+diff --git a/lang/python/python3/patches/003-do-not-run-distutils-tests.patch b/lang/python/python3/patches/003-do-not-run-distutils-tests.patch
+index 599385980..af0418d99 100644
+--- a/lang/python/python3/patches/003-do-not-run-distutils-tests.patch
++++ b/lang/python/python3/patches/003-do-not-run-distutils-tests.patch
+@@ -1,6 +1,6 @@
+ --- a/Makefile.pre.in
+ +++ b/Makefile.pre.in
+-@@ -1341,6 +1341,7 @@ libinstall:	build_all $(srcdir)/Modules/
++@@ -1344,6 +1344,7 @@ libinstall:	build_all $(srcdir)/Modules/
+  	$(INSTALL_DATA) `cat pybuilddir.txt`/_sysconfigdata_$(ABIFLAGS)_$(MACHDEP)_$(MULTIARCH).py \
+  		$(DESTDIR)$(LIBDEST); \
+  	$(INSTALL_DATA) $(srcdir)/LICENSE $(DESTDIR)$(LIBDEST)/LICENSE.txt
+@@ -8,7 +8,7 @@
+  	if test -d $(DESTDIR)$(LIBDEST)/distutils/tests; then \
+  		$(INSTALL_DATA) $(srcdir)/Modules/xxmodule.c \
+  			$(DESTDIR)$(LIBDEST)/distutils/tests ; \
+-@@ -1376,6 +1377,7 @@ libinstall:	build_all $(srcdir)/Modules/
++@@ -1379,6 +1380,7 @@ libinstall:	build_all $(srcdir)/Modules/
+  		$(PYTHON_FOR_BUILD) -m lib2to3.pgen2.driver $(DESTDIR)$(LIBDEST)/lib2to3/Grammar.txt
+  	-PYTHONPATH=$(DESTDIR)$(LIBDEST) $(RUNSHARED) \
+  		$(PYTHON_FOR_BUILD) -m lib2to3.pgen2.driver $(DESTDIR)$(LIBDEST)/lib2to3/PatternGrammar.txt
+diff --git a/lang/python/python3/patches/006-remove-multi-arch-and-local-paths.patch b/lang/python/python3/patches/006-remove-multi-arch-and-local-paths.patch
+index cad73edc8..892331c44 100644
+--- a/lang/python/python3/patches/006-remove-multi-arch-and-local-paths.patch
++++ b/lang/python/python3/patches/006-remove-multi-arch-and-local-paths.patch
+@@ -1,6 +1,6 @@
+ --- a/setup.py
+ +++ b/setup.py
+-@@ -512,16 +512,9 @@ class PyBuildExt(build_ext):
++@@ -517,16 +517,9 @@ class PyBuildExt(build_ext):
+              return ['m']
+
+      def detect_modules(self):
+diff --git a/lang/python/python3/patches/008-bpo-34623-Use-XML_SetHashSalt-in-_elementtree-GH-914.patch b/lang/python/python3/patches/008-bpo-34623-Use-XML_SetHashSalt-in-_elementtree-GH-914.patch
+deleted file mode 100644
+index 09a4014c3..000000000
+--- a/lang/python/python3/patches/008-bpo-34623-Use-XML_SetHashSalt-in-_elementtree-GH-914.patch
++++ /dev/null
+@@ -1,88 +0,0 @@
+-From f7666e828cc3d5873136473ea36ba2013d624fa1 Mon Sep 17 00:00:00 2001
+-From: "Miss Islington (bot)"
+- <31488909+miss-islington@users.noreply.github.com>
+-Date: Tue, 18 Sep 2018 06:14:13 -0700
+-Subject: [PATCH] bpo-34623: Use XML_SetHashSalt in _elementtree (GH-9146)
+-
+-The C accelerated _elementtree module now initializes hash randomization
+-salt from _Py_HashSecret instead of libexpat's default CPRNG.
+-
+-Signed-off-by: Christian Heimes <christian@python.org>
+-
+-https://bugs.python.org/issue34623
+-(cherry picked from commit cb5778f00ce48631c7140f33ba242496aaf7102b)
+-
+-Co-authored-by: Christian Heimes <christian@python.org>
+----
+- Include/pyexpat.h                                            | 4 +++-
+- .../next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst   | 2 ++
+- Modules/_elementtree.c                                       | 5 +++++
+- Modules/pyexpat.c                                            | 5 +++++
+- 4 files changed, 15 insertions(+), 1 deletion(-)
+- create mode 100644 Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-
+-diff --git a/Include/pyexpat.h b/Include/pyexpat.h
+-index 44259bf6d7..07020b5dc9 100644
+---- a/Include/pyexpat.h
+-+++ b/Include/pyexpat.h
+-@@ -3,7 +3,7 @@
+-
+- /* note: you must import expat.h before importing this module! */
+-
+--#define PyExpat_CAPI_MAGIC  "pyexpat.expat_CAPI 1.0"
+-+#define PyExpat_CAPI_MAGIC  "pyexpat.expat_CAPI 1.1"
+- #define PyExpat_CAPSULE_NAME "pyexpat.expat_CAPI"
+-
+- struct PyExpat_CAPI
+-@@ -48,6 +48,8 @@ struct PyExpat_CAPI
+-     enum XML_Status (*SetEncoding)(XML_Parser parser, const XML_Char *encoding);
+-     int (*DefaultUnknownEncodingHandler)(
+-         void *encodingHandlerData, const XML_Char *name, XML_Encoding *info);
+-+    /* might be none for expat < 2.1.0 */
+-+    int (*SetHashSalt)(XML_Parser parser, unsigned long hash_salt);
+-     /* always add new stuff to the end! */
+- };
+-
+-diff --git a/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst b/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-new file mode 100644
+-index 0000000000..31ad92ef85
+---- /dev/null
+-+++ b/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-@@ -0,0 +1,2 @@
+-+The C accelerated _elementtree module now initializes hash randomization
+-+salt from _Py_HashSecret instead of libexpat's default CSPRNG.
+-diff --git a/Modules/_elementtree.c b/Modules/_elementtree.c
+-index 707ab2912b..53f05f937f 100644
+---- a/Modules/_elementtree.c
+-+++ b/Modules/_elementtree.c
+-@@ -3261,6 +3261,11 @@ _elementtree_XMLParser___init___impl(XMLParserObject *self, PyObject *html,
+-         PyErr_NoMemory();
+-         return -1;
+-     }
+-+    /* expat < 2.1.0 has no XML_SetHashSalt() */
+-+    if (EXPAT(SetHashSalt) != NULL) {
+-+        EXPAT(SetHashSalt)(self->parser,
+-+                           (unsigned long)_Py_HashSecret.expat.hashsalt);
+-+    }
+-
+-     if (target) {
+-         Py_INCREF(target);
+-diff --git a/Modules/pyexpat.c b/Modules/pyexpat.c
+-index 47c3e86c20..aa21d93c11 100644
+---- a/Modules/pyexpat.c
+-+++ b/Modules/pyexpat.c
+-@@ -1887,6 +1887,11 @@ MODULE_INITFUNC(void)
+-     capi.SetStartDoctypeDeclHandler = XML_SetStartDoctypeDeclHandler;
+-     capi.SetEncoding = XML_SetEncoding;
+-     capi.DefaultUnknownEncodingHandler = PyUnknownEncodingHandler;
+-+#if XML_COMBINED_VERSION >= 20100
+-+    capi.SetHashSalt = XML_SetHashSalt;
+-+#else
+-+    capi.SetHashSalt = NULL;
+-+#endif
+-
+-     /* export using capsule */
+-     capi_object = PyCapsule_New(&capi, PyExpat_CAPSULE_NAME, NULL);
+---
+-2.19.1
+-
+diff --git a/lang/python/python3/patches/009-3.6-bpo-34623-Mention-CVE-2018-14647-in-news-entry-G.patch b/lang/python/python3/patches/009-3.6-bpo-34623-Mention-CVE-2018-14647-in-news-entry-G.patch
+deleted file mode 100644
+index c83236a58..000000000
+--- a/lang/python/python3/patches/009-3.6-bpo-34623-Mention-CVE-2018-14647-in-news-entry-G.patch
++++ /dev/null
+@@ -1,31 +0,0 @@
+-From d1b336e530472f316b1d164d04626724c83b16d7 Mon Sep 17 00:00:00 2001
+-From: "Miss Islington (bot)"
+- <31488909+miss-islington@users.noreply.github.com>
+-Date: Fri, 21 Sep 2018 21:57:28 -0700
+-Subject: [PATCH] [3.6] bpo-34623: Mention CVE-2018-14647 in news entry
+- (GH-9482) (GH-9489)
+-
+-https://bugs.python.org/issue34623
+-(cherry picked from commit 026337a7101369297c8083047d2f3c6fc9dd1e2b)
+-
+-
+-Co-authored-by: Christian Heimes <christian@python.org>
+-
+-
+-https://bugs.python.org/issue34623
+----
+- .../next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst    | 4 ++--
+- 1 file changed, 2 insertions(+), 2 deletions(-)
+-
+-diff --git a/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst b/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-index 31ad92ef85..cbaa4b7506 100644
+---- a/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-+++ b/Misc/NEWS.d/next/Security/2018-09-10-16-05-39.bpo-34623.Ua9jMv.rst
+-@@ -1,2 +1,2 @@
+--The C accelerated _elementtree module now initializes hash randomization
+--salt from _Py_HashSecret instead of libexpat's default CSPRNG.
+-+CVE-2018-14647: The C accelerated _elementtree module now initializes hash
+-+randomization salt from _Py_HashSecret instead of libexpat's default CSPRNG.
+---
+-2.19.1
+-
+diff --git a/lang/python/python3/patches/010-do-not-add-rt-lib-dirs-when-cross-compiling.patch b/lang/python/python3/patches/010-do-not-add-rt-lib-dirs-when-cross-compiling.patch
+index 3211f7386..0d7ba10b5 100644
+--- a/lang/python/python3/patches/010-do-not-add-rt-lib-dirs-when-cross-compiling.patch
++++ b/lang/python/python3/patches/010-do-not-add-rt-lib-dirs-when-cross-compiling.patch
+@@ -1,6 +1,6 @@
+ --- a/setup.py
+ +++ b/setup.py
+-@@ -522,8 +522,9 @@ class PyBuildExt(build_ext):
++@@ -527,8 +527,9 @@ class PyBuildExt(build_ext):
+          # directly since an inconsistently reproducible issue comes up where
+          # the environment variable is not set even though the value were passed
+          # into configure and stored in the Makefile (issue found on OS X 10.3).
+diff --git a/lang/python/python3/patches/013-getbuildinfo-date-time-source-date-epoch.patch b/lang/python/python3/patches/013-getbuildinfo-date-time-source-date-epoch.patch
+index 340e302d8..b00170556 100644
+--- a/lang/python/python3/patches/013-getbuildinfo-date-time-source-date-epoch.patch
++++ b/lang/python/python3/patches/013-getbuildinfo-date-time-source-date-epoch.patch
+@@ -1,6 +1,6 @@
+ --- a/Makefile.pre.in
+ +++ b/Makefile.pre.in
+-@@ -725,6 +725,16 @@ regen-all: regen-opcode regen-opcode-tar
++@@ -728,6 +728,16 @@ regen-all: regen-opcode regen-opcode-tar
+  ############################################################################
+  # Special rules for object files
+
+@@ -17,7 +17,7 @@
+  Modules/getbuildinfo.o: $(PARSER_OBJS) \
+  		$(OBJECT_OBJS) \
+  		$(PYTHON_OBJS) \
+-@@ -732,6 +742,8 @@ Modules/getbuildinfo.o: $(PARSER_OBJS) \
++@@ -735,6 +745,8 @@ Modules/getbuildinfo.o: $(PARSER_OBJS) \
+  		$(MODOBJS) \
+  		$(srcdir)/Modules/getbuildinfo.c
+  	$(CC) -c $(PY_CORE_CFLAGS) \
+diff --git a/lang/python/python3/patches/014-remove-platform-so-suffix.patch b/lang/python/python3/patches/014-remove-platform-so-suffix.patch
+index c209fa745..98155bc20 100644
+--- a/lang/python/python3/patches/014-remove-platform-so-suffix.patch
++++ b/lang/python/python3/patches/014-remove-platform-so-suffix.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -14995,7 +14995,7 @@ $as_echo_n "checking ABIFLAGS... " >&6;
++@@ -15171,7 +15171,7 @@ $as_echo_n "checking ABIFLAGS... " >&6;
+  $as_echo "$ABIFLAGS" >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking SOABI" >&5
+  $as_echo_n "checking SOABI... " >&6; }
+@@ -11,7 +11,7 @@
+
+ --- a/configure.ac
+ +++ b/configure.ac
+-@@ -4647,7 +4647,7 @@ AC_SUBST(SOABI)
++@@ -4753,7 +4753,7 @@ AC_SUBST(SOABI)
+  AC_MSG_CHECKING(ABIFLAGS)
+  AC_MSG_RESULT($ABIFLAGS)
+  AC_MSG_CHECKING(SOABI)
+diff --git a/lang/python/python3/patches/015-abort-on-failed-modules.patch b/lang/python/python3/patches/015-abort-on-failed-modules.patch
+index 09a48af69..5ebd7218a 100644
+--- a/lang/python/python3/patches/015-abort-on-failed-modules.patch
++++ b/lang/python/python3/patches/015-abort-on-failed-modules.patch
+@@ -1,6 +1,6 @@
+ --- a/setup.py
+ +++ b/setup.py
+-@@ -333,6 +333,7 @@ class PyBuildExt(build_ext):
++@@ -338,6 +338,7 @@ class PyBuildExt(build_ext):
+              print("Failed to build these modules:")
+              print_three_column(failed)
+              print()
+diff --git a/lang/python/python3/patches/016-adjust-config-paths.patch b/lang/python/python3/patches/016-adjust-config-paths.patch
+index c08388729..3251b9d8f 100644
+--- a/lang/python/python3/patches/016-adjust-config-paths.patch
++++ b/lang/python/python3/patches/016-adjust-config-paths.patch
+@@ -20,7 +20,7 @@
+          abi=sys.abiflags,
+ --- a/Makefile.pre.in
+ +++ b/Makefile.pre.in
+-@@ -1350,7 +1350,7 @@ libinstall:	build_all $(srcdir)/Modules/
++@@ -1353,7 +1353,7 @@ libinstall:	build_all $(srcdir)/Modules/
+  			esac; \
+  		done; \
+  	done
+@@ -29,7 +29,7 @@
+  		$(DESTDIR)$(LIBDEST); \
+  	$(INSTALL_DATA) $(srcdir)/LICENSE $(DESTDIR)$(LIBDEST)/LICENSE.txt
+  ifeq (@COMPILE_ALL_TESTS@,yes)
+-@@ -1487,7 +1487,7 @@ sharedinstall: sharedmods
++@@ -1489,7 +1489,7 @@ sharedinstall: sharedmods
+  		--install-scripts=$(BINDIR) \
+  		--install-platlib=$(DESTSHARED) \
+  		--root=$(DESTDIR)/
+@@ -40,7 +40,7 @@
+  # Here are a couple of targets for MacOSX again, to install a full
+ --- a/configure
+ +++ b/configure
+-@@ -15014,7 +15014,7 @@ LDVERSION='$(VERSION)$(ABIFLAGS)'
++@@ -15190,7 +15190,7 @@ LDVERSION='$(VERSION)$(ABIFLAGS)'
+  $as_echo "$LDVERSION" >&6; }
+
+
+@@ -51,7 +51,7 @@
+    LIBPL='$(prefix)'"/lib/python${VERSION}/config-${LDVERSION}-${PLATFORM_TRIPLET}"
+ --- a/configure.ac
+ +++ b/configure.ac
+-@@ -4664,7 +4664,7 @@ AC_MSG_RESULT($LDVERSION)
++@@ -4770,7 +4770,7 @@ AC_MSG_RESULT($LDVERSION)
+
+  dnl define LIBPL after ABIFLAGS and LDVERSION is defined.
+  AC_SUBST(PY_ENABLE_SHARED)
+diff --git a/lang/python/python3/patches/017_lib2to3_fix_pyc_search.patch b/lang/python/python3/patches/017_lib2to3_fix_pyc_search.patch
+index 5972914bd..ab55f3966 100644
+--- a/lang/python/python3/patches/017_lib2to3_fix_pyc_search.patch
++++ b/lang/python/python3/patches/017_lib2to3_fix_pyc_search.patch
+@@ -1,8 +1,6 @@
+-diff --git a/Lib/lib2to3/refactor.py b/Lib/lib2to3/refactor.py
+-index 7841b99..1e0d3b3 100644
+ --- a/Lib/lib2to3/refactor.py
+ +++ b/Lib/lib2to3/refactor.py
+-@@ -37,6 +37,12 @@ def get_all_fix_names(fixer_pkg, remove_prefix=True):
++@@ -37,6 +37,12 @@ def get_all_fix_names(fixer_pkg, remove_
+              if remove_prefix:
+                  name = name[4:]
+              fix_names.append(name[:-3])
+diff --git a/lang/python/python3/patches/018-closes-bpo-34656-Avoid-relying-on-signed-overflow-in.patch b/lang/python/python3/patches/018-closes-bpo-34656-Avoid-relying-on-signed-overflow-in.patch
+deleted file mode 100644
+index 46e0312b8..000000000
+--- a/lang/python/python3/patches/018-closes-bpo-34656-Avoid-relying-on-signed-overflow-in.patch
++++ /dev/null
+@@ -1,206 +0,0 @@
+-From 71a9c65e74a70b6ed39adc4ba81d311ac1aa2acc Mon Sep 17 00:00:00 2001
+-From: "Miss Islington (bot)"
+- <31488909+miss-islington@users.noreply.github.com>
+-Date: Thu, 20 Sep 2018 19:00:37 -0700
+-Subject: [PATCH] closes bpo-34656: Avoid relying on signed overflow in _pickle
+- memos. (GH-9261)
+-
+-(cherry picked from commit a4ae828ee416a66d8c7bf5ee71d653c2cc6a26dd)
+-
+-Co-authored-by: Benjamin Peterson <benjamin@python.org>
+----
+- Modules/_pickle.c | 62 +++++++++++++++++++++++------------------------
+- 1 file changed, 31 insertions(+), 31 deletions(-)
+-
+-diff --git a/Modules/_pickle.c b/Modules/_pickle.c
+-index f5202f50c5..93bc1c6fee 100644
+---- a/Modules/_pickle.c
+-+++ b/Modules/_pickle.c
+-@@ -596,9 +596,9 @@ typedef struct {
+- } PyMemoEntry;
+-
+- typedef struct {
+--    Py_ssize_t mt_mask;
+--    Py_ssize_t mt_used;
+--    Py_ssize_t mt_allocated;
+-+    size_t mt_mask;
+-+    size_t mt_used;
+-+    size_t mt_allocated;
+-     PyMemoEntry *mt_table;
+- } PyMemoTable;
+-
+-@@ -644,8 +644,8 @@ typedef struct UnpicklerObject {
+-     /* The unpickler memo is just an array of PyObject *s. Using a dict
+-        is unnecessary, since the keys are contiguous ints. */
+-     PyObject **memo;
+--    Py_ssize_t memo_size;       /* Capacity of the memo array */
+--    Py_ssize_t memo_len;        /* Number of objects in the memo */
+-+    size_t memo_size;       /* Capacity of the memo array */
+-+    size_t memo_len;        /* Number of objects in the memo */
+-
+-     PyObject *pers_func;        /* persistent_load() method, can be NULL. */
+-     PyObject *pers_func_self;   /* borrowed reference to self if pers_func
+-@@ -731,7 +731,6 @@ PyMemoTable_New(void)
+- static PyMemoTable *
+- PyMemoTable_Copy(PyMemoTable *self)
+- {
+--    Py_ssize_t i;
+-     PyMemoTable *new = PyMemoTable_New();
+-     if (new == NULL)
+-         return NULL;
+-@@ -748,7 +747,7 @@ PyMemoTable_Copy(PyMemoTable *self)
+-         PyErr_NoMemory();
+-         return NULL;
+-     }
+--    for (i = 0; i < self->mt_allocated; i++) {
+-+    for (size_t i = 0; i < self->mt_allocated; i++) {
+-         Py_XINCREF(self->mt_table[i].me_key);
+-     }
+-     memcpy(new->mt_table, self->mt_table,
+-@@ -794,7 +793,7 @@ _PyMemoTable_Lookup(PyMemoTable *self, PyObject *key)
+- {
+-     size_t i;
+-     size_t perturb;
+--    size_t mask = (size_t)self->mt_mask;
+-+    size_t mask = self->mt_mask;
+-     PyMemoEntry *table = self->mt_table;
+-     PyMemoEntry *entry;
+-     Py_hash_t hash = (Py_hash_t)key >> 3;
+-@@ -816,22 +815,24 @@ _PyMemoTable_Lookup(PyMemoTable *self, PyObject *key)
+-
+- /* Returns -1 on failure, 0 on success. */
+- static int
+--_PyMemoTable_ResizeTable(PyMemoTable *self, Py_ssize_t min_size)
+-+_PyMemoTable_ResizeTable(PyMemoTable *self, size_t min_size)
+- {
+-     PyMemoEntry *oldtable = NULL;
+-     PyMemoEntry *oldentry, *newentry;
+--    Py_ssize_t new_size = MT_MINSIZE;
+--    Py_ssize_t to_process;
+-+    size_t new_size = MT_MINSIZE;
+-+    size_t to_process;
+-
+-     assert(min_size > 0);
+-
+--    /* Find the smallest valid table size >= min_size. */
+--    while (new_size < min_size && new_size > 0)
+--        new_size <<= 1;
+--    if (new_size <= 0) {
+-+    if (min_size > PY_SSIZE_T_MAX) {
+-         PyErr_NoMemory();
+-         return -1;
+-     }
+-+
+-+    /* Find the smallest valid table size >= min_size. */
+-+    while (new_size < min_size) {
+-+        new_size <<= 1;
+-+    }
+-     /* new_size needs to be a power of two. */
+-     assert((new_size & (new_size - 1)) == 0);
+-
+-@@ -904,10 +905,12 @@ PyMemoTable_Set(PyMemoTable *self, PyObject *key, Py_ssize_t value)
+-      * Very large memo tables (over 50K items) use doubling instead.
+-      * This may help applications with severe memory constraints.
+-      */
+--    if (!(self->mt_used * 3 >= (self->mt_mask + 1) * 2))
+-+    if (SIZE_MAX / 3 >= self->mt_used && self->mt_used * 3 < self->mt_allocated * 2) {
+-         return 0;
+--    return _PyMemoTable_ResizeTable(self,
+--        (self->mt_used > 50000 ? 2 : 4) * self->mt_used);
+-+    }
+-+    // self->mt_used is always < PY_SSIZE_T_MAX, so this can't overflow.
+-+    size_t desired_size = (self->mt_used > 50000 ? 2 : 4) * self->mt_used;
+-+    return _PyMemoTable_ResizeTable(self, desired_size);
+- }
+-
+- #undef MT_MINSIZE
+-@@ -1352,9 +1355,9 @@ _Unpickler_Readline(UnpicklerObject *self, char **result)
+- /* Returns -1 (with an exception set) on failure, 0 on success. The memo array
+-    will be modified in place. */
+- static int
+--_Unpickler_ResizeMemoList(UnpicklerObject *self, Py_ssize_t new_size)
+-+_Unpickler_ResizeMemoList(UnpicklerObject *self, size_t new_size)
+- {
+--    Py_ssize_t i;
+-+    size_t i;
+-
+-     assert(new_size > self->memo_size);
+-
+-@@ -1373,9 +1376,9 @@ _Unpickler_ResizeMemoList(UnpicklerObject *self, Py_ssize_t new_size)
+-
+- /* Returns NULL if idx is out of bounds. */
+- static PyObject *
+--_Unpickler_MemoGet(UnpicklerObject *self, Py_ssize_t idx)
+-+_Unpickler_MemoGet(UnpicklerObject *self, size_t idx)
+- {
+--    if (idx < 0 || idx >= self->memo_size)
+-+    if (idx >= self->memo_size)
+-         return NULL;
+-
+-     return self->memo[idx];
+-@@ -1384,7 +1387,7 @@ _Unpickler_MemoGet(UnpicklerObject *self, Py_ssize_t idx)
+- /* Returns -1 (with an exception set) on failure, 0 on success.
+-    This takes its own reference to `value`. */
+- static int
+--_Unpickler_MemoPut(UnpicklerObject *self, Py_ssize_t idx, PyObject *value)
+-+_Unpickler_MemoPut(UnpicklerObject *self, size_t idx, PyObject *value)
+- {
+-     PyObject *old_item;
+-
+-@@ -4328,14 +4331,13 @@ static PyObject *
+- _pickle_PicklerMemoProxy_copy_impl(PicklerMemoProxyObject *self)
+- /*[clinic end generated code: output=bb83a919d29225ef input=b73043485ac30b36]*/
+- {
+--    Py_ssize_t i;
+-     PyMemoTable *memo;
+-     PyObject *new_memo = PyDict_New();
+-     if (new_memo == NULL)
+-         return NULL;
+-
+-     memo = self->pickler->memo;
+--    for (i = 0; i < memo->mt_allocated; ++i) {
+-+    for (size_t i = 0; i < memo->mt_allocated; ++i) {
+-         PyMemoEntry entry = memo->mt_table[i];
+-         if (entry.me_key != NULL) {
+-             int status;
+-@@ -6764,7 +6766,7 @@ static PyObject *
+- _pickle_UnpicklerMemoProxy_copy_impl(UnpicklerMemoProxyObject *self)
+- /*[clinic end generated code: output=e12af7e9bc1e4c77 input=97769247ce032c1d]*/
+- {
+--    Py_ssize_t i;
+-+    size_t i;
+-     PyObject *new_memo = PyDict_New();
+-     if (new_memo == NULL)
+-         return NULL;
+-@@ -6915,8 +6917,7 @@ static int
+- Unpickler_set_memo(UnpicklerObject *self, PyObject *obj)
+- {
+-     PyObject **new_memo;
+--    Py_ssize_t new_memo_size = 0;
+--    Py_ssize_t i;
+-+    size_t new_memo_size = 0;
+-
+-     if (obj == NULL) {
+-         PyErr_SetString(PyExc_TypeError,
+-@@ -6933,7 +6934,7 @@ Unpickler_set_memo(UnpicklerObject *self, PyObject *obj)
+-         if (new_memo == NULL)
+-             return -1;
+-
+--        for (i = 0; i < new_memo_size; i++) {
+-+        for (size_t i = 0; i < new_memo_size; i++) {
+-             Py_XINCREF(unpickler->memo[i]);
+-             new_memo[i] = unpickler->memo[i];
+-         }
+-@@ -6981,8 +6982,7 @@ Unpickler_set_memo(UnpicklerObject *self, PyObject *obj)
+-
+-   error:
+-     if (new_memo_size) {
+--        i = new_memo_size;
+--        while (--i >= 0) {
+-+        for (size_t i = new_memo_size - 1; i != SIZE_MAX; i--) {
+-             Py_XDECREF(new_memo[i]);
+-         }
+-         PyMem_FREE(new_memo);
+---
+-2.17.1
+-
+diff --git a/lang/python/python3/patches/019-bpo-36216-Add-check-for-characters-in-netloc-that-normalize-to-separators-GH-12215.patch b/lang/python/python3/patches/019-bpo-36216-Add-check-for-characters-in-netloc-that-normalize-to-separators-GH-12215.patch
+deleted file mode 100644
+index 01ad6e78d..000000000
+--- a/lang/python/python3/patches/019-bpo-36216-Add-check-for-characters-in-netloc-that-normalize-to-separators-GH-12215.patch
++++ /dev/null
+@@ -1,173 +0,0 @@
+-From 8f5285ac12bd185202fdaac56fd19dfb858ec947 Mon Sep 17 00:00:00 2001
+-From: Steve Dower <steve.dower@python.org>
+-Date: Thu, 7 Mar 2019 08:09:56 -0800
+-Subject: [PATCH 1/2] bpo-36216: Add check for characters in netloc that
+- normalize to separators (GH-12201)
+-
+----
+- Doc/library/urllib.parse.rst                  | 18 +++++++++++++++
+- Lib/test/test_urlparse.py                     | 23 +++++++++++++++++++
+- Lib/urllib/parse.py                           | 17 ++++++++++++++
+- .../2019-03-06-09-38-40.bpo-36216.6q1m4a.rst  |  3 +++
+- 4 files changed, 61 insertions(+)
+- create mode 100644 Misc/NEWS.d/next/Security/2019-03-06-09-38-40.bpo-36216.6q1m4a.rst
+-
+-diff --git a/Doc/library/urllib.parse.rst b/Doc/library/urllib.parse.rst
+-index d991254d5ca1..647af613a315 100644
+---- a/Doc/library/urllib.parse.rst
+-+++ b/Doc/library/urllib.parse.rst
+-@@ -121,6 +121,11 @@ or on combining URL components into a URL string.
+-    Unmatched square brackets in the :attr:`netloc` attribute will raise a
+-    :exc:`ValueError`.
+-
+-+   Characters in the :attr:`netloc` attribute that decompose under NFKC
+-+   normalization (as used by the IDNA encoding) into any of ``/``, ``?``,
+-+   ``#``, ``@``, or ``:`` will raise a :exc:`ValueError`. If the URL is
+-+   decomposed before parsing, no error will be raised.
+-+
+-    .. versionchanged:: 3.2
+-       Added IPv6 URL parsing capabilities.
+-
+-@@ -133,6 +138,10 @@ or on combining URL components into a URL string.
+-       Out-of-range port numbers now raise :exc:`ValueError`, instead of
+-       returning :const:`None`.
+-
+-+   .. versionchanged:: 3.6.9
+-+      Characters that affect netloc parsing under NFKC normalization will
+-+      now raise :exc:`ValueError`.
+-+
+-
+- .. function:: parse_qs(qs, keep_blank_values=False, strict_parsing=False, encoding='utf-8', errors='replace', max_num_fields=None)
+-
+-@@ -256,10 +265,19 @@ or on combining URL components into a URL string.
+-    Unmatched square brackets in the :attr:`netloc` attribute will raise a
+-    :exc:`ValueError`.
+-
+-+   Characters in the :attr:`netloc` attribute that decompose under NFKC
+-+   normalization (as used by the IDNA encoding) into any of ``/``, ``?``,
+-+   ``#``, ``@``, or ``:`` will raise a :exc:`ValueError`. If the URL is
+-+   decomposed before parsing, no error will be raised.
+-+
+-    .. versionchanged:: 3.6
+-       Out-of-range port numbers now raise :exc:`ValueError`, instead of
+-       returning :const:`None`.
+-
+-+   .. versionchanged:: 3.6.9
+-+      Characters that affect netloc parsing under NFKC normalization will
+-+      now raise :exc:`ValueError`.
+-+
+-
+- .. function:: urlunsplit(parts)
+-
+-diff --git a/Lib/test/test_urlparse.py b/Lib/test/test_urlparse.py
+-index be50b47603aa..e6638aee2244 100644
+---- a/Lib/test/test_urlparse.py
+-+++ b/Lib/test/test_urlparse.py
+-@@ -1,3 +1,5 @@
+-+import sys
+-+import unicodedata
+- import unittest
+- import urllib.parse
+-
+-@@ -984,6 +986,27 @@ def test_all(self):
+-                 expected.append(name)
+-         self.assertCountEqual(urllib.parse.__all__, expected)
+-
+-+    def test_urlsplit_normalization(self):
+-+        # Certain characters should never occur in the netloc,
+-+        # including under normalization.
+-+        # Ensure that ALL of them are detected and cause an error
+-+        illegal_chars = '/:#?@'
+-+        hex_chars = {'{:04X}'.format(ord(c)) for c in illegal_chars}
+-+        denorm_chars = [
+-+            c for c in map(chr, range(128, sys.maxunicode))
+-+            if (hex_chars & set(unicodedata.decomposition(c).split()))
+-+            and c not in illegal_chars
+-+        ]
+-+        # Sanity check that we found at least one such character
+-+        self.assertIn('\u2100', denorm_chars)
+-+        self.assertIn('\uFF03', denorm_chars)
+-+
+-+        for scheme in ["http", "https", "ftp"]:
+-+            for c in denorm_chars:
+-+                url = "{}://netloc{}false.netloc/path".format(scheme, c)
+-+                with self.subTest(url=url, char='{:04X}'.format(ord(c))):
+-+                    with self.assertRaises(ValueError):
+-+                        urllib.parse.urlsplit(url)
+-
+- class Utility_Tests(unittest.TestCase):
+-     """Testcase to test the various utility functions in the urllib."""
+-diff --git a/Lib/urllib/parse.py b/Lib/urllib/parse.py
+-index 85e68c8b42c7..24a628915e53 100644
+---- a/Lib/urllib/parse.py
+-+++ b/Lib/urllib/parse.py
+-@@ -391,6 +391,21 @@ def _splitnetloc(url, start=0):
+-             delim = min(delim, wdelim)     # use earliest delim position
+-     return url[start:delim], url[delim:]   # return (domain, rest)
+-
+-+def _checknetloc(netloc):
+-+    if not netloc or netloc.isascii():
+-+        return
+-+    # looking for characters like \u2100 that expand to 'a/c'
+-+    # IDNA uses NFKC equivalence, so normalize for this check
+-+    import unicodedata
+-+    netloc2 = unicodedata.normalize('NFKC', netloc)
+-+    if netloc == netloc2:
+-+        return
+-+    _, _, netloc = netloc.rpartition('@') # anything to the left of '@' is okay
+-+    for c in '/?#@:':
+-+        if c in netloc2:
+-+            raise ValueError("netloc '" + netloc2 + "' contains invalid " +
+-+                             "characters under NFKC normalization")
+-+
+- def urlsplit(url, scheme='', allow_fragments=True):
+-     """Parse a URL into 5 components:
+-     <scheme>://<netloc>/<path>?<query>#<fragment>
+-@@ -420,6 +435,7 @@ def urlsplit(url, scheme='', allow_fragments=True):
+-                 url, fragment = url.split('#', 1)
+-             if '?' in url:
+-                 url, query = url.split('?', 1)
+-+            _checknetloc(netloc)
+-             v = SplitResult(scheme, netloc, url, query, fragment)
+-             _parse_cache[key] = v
+-             return _coerce_result(v)
+-@@ -443,6 +459,7 @@ def urlsplit(url, scheme='', allow_fragments=True):
+-         url, fragment = url.split('#', 1)
+-     if '?' in url:
+-         url, query = url.split('?', 1)
+-+    _checknetloc(netloc)
+-     v = SplitResult(scheme, netloc, url, query, fragment)
+-     _parse_cache[key] = v
+-     return _coerce_result(v)
+-diff --git a/Misc/NEWS.d/next/Security/2019-03-06-09-38-40.bpo-36216.6q1m4a.rst b/Misc/NEWS.d/next/Security/2019-03-06-09-38-40.bpo-36216.6q1m4a.rst
+-new file mode 100644
+-index 000000000000..5546394157f9
+---- /dev/null
+-+++ b/Misc/NEWS.d/next/Security/2019-03-06-09-38-40.bpo-36216.6q1m4a.rst
+-@@ -0,0 +1,3 @@
+-+Changes urlsplit() to raise ValueError when the URL contains characters that
+-+decompose under IDNA encoding (NFKC-normalization) into characters that
+-+affect how the URL is parsed.
+-
+-From 379c71551a3f005bbedccc3758568918612c1765 Mon Sep 17 00:00:00 2001
+-From: Steve Dower <steve.dower@python.org>
+-Date: Thu, 7 Mar 2019 08:28:39 -0800
+-Subject: [PATCH 2/2] Replace isascii call with any() call
+-
+----
+- Lib/urllib/parse.py | 2 +-
+- 1 file changed, 1 insertion(+), 1 deletion(-)
+-
+-diff --git a/Lib/urllib/parse.py b/Lib/urllib/parse.py
+-index 24a628915e53..7b06f4d71d67 100644
+---- a/Lib/urllib/parse.py
+-+++ b/Lib/urllib/parse.py
+-@@ -392,7 +392,7 @@ def _splitnetloc(url, start=0):
+-     return url[start:delim], url[delim:]   # return (domain, rest)
+-
+- def _checknetloc(netloc):
+--    if not netloc or netloc.isascii():
+-+    if not netloc or not any(ord(c) > 127 for c in netloc):
+-         return
+-     # looking for characters like \u2100 that expand to 'a/c'
+-     # IDNA uses NFKC equivalence, so normalize for this check
+--
+2.20.1
