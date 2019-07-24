@@ -2,7 +2,7 @@ include(utils.m4)dnl Include utility macros
 _FEATURE_GUARD_
 
 Install("lxc", { priority = 40 })
-forInstall(lxc,attach,auto,console,create,info,ls,monitor,monitord,snapshot,start,stop)
+forInstall(lxc,attach,auto,console,copy,create,destroy,freeze,info,ls,monitor,monitord,snapshot,start,stop,unfreeze)
 
 Install("luci-app-lxc", { priority = 40 })
 
