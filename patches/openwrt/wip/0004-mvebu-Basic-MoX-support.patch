@@ -1,4 +1,4 @@
-From 86a2033bfead504954310d05027fdb64ec876e61 Mon Sep 17 00:00:00 2001
+From ba4b6c02c4ad0bfe2d465e3af795e605d39f4c1a Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -66,7 +66,6 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  ...37xx-periph-add-DVFS-support-for-cp.patch} |  20 +-
  ...eq-Add-DVFS-support-for-Armada-37xx.patch} |  18 +-
  ...SPI-mode-before-asserting-chip-sele.patch} |  18 +-
- ...rvell-Fix-A37xx-UART0-register-size.patch} |  11 +-
  ...-marvell-armada-37xx-add-UART-clock.patch} |   9 +-
  ...-armada-37xx-add-nodes-allowing-cpu.patch} |  13 +-
  ...s-marvell-armada37xx-Add-eth0-alias.patch} |   9 +-
@@ -144,7 +143,7 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  ...37xx-periph-Fix-switching-CPU-rate-.patch} |   0
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
- 133 files changed, 14299 insertions(+), 307 deletions(-)
+ 132 files changed, 14290 insertions(+), 305 deletions(-)
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -198,7 +197,6 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  rename target/linux/mvebu/patches-4.14/{505-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch => 90050-clk-mvebu-armada-37xx-periph-add-DVFS-support-for-cp.patch} (93%)
  rename target/linux/mvebu/patches-4.14/{506-cpufreq-Add-DVFS-support-for-Armada-37xx.patch => 90051-cpufreq-Add-DVFS-support-for-Armada-37xx.patch} (93%)
  rename target/linux/mvebu/patches-4.14/{501-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch => 90052-spi-a3700-Change-SPI-mode-before-asserting-chip-sele.patch} (74%)
- rename target/linux/mvebu/patches-4.14/{500-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch => 90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch} (73%)
  rename target/linux/mvebu/patches-4.14/{502-arm64-dts-marvell-armada-37xx-add-UART-clock.patch => 90054-arm64-dts-marvell-armada-37xx-add-UART-clock.patch} (74%)
  rename target/linux/mvebu/patches-4.14/{507-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch => 90055-arm64-dts-marvell-armada-37xx-add-nodes-allowing-cpu.patch} (73%)
  rename target/linux/mvebu/patches-4.14/{520-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch => 90056-arm64-dts-marvell-armada37xx-Add-eth0-alias.patch} (59%)
@@ -4176,7 +4174,7 @@ diff --git a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-informat
 similarity index 99%
 rename from target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 rename to target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
-index ccc9896..ead2977 100644
+index c531c37..9b6e7ab 100644
 --- a/target/linux/mvebu/patches-4.14/402-sfp-display-SFP-module-information.patch
 +++ b/target/linux/mvebu/patches-4.14/90037-sfp-display-SFP-module-information.patch
 @@ -288,3 +288,6 @@ Signed-off-by: Russell King <rmk+kernel@arm.linux.org.uk>
@@ -5229,7 +5227,7 @@ diff --git a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch b/
 similarity index 84%
 rename from target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 rename to target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
-index d2e7d22..19d2a21 100644
+index 9174765..b71aa71 100644
 --- a/target/linux/mvebu/patches-4.14/411-sfp-add-sfp-compatible.patch
 +++ b/target/linux/mvebu/patches-4.14/90047-sfp-add-sfp-compatible.patch
 @@ -1,7 +1,7 @@
@@ -5628,48 +5626,6 @@ index 3ac7091..a26ec53 100644
   	return 0;
   }
   
-+-- 
-+2.21.0
-+
-diff --git a/target/linux/mvebu/patches-4.14/500-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch b/target/linux/mvebu/patches-4.14/90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-similarity index 73%
-rename from target/linux/mvebu/patches-4.14/500-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-rename to target/linux/mvebu/patches-4.14/90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-index 9e2b1c1..bc7795f 100644
---- a/target/linux/mvebu/patches-4.14/500-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-+++ b/target/linux/mvebu/patches-4.14/90053-arm64-dts-marvell-Fix-A37xx-UART0-register-size.patch
-@@ -1,7 +1,7 @@
--From c737abc193d16e62e23e2fb585b8b7398ab380d8 Mon Sep 17 00:00:00 2001
-+From 53e48e6a26036b17a782627499feada841a40709 Mon Sep 17 00:00:00 2001
- From: allen yan <yanwei@marvell.com>
- Date: Thu, 7 Sep 2017 15:04:53 +0200
--Subject: arm64: dts: marvell: Fix A37xx UART0 register size
-+Subject: [PATCH 053/126] arm64: dts: marvell: Fix A37xx UART0 register size
- 
- Armada-37xx UART0 registers are 0x200 bytes wide. Right next to them are
- the UART1 registers that should not be declared in this node.
-@@ -16,6 +16,8 @@ Signed-off-by: Gregory CLEMENT <gregory.clement@free-electrons.com>
-  arch/arm64/boot/dts/marvell/armada-37xx.dtsi            | 2 +-
-  2 files changed, 2 insertions(+), 2 deletions(-)
- 
-+diff --git a/Documentation/devicetree/bindings/serial/mvebu-uart.txt b/Documentation/devicetree/bindings/serial/mvebu-uart.txt
-+index 6087defd9f93..d37fabe17bd1 100644
- --- a/Documentation/devicetree/bindings/serial/mvebu-uart.txt
- +++ b/Documentation/devicetree/bindings/serial/mvebu-uart.txt
- @@ -8,6 +8,6 @@ Required properties:
-@@ -26,6 +28,8 @@ Signed-off-by: Gregory CLEMENT <gregory.clement@free-electrons.com>
- +		reg = <0x12000 0x200>;
-  		interrupts = <43>;
-  	};
-+diff --git a/arch/arm64/boot/dts/marvell/armada-37xx.dtsi b/arch/arm64/boot/dts/marvell/armada-37xx.dtsi
-+index 6842cae5b35b..a4483ba82ecc 100644
- --- a/arch/arm64/boot/dts/marvell/armada-37xx.dtsi
- +++ b/arch/arm64/boot/dts/marvell/armada-37xx.dtsi
- @@ -134,7 +134,7 @@
-@@ -37,3 +41,6 @@ Signed-off-by: Gregory CLEMENT <gregory.clement@free-electrons.com>
-  				interrupts = <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
-  				status = "disabled";
-  			};
 +-- 
 +2.21.0
 +
@@ -16705,5 +16661,5 @@ similarity index 100%
 rename from target/linux/mvebu/patches-4.14/512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
 rename to target/linux/mvebu/patches-4.14/99512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
 -- 
-2.21.0
+2.22.0
 
