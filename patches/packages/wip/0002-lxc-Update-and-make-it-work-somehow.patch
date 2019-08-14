@@ -1,24 +1,26 @@
-From f125a45e16180501b9e2e7e46f018778cf332853 Mon Sep 17 00:00:00 2001
+From 914ad4089f706aaa8e1a59d0f11338e0959f80a9 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Fri, 3 May 2019 16:38:11 +0200
 Subject: [PATCH] lxc: Update and make it work somehow
 
 ---
- utils/lxc/Makefile                            | 36 ++++--------------
- utils/lxc/files/systemd-workaround            |  4 ++
- ...01-nl-avoid-NULL-pointer-dereference.patch | 37 -------------------
- utils/lxc/patches/002-compile.patch           | 10 -----
- utils/lxc/patches/003-compile.patch           | 11 ------
- utils/lxc/patches/010-compile.patch           | 37 -------------------
+ utils/lxc/Makefile                            | 36 ++-----
+ utils/lxc/files/systemd-workaround            |  4 +
+ ...01-nl-avoid-NULL-pointer-dereference.patch | 37 --------
+ utils/lxc/patches/002-compile.patch           | 10 --
+ utils/lxc/patches/003-compile.patch           | 11 ---
+ utils/lxc/patches/010-compile.patch           | 37 --------
  utils/lxc/patches/020-lxc-checkconfig.patch   |  4 +-
- .../025-remove-unsupported-option.patch       | 20 +++++-----
- utils/lxc/patches/030-turris-servers.patch    |  6 +--
- 9 files changed, 27 insertions(+), 138 deletions(-)
+ .../025-remove-unsupported-option.patch       | 20 ++--
+ utils/lxc/patches/030-prlimit.patch           | 95 -------------------
+ utils/lxc/patches/030-turris-servers.patch    |  6 +-
+ 10 files changed, 27 insertions(+), 233 deletions(-)
  create mode 100644 utils/lxc/files/systemd-workaround
  delete mode 100644 utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
  delete mode 100644 utils/lxc/patches/002-compile.patch
  delete mode 100644 utils/lxc/patches/003-compile.patch
  delete mode 100644 utils/lxc/patches/010-compile.patch
+ delete mode 100644 utils/lxc/patches/030-prlimit.patch
 
 diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
 index 8641775..352b99e 100644
@@ -297,6 +299,107 @@ index b208708..4e7b584 100644
   
   mkdir -p "${LXC_ROOTFS}/dev/pts/"
 + 
+diff --git a/utils/lxc/patches/030-prlimit.patch b/utils/lxc/patches/030-prlimit.patch
+deleted file mode 100644
+index 88f17aa..0000000
+--- a/utils/lxc/patches/030-prlimit.patch
++++ /dev/null
+@@ -1,95 +0,0 @@
+-From f48b5fd8ab03c200eaf5e3a9b03bcd01b2659cf3 Mon Sep 17 00:00:00 2001
+-From: Fabrice Fontaine <fontaine.fabrice@gmail.com>
+-Date: Thu, 2 Nov 2017 16:00:33 +0100
+-Subject: [PATCH] Fix compilation on toolchain without prlimit
+-
+-Some toolchains which are not bionic like uclibc does not support
+-prlimit or prlimit64. In this case, return an error.
+-Moreover, if prlimit64 is available, use lxc implementation of prlimit.
+-
+-Signed-off-by: Fabrice Fontaine <fontaine.fabrice@gmail.com>
+----
+- configure.ac        |  4 ++++
+- src/lxc/Makefile.am |  6 ++++++
+- src/lxc/conf.c      | 12 +++++++++---
+- 3 files changed, 19 insertions(+), 3 deletions(-)
+-
+-diff --git a/configure.ac b/configure.ac
+-index 642b78e7e1..63df7466cb 100644
+---- a/configure.ac
+-+++ b/configure.ac
+-@@ -643,6 +643,10 @@ AC_CHECK_FUNCS([prlimit],
+- 	AM_CONDITIONAL(HAVE_PRLIMIT, true)
+- 	AC_DEFINE(HAVE_PRLIMIT,1,[Have prlimit]),
+- 	AM_CONDITIONAL(HAVE_PRLIMIT, false))
+-+AC_CHECK_FUNCS([prlimit64],
+-+	AM_CONDITIONAL(HAVE_PRLIMIT64, true)
+-+	AC_DEFINE(HAVE_PRLIMIT64,1,[Have prlimit64]),
+-+	AM_CONDITIONAL(HAVE_PRLIMIT64, false))
+- 
+- # Check for some libraries
+- AC_SEARCH_LIBS(sem_open, [rt pthread])
+-diff --git a/src/lxc/Makefile.am b/src/lxc/Makefile.am
+-index fff32ae4f3..8f0c11ecae 100644
+---- a/src/lxc/Makefile.am
+-+++ b/src/lxc/Makefile.am
+-@@ -45,7 +45,10 @@ noinst_HEADERS += \
+- 	../include/ifaddrs.h \
+- 	../include/openpty.h \
+- 	../include/lxcmntent.h
+-+endif
+-+
+- if !HAVE_PRLIMIT
+-+if HAVE_PRLIMIT64
+- noinst_HEADERS += ../include/prlimit.h
+- endif
+- endif
+-@@ -142,7 +145,10 @@ liblxc_la_SOURCES += \
+- 	../include/ifaddrs.c ../include/ifaddrs.h \
+- 	../include/openpty.c ../include/openpty.h \
+- 	../include/lxcmntent.c ../include/lxcmntent.h
+-+endif
+-+
+- if !HAVE_PRLIMIT
+-+if HAVE_PRLIMIT64
+- liblxc_la_SOURCES += ../include/prlimit.c ../include/prlimit.h
+- endif
+- endif
+-diff --git a/src/lxc/conf.c b/src/lxc/conf.c
+-index 44d9784303..8a66f2d02c 100644
+---- a/src/lxc/conf.c
+-+++ b/src/lxc/conf.c
+-@@ -100,13 +100,14 @@
+- 
+- #if IS_BIONIC
+- #include <../include/lxcmntent.h>
+--#ifndef HAVE_PRLIMIT
+--#include <../include/prlimit.h>
+--#endif
+- #else
+- #include <mntent.h>
+- #endif
+- 
+-+#if !defined(HAVE_PRLIMIT) && defined(HAVE_PRLIMIT64)
+-+#include <../include/prlimit.h>
+-+#endif
+-+
+- lxc_log_define(lxc_conf, lxc);
+- 
+- #if HAVE_LIBCAP
+-@@ -2457,10 +2458,15 @@ int setup_resource_limits(struct lxc_list *limits, pid_t pid) {
+- 			return -1;
+- 		}
+- 
+-+#if HAVE_PRLIMIT || HAVE_PRLIMIT64
+- 		if (prlimit(pid, resid, &lim->limit, NULL) != 0) {
+- 			ERROR("failed to set limit %s: %s", lim->resource, strerror(errno));
+- 			return -1;
+- 		}
+-+#else
+-+		ERROR("Cannot set limit %s as prlimit is missing", lim->resource);
+-+		return -1;
+-+#endif
+- 	}
+- 	return 0;
+- }
 diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
 index a674b3f..0f351ea 100644
 --- a/utils/lxc/patches/030-turris-servers.patch
@@ -315,5 +418,5 @@ index a674b3f..0f351ea 100644
  +lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
  Index: lxc-2.1.1/templates/lxc-download.in
 -- 
-2.22.0
+2.22.1
 
