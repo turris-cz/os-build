@@ -32,7 +32,7 @@ Install("opkg", "libustream-openssl", { priority = 40 })
 Uninstall("wget-nossl", { priority = 40 }) -- opkg required SSL variant only
 
 -- Turris minimum
-Install("vixie-cron", "syslog-ng", { priority = 40 })
+Install("cronie", "syslog-ng", { priority = 40 })
 Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 if board == "turris1x" then
