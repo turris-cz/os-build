@@ -1,4 +1,5 @@
 include(utils.m4)dnl Include utility macros
+include(luci-utils.m4)dnl
 _FEATURE_GUARD_
 
 -- Kernel --
@@ -35,7 +36,7 @@ Install("sshfs", { priority = 40 })
 Install("wget", "rsync", "rsyncd", "samba36-client", "samba36-server", { priority = 40 })
 
 -- Luci
-forInstall(luci-app,hd-idle,minidlna,samba)
+luci_app("hd-idle","minidlna", "samba")
 Install("luci-mod-admin-full", { priority = 40 })
 
 -- Encryption --

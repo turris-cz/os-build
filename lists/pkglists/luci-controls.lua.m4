@@ -1,11 +1,11 @@
 include(utils.m4)dnl Include utility macros
+include(luci-utils.m4)dnl
 _FEATURE_GUARD_
 
-forInstall(luci-app,ahcp,adblock,bcp38,firewall,minidlna,mjpg-streamer,sqm,statistics,tinyproxy,transmission,upnp)
-forInstall(luci-proto,openconnect,relay,vpnc)
-Install("luci-theme-bootstrap", { priority = 40 })
+luci_app("ahcp", "adblock", "bcp38", "firewall", "minidlna", "mjpg-streamer", "sqm", "statistics", "tinyproxy", "transmission", "upnp")
 if board == "omnia" or board == "turris1x" then
-	Install('luci-app-rainbow', { priority = 40 })
+	luci_app('rainbow')
 end
+luci_proto("openconnect", "relay", "vpnc")
 
 _END_FEATURE_GUARD_
