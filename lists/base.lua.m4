@@ -8,7 +8,9 @@ _FEATURE_GUARD_
 list_script('luci.lua')
 list_script('foris.lua')
 list_script('terminal-apps.lua')
-list_script('webapps.lua')
+
+-- WebAPPs
+Install("turris-webapps", { priority = 40 })
 
 -- IPv6
 Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })
