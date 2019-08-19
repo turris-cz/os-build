@@ -1,6 +1,7 @@
 include(utils.m4)dnl Include utility macros
+include(foris-utils.m4)dnl
 _FEATURE_GUARD_
 
-Install("foris-netmetr-plugin", { priority = 40 })
+foris_plugin("netmetr")
 
 _END_FEATURE_GUARD_
