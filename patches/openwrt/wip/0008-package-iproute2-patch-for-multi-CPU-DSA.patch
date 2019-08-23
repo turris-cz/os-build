@@ -1,0 +1,141 @@
+From 3f1a72353a641e0dd1c3c608c26ded1879540569 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Aug 2019 21:50:58 +0200
+Subject: [PATCH] package/iproute2: patch for multi-CPU DSA
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ .../patches/960-ip-link-set-link.patch        | 118 ++++++++++++++++++
+ 1 file changed, 118 insertions(+)
+ create mode 100644 package/network/utils/iproute2/patches/960-ip-link-set-link.patch
+
+diff --git a/package/network/utils/iproute2/patches/960-ip-link-set-link.patch b/package/network/utils/iproute2/patches/960-ip-link-set-link.patch
+new file mode 100644
+index 0000000..a22c378
+--- /dev/null
++++ b/package/network/utils/iproute2/patches/960-ip-link-set-link.patch
+@@ -0,0 +1,118 @@
++diff -Naurp a/include/utils.h b/include/utils.h
++--- a/include/utils.h	2018-04-02 19:06:08.000000000 +0200
+++++ b/include/utils.h	2019-08-23 21:40:05.406944104 +0200
++@@ -279,7 +279,7 @@ struct iplink_req {
++ };
++ 
++ int iplink_parse(int argc, char **argv, struct iplink_req *req,
++-		char **name, char **type, char **link, char **dev,
+++		char **name, char **type, char **dev,
++ 		int *group, int *index);
++ 
++ int do_each_netns(int (*func)(char *nsname, void *arg), void *arg,
++diff -Naurp a/ip/iplink.c b/ip/iplink.c
++--- a/ip/iplink.c	2018-04-02 19:06:08.000000000 +0200
+++++ b/ip/iplink.c	2019-08-23 21:41:12.126943407 +0200
++@@ -572,7 +572,7 @@ static int iplink_parse_vf(int vf, int *
++ }
++ 
++ int iplink_parse(int argc, char **argv, struct iplink_req *req,
++-		 char **name, char **type, char **link, char **dev,
+++		 char **name, char **type, char **dev,
++ 		 int *group, int *index)
++ {
++ 	int ret, len;
++@@ -610,8 +610,16 @@ int iplink_parse(int argc, char **argv,
++ 			if (*index <= 0)
++ 				invarg("Invalid \"index\" value", *argv);
++ 		} else if (matches(*argv, "link") == 0) {
+++			int link;
+++
++ 			NEXT_ARG();
++-			*link = *argv;
+++			link = ll_name_to_index(*argv);
+++			if (link == 0) {
+++				fprintf(stderr, "Cannot find device \"%s\"\n",
+++					*argv);
+++				return -1;
+++			}
+++			addattr_l(&req->n, sizeof(req), IFLA_LINK, &link, 4);
++ 		} else if (matches(*argv, "address") == 0) {
++ 			NEXT_ARG();
++ 			addr_len = ll_addr_a2n(abuf, sizeof(abuf), *argv);
++@@ -925,7 +933,6 @@ static int iplink_modify(int cmd, unsign
++ {
++ 	char *dev = NULL;
++ 	char *name = NULL;
++-	char *link = NULL;
++ 	char *type = NULL;
++ 	int index = 0;
++ 	int group;
++@@ -939,7 +946,7 @@ static int iplink_modify(int cmd, unsign
++ 	int ret;
++ 
++ 	ret = iplink_parse(argc, argv,
++-			   &req, &name, &type, &link, &dev, &group, &index);
+++			   &req, &name, &type, &dev, &group, &index);
++ 	if (ret < 0)
++ 		return ret;
++ 
++@@ -992,18 +999,6 @@ static int iplink_modify(int cmd, unsign
++ 		if (!name)
++ 			name = dev;
++ 
++-		if (link) {
++-			int ifindex;
++-
++-			ifindex = ll_name_to_index(link);
++-			if (ifindex == 0) {
++-				fprintf(stderr, "Cannot find device \"%s\"\n",
++-					link);
++-				return -1;
++-			}
++-			addattr_l(&req.n, sizeof(req), IFLA_LINK, &ifindex, 4);
++-		}
++-
++ 		req.i.ifi_index = index;
++ 	}
++ 
++diff -Naurp a/ip/iplink_vxcan.c b/ip/iplink_vxcan.c
++--- a/ip/iplink_vxcan.c	2018-04-02 19:06:08.000000000 +0200
+++++ b/ip/iplink_vxcan.c	2019-08-23 21:40:26.350277221 +0200
++@@ -35,7 +35,6 @@ static int vxcan_parse_opt(struct link_u
++ {
++ 	char *dev = NULL;
++ 	char *name = NULL;
++-	char *link = NULL;
++ 	char *type = NULL;
++ 	int index = 0;
++ 	int err;
++@@ -61,7 +60,7 @@ static int vxcan_parse_opt(struct link_u
++ 	hdr->nlmsg_len += sizeof(struct ifinfomsg);
++ 
++ 	err = iplink_parse(argc - 1, argv + 1, (struct iplink_req *)hdr,
++-			   &name, &type, &link, &dev, &group, &index);
+++			   &name, &type, &dev, &group, &index);
++ 	if (err < 0)
++ 		return err;
++ 
++diff -Naurp a/ip/link_veth.c b/ip/link_veth.c
++--- a/ip/link_veth.c	2018-04-02 19:06:08.000000000 +0200
+++++ b/ip/link_veth.c	2019-08-23 21:40:40.523610399 +0200
++@@ -33,7 +33,6 @@ static int veth_parse_opt(struct link_ut
++ {
++ 	char *dev = NULL;
++ 	char *name = NULL;
++-	char *link = NULL;
++ 	char *type = NULL;
++ 	int index = 0;
++ 	int err;
++@@ -59,7 +58,7 @@ static int veth_parse_opt(struct link_ut
++ 	hdr->nlmsg_len += sizeof(struct ifinfomsg);
++ 
++ 	err = iplink_parse(argc - 1, argv + 1, (struct iplink_req *)hdr,
++-			   &name, &type, &link, &dev, &group, &index);
+++			   &name, &type, &dev, &group, &index);
++ 	if (err < 0)
++ 		return err;
++ 
+-- 
+2.21.0
+
