@@ -1,4 +1,4 @@
-From 9e8821be8d387c40aa801e098821978da75722d5 Mon Sep 17 00:00:00 2001
+From eb7378684ab55a775b3e27935a1ef2aafbea5860 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Tue, 27 Aug 2019 19:56:07 +0200
 Subject: [PATCH] mvebu: turris-omnia: multi cpu dsa
@@ -8,21 +8,21 @@ Content-Transfer-Encoding: 8bit
 
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 ---
- .../90500-net-dsa-multi-cpu.patch             | 253 ++++++++++++++++++
+ .../90500-net-dsa-multi-cpu.patch             | 261 ++++++++++++++++++
  .../90501-omnia-dts-dsa-multi-cpu.patch       |  58 ++++
- 2 files changed, 311 insertions(+)
+ 2 files changed, 319 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90501-omnia-dts-dsa-multi-cpu.patch
 
 diff --git a/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch b/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
 new file mode 100644
-index 0000000..e51ee19
+index 0000000..5bd18c1
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,261 @@
 +diff -Naurp a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c	2019-08-22 10:27:11.763008277 +0200
-++++ b/drivers/net/dsa/mv88e6xxx/chip.c	2019-08-27 19:27:30.435568033 +0200
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c	2019-08-28 00:17:26.065042132 +0200
 +@@ -1087,6 +1087,7 @@ static u16 mv88e6xxx_port_vlan(struct mv
 + 	struct dsa_switch *ds = NULL;
 + 	struct net_device *br;
@@ -31,7 +31,7 @@ index 0000000..e51ee19
 + 	int i;
 + 
 + 	if (dev < DSA_MAX_SWITCHES)
-+@@ -1097,8 +1098,22 @@ static u16 mv88e6xxx_port_vlan(struct mv
++@@ -1097,8 +1098,26 @@ static u16 mv88e6xxx_port_vlan(struct mv
 + 		return 0;
 + 
 + 	/* Frames from DSA links and CPU ports can egress any local port */
@@ -47,6 +47,10 @@ index 0000000..e51ee19
 ++					pvlan |= BIT(i);
 ++				continue;
 ++			}
+++			if (dsa_is_dsa_port(ds, i)) {
+++				pvlan |= BIT(i);
+++				continue;
+++			}
 ++			if ((pmask & BIT(i)) && dsa_port_upstream_port(chip->ds, i) == port)
 ++				pvlan |= BIT(i);
 ++		}
@@ -56,7 +60,7 @@ index 0000000..e51ee19
 + 
 + 	br = ds->ports[port].bridge_dev;
 + 	pvlan = 0;
-+@@ -1106,8 +1121,9 @@ static u16 mv88e6xxx_port_vlan(struct mv
++@@ -1106,8 +1125,9 @@ static u16 mv88e6xxx_port_vlan(struct mv
 + 	/* Frames from user ports can egress any local DSA links and CPU ports,
 + 	 * as well as any local member of their bridge group.
 + 	 */
@@ -67,7 +71,7 @@ index 0000000..e51ee19
 + 		    dsa_is_dsa_port(chip->ds, i) ||
 + 		    (br && chip->ds->ports[i].bridge_dev == br))
 + 			pvlan |= BIT(i);
-+@@ -1943,9 +1959,11 @@ static int mv88e6xxx_setup_message_port(
++@@ -1943,9 +1963,11 @@ static int mv88e6xxx_setup_message_port(
 + 
 + static int mv88e6xxx_setup_egress_floods(struct mv88e6xxx_chip *chip, int port)
 + {
@@ -82,7 +86,7 @@ index 0000000..e51ee19
 + 							       flood, flood);
 +diff -Naurp a/include/net/dsa.h b/include/net/dsa.h
 +--- a/include/net/dsa.h	2019-08-22 10:27:11.723008277 +0200
-++++ b/include/net/dsa.h	2019-08-27 15:56:37.053514380 +0200
+++++ b/include/net/dsa.h	2019-08-28 00:05:14.713351430 +0200
 +@@ -188,6 +188,10 @@ struct dsa_port {
 + 	struct net_device	*bridge_dev;
 + 	struct devlink_port	devlink_port;
@@ -116,7 +120,7 @@ index 0000000..e51ee19
 ++	 * If this port has a specific upstream cpu port, use it,
 ++	 * otherwise use the switch default.
 ++	 */
-++	if (ds->ports[port].upstream)
+++	if (ds->ports[port].upstream != DSA_RTABLE_NONE)
 ++		return ds->ports[port].upstream;
 ++	else
 ++		return dsa_upstream_port(ds);
@@ -127,7 +131,7 @@ index 0000000..e51ee19
 + struct dsa_switch_ops {
 +diff -Naurp a/net/dsa/dsa2.c b/net/dsa/dsa2.c
 +--- a/net/dsa/dsa2.c	2019-08-09 17:53:37.000000000 +0200
-++++ b/net/dsa/dsa2.c	2019-08-27 19:44:55.481541248 +0200
+++++ b/net/dsa/dsa2.c	2019-08-28 00:13:37.643198813 +0200
 +@@ -253,6 +253,8 @@ static int dsa_cpu_port_apply(struct dsa
 + 	memset(&port->devlink_port, 0, sizeof(port->devlink_port));
 + 	err = devlink_port_register(ds->devlink, &port->devlink_port,
@@ -188,7 +192,7 @@ index 0000000..e51ee19
 ++			return -EINVAL;
 ++		cpu_port_index = be32_to_cpup(cpu_port_reg);
 ++	} else {
-++		cpu_port_index = ds->dst->cpu_dp->index;
+++		cpu_port_index = dsa_upstream_port(ds);
 ++	}
 ++
 ++	ds->ports[index].upstream = cpu_port_index;
@@ -196,7 +200,7 @@ index 0000000..e51ee19
 + 	return 0;
 + }
 + 
-+@@ -533,8 +566,9 @@ static int dsa_ds_parse(struct dsa_switc
++@@ -533,10 +566,13 @@ static int dsa_ds_parse(struct dsa_switc
 + {
 + 	struct dsa_port *port;
 + 	u32 index;
@@ -206,8 +210,12 @@ index 0000000..e51ee19
 ++	/* first parse only CPU ports */
 + 	for (index = 0; index < ds->num_ports; index++) {
 + 		port = &ds->ports[index];
+++		port->upstream = DSA_RTABLE_NONE;
+++
 + 		if (!dsa_port_is_valid(port) ||
-+@@ -545,7 +579,20 @@ static int dsa_ds_parse(struct dsa_switc
++ 		    dsa_port_is_dsa(port))
++ 			continue;
++@@ -545,7 +581,20 @@ static int dsa_ds_parse(struct dsa_switc
 + 			err = dsa_cpu_parse(port, index, dst, ds);
 + 			if (err)
 + 				return err;
