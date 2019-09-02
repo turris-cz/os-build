@@ -1,5 +1,5 @@
-include(utils.m4)dnl Include utility macros
-include(repository.m4)dnl Include Repository command
+include(utils.m4)dnl
+include(repository.m4)dnl
 
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })

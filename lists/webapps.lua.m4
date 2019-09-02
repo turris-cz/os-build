@@ -1,4 +1,4 @@
-include(utils.m4)dnl Include utility macros
+include(utils.m4)dnl
 _FEATURE_GUARD_
 
 -- List of all available webapps packages integrations

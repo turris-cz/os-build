@@ -1,4 +1,4 @@
-include(utils.m4)dnl Include utility macros
+include(utils.m4)dnl
 
 local feeds = { "base", "core" esyscmd(`awk "/^src-git/{printf \", \\\"%s\\\"\", \$'`2}" '_FEEDS_)}
 
