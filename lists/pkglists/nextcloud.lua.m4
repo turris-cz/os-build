@@ -1,4 +1,4 @@
-include(utils.m4)dnl Include utility macros
+include(utils.m4)dnl
 _FEATURE_GUARD_
 
 Install("nextcloud", "nextcloud-install", { priority = 40 })

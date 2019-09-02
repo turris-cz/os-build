@@ -1,4 +1,4 @@
-include(utils.m4)dnl Include utility macros
+include(utils.m4)dnl
 include(foris-utils.m4)dnl
 _FEATURE_GUARD_
 
