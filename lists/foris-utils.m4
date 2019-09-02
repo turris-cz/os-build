@@ -1,6 +1,6 @@
 
 local function foris_plugin(...)
-	for plugin in pairs({...}) do
+	for _, plugin in pairs({...}) do
 		fplugin = "foris-" .. plugin .. "-plugin"
 		Install(fplugin, { priority = 40 })
 		if for_l10n then
