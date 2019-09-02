@@ -18,7 +18,6 @@ set -e
 
 output_path=
 sign_key=
-obsolete=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -41,9 +40,6 @@ while [ $# -gt 0 ]; do
 		--debug)
 			set -x
 			;;
-		--obsolete)
-			obsolete=-obsolete
-			;;
 		*)
 			if [ -z "$output_path" ]; then
 				output_path="$1"
@@ -58,7 +54,7 @@ done
 
 [ -n "$output_path" ] || output_path="generated_lists"
 tb="$(dirname "$(readlink -f "$0")")"
-[ -d "$tb/lists$obsolete" -a -f "$tb/feeds.conf" ] || {
+[ -d "$tb/lists" -a -f "$tb/feeds.conf" ] || {
 	echo "This script has to be in same direstory as feeds.conf and lists directory." >&2
 	exit 1
 }
@@ -70,7 +66,7 @@ mkdir -p "$output_path"
 "$tb/helpers/turris-version.sh" version > "$output_path/turris-version"
 ( cd "$tb" && git rev-parse HEAD > "$output_path/git-hash" )
 
-listsdir="$tb/lists$obsolete"
+listsdir="$tb/lists"
 m4args=( "--include=$listsdir" "-D_INCLUDE_=$listsdir/" "-D_FEEDS_=$tb/feeds.conf" )
 m4args+=( "-D_TURRIS_OS_VERSION_=$("${0%/*}/helpers/turris-version.sh" version)" )
 
