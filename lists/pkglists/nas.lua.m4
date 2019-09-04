@@ -33,10 +33,11 @@ Install("ntfs-3g", "ntfs-3g-utils", { priority = 40 })
 Install("sshfs", { priority = 40 })
 
 -- Network
-Install("wget", "rsync", "rsyncd", "samba36-client", "samba36-server", { priority = 40 })
+Install("wget", "rsync", "rsyncd", { priority = 40 })
+forInstall(samba4,client,server,admin,utils)
 
 -- Luci
-luci_app("hd-idle","minidlna", "samba")
+luci_app("hd-idle","minidlna", "samba4")
 
 -- Encryption --
 Install("cryptsetup", "kmod-cryptodev", "kmod-crypto-user", { priority = 40 })
