@@ -1,4 +1,4 @@
-From f07f2a4ab16d7ae78e7adf2003fd8741dca7936e Mon Sep 17 00:00:00 2001
+From 7424bbfa0d512c332498ebb402ee9e68331b4299 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 29 May 2018 16:13:18 +0200
 Subject: [PATCH] base-files: do not automatically activate services and
@@ -15,16 +15,16 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
 ---
  package/base-files/Makefile                  | 11 ++++
- package/base-files/files/etc/services_wanted | 56 ++++++++++++++++++++
+ package/base-files/files/etc/services_wanted | 54 ++++++++++++++++++++
  package/base-files/files/lib/functions.sh    | 16 +++---
- 3 files changed, 77 insertions(+), 6 deletions(-)
+ 3 files changed, 74 insertions(+), 7 deletions(-)
  create mode 100644 package/base-files/files/etc/services_wanted
 
 diff --git a/package/base-files/Makefile b/package/base-files/Makefile
-index d1b26ea40e..c16091b6bc 100644
+index 89ced0d..26ff9a5 100644
 --- a/package/base-files/Makefile
 +++ b/package/base-files/Makefile
-@@ -200,6 +200,17 @@ define Package/base-files/install
+@@ -209,6 +209,17 @@ define Package/base-files/install
  		rm -f $(1)/sbin/pkg_check,)
  endef
  
@@ -44,7 +44,7 @@ index d1b26ea40e..c16091b6bc 100644
    -include $(PLATFORM_SUBDIR)/base-files.mk
 diff --git a/package/base-files/files/etc/services_wanted b/package/base-files/files/etc/services_wanted
 new file mode 100644
-index 0000000..f73067e
+index 0000000..b7e8208
 --- /dev/null
 +++ b/package/base-files/files/etc/services_wanted
 @@ -0,0 +1,54 @@
@@ -102,35 +102,34 @@ index 0000000..f73067e
 +updater-journal-recover
 +urandom_seed
 +usbmode
-+watchdog_adjust
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
-index edce75e..6bd0701 100755
+index 860fc04..213e2c2 100755
 --- a/package/base-files/files/lib/functions.sh
 +++ b/package/base-files/files/lib/functions.sh
-@@ -244,13 +244,17 @@ default_postinst() {
+@@ -251,14 +251,16 @@ default_postinst() {
  
  	local shell="$(which bash)"
- 	for i in $(grep -s "^/etc/init.d/" "$root/usr/lib/opkg/info/${pkgname}.list"); do
+ 	for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
 -		if [ -n "$root" ]; then
 -			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 -		else
 -			if [ "$PKG_UPGRADE" != "1" ]; then
 -				"$i" enable
+-			fi
+-			"$i" start
 +		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
 +			if [ -n "$root" ]; then
 +				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 +			else
-+				if [ "$PKG_UPGRADE" != "1" ]; then
-+					"$i" enable
-+				fi
- 			fi
--			"$i" start
-+		fi
-+		if [ -z "$root" -a "$pkgname" \!= "updater" -a "$pkgname" \!= "base-files" ] && "$i" enabled; then
-+			"$i" restart
++				[ "$PKG_UPGRADE" = "1" ] || "$i" enable
++ 			fi
  		fi
++		if [ -z "$root" ] && "$i" enabled; then
++			"$i" restart
++ 		fi
  	done
  
+ 	return $ret
 -- 
-2.22.1
+2.23.0
 
