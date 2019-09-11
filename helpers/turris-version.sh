@@ -22,8 +22,7 @@ get_version() {
 }
 
 news_text() {
-	awk '/^-+$/{if(flg) nextfile; else flg=1;next} flg==1{prev=$0;flg=2;next} flg==2{print prev;prev=$0}' "$news_file" | \
-		sed '/^$/d;s/^[[:blank:]]*\*[[:blank:]]*/ • /'
+	awk '/^-+$/{if(flg) nextfile; else flg=1;next} flg==1{prev=$0;flg=2;next} flg==2{ if (prev !~ /^$/) {print prev};prev=$0}' "$news_file"
 }
 
 gen_package() {
@@ -62,7 +61,7 @@ define Package/turris-version/postinst
 #!/bin/sh
 # Danger: spaces are not ordinary spaces, but special unicode ones
 [ -n "\$\$IPKG_INSTROOT" ] || {
-create_notification -s news "$(news_text | sed 's/"/\\"/g')"
+create_notification -s news "$(news_text | sed -e 's/"/\\"/g' -e 's/^[[:blank:]]*\*[[:blank:]]*/ • /')"
 }
 endef
 
@@ -100,7 +99,7 @@ while [ $# -gt 0 ]; do
 			shift
 			output="$1"
 			;;
-		version|package)
+		version|package|news)
 			operation="$1"
 			;;
 		*)
@@ -122,5 +121,8 @@ case "$operation" in
 		;;
 	package)
 		gen_package
+		;;
+	news)
+		news_text
 		;;
 esac
