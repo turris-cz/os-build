@@ -1,0 +1,1734 @@
+From 952be5b6ef9c954c24d8d587194e64d191f9f9a7 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 25 Sep 2019 10:51:17 +0200
+Subject: [PATCH] mariadb: workaround for broken priority of feeds
+
+---
+ utils/mariadb/Makefile                        | 640 ------------------
+ utils/mariadb/conf/50-client.cnf              |  21 -
+ utils/mariadb/conf/50-mysql-clients.cnf       |  25 -
+ utils/mariadb/conf/50-server.cnf              | 136 ----
+ utils/mariadb/conf/my.cnf                     |  22 -
+ utils/mariadb/files/mysqld.config             |   7 -
+ utils/mariadb/files/mysqld.init               | 156 -----
+ utils/mariadb/patches/100-fix_hostname.patch  |  11 -
+ utils/mariadb/patches/110-pcre.cmake.patch    |  11 -
+ utils/mariadb/patches/130-c11_atomics.patch   | 112 ---
+ .../patches/140-mips-connect-unaligned.patch  | 262 -------
+ utils/mariadb/patches/160-mips-machine.patch  |  25 -
+ .../patches/170-ppc-remove-glibc-dep.patch    |  79 ---
+ utils/mariadb/patches/180-libedit.patch       | 105 ---
+ 14 files changed, 1612 deletions(-)
+ delete mode 100644 utils/mariadb/Makefile
+ delete mode 100644 utils/mariadb/conf/50-client.cnf
+ delete mode 100644 utils/mariadb/conf/50-mysql-clients.cnf
+ delete mode 100644 utils/mariadb/conf/50-server.cnf
+ delete mode 100644 utils/mariadb/conf/my.cnf
+ delete mode 100644 utils/mariadb/files/mysqld.config
+ delete mode 100644 utils/mariadb/files/mysqld.init
+ delete mode 100644 utils/mariadb/patches/100-fix_hostname.patch
+ delete mode 100644 utils/mariadb/patches/110-pcre.cmake.patch
+ delete mode 100644 utils/mariadb/patches/130-c11_atomics.patch
+ delete mode 100644 utils/mariadb/patches/140-mips-connect-unaligned.patch
+ delete mode 100644 utils/mariadb/patches/160-mips-machine.patch
+ delete mode 100644 utils/mariadb/patches/170-ppc-remove-glibc-dep.patch
+ delete mode 100644 utils/mariadb/patches/180-libedit.patch
+
+diff --git a/utils/mariadb/Makefile b/utils/mariadb/Makefile
+deleted file mode 100644
+index 81aa2dcda..000000000
+--- a/utils/mariadb/Makefile
++++ /dev/null
+@@ -1,640 +0,0 @@
+-#
+-# Copyright (C) 2018 Sebastian Kemper <sebastian_ml@gmx.net>
+-#
+-# This is free software, licensed under the GNU General Public License v2.
+-# See /LICENSE for more information.
+-#
+-
+-include $(TOPDIR)/rules.mk
+-
+-PKG_NAME:=mariadb
+-PKG_VERSION:=10.2.26
+-PKG_RELEASE:=1
+-
+-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_SOURCE_URL := \
+-	https://mirror.netcologne.de/mariadb/$(PKG_NAME)-$(PKG_VERSION)/source \
+-	https://mirror.lstn.net/mariadb/$(PKG_NAME)-$(PKG_VERSION)/source \
+-	https://ftp.yz.yamagata-u.ac.jp/pub/dbms/mariadb/$(PKG_NAME)-$(PKG_VERSION)/source \
+-	https://downloads.mariadb.org/interstitial/$(PKG_NAME)-$(PKG_VERSION)/source
+-
+-PKG_HASH:=152fe941c4f2a352b2b3a4db1ef64e70235fd9ff055af62ad7bda9f2b2191528
+-PKG_MAINTAINER:=Sebastian Kemper <sebastian_ml@gmx.net>
+-PKG_LICENSE:=GPL-2.0 LGPL-2.1
+-PKG_LICENSE_FILES:=COPYING THIRDPARTY libmariadb/COPYING.LIB
+-
+-PKG_CPE_ID:=cpe:/a:mariadb:mariadb
+-
+-HOST_BUILD_PARALLEL:=1
+-PKG_BUILD_PARALLEL:=1
+-PKG_USE_MIPS16:=0
+-
+-HOST_BUILD_DEPENDS:=libxml2/host
+-# Without libevent2 tests/async_queries sporadically fails on the bots
+-PKG_BUILD_DEPENDS:=libevent2 mariadb/host
+-
+-CMAKE_INSTALL:=1
+-
+-CONF_DIR:=/etc/mysql
+-PLUGIN_DIR:=/usr/lib/mariadb/plugin
+-SHARE_DIR:=/usr/share/mariadb
+-
+-MARIADB_DISABLE_ENGINES := \
+-	cassandra \
+-	example \
+-	mroonga \
+-	oqgraph \
+-	rocksdb \
+-	test_sql_discovery \
+-	tokudb
+-
+-MARIADB_DISABLE_PLUGINS := \
+-	audit_null \
+-	auth_examples \
+-	aws_key_management \
+-	cracklib_password_check \
+-	daemon_example \
+-	debug_key_management \
+-	example_key_management \
+-	fulltext
+-
+-MARIADB_LIB_PLUGINS := \
+-	auth_gssapi_client
+-
+-MARIADB_SERVER_PLUGINS := \
+-	auth_ed25519 \
+-	auth_gssapi \
+-	auth_pam \
+-	disks \
+-	feedback \
+-	file_key_management \
+-	ha_archive \
+-	ha_blackhole \
+-	ha_connect \
+-	ha_federated \
+-	ha_federatedx \
+-	ha_sphinx \
+-	ha_spider \
+-	handlersocket \
+-	locales \
+-	metadata_lock_info \
+-	query_cache_info \
+-	query_response_time \
+-	semisync_master \
+-	semisync_slave \
+-	server_audit \
+-	simple_password_check \
+-	sql_errlog \
+-	wsrep_info
+-
+-PKG_CONFIG_DEPENDS := \
+-	$(patsubst %,CONFIG_PACKAGE_lib$(PKG_NAME)-plugin-%,$(subst _,-,$(MARIADB_LIB_PLUGINS))) \
+-	$(patsubst %,CONFIG_PACKAGE_$(PKG_NAME)-server-plugin-%,$(subst _,-,$(MARIADB_SERVER_PLUGINS))) \
+-	CONFIG_PACKAGE_mariadb-server
+-
+-plugin-auth_gssapi_client       := PLUGIN_AUTH_GSSAPI_CLIENT
+-
+-plugin-auth_ed25519             := PLUGIN_AUTH_ED25519
+-plugin-auth_gssapi              := PLUGIN_AUTH_GSSAPI
+-plugin-auth_pam                 := PLUGIN_AUTH_PAM
+-plugin-disks                    := PLUGIN_DISKS
+-plugin-feedback                 := PLUGIN_FEEDBACK
+-plugin-file_key_management      := PLUGIN_FILE_KEY_MANAGEMENT
+-plugin-ha_archive               := PLUGIN_ARCHIVE
+-plugin-ha_blackhole             := PLUGIN_BLACKHOLE
+-plugin-ha_connect               := PLUGIN_CONNECT
+-plugin-ha_federated             := PLUGIN_FEDERATED
+-plugin-ha_federatedx            := PLUGIN_FEDERATEDX
+-plugin-ha_sphinx                := PLUGIN_SPHINX
+-plugin-ha_spider                := PLUGIN_SPIDER
+-plugin-handlersocket            := PLUGIN_HANDLERSOCKET
+-plugin-locales                  := PLUGIN_LOCALES
+-plugin-metadata_lock_info       := PLUGIN_METADATA_LOCK_INFO
+-plugin-query_cache_info         := PLUGIN_QUERY_CACHE_INFO
+-plugin-query_response_time      := PLUGIN_QUERY_RESPONSE_TIME
+-plugin-semisync_master          := PLUGIN_SEMISYNC_MASTER
+-plugin-semisync_slave           := PLUGIN_SEMISYNC_SLAVE
+-plugin-server_audit             := PLUGIN_SERVER_AUDIT
+-plugin-simple_password_check    := PLUGIN_SIMPLE_PASSWORD_CHECK
+-plugin-sql_errlog               := PLUGIN_SQL_ERRLOG
+-plugin-wsrep_info               := PLUGIN_WSREP_INFO
+-
+-MARIADB_CLIENT := \
+-	mysql \
+-	mysqlcheck
+-
+-MARIADB_CLIENT_EXTRA := \
+-	mysql_find_rows \
+-	mysql_waitpid \
+-	mysqlaccess \
+-	mysqladmin \
+-	mysqldump \
+-	mysqlimport \
+-	mysqlshow \
+-	mysqlslap \
+-	mytop
+-
+-MARIADB_SERVER := \
+-	innochecksum \
+-	my_print_defaults \
+-	mysql_install_db \
+-	mysql_upgrade \
+-	mysqld
+-
+-MARIADB_SERVER_EXTRA := \
+-	aria* \
+-	mariabackup \
+-	msql2mysql \
+-	myisam_ftdump \
+-	myisamchk \
+-	myisamlog \
+-	myisampack \
+-	mysql_convert_table_format \
+-	mysql_fix_extensions \
+-	mysql_plugin \
+-	mysql_secure_installation \
+-	mysql_setpermission \
+-	mysql_tzinfo_to_sql \
+-	mysqlbinlog \
+-	mysqld_multi \
+-	mysqldumpslow \
+-	mysqlhotcopy \
+-	perror \
+-	replace \
+-	resolve_stack_dump \
+-	wsrep_sst_*
+-
+-include $(INCLUDE_DIR)/package.mk
+-include $(INCLUDE_DIR)/host-build.mk
+-include $(INCLUDE_DIR)/cmake.mk
+-include $(INCLUDE_DIR)/nls.mk
+-
+-MARIADB_COMMON_DEPENDS := \
+-	$(ICONV_DEPENDS) \
+-	+libopenssl \
+-	+zlib
+-
+-MARIADB_COMMON_DEPENDS_EXE := \
+-	$(MARIADB_COMMON_DEPENDS) \
+-	+libatomic \
+-	+libstdcpp
+-
+-# Pass CPPFLAGS in the CFLAGS as otherwise the build system will
+-# ignore them.
+-TARGET_CFLAGS+=$(TARGET_CPPFLAGS)
+-
+-define Package/mariadb/disable/engine
+-	echo > $(1)/storage/$(2)/CMakeLists.txt
+-endef
+-
+-define Package/mariadb/disable/plugin
+-	echo > $(1)/plugin/$(2)/CMakeLists.txt
+-endef
+-
+-define Package/mariadb/install/bin
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(2) $(1)/usr/bin
+-endef
+-
+-define Package/mariadb/install/plugin
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/$(2).so $(1)$(PLUGIN_DIR)
+-endef
+-
+-define Package/mariadb/description/Default
+-MariaDB is a very fast and robust SQL database server.
+-endef
+-
+-define Package/libmariadb/Default
+-  SECTION:=libs
+-  CATEGORY:=Libraries
+-  URL:=https://mariadb.org/
+-endef
+-
+-define Package/libmariadb
+-  $(call Package/libmariadb/Default)
+-  DEPENDS:=+mariadb-common \
+-	  $(MARIADB_COMMON_DEPENDS)
+-  TITLE:=MariaDB database client library
+-  MENU:=1
+-  PROVIDES:=libmariadbclient libmysqlclient libmysqlclient-r
+-endef
+-
+-define Package/libmariadb/conffiles
+-$(CONF_DIR)/conf.d/50-client.cnf
+-endef
+-
+-define Package/libmariadb/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes the client library.
+-
+-endef
+-
+-define Package/mariadb/Default
+-  SECTION:=utils
+-  CATEGORY:=Utilities
+-  URL:=https://mariadb.org/
+-  SUBMENU:=database
+-endef
+-
+-define Package/mariadb-client
+-  $(call Package/mariadb/Default)
+-  TITLE:=MariaDB database client
+-  MENU:=1
+-  DEPENDS:=mariadb-client-base
+-endef
+-
+-define Package/mariadb-client/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes the following core client binaries:
+-
+-$(subst $(space),$(newline),$(MARIADB_CLIENT))
+-
+-endef
+-
+-define Package/mariadb-client-base
+-  $(call Package/mariadb/Default)
+-  TITLE:=MariaDB database client base
+-  DEPENDS:=mariadb-common \
+-	  $(MARIADB_COMMON_DEPENDS_EXE) \
+-	  +libedit
+-endef
+-
+-define Package/mariadb-client-base/conffiles
+-$(CONF_DIR)/conf.d/50-mysql-clients.cnf
+-endef
+-
+-define Package/mariadb-client-base/description
+-$(call Package/mariadb/description/Default)
+-
+-This package provides the foundation for mariadb-client. It installs the
+-configuration and the dependencies.
+-
+-endef
+-
+-define Package/mariadb-client-extra
+-  $(call Package/mariadb/Default)
+-  TITLE:=MariaDB database client extra
+-  DEPENDS:=mariadb-client
+-endef
+-
+-define Package/mariadb-client-extra/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes the following extra client binaries:
+-
+-$(subst $(space),$(newline),$(MARIADB_CLIENT_EXTRA))
+-
+-endef
+-
+-define Package/mariadb-common
+-  $(call Package/mariadb/Default)
+-  TITLE:=MariaDB database common files
+-  DEPENDS:=
+-endef
+-
+-define Package/mariadb-common/conffiles
+-$(CONF_DIR)/my.cnf
+-endef
+-
+-define Package/mariadb-common/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes shared files, for example $(CONF_DIR)/my.cnf.
+-
+-endef
+-
+-define Package/mariadb-server
+-  $(call Package/mariadb/Default)
+-  DEPENDS:=mariadb-server-base
+-  TITLE:=MariaDB database server
+-  MENU:=1
+-  PROVIDES:=mysql-server
+-endef
+-
+-define Package/mariadb-server/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes the following core server binaries:
+-
+-$(subst $(space),$(newline),$(MARIADB_SERVER))
+-
+-endef
+-
+-define Package/mariadb-server-base
+-  $(call Package/mariadb/Default)
+-  DEPENDS:=mariadb-common \
+-	  $(MARIADB_COMMON_DEPENDS_EXE) \
+-	  +!arc:libaio \
+-	  +liblzma \
+-	  +libpcre \
+-	  +resolveip
+-  TITLE:=MariaDB database server base
+-  USERID:=mariadb=376:mariadb=376
+-endef
+-
+-define Package/mariadb-server-base/conffiles
+-$(CONF_DIR)/conf.d/50-server.cnf
+-$(CONF_DIR)/conf.d/60-galera.cnf
+-/etc/config/mysqld
+-endef
+-
+-define Package/mariadb-server-base/description
+-$(call Package/mariadb/description/Default)
+-
+-This package provides the foundation for mariadb-server. It installs the
+-init script, support files (configuration etc.), the user "mariadb" and
+-the dependencies.
+-
+-endef
+-
+-define Package/mariadb-server-extra
+-  $(call Package/mariadb/Default)
+-  TITLE:=MariaDB database server extra
+-  DEPENDS:=mariadb-server
+-endef
+-
+-define Package/mariadb-server-extra/description
+-$(call Package/mariadb/description/Default)
+-
+-This package includes the following extra server binaries:
+-
+-$(subst $(space),$(newline),$(MARIADB_SERVER_EXTRA))
+-
+-endef
+-
+-# We won't need unit tests
+-CMAKE_OPTIONS += -DWITH_UNIT_TESTS=0
+-
+-# This value is determined automatically during straight compile by compiling
+-# and running a test code. You cannot do that during cross-compile. However the
+-# stack grows downward in most if not all modern systems. The only exception
+-# according to buildroot is PA-RISC which is not supported by OpenWrt as far as
+-# I know. Therefore it makes sense to hardcode the value. If an arch is added
+-# the stack of which grows up one should expect unpredictable behavior at run
+-# time.
+-CMAKE_OPTIONS += -DSTACK_DIRECTION=-1
+-
+-# Make it explicit that we are cross-compiling
+-CMAKE_OPTIONS += -DCMAKE_CROSSCOMPILING=1
+-
+-# Explicitly disable dtrace to avoid detection of a host version
+-CMAKE_OPTIONS += -DENABLE_DTRACE=0
+-
+-# Prevent MariaDB from messing with OpenWrt's C(XX)FLAGS
+-CMAKE_OPTIONS += -DSECURITY_HARDENED=OFF
+-
+-ifeq ($(CONFIG_PACKAGE_mariadb-server),)
+-CMAKE_OPTIONS += -DWITHOUT_SERVER=ON
+-else
+-# Enable the auth_socket plugin and let unix user root access MariaDB without a
+-# separate password.
+-CMAKE_OPTIONS += -DWITHOUT_SERVER=OFF -DPLUGIN_AUTH_SOCKET=STATIC
+-endif
+-
+-CMAKE_OPTIONS += \
+-	-DCONNECT_WITH_JDBC=NO \
+-	-DCONNECT_WITH_LIBXML2=system \
+-	-DCONNECT_WITH_MONGO=NO \
+-	-DCONNECT_WITH_ODBC=NO \
+-	-DDISABLE_SHARED=NO \
+-	-DENABLED_PROFILING=OFF \
+-	-DENABLE_STATIC_LIBS=OFF \
+-	-DINSTALL_DOCDIR=share/doc/mariadb \
+-	-DINSTALL_DOCREADMEDIR=share/doc/mariadb \
+-	-DINSTALL_INFODIR=share/info \
+-	-DINSTALL_MANDIR=share/man \
+-	-DINSTALL_MYSQLSHAREDIR=share/mariadb \
+-	-DINSTALL_MYSQLTESTDIR="" \
+-	-DINSTALL_PLUGINDIR=lib/mariadb/plugin \
+-	-DINSTALL_SBINDIR=bin \
+-	-DINSTALL_SCRIPTDIR=bin \
+-	-DINSTALL_SQLBENCHDIR="" \
+-	-DINSTALL_SUPPORTFILESDIR=share/mariadb \
+-	-DINSTALL_UNIX_ADDRDIR=/var/run/mysqld/mysqld.sock \
+-	-DMYSQL_DATADIR=/var/lib/mysql \
+-	-DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
+-	-DSKIP_TESTS=ON \
+-	-DWITH_DEBUG=OFF \
+-	-DWITH_EMBEDDED_SERVER=OFF \
+-	-DWITH_INNODB_BZIP2=OFF \
+-	-DWITH_INNODB_LZ4=OFF \
+-	-DWITH_INNODB_LZMA=ON \
+-	-DWITH_INNODB_LZO=OFF \
+-	-DWITH_INNODB_SNAPPY=OFF \
+-	-DWITH_JEMALLOC=OFF \
+-	-DWITH_LIBARCHIVE=OFF \
+-	-DWITH_LIBWRAP=OFF \
+-	-DWITH_MARIABACKUP=ON \
+-	-DWITH_PCRE=system \
+-	-DWITH_SAFEMALLOC=OFF \
+-	-DWITH_SSL=system \
+-	-DWITH_SYSTEMD=no \
+-	-DWITH_VALGRIND=OFF \
+-	-DWITH_ZLIB=system
+-
+-# Help MariaDB find the correct libiconv.
+-# nls.mk sets it up so that with CONFIG_BUILD_NLS libiconv-full would be used,
+-# otherwise libiconv-stub (independent of the selected libc). MariaDB needs a
+-# leg up to find/pick the right lib.
+-CMAKE_OPTIONS += \
+-	-DICONV_INCLUDE_DIR=$(ICONV_PREFIX)/include \
+-	-DICONV_LIBRARIES=$(ICONV_PREFIX)/lib/libiconv.$(if $(CONFIG_BUILD_NLS),so,a)
+-
+-CMAKE_OPTIONS += \
+-	$(foreach p,$(MARIADB_LIB_PLUGINS),-D$(plugin-$(p))=$(if $(CONFIG_PACKAGE_lib$(PKG_NAME)-plugin-$(subst _,-,$(p))),DYNAMIC,OFF)) \
+-	$(foreach p,$(MARIADB_SERVER_PLUGINS),-D$(plugin-$(p))=$(if $(CONFIG_PACKAGE_$(PKG_NAME)-server-plugin-$(subst _,-,$(p))),DYNAMIC,NO))
+-
+-# Set CMAKE_FIND_ROOT_PATH_MODE_INCLUDE and CMAKE_FIND_ROOT_PATH_MODE_LIBRARY
+-# to BOTH as otherwise the host build will not find some required dependencies
+-# installed on the host machine, like ncurses.
+-#
+-# Add "$(STAGING_DIR_HOSTPKG)/lib" to the RPATH of the host helpers,
+-# otherwise they might not find the location of a library at run time.
+-CMAKE_HOST_OPTIONS += \
+-	-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE \
+-	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
+-	-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
+-	-DCMAKE_INSTALL_RPATH="$(STAGING_DIR_HOSTPKG)/lib" \
+-	-DCMAKE_SKIP_RPATH=FALSE \
+-	-DWITHOUT_SERVER=OFF
+-
+-# Some helpers must be compiled for host in order to crosscompile MariaDB for
+-# the target. They are then included by import_executables.cmake which is
+-# generated during the build of the host helpers. It is not necessary to build
+-# the whole host package, only the "import_executables" target.
+-# -DIMPORT_EXECUTABLES=$(HOST_BUILD_DIR)/import_executables.cmake
+-# must then be passed to cmake during target build.
+-# See also https://mariadb.com/kb/en/mariadb/cross-compiling-mariadb/
+-
+-CMAKE_OPTIONS += -DIMPORT_EXECUTABLES=$(STAGING_DIR_HOSTPKG)/share/mariadb/import_executables.cmake
+-
+-# Disable some engines/plugins here as well - decreases the number of cmake checks.
+-define Host/Prepare
+-	$(call Host/Prepare/Default)
+-	$(foreach e,$(MARIADB_DISABLE_ENGINES),$(call Package/mariadb/disable/engine,$(HOST_BUILD_DIR),$(e));)
+-	$(foreach p,$(MARIADB_DISABLE_PLUGINS),$(call Package/mariadb/disable/plugin,$(HOST_BUILD_DIR),$(p));)
+-endef
+-
+-define Host/Compile
+-	$(call Host/Compile/Default,import_executables)
+-endef
+-
+-define Host/Install
+-	$(SED) 's|$(HOST_BUILD_DIR)|$(STAGING_DIR_HOSTPKG)/share/mariadb|' $(HOST_BUILD_DIR)/import_executables.cmake
+-	$(INSTALL_DIR) $(1)/share/mariadb/{dbug,extra,scripts,sql}
+-	$(INSTALL_BIN) $(HOST_BUILD_DIR)/dbug/factorial $(1)/share/mariadb/dbug
+-	$(INSTALL_BIN) $(HOST_BUILD_DIR)/extra/comp_err $(1)/share/mariadb/extra
+-	$(INSTALL_BIN) $(HOST_BUILD_DIR)/scripts/comp_sql $(1)/share/mariadb/scripts
+-	$(INSTALL_BIN) $(HOST_BUILD_DIR)/sql/{gen_lex_hash,gen_lex_token} $(1)/share/mariadb/sql
+-	$(INSTALL_DATA) $(HOST_BUILD_DIR)/import_executables.cmake $(1)/share/mariadb
+-endef
+-
+-# LIBICONV_PLUG is used in GNU's libiconv for redefinition of exports [e.g.
+-# from libiconv_open() to iconv_open()]. But in OpenWrt this variable is not set
+-# when building libiconv-full. So when MariaDB sets LIBICONV_PLUG it expects
+-# iconv_open() to be available for example, which is not the case - only
+-# libiconv_open() is. To address this prevent the variable from being set.
+-# libiconv-stub does not use this variable, so there is no harm in always doing
+-# this.
+-
+-define Build/Prepare
+-	$(call Build/Prepare/Default)
+-	$(SED) '/ADD_DEFINITIONS(-DLIBICONV_PLUG)/d' $(PKG_BUILD_DIR)/libmariadb/libmariadb/CMakeLists.txt
+-	$(foreach e,$(MARIADB_DISABLE_ENGINES),$(call Package/mariadb/disable/engine,$(PKG_BUILD_DIR),$(e));)
+-	$(foreach p,$(MARIADB_DISABLE_PLUGINS),$(call Package/mariadb/disable/plugin,$(PKG_BUILD_DIR),$(p));)
+-endef
+-
+-define Build/InstallDev
+-	$(INSTALL_DIR) $(2)/bin $(1)/usr/bin $(1)/usr/include $(1)/usr/lib/mysql $(1)/usr/lib/pkgconfig $(1)/usr/share/aclocal
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mysql_config $(1)/usr/bin
+-	$(LN) $(STAGING_DIR)/usr/bin/mysql_config $(2)/bin
+-	$(CP) $(PKG_INSTALL_DIR)/usr/include/mysql $(1)/usr/include
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/lib{mariadb,mysqlclient}*.so* $(1)/usr/lib
+-	cd $(1)/usr/lib/mysql; $(LN) ../lib{mariadb,mysqlclient}*.so* .
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/libmariadb.pc $(1)/usr/lib/pkgconfig
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/aclocal/mysql.m4 $(1)/usr/share/aclocal
+-endef
+-
+-define Package/libmariadb/install
+-	$(INSTALL_DIR) $(1)$(CONF_DIR)/conf.d
+-	$(INSTALL_DIR) $(1)$(PLUGIN_DIR)
+-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/lib{mariadb,mysqlclient}*.so* $(1)/usr/lib
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/caching_sha2_password.so $(1)$(PLUGIN_DIR)
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/client_ed25519.so $(1)$(PLUGIN_DIR)
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/dialog.so $(1)$(PLUGIN_DIR)
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/mysql_clear_password.so $(1)$(PLUGIN_DIR)
+-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)$(PLUGIN_DIR)/sha256_password.so $(1)$(PLUGIN_DIR)
+-	$(INSTALL_CONF) conf/50-client.cnf $(1)$(CONF_DIR)/conf.d
+-endef
+-
+-define Package/mariadb-client/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+-	$(foreach b,$(MARIADB_CLIENT),$(call Package/mariadb/install/bin,$(1),$(b));)
+-	# Install convenience links for mysqlcheck multi-call binary
+-	cd $(1)/usr/bin; $(LN) mysqlcheck mysqlanalyze
+-	cd $(1)/usr/bin; $(LN) mysqlcheck mysqlrepair
+-	cd $(1)/usr/bin; $(LN) mysqlcheck mysqloptimize
+-endef
+-
+-define Package/mariadb-client-base/install
+-	$(INSTALL_DIR) $(1)$(CONF_DIR)/conf.d
+-	$(INSTALL_CONF) conf/50-mysql-clients.cnf $(1)$(CONF_DIR)/conf.d
+-endef
+-
+-define Package/mariadb-client-extra/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+-	$(foreach b,$(MARIADB_CLIENT_EXTRA),$(call Package/mariadb/install/bin,$(1),$(b));)
+-endef
+-
+-define Package/mariadb-common/install
+-	$(INSTALL_DIR) $(1)$(CONF_DIR)
+-	$(INSTALL_CONF) conf/my.cnf $(1)$(CONF_DIR)
+-endef
+-
+-define Package/mariadb-server/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+-	$(foreach b,$(MARIADB_SERVER),$(call Package/mariadb/install/bin,$(1),$(b));)
+-endef
+-
+-define Package/mariadb-server-base/install
+-	$(INSTALL_DIR) $(1)$(CONF_DIR)/conf.d
+-	$(INSTALL_DIR) $(1)$(SHARE_DIR)/charsets
+-	$(INSTALL_DIR) $(1)$(SHARE_DIR)/english
+-	$(INSTALL_DIR) $(1)/etc/config
+-	$(INSTALL_DIR) $(1)/etc/init.d
+-	$(INSTALL_BIN) files/mysqld.init $(1)/etc/init.d/mysqld
+-	$(SED) '/^[a-z]/s/^/#/' $(PKG_INSTALL_DIR)$(SHARE_DIR)/wsrep.cnf
+-	$(INSTALL_CONF) $(PKG_INSTALL_DIR)$(SHARE_DIR)/wsrep.cnf $(1)$(CONF_DIR)/conf.d/60-galera.cnf
+-	$(INSTALL_CONF) conf/50-server.cnf $(1)$(CONF_DIR)/conf.d
+-	$(INSTALL_CONF) files/mysqld.config $(1)/etc/config/mysqld
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/charsets/* $(1)$(SHARE_DIR)/charsets
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/english/errmsg.sys $(1)$(SHARE_DIR)/english
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/fill_help_tables.sql $(1)$(SHARE_DIR)
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/maria_add_gis_sp_bootstrap.sql $(1)$(SHARE_DIR)
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/mysql_performance_tables.sql $(1)$(SHARE_DIR)
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/mysql_system_tables.sql $(1)$(SHARE_DIR)
+-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)$(SHARE_DIR)/mysql_system_tables_data.sql $(1)$(SHARE_DIR)
+-endef
+-
+-define Package/mariadb-server-extra/install
+-	$(INSTALL_DIR) $(1)/usr/bin
+-	$(SED) 's,/bin/bash,/bin/sh,g' $(PKG_INSTALL_DIR)/usr/bin/wsrep_sst_*
+-	$(foreach b,$(MARIADB_SERVER_EXTRA),$(call Package/mariadb/install/bin,$(1),$(b));)
+-endef
+-
+-define BuildPlugin
+-  define Package/$(1)-plugin-$(subst _,-,$(2))
+-    $(call Package/$(subst mariadb-server,mariadb,$(1))/Default)
+-    TITLE:=$(1) plugin
+-    DEPENDS:=$(1) $(patsubst +%,+PACKAGE_$(1)-plugin-$(subst _,-,$(2)):%,$(3))
+-  endef
+-  define Package/$(1)-plugin-$(subst _,-,$(2))/description
+-    $(call Package/mariadb/description/Default)
+-
+-This package provides the $(2) plugin.
+-
+-  endef
+-  define Package/$(1)-plugin-$(subst _,-,$(2))/install
+-	  $(INSTALL_DIR) $$(1)$(PLUGIN_DIR)
+-	  $(call Package/mariadb/install/plugin,$$(1),$(2))
+-  endef
+-  $$(eval $$(call BuildPackage,$(1)-plugin-$(subst _,-,$(2))))
+-endef
+-
+-$(eval $(call HostBuild))
+-$(eval $(call BuildPackage,libmariadb))
+-$(eval $(call BuildPackage,mariadb-client))
+-$(eval $(call BuildPackage,mariadb-client-base))
+-$(eval $(call BuildPackage,mariadb-client-extra))
+-$(eval $(call BuildPackage,mariadb-common))
+-$(eval $(call BuildPackage,mariadb-server))
+-$(eval $(call BuildPackage,mariadb-server-base))
+-$(eval $(call BuildPackage,mariadb-server-extra))
+-
+-$(eval $(call BuildPlugin,libmariadb,auth_gssapi_client,+krb5-libs))
+-$(eval $(call BuildPlugin,mariadb-server,auth_ed25519,))
+-$(eval $(call BuildPlugin,mariadb-server,auth_gssapi,+krb5-libs))
+-$(eval $(call BuildPlugin,mariadb-server,auth_pam,+libpam))
+-$(eval $(call BuildPlugin,mariadb-server,disks,))
+-$(eval $(call BuildPlugin,mariadb-server,feedback,))
+-$(eval $(call BuildPlugin,mariadb-server,file_key_management,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_archive,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_blackhole,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_connect,+libxml2))
+-$(eval $(call BuildPlugin,mariadb-server,ha_federated,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_federatedx,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_sphinx,))
+-$(eval $(call BuildPlugin,mariadb-server,ha_spider,))
+-$(eval $(call BuildPlugin,mariadb-server,handlersocket,))
+-$(eval $(call BuildPlugin,mariadb-server,locales,))
+-$(eval $(call BuildPlugin,mariadb-server,metadata_lock_info,))
+-$(eval $(call BuildPlugin,mariadb-server,query_cache_info,))
+-$(eval $(call BuildPlugin,mariadb-server,query_response_time,))
+-$(eval $(call BuildPlugin,mariadb-server,semisync_master,))
+-$(eval $(call BuildPlugin,mariadb-server,semisync_slave,))
+-$(eval $(call BuildPlugin,mariadb-server,server_audit,))
+-$(eval $(call BuildPlugin,mariadb-server,simple_password_check,))
+-$(eval $(call BuildPlugin,mariadb-server,sql_errlog,))
+-$(eval $(call BuildPlugin,mariadb-server,wsrep_info,))
+-
+diff --git a/utils/mariadb/conf/50-client.cnf b/utils/mariadb/conf/50-client.cnf
+deleted file mode 100644
+index de2b89f5e..000000000
+--- a/utils/mariadb/conf/50-client.cnf
++++ /dev/null
+@@ -1,21 +0,0 @@
+-#
+-# This group is read by the client library
+-# Use it for options that affect all clients, but not the server
+-#
+-
+-[client]
+-# Default is Latin1, if you need UTF-8 set this (also in server section)
+-default-character-set = utf8mb4
+-
+-# Example of client certificate usage
+-# ssl-cert=/etc/mysql/client-cert.pem
+-# ssl-key=/etc/mysql/client-key.pem
+-#
+-# Allow only TLS encrypted connections
+-# ssl-verify-server-cert=on
+-
+-# This group is *never* read by mysql client library
+-# If you use the same .cnf file for MySQL and MariaDB, use it for
+-# MariaDB-only client options
+-[client-mariadb]
+-
+diff --git a/utils/mariadb/conf/50-mysql-clients.cnf b/utils/mariadb/conf/50-mysql-clients.cnf
+deleted file mode 100644
+index b762a766b..000000000
+--- a/utils/mariadb/conf/50-mysql-clients.cnf
++++ /dev/null
+@@ -1,25 +0,0 @@
+-#
+-# These groups are read by MariaDB command-line tools
+-# Use it for options that affect only one utility
+-#
+-
+-[mysql]
+-# Default is Latin1, if you need UTF-8 set this (also in server section)
+-default-character-set = utf8mb4
+-
+-[mysql_upgrade]
+-
+-[mysqladmin]
+-
+-[mysqlbinlog]
+-
+-[mysqlcheck]
+-
+-[mysqldump]
+-
+-[mysqlimport]
+-
+-[mysqlshow]
+-
+-[mysqlslap]
+-
+diff --git a/utils/mariadb/conf/50-server.cnf b/utils/mariadb/conf/50-server.cnf
+deleted file mode 100644
+index d478d1f5e..000000000
+--- a/utils/mariadb/conf/50-server.cnf
++++ /dev/null
+@@ -1,136 +0,0 @@
+-#
+-# These groups are read by MariaDB server.
+-# Use it for options that only the server (but not clients) should see
+-#
+-# See the examples of server my.cnf files in /usr/share/mysql/
+-#
+-
+-# this is read by the standalone daemon and embedded servers
+-[server]
+-
+-# this is only for the mysqld standalone daemon
+-[mysqld]
+-
+-#
+-# * Basic Settings
+-#
+-user		= mariadb
+-pid-file	= /var/run/mysqld/mysqld.pid
+-socket		= /var/run/mysqld/mysqld.sock
+-port		= 3306
+-basedir		= /usr
+-# Don't put this on flash memory
+-# Figure out where you are going to put the databases and run
+-# mysql_install_db --force
+-datadir		= /mnt/data/mysql
+-# tmpdir should also not go on flash memory
+-tmpdir		= /tmp
+-lc-messages-dir	= /usr/share/mariadb
+-
+-skip-external-locking
+-
+-# Instead of skip-networking the default is now to listen only on
+-# localhost which is more compatible and is not less secure.
+-bind-address	= 127.0.0.1
+-
+-#
+-# * Fine Tuning
+-#
+-key_buffer_size		= 16M
+-max_allowed_packet	= 16M
+-thread_stack		= 192K
+-thread_cache_size	= 8
+-# This replaces the startup script and checks MyISAM tables if needed
+-# the first time they are touched
+-myisam_recover_options	= BACKUP
+-#max_connections	= 100
+-#table_cache		= 64
+-#thread_concurrency	= 10
+-
+-#
+-# * Query Cache Configuration
+-#
+-query_cache_limit	= 1M
+-query_cache_size	= 16M
+-
+-#
+-# * Logging and Replication
+-#
+-# Both location gets rotated by the cronjob.
+-# Be aware that this log type is a performance killer.
+-# As of 5.1 you can enable the log at runtime!
+-#general_log_file	= /var/log/mysql/mysql.log
+-#general_log		= 1
+-#
+-# Error log - should be very few entries.
+-# Note that if unset the errors will go to stdout and can be seen in syslog
+-# (check "logread")
+-#
+-#log_error = /var/log/mysql/error.log
+-#
+-# Enable the slow query log to see queries with especially long duration
+-#slow_query_log_file	= /var/log/mysql/mariadb-slow.log
+-#long_query_time	= 10
+-#log_slow_rate_limit	= 1000
+-#log_slow_verbosity	= query_plan
+-#
+-#log-queries-not-using-indexes
+-#
+-# The following can be used as easy to replay backup logs or for replication.
+-#server-id		= 1
+-#log_bin		= /var/log/mysql/mysql-bin.log
+-expire_logs_days	= 10
+-max_binlog_size		= 100M
+-#binlog_do_db		= include_database_name
+-#binlog_ignore_db	= exclude_database_name
+-
+-#
+-# * InnoDB
+-#
+-# InnoDB is enabled by default with a 10MB datafile in /var/lib/mysql/.
+-# Read the manual for more InnoDB related options. There are many!
+-
+-#
+-# * Security Features
+-#
+-# Read the manual, too, if you want chroot!
+-# chroot = /var/lib/mysql/
+-#
+-# For generating SSL certificates you can use for example the GUI tool "tinyca".
+-#
+-# ssl-ca=/etc/mysql/cacert.pem
+-# ssl-cert=/etc/mysql/server-cert.pem
+-# ssl-key=/etc/mysql/server-key.pem
+-#
+-# Accept only connections using the latest and most secure TLS protocol version.
+-# ..when MariaDB is compiled with OpenSSL:
+-# ssl-cipher=TLSv1.2
+-
+-#
+-# * Character sets
+-#
+-# MySQL/MariaDB default is Latin1, but in OpenWrt we rather default to the full
+-# utf8 4-byte character set. See also client.cnf
+-#
+-# Note: In OpenWrt until mariadb 10.2.19-2 the baked-in defaults were
+-# "DEFAULT_CHARSET=utf8" and "DEFAULT_COLLATION=utf8_general_ci". As MariaDB's
+-# utf8 (supports three bytes per character) is not really UTF-8 (which needs up
+-# to four bytes per character) this was changed. Now the baked in-defaults are
+-# the upstream defaults (Latin1), but in the default configuration (like in the
+-# file you are currently reading) utf8mb4 is set, which is real UTF-8.
+-#
+-# Of course you are free to change this, either here or in a configuration file
+-# of your own which is read after this .cnf file, see my.cnf in parent folder
+-# (files are read in alphabetical order).
+-character-set-server  = utf8mb4
+-collation-server      = utf8mb4_general_ci
+-
+-#
+-# * Unix socket authentication plugin is built-in
+-#
+-# Needed so the root database user can authenticate without a password but
+-# only when running as the unix root user.
+-#
+-# Also available for other users if required.
+-# See https://mariadb.com/kb/en/unix_socket-authentication-plugin/
+-
+diff --git a/utils/mariadb/conf/my.cnf b/utils/mariadb/conf/my.cnf
+deleted file mode 100644
+index 7583c7cae..000000000
+--- a/utils/mariadb/conf/my.cnf
++++ /dev/null
+@@ -1,22 +0,0 @@
+-# The MariaDB configuration file
+-#
+-# The MariaDB/MySQL tools read configuration files in the following order:
+-# 1. "/etc/mysql/my.cnf" (this file) to set global defaults,
+-# 2. "/etc/mysql/conf.d/*.cnf" to set global options.
+-# 3. "~/.my.cnf" to set user-specific options.
+-#
+-# If the same option is defined multiple times, the last one will apply.
+-#
+-# One can use all long options that the program supports.
+-# Run program with --help to get a list of available options and with
+-# --print-defaults to see which it would actually understand and use.
+-
+-#
+-# This group is read both both by the client and the server
+-# use it for options that affect everything
+-#
+-[client-server]
+-
+-# Import all .cnf files from configuration directory
+-!includedir /etc/mysql/conf.d/
+-
+diff --git a/utils/mariadb/files/mysqld.config b/utils/mariadb/files/mysqld.config
+deleted file mode 100644
+index 1bfcde6c5..000000000
+--- a/utils/mariadb/files/mysqld.config
++++ /dev/null
+@@ -1,7 +0,0 @@
+-
+-config mysqld 'general'
+-	option enabled '0'
+-	option log_stderr '1'
+-	option log_stdout '1'
+-	option options ''
+-
+diff --git a/utils/mariadb/files/mysqld.init b/utils/mariadb/files/mysqld.init
+deleted file mode 100644
+index 66afb35bc..000000000
+--- a/utils/mariadb/files/mysqld.init
++++ /dev/null
+@@ -1,156 +0,0 @@
+-#!/bin/sh /etc/rc.common
+-# Copyright (C) 2010-2018 OpenWrt.org
+-
+-START=95
+-STOP=10
+-
+-USE_PROCD=1
+-
+-#PROCD_DEBUG=1
+-
+-NAME=mysqld
+-
+-LOGGER="/usr/bin/logger -p user.err -s -t $NAME --"
+-COMMAND=/usr/bin/$NAME
+-
+-mysqld_get_param() {
+-	$COMMAND --print-defaults \
+-		| tr " " "\n" \
+-		| grep -- "--$1" \
+-		| tail -n 1 \
+-		| cut -d= -f2
+-}
+-
+-start_service() {
+-	local conf=/etc/mysql/my.cnf
+-	local dir
+-	local user
+-	local group
+-
+-	local logfile
+-
+-	local datadir
+-	local logdir=/var/log/mysql
+-	local rundir=/var/run/mysqld
+-	local tmpdir
+-
+-	local enabled
+-	local log_stderr
+-	local log_stdout
+-	local options
+-
+-	local hint="please fix your server configuration in /etc/mysql/"
+-
+-	if [ ! -x $COMMAND ]; then
+-		$LOGGER $COMMAND is missing
+-		exit 1
+-	fi
+-
+-	if [ ! -r $conf ]; then
+-		$LOGGER $conf cannot be read
+-		exit 1
+-	fi
+-
+-	config_load $NAME
+-
+-	config_get_bool enabled general enabled 0
+-	if [ $enabled -eq 0 ]; then
+-		$LOGGER service not enabled in /etc/config/$NAME
+-		exit 1
+-	fi
+-
+-	config_get_bool log_stderr general log_stderr 1
+-	config_get_bool log_stdout general log_stdout 1
+-
+-	config_get options general options
+-
+-	datadir=$(mysqld_get_param datadir)
+-	logfile=$(mysqld_get_param general_log_file)
+-	tmpdir=$(mysqld_get_param tmpdir)
+-	user=$(mysqld_get_param user)
+-
+-	if [ -z "$datadir" ]; then
+-		$LOGGER datadir is not set
+-		$LOGGER $hint
+-		exit 1
+-	fi
+-
+-	if [ -z "$tmpdir" ]; then
+-		$LOGGER tmpdir is not set
+-		$LOGGER $hint
+-		exit 1
+-	fi
+-
+-	if [ -z "$user" ]; then
+-		$LOGGER user is not set
+-		$LOGGER $hint
+-		exit 1
+-	fi
+-
+-	user_exists "$user" || {
+-		$LOGGER user \""$user"\" does not exist
+-		$LOGGER $hint
+-		exit 1
+-	}
+-
+-	group=$(id -g -n "$user")
+-
+-	group_exists "$group" || {
+-		$LOGGER group \""$group"\" does not exist
+-		$LOGGER user \""$user"\" not configured correctly
+-		exit 1
+-	}
+-
+-	[ -n "$logfile" ] && logdir=$(dirname "$logfile")
+-
+-	# do not touch directories that already exist
+-	# posix shell does not support arrays, hence using awk
+-	awk \
+-	  -v user="$user" \
+-	  -v group="$group" \
+-	  -v a="$datadir" \
+-	  -v b="$logdir" \
+-	  -v c="$rundir" \
+-	  -v d="$tmpdir" \
+-	  '
+-	    BEGIN {
+-	      dir[0]=a
+-	      dir[1]=b
+-	      dir[2]=c
+-	      dir[3]=d
+-	      for (x in dir) {
+-	        if (system("test ! -e \"" dir[x] "\"" )) {
+-	          delete dir[x]
+-	        }
+-	      }
+-	      for (x in dir) {
+-	        system("mkdir -p \"" dir[x] "\"" )
+-	        system("chmod 750 \"" dir[x] "\"" )
+-	        system("chown \"" user "\":\"" group "\" \"" dir[x] "\"" )
+-	      }
+-	    }
+-	  '
+-
+-	if [ ! -f "$datadir/mysql/tables_priv.MYD" ]; then
+-		local args="--force"
+-		local basedir=$(mysqld_get_param basedir)
+-		[ -n "$basedir" ] && args="$args --basedir=$basedir"
+-
+-		$LOGGER Cannot detect privileges table. You might need to run
+-		$LOGGER \'mysql_install_db $args\'
+-		$LOGGER to initialize the system tables.
+-		exit 1
+-	fi
+-
+-	procd_open_instance
+-
+-	procd_set_param command $COMMAND $options
+-
+-	# forward stderr to logd
+-	procd_set_param stderr $log_stderr
+-	# same for stdout
+-	procd_set_param stdout $log_stdout
+-
+-	procd_close_instance
+-}
+-
+diff --git a/utils/mariadb/patches/100-fix_hostname.patch b/utils/mariadb/patches/100-fix_hostname.patch
+deleted file mode 100644
+index ae1ce0e22..000000000
+--- a/utils/mariadb/patches/100-fix_hostname.patch
++++ /dev/null
+@@ -1,11 +0,0 @@
+---- a/scripts/mysql_install_db.sh
+-+++ b/scripts/mysql_install_db.sh
+-@@ -410,7 +410,7 @@ fi
+-
+-
+- # Try to determine the hostname
+--hostname=`@HOSTNAME@`
+-+hostname=`cat /proc/sys/kernel/hostname`
+-
+- # Check if hostname is valid
+- if test "$cross_bootstrap" -eq 0 -a "$in_rpm" -eq 0 -a "$force" -eq 0
+diff --git a/utils/mariadb/patches/110-pcre.cmake.patch b/utils/mariadb/patches/110-pcre.cmake.patch
+deleted file mode 100644
+index 6e1d0b259..000000000
+--- a/utils/mariadb/patches/110-pcre.cmake.patch
++++ /dev/null
+@@ -1,11 +0,0 @@
+---- a/cmake/pcre.cmake
+-+++ b/cmake/pcre.cmake
+-@@ -14,6 +14,8 @@ MACRO (CHECK_PCRE)
+-         return -pcre_exec(NULL, NULL, NULL, -999, -999, 0, NULL, 0) < 256;
+-         }"  PCRE_STACK_SIZE_OK)
+-       SET(CMAKE_REQUIRED_LIBRARIES)
+-+    ELSE()
+-+      SET(PCRE_STACK_SIZE_OK TRUE)
+-     ENDIF()
+-   ENDIF()
+-   IF(NOT HAVE_PCRE_STACK_GUARD OR NOT PCRE_STACK_SIZE_OK OR
+diff --git a/utils/mariadb/patches/130-c11_atomics.patch b/utils/mariadb/patches/130-c11_atomics.patch
+deleted file mode 100644
+index 00a636305..000000000
+--- a/utils/mariadb/patches/130-c11_atomics.patch
++++ /dev/null
+@@ -1,112 +0,0 @@
+-Description: Fix mips missing atomics primitives
+- On mips we don't have native support for 64bit atomic operations. Make use
+- of libatomic to emulate them.
+-Author: Vicențiu Ciorbaru <vicentiu@mariadb.org>
+-
+---- a/configure.cmake
+-+++ b/configure.cmake
+-@@ -128,7 +128,7 @@ IF(UNIX)
+-   ENDIF()
+-   FIND_PACKAGE(Threads)
+-
+--  SET(CMAKE_REQUIRED_LIBRARIES
+-+  LIST(APPEND CMAKE_REQUIRED_LIBRARIES
+-     ${LIBM} ${LIBNSL} ${LIBBIND} ${LIBCRYPT} ${LIBSOCKET} ${LIBDL} ${CMAKE_THREAD_LIBS_INIT} ${LIBRT} ${LIBEXECINFO})
+-   # Need explicit pthread for gcc -fsanitize=address
+-   IF(CMAKE_USE_PTHREADS_INIT AND CMAKE_C_FLAGS MATCHES "-fsanitize=")
+-@@ -952,7 +952,26 @@ ELSEIF(NOT WITH_ATOMIC_OPS)
+-     long long int *ptr= &var;
+-     return (int)__atomic_load_n(ptr, __ATOMIC_SEQ_CST);
+-   }"
+--  HAVE_GCC_C11_ATOMICS)
+-+  HAVE_GCC_C11_ATOMICS_WITHOUT_LIBATOMIC)
+-+  IF(HAVE_GCC_C11_ATOMICS_WITHOUT_LIBATOMIC)
+-+    SET(HAVE_GCC_C11_ATOMICS True)
+-+  ELSE()
+-+    SET(OLD_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
+-+    LIST(APPEND CMAKE_REQUIRED_LIBRARIES "atomic")
+-+    CHECK_CXX_SOURCE_COMPILES("
+-+    int main()
+-+    {
+-+      long long int var= 1;
+-+      long long int *ptr= &var;
+-+      return (int)__atomic_load_n(ptr, __ATOMIC_SEQ_CST);
+-+    }"
+-+    HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
+-+    IF(HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
+-+      SET(HAVE_GCC_C11_ATOMICS True)
+-+    ELSE()
+-+      SET(CMAKE_REQUIRED_LIBRARIES ${OLD_CMAKE_REQUIRED_LIBRARIES})
+-+    ENDIF()
+-+  ENDIF()
+- ELSE()
+-   MESSAGE(FATAL_ERROR "${WITH_ATOMIC_OPS} is not a valid value for WITH_ATOMIC_OPS!")
+- ENDIF()
+---- a/include/atomic/gcc_builtins.h
+-+++ b/include/atomic/gcc_builtins.h
+-@@ -16,6 +16,7 @@
+-    along with this program; if not, write to the Free Software
+-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1335  USA */
+-
+-+#if defined (HAVE_GCC_ATOMIC_BUILTINS)
+- #define make_atomic_add_body(S)                     \
+-   v= __sync_fetch_and_add(a, v);
+- #define make_atomic_fas_body(S)                     \
+-@@ -26,6 +27,20 @@
+-   sav= __sync_val_compare_and_swap(a, cmp_val, set);\
+-   if (!(ret= (sav == cmp_val))) *cmp= sav
+-
+-+#elif defined(HAVE_GCC_C11_ATOMICS)
+-+
+-+#define make_atomic_add_body(S)                     \
+-+  v= __atomic_fetch_add(a, v, __ATOMIC_SEQ_CST)
+-+#define make_atomic_fas_body(S)                     \
+-+  v= __atomic_exchange_n(a, v, __ATOMIC_SEQ_CST)
+-+#define make_atomic_cas_body(S)                     \
+-+  int ## S sav;                                     \
+-+  ret= __atomic_compare_exchange_n(a, cmp, set,     \
+-+                                   0,               \
+-+                                   __ATOMIC_SEQ_CST,\
+-+                                   __ATOMIC_SEQ_CST);
+-+#endif
+-+
+- #ifdef MY_ATOMIC_MODE_DUMMY
+- #define make_atomic_load_body(S)   ret= *a
+- #define make_atomic_store_body(S)  *a= v
+---- a/mysys/CMakeLists.txt
+-+++ b/mysys/CMakeLists.txt
+-@@ -81,6 +81,10 @@ IF(HAVE_BFD_H)
+-   TARGET_LINK_LIBRARIES(mysys bfd)
+- ENDIF(HAVE_BFD_H)
+-
+-+IF(HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
+-+  TARGET_LINK_LIBRARIES(mysys atomic)
+-+ENDIF()
+-+
+- IF (WIN32)
+-   TARGET_LINK_LIBRARIES(mysys IPHLPAPI)
+- ENDIF(WIN32)
+---- a/sql/CMakeLists.txt
+-+++ b/sql/CMakeLists.txt
+-@@ -170,6 +170,10 @@ TARGET_LINK_LIBRARIES(sql ${MYSQLD_STATI
+-   ${SSL_LIBRARIES}
+-   ${LIBSYSTEMD})
+-
+-+IF(HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
+-+  TARGET_LINK_LIBRARIES(sql atomic)
+-+ENDIF()
+-+
+- IF(WIN32)
+-   SET(MYSQLD_SOURCE main.cc nt_servc.cc message.rc)
+-   TARGET_LINK_LIBRARIES(sql psapi)
+---- a/include/my_atomic.h
+-+++ b/include/my_atomic.h
+-@@ -126,7 +126,7 @@
+- #include "atomic/generic-msvc.h"
+- #elif defined(HAVE_SOLARIS_ATOMIC)
+- #include "atomic/solaris.h"
+--#elif defined(HAVE_GCC_ATOMIC_BUILTINS)
+-+#elif defined(HAVE_GCC_ATOMIC_BUILTINS) || defined(HAVE_GCC_C11_ATOMICS)
+- #include "atomic/gcc_builtins.h"
+- #elif defined(__GNUC__) && (defined(__i386__) || defined(__x86_64__))
+- #include "atomic/x86-gcc.h"
+diff --git a/utils/mariadb/patches/140-mips-connect-unaligned.patch b/utils/mariadb/patches/140-mips-connect-unaligned.patch
+deleted file mode 100644
+index 501eb53ca..000000000
+--- a/utils/mariadb/patches/140-mips-connect-unaligned.patch
++++ /dev/null
+@@ -1,262 +0,0 @@
+-Description: Handle unaligned buffers in connect's TYPBLK class
+- On MIPS platforms (and probably others) unaligned memory access results in a
+- bus error. In the connect storage engine, block data for some data formats is
+- stored packed in memory and the TYPBLK class is used to read values from it.
+- Since TYPBLK does not have special handling for this packed memory, it can
+- quite easily result in unaligned memory accesses.
+- .
+- The simple way to fix this is to perform all accesses to the main buffer
+- through memcpy. With GCC and optimizations turned on, this call to memcpy is
+- completely optimized away on architectures where unaligned accesses are ok
+- (like x86).
+-Author: James Cowgill <jcowgill@debian.org>
+----
+-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+---- a/storage/connect/valblk.h
+-+++ b/storage/connect/valblk.h
+-@@ -139,6 +139,7 @@ class VALBLK : public BLOCK {
+-   int     Prec;             // Precision of float values
+-   }; // end of class VALBLK
+-
+-+
+- /***********************************************************************/
+- /*  Class TYPBLK: represents a block of typed values.                  */
+- /***********************************************************************/
+-@@ -151,40 +152,41 @@ class TYPBLK : public VALBLK {
+-   // Implementation
+-   virtual bool   Init(PGLOBAL g, bool check);
+-   virtual int    GetVlen(void) {return sizeof(TYPE);}
+--  virtual char   GetTinyValue(int n) {return (char)Typp[n];}
+--  virtual uchar  GetUTinyValue(int n) {return (uchar)Typp[n];}
+--  virtual short  GetShortValue(int n) {return (short)Typp[n];}
+--  virtual ushort GetUShortValue(int n) {return (ushort)Typp[n];}
+--  virtual int    GetIntValue(int n) {return (int)Typp[n];}
+--  virtual uint   GetUIntValue(int n) {return (uint)Typp[n];}
+--  virtual longlong GetBigintValue(int n) {return (longlong)Typp[n];}
+--  virtual ulonglong GetUBigintValue(int n) {return (ulonglong)Typp[n];}
+--  virtual double GetFloatValue(int n) {return (double)Typp[n];}
+-+
+-+  virtual char   GetTinyValue(int n) {return (char)UnalignedRead(n);}
+-+  virtual uchar  GetUTinyValue(int n) {return (uchar)UnalignedRead(n);}
+-+  virtual short  GetShortValue(int n) {return (short)UnalignedRead(n);}
+-+  virtual ushort GetUShortValue(int n) {return (ushort)UnalignedRead(n);}
+-+  virtual int    GetIntValue(int n) {return (int)UnalignedRead(n);}
+-+  virtual uint   GetUIntValue(int n) {return (uint)UnalignedRead(n);}
+-+  virtual longlong GetBigintValue(int n) {return (longlong)UnalignedRead(n);}
+-+  virtual ulonglong GetUBigintValue(int n) {return (ulonglong)UnalignedRead(n);}
+-+  virtual double GetFloatValue(int n) {return (double)UnalignedRead(n);}
+-   virtual char  *GetCharString(char *p, int n);
+--  virtual void   Reset(int n) {Typp[n] = 0;}
+-+  virtual void   Reset(int n) {UnalignedWrite(n, 0);}
+-
+-   // Methods
+-   using VALBLK::SetValue;
+-   virtual void   SetValue(PCSZ sp, int n);
+-   virtual void   SetValue(const char *sp, uint len, int n);
+-   virtual void   SetValue(short sval, int n)
+--                  {Typp[n] = (TYPE)sval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)sval); SetNull(n, false);}
+-   virtual void   SetValue(ushort sval, int n)
+--                  {Typp[n] = (TYPE)sval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)sval); SetNull(n, false);}
+-   virtual void   SetValue(int lval, int n)
+--                  {Typp[n] = (TYPE)lval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)lval); SetNull(n, false);}
+-   virtual void   SetValue(uint lval, int n)
+--                  {Typp[n] = (TYPE)lval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)lval); SetNull(n, false);}
+-   virtual void   SetValue(longlong lval, int n)
+--                  {Typp[n] = (TYPE)lval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)lval); SetNull(n, false);}
+-   virtual void   SetValue(ulonglong lval, int n)
+--                  {Typp[n] = (TYPE)lval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)lval); SetNull(n, false);}
+-   virtual void   SetValue(double fval, int n)
+--                  {Typp[n] = (TYPE)fval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)fval); SetNull(n, false);}
+-   virtual void   SetValue(char cval, int n)
+--                  {Typp[n] = (TYPE)cval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)cval); SetNull(n, false);}
+-   virtual void   SetValue(uchar cval, int n)
+--                  {Typp[n] = (TYPE)cval; SetNull(n, false);}
+-+                  {UnalignedWrite(n, (TYPE)cval); SetNull(n, false);}
+-   virtual void   SetValue(PVAL valp, int n);
+-   virtual void   SetValue(PVBLK pv, int n1, int n2);
+-   virtual void   SetMin(PVAL valp, int n);
+-@@ -206,6 +208,17 @@ class TYPBLK : public VALBLK {
+-   // Members
+-   TYPE* const &Typp;
+-   const char  *Fmt;
+-+
+-+  // Unaligned access
+-+  TYPE UnalignedRead(int n) const {
+-+    TYPE result;
+-+    memcpy(&result, Typp + n, sizeof(TYPE));
+-+    return result;
+-+  }
+-+
+-+  void UnalignedWrite(int n, TYPE value) {
+-+    memcpy(Typp + n, &value, sizeof(TYPE));
+-+  }
+-   }; // end of class TYPBLK
+-
+- /***********************************************************************/
+---- a/storage/connect/valblk.cpp
+-+++ b/storage/connect/valblk.cpp
+-@@ -266,14 +266,14 @@ bool TYPBLK<TYPE>::Init(PGLOBAL g, bool
+- template <class TYPE>
+- char *TYPBLK<TYPE>::GetCharString(char *p, int n)
+-   {
+--  sprintf(p, Fmt, Typp[n]);
+-+  sprintf(p, Fmt, UnalignedRead(n));
+-   return p;
+-   } // end of GetCharString
+-
+- template <>
+- char *TYPBLK<double>::GetCharString(char *p, int n)
+-   {
+--  sprintf(p, Fmt, Prec, Typp[n]);
+-+  sprintf(p, Fmt, Prec, UnalignedRead(n));
+-   return p;
+-   } // end of GetCharString
+-
+-@@ -289,7 +289,7 @@ void TYPBLK<TYPE>::SetValue(PVAL valp, i
+-   ChkTyp(valp);
+-
+-   if (!(b = valp->IsNull()))
+--    Typp[n] = GetTypedValue(valp);
+-+    UnalignedWrite(n, GetTypedValue(valp));
+-   else
+-     Reset(n);
+-
+-@@ -351,9 +351,9 @@ void TYPBLK<TYPE>::SetValue(PCSZ p, int
+-   ulonglong val = CharToNumber(p, strlen(p), maxval, Unsigned, &minus);
+-
+-   if (minus && val < maxval)
+--    Typp[n] = (TYPE)(-(signed)val);
+-+    UnalignedWrite(n, (TYPE)(-(signed)val));
+-   else
+--    Typp[n] = (TYPE)val;
+-+    UnalignedWrite(n, (TYPE)val);
+-
+-   SetNull(n, false);
+-   } // end of SetValue
+-@@ -396,7 +396,7 @@ void TYPBLK<double>::SetValue(PCSZ p, in
+- 		throw Type;
+- 	} // endif Check
+-
+--  Typp[n] = atof(p);
+-+  UnalignedWrite(n, atof(p));
+-   SetNull(n, false);
+-   } // end of SetValue
+-
+-@@ -428,7 +428,7 @@ void TYPBLK<TYPE>::SetValue(PVBLK pv, in
+-   ChkTyp(pv);
+-
+-   if (!(b = pv->IsNull(n2) && Nullable))
+--    Typp[n1] = GetTypedValue(pv, n2);
+-+    UnalignedWrite(n1, GetTypedValue(pv, n2));
+-   else
+-     Reset(n1);
+-
+-@@ -479,10 +479,10 @@ void TYPBLK<TYPE>::SetMin(PVAL valp, int
+-   {
+-   CheckParms(valp, n)
+-   TYPE  tval = GetTypedValue(valp);
+--  TYPE& tmin = Typp[n];
+-+  TYPE  tmin = UnalignedRead(n);
+-
+-   if (tval < tmin)
+--    tmin = tval;
+-+    UnalignedWrite(n, tval);
+-
+-   } // end of SetMin
+-
+-@@ -494,10 +494,10 @@ void TYPBLK<TYPE>::SetMax(PVAL valp, int
+-   {
+-   CheckParms(valp, n)
+-   TYPE  tval = GetTypedValue(valp);
+--  TYPE& tmin = Typp[n];
+-+  TYPE  tmin = UnalignedRead(n);
+-
+-   if (tval > tmin)
+--    tmin = tval;
+-+    UnalignedWrite(n, tval);
+-
+-   } // end of SetMax
+-
+-@@ -511,8 +511,7 @@ void TYPBLK<TYPE>::SetValues(PVBLK pv, i
+-   CheckType(pv)
+-   TYPE *lp = ((TYPBLK*)pv)->Typp;
+-
+--  for (int i = k; i < n; i++)          // TODO
+--    Typp[i] = lp[i];
+-+  memcpy(Typp + k, lp + k, sizeof(TYPE) * n);
+-
+-   } // end of SetValues
+- #endif // 0
+-@@ -523,7 +522,7 @@ void TYPBLK<TYPE>::SetValues(PVBLK pv, i
+- template <class TYPE>
+- void TYPBLK<TYPE>::Move(int i, int j)
+-   {
+--  Typp[j] = Typp[i];
+-+  UnalignedWrite(j, UnalignedRead(i));
+-   MoveNull(i, j);
+-   } // end of Move
+-
+-@@ -537,7 +536,7 @@ int TYPBLK<TYPE>::CompVal(PVAL vp, int n
+-   ChkIndx(n);
+-   ChkTyp(vp);
+- #endif   // _DEBUG
+--  TYPE mlv = Typp[n];
+-+  TYPE mlv = UnalignedRead(n);
+-   TYPE vlv = GetTypedValue(vp);
+-
+-   return (vlv > mlv) ? 1 : (vlv < mlv) ? (-1) : 0;
+-@@ -549,8 +548,8 @@ int TYPBLK<TYPE>::CompVal(PVAL vp, int n
+- template <class TYPE>
+- int TYPBLK<TYPE>::CompVal(int i1, int i2)
+-   {
+--  TYPE lv1 = Typp[i1];
+--  TYPE lv2 = Typp[i2];
+-+  TYPE lv1 = UnalignedRead(i1);
+-+  TYPE lv2 = UnalignedRead(i2);
+-
+-   return (lv1 > lv2) ? 1 : (lv1 < lv2) ? (-1) : 0;
+-   } // end of CompVal
+-@@ -587,7 +586,7 @@ int TYPBLK<TYPE>::Find(PVAL vp)
+-   TYPE n = GetTypedValue(vp);
+-
+-   for (i = 0; i < Nval; i++)
+--    if (n == Typp[i])
+-+    if (n == UnalignedRead(i))
+-       break;
+-
+-   return (i < Nval) ? i : (-1);
+-@@ -603,7 +602,7 @@ int TYPBLK<TYPE>::GetMaxLength(void)
+-   int i, n, m;
+-
+-   for (i = n = 0; i < Nval; i++) {
+--    m = sprintf(buf, Fmt, Typp[i]);
+-+    m = sprintf(buf, Fmt, UnalignedRead(i));
+-     n = MY_MAX(n, m);
+-     } // endfor i
+-
+-@@ -1333,7 +1332,7 @@ char *DATBLK::GetCharString(char *p, int
+-   char *vp;
+-
+-   if (Dvalp) {
+--    Dvalp->SetValue(Typp[n]);
+-+    Dvalp->SetValue(UnalignedRead(n));
+-     vp = Dvalp->GetCharString(p);
+-   } else
+-     vp = TYPBLK<int>::GetCharString(p, n);
+-@@ -1349,7 +1348,7 @@ void DATBLK::SetValue(PCSZ p, int n)
+-   if (Dvalp) {
+-     // Decode the string according to format
+-     Dvalp->SetValue_psz(p);
+--    Typp[n] = Dvalp->GetIntValue();
+-+    UnalignedWrite(n, Dvalp->GetIntValue());
+-   } else
+-     TYPBLK<int>::SetValue(p, n);
+-
+diff --git a/utils/mariadb/patches/160-mips-machine.patch b/utils/mariadb/patches/160-mips-machine.patch
+deleted file mode 100644
+index f7d083243..000000000
+--- a/utils/mariadb/patches/160-mips-machine.patch
++++ /dev/null
+@@ -1,25 +0,0 @@
+-Description: Fix DEFAULT_MACHINE on mips
+- The DEFAULT_MACHINE constant is calculated from the CMAKE_SYSTEM_PROCESSOR
+- variable which contains the processor which built mariadb. Since most Debian
+- buildds run on 64-bit hardware even though they build 32-bit binaries,
+- DEFAULT_MACHINE previously contained "mips64" on 32-bit builds. This confuses
+- some mroonga tests which rely on DEFAULT_MACHINE to detect 64-bitness.
+- .
+- This patch fixes the value of DEFAULT_MACHINE so it always contains just "mips"
+- on 32-bit mips builds.
+-Author: James Cowgill <jcowgill@debian.org>
+----
+-This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+---- mariadb-10.1.orig/cmake/package_name.cmake
+-+++ mariadb-10.1/cmake/package_name.cmake
+-@@ -34,6 +34,10 @@ IF(NOT VERSION)
+-       SET(DEFAULT_MACHINE "mips")
+-     ENDIF()
+-
+-+    IF(NOT 64BIT AND CMAKE_SYSTEM_PROCESSOR MATCHES "^mips64")
+-+      SET(DEFAULT_MACHINE "mips")
+-+    ENDIF()
+-+
+-     IF(CMAKE_SYSTEM_NAME MATCHES "Windows")
+-       SET(NEED_DASH_BETWEEN_PLATFORM_AND_MACHINE 0)
+-       SET(DEFAULT_PLATFORM "win")
+diff --git a/utils/mariadb/patches/170-ppc-remove-glibc-dep.patch b/utils/mariadb/patches/170-ppc-remove-glibc-dep.patch
+deleted file mode 100644
+index 84637a47d..000000000
+--- a/utils/mariadb/patches/170-ppc-remove-glibc-dep.patch
++++ /dev/null
+@@ -1,79 +0,0 @@
+-From f5cf70d9d1dc7f4cbeffb7fb75cbbe08720e3873 Mon Sep 17 00:00:00 2001
+-From: Gustavo Romero <gromero@br.ibm.com>
+-Date: Sun, 26 Mar 2017 15:08:15 +0000
+-Subject: [PATCH] Remove dependency on glibc on PPC
+-
+-Remove dependency on glibc by using gcc builtin function and no glibc
+-wrappers.
+-
+-Currently there are no surrogates in musl for:
+-
+-  __ppc_get_timebase()
+-  __ppc_set_ppr_low()
+-  __ppc_set_ppr_med()
+-
+-however glibc __ppc_get_timebase() is just a wrapper for GCC builtin
+-__builtin_get_timebase() available since GCC 4.8 [1], so assuming that
+-aports on ppc64le will never be built using GCC < 4.8 we can just
+-switch directly to the GCC builtin function.
+-
+-Also __ppc_set_ppr_{low,med}() are not available on musl but both
+-are simple glibc wrappers on a single asm instruction, hence there
+-is no harm in using asm directly instead. Actually, using asm
+-directly was the first solution adopted in MariaDB [2].
+-
+-[1] https://goo.gl/jxLV6O
+-[2] https://goo.gl/9bjuVC
+-
+---- a/storage/xtradb/include/ut0ut.h
+-+++ b/storage/xtradb/include/ut0ut.h
+-@@ -83,9 +83,8 @@ private:
+-    the YieldProcessor macro defined in WinNT.h. It is a CPU architecture-
+-    independent way by using YieldProcessor. */
+- #  define UT_RELAX_CPU() YieldProcessor()
+--# elif defined(__powerpc__) && defined __GLIBC__
+--#include <sys/platform/ppc.h>
+--#  define UT_RELAX_CPU() __ppc_get_timebase()
+-+# elif defined(__powerpc__)
+-+#  define UT_RELAX_CPU() __builtin_ppc_get_timebase()
+- # else
+- #  define UT_RELAX_CPU() ((void)0) /* avoid warning for an empty statement */
+- # endif
+-@@ -99,9 +98,8 @@ private:
+- #endif
+-
+- # if defined(HAVE_HMT_PRIORITY_INSTRUCTION)
+--#include <sys/platform/ppc.h>
+--#  define UT_LOW_PRIORITY_CPU() __ppc_set_ppr_low()
+--#  define UT_RESUME_PRIORITY_CPU() __ppc_set_ppr_med()
+-+#  define UT_LOW_PRIORITY_CPU() __asm__ __volatile__ ("or 1,1,1")
+-+#  define UT_RESUME_PRIORITY_CPU() __asm__ __volatile__ ("or 2,2,2")
+- # else
+- #  define UT_LOW_PRIORITY_CPU() ((void)0)
+- #  define UT_RESUME_PRIORITY_CPU() ((void)0)
+---- a/storage/innobase/include/ut0ut.h
+-+++ b/storage/innobase/include/ut0ut.h
+-@@ -68,9 +68,8 @@ Created 1/20/1994 Heikki Tuuri
+-    the YieldProcessor macro defined in WinNT.h. It is a CPU architecture-
+-    independent way by using YieldProcessor. */
+- # define UT_RELAX_CPU() YieldProcessor()
+--#elif defined(__powerpc__) && defined __GLIBC__
+--# include <sys/platform/ppc.h>
+--# define UT_RELAX_CPU() __ppc_get_timebase()
+-+#elif defined(__powerpc__)
+-+# define UT_RELAX_CPU() __builtin_ppc_get_timebase()
+- #else
+- # define UT_RELAX_CPU() do { \
+-      volatile int32	volatile_var; \
+-@@ -88,9 +87,8 @@ Created 1/20/1994 Heikki Tuuri
+- #endif
+-
+- #if defined(HAVE_HMT_PRIORITY_INSTRUCTION)
+--# include <sys/platform/ppc.h>
+--# define UT_LOW_PRIORITY_CPU() __ppc_set_ppr_low()
+--# define UT_RESUME_PRIORITY_CPU() __ppc_set_ppr_med()
+-+# define UT_LOW_PRIORITY_CPU() __asm__  __volatile__ ("or 1,1,1")
+-+# define UT_RESUME_PRIORITY_CPU() __asm__ __volatile__ ("or 2,2,2")
+- #else
+- # define UT_LOW_PRIORITY_CPU() ((void)0)
+- # define UT_RESUME_PRIORITY_CPU() ((void)0)
+diff --git a/utils/mariadb/patches/180-libedit.patch b/utils/mariadb/patches/180-libedit.patch
+deleted file mode 100644
+index edf1ea7f8..000000000
+--- a/utils/mariadb/patches/180-libedit.patch
++++ /dev/null
+@@ -1,105 +0,0 @@
+-commit 2220f7458ef90829eacc457167a28aeba75ca1bc
+-Author: Sebastian Kemper <sebastian_ml@gmx.net>
+-Date:   Sun Dec 9 21:19:24 2018 +0100
+-
+-    cmake: support new libedit interface
+-
+-    libedit changed it's interface a while ago. MariaDB's cmake file doesn't
+-    recognize the new interface, the compile test fails:
+-
+-    /mariadb-10.2.19/CMakeFiles/CMakeTmp/src.cxx: In function 'int main(int, char**)':
+-    /mariadb-10.2.19/CMakeFiles/CMakeTmp/src.cxx:6:47: error: invalid conversion from 'char*' to 'int' [-fpermissive]
+-      int res= (*rl_completion_entry_function)(0,0);
+-               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~
+-
+-    Fix this by adding a detection for the new interface as well.
+-
+-    In client/mysql.cc the ifdefs for the new readline interface are
+-    extended to also check for the new libedit interface. They work the same
+-    way.
+-
+-    Run-tested on a MIPS machine.
+-
+-    Signed-off-by: Sebastian Kemper <sebastian_ml@gmx.net>
+-
+---- a/client/mysql.cc
+-+++ b/client/mysql.cc
+-@@ -2578,7 +2578,7 @@ C_MODE_END
+-   if not.
+- */
+-
+--#if defined(USE_NEW_READLINE_INTERFACE)
+-+#if defined(USE_NEW_READLINE_INTERFACE) || defined(USE_NEW_LIBEDIT_INTERFACE)
+- static int fake_magic_space(int, int);
+- extern "C" char *no_completion(const char*,int)
+- #elif defined(USE_LIBEDIT_INTERFACE)
+-@@ -2660,7 +2660,7 @@ static int not_in_history(const char *li
+- }
+-
+-
+--#if defined(USE_NEW_READLINE_INTERFACE)
+-+#if defined(USE_NEW_READLINE_INTERFACE) || defined(USE_NEW_LIBEDIT_INTERFACE)
+- static int fake_magic_space(int, int)
+- #else
+- static int fake_magic_space(const char *, int)
+-@@ -2677,7 +2677,7 @@ static void initialize_readline (char *n
+-   rl_readline_name = name;
+-
+-   /* Tell the completer that we want a crack first. */
+--#if defined(USE_NEW_READLINE_INTERFACE)
+-+#if defined(USE_NEW_READLINE_INTERFACE) || defined(USE_NEW_LIBEDIT_INTERFACE)
+-   rl_attempted_completion_function= (rl_completion_func_t*)&new_mysql_completion;
+-   rl_completion_entry_function= (rl_compentry_func_t*)&no_completion;
+-
+-@@ -2707,7 +2707,7 @@ static char **new_mysql_completion(const
+-                                    int end __attribute__((unused)))
+- {
+-   if (!status.batch && !quick)
+--#if defined(USE_NEW_READLINE_INTERFACE)
+-+#if defined(USE_NEW_READLINE_INTERFACE) || defined(USE_NEW_LIBEDIT_INTERFACE)
+-     return rl_completion_matches(text, new_command_generator);
+- #else
+-     return completion_matches((char *)text, (CPFunction *)new_command_generator);
+---- a/cmake/readline.cmake
+-+++ b/cmake/readline.cmake
+-@@ -160,8 +160,20 @@ MACRO (MYSQL_FIND_SYSTEM_LIBEDIT)
+-       int res= (*rl_completion_entry_function)(0,0);
+-       completion_matches(0,0);
+-     }"
+--    LIBEDIT_INTERFACE)
+--    SET(USE_LIBEDIT_INTERFACE ${LIBEDIT_INTERFACE})
+-+    LIBEDIT_HAVE_COMPLETION_INT)
+-+
+-+    CHECK_CXX_SOURCE_COMPILES("
+-+    #include <stdio.h>
+-+    #include <readline.h>
+-+    int main(int argc, char **argv)
+-+    {
+-+      char res= *(*rl_completion_entry_function)(0,0);
+-+      completion_matches(0,0);
+-+    }"
+-+    LIBEDIT_HAVE_COMPLETION_CHAR)
+-+    IF(LIBEDIT_HAVE_COMPLETION_INT OR LIBEDIT_HAVE_COMPLETION_CHAR)
+-+      SET(USE_LIBEDIT_INTERFACE 1)
+-+    ENDIF()
+-   ENDIF()
+- ENDMACRO()
+-
+-@@ -187,6 +199,7 @@ MACRO (MYSQL_CHECK_READLINE)
+-         IF(USE_LIBEDIT_INTERFACE)
+-           SET(MY_READLINE_INCLUDE_DIR ${LIBEDIT_INCLUDE_DIR})
+-           SET(MY_READLINE_LIBRARY ${LIBEDIT_LIBRARY} ${CURSES_LIBRARY})
+-+          SET(USE_NEW_LIBEDIT_INTERFACE ${LIBEDIT_HAVE_COMPLETION_CHAR})
+-         ELSE()
+-           MYSQL_USE_BUNDLED_READLINE()
+-         ENDIF()
+---- a/config.h.cmake
+-+++ b/config.h.cmake
+-@@ -113,6 +113,7 @@
+- /* Readline */
+- #cmakedefine HAVE_HIST_ENTRY 1
+- #cmakedefine USE_LIBEDIT_INTERFACE 1
+-+#cmakedefine USE_NEW_LIBEDIT_INTERFACE 1
+- #cmakedefine USE_NEW_READLINE_INTERFACE 1
+-
+- #cmakedefine FIONREAD_IN_SYS_IOCTL 1
+--
+2.20.1
