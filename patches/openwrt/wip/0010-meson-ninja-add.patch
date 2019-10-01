@@ -1,0 +1,243 @@
+From 4646f03c0e6af2c0ef5cb1192a8b89aa427960b8 Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Fri, 9 Aug 2019 11:12:03 +0200
+Subject: [PATCH 1/3] tools/ninja: add new tools package
+
+Signed-off-by: Jan Pavlinec <jan.pavlinec@nic.cz>
+---
+ include/ninja.mk     | 31 +++++++++++++++++++++++++++++++
+ tools/ninja/Makefile | 39 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 70 insertions(+)
+ create mode 100644 include/ninja.mk
+ create mode 100644 tools/ninja/Makefile
+
+diff --git a/include/ninja.mk b/include/ninja.mk
+new file mode 100644
+index 00000000000..9dde3e502aa
+--- /dev/null
++++ b/include/ninja.mk
+@@ -0,0 +1,31 @@
++ifneq ($(__ninja_mk_inc),1)
++__ninja_mk_inc=1
++
++HOST_NINJA_DIR:=$(STAGING_DIR_HOST)
++HOST_NINJA_BIN:=$(HOST_NINJA_DIR)/usr/bin/ninja
++
++CMAKE_INSTALL_PREFIX=$(PKG_BUILD_DIR)/ipkg-install/usr
++CMAKE_GENERATOR="Ninja"
++
++define Build/Ninja/Compile
++	cd $(PKG_BUILD_DIR)/$(1) && $(HOST_NINJA_BIN)
++endef
++
++define Build/Ninja/Install
++	DESTDIR=$(PKG_BUILD_DIR)/ipkg-install  $(HOST_NINJA_BIN) install -C $(PKG_BUILD_DIR)/$(strip $(1))
++endef
++
++# Don't overwrite Compile or Install section in
++# case of meson and use one defined in meson.mk
++ifneq ($(__meson_mk_inc),1)
++
++define Build/Compile
++	$(call Build/Ninja/Compile)
++endef
++
++define Build/Install
++	$(call Build/Ninja/Install)
++endef
++endif
++
++endif
+diff --git a/tools/ninja/Makefile b/tools/ninja/Makefile
+new file mode 100644
+index 00000000000..e062d4fd123
+--- /dev/null
++++ b/tools/ninja/Makefile
+@@ -0,0 +1,39 @@
++#
++# Copyright (C) 2019 CZ.NIC z.s.p.o. (https://www.nic.cz/)
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=ninja
++PKG_VERSION:=1.9.0
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=https://codeload.github.com/ninja-build/ninja/tar.gz/v$(PKG_VERSION)?
++PKG_HASH:=5d7ec75828f8d3fd1a0c2f31b5b0cea780cdfe1031359228c428c1a48bfcd5b9
++
++PKG_LICENSE:=Apache-2.0
++PKG_LICENSE_FILES:=COPYING
++
++HOST_BUILD_PARALLEL:=1
++
++include $(INCLUDE_DIR)/host-build.mk
++
++HOST_CONFIGURE_ARGS := --bootstrap
++
++define Host/Compile
++	cd  $(HOST_BUILD_DIR) && python3 configure.py $(HOST_CONFIGURE_ARGS)
++endef
++
++define Host/Install
++	$(INSTALL_DIR) $(STAGING_DIR_HOST)/usr/bin/
++	$(INSTALL_BIN) $(HOST_BUILD_DIR)/ninja $(STAGING_DIR_HOST)/usr/bin/
++endef
++
++define Host/Clean
++	$(call Host/Clean/Default)
++	rm -f $(STAGING_DIR_HOST)/usr/bin/ninja
++endef
++
++$(eval $(call HostBuild))
+
+From 79cd5da2f42bcfac7786b4707474f29192e78818 Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Fri, 9 Aug 2019 11:12:59 +0200
+Subject: [PATCH 2/3] tools: add ninja and meson
+
+Signed-off-by: Jan Pavlinec <jan.pavlinec@nic.cz>
+---
+ tools/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/tools/Makefile b/tools/Makefile
+index d7207ba89dd..6d12d4ec840 100644
+--- a/tools/Makefile
++++ b/tools/Makefile
+@@ -27,6 +27,7 @@ tools-y += sstrip make-ext4fs e2fsprogs mtd-utils mkimage
+ tools-y += firmware-utils patch-image quilt padjffs2
+ tools-y += mm-macros missing-macros cmake scons bc findutils gengetopt patchelf
+ tools-y += mtools dosfstools libressl
++tools-y += ninja meson
+ tools-$(CONFIG_TARGET_orion_generic) += wrt350nv2-builder upslug2
+ tools-$(CONFIG_TARGET_x86) += qemu
+ tools-$(CONFIG_TARGET_mxs) += elftosb sdimage
+
+From 9741ff73952f34222602a520c515280744dafff7 Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Fri, 9 Aug 2019 11:11:28 +0200
+Subject: [PATCH 3/3] tools/meson: add new tools package
+
+Signed-off-by: Jan Pavlinec <jan.pavlinec@nic.cz>
+---
+ include/meson.mk     | 63 ++++++++++++++++++++++++++++++++++++++++++++
+ tools/meson/Makefile | 36 +++++++++++++++++++++++++
+ 2 files changed, 99 insertions(+)
+ create mode 100644 include/meson.mk
+ create mode 100644 tools/meson/Makefile
+
+diff --git a/include/meson.mk b/include/meson.mk
+new file mode 100644
+index 00000000000..7068f7335c4
+--- /dev/null
++++ b/include/meson.mk
+@@ -0,0 +1,63 @@
++ifneq ($(__meson_mk_inc),1)
++__meson_mk_inc=1
++
++include $(TOPDIR)/include/ninja.mk
++
++CROSS_CONF_FILE=$(PKG_BUILD_DIR)/cross_conf.txt
++HOST_PYTHON3_BIN ?= python3
++HOST_MESON_BIN=$(STAGING_DIR_HOST)/meson/meson.py
++MESON_BUILD_DIR ?= builddir
++
++BINPATH=$(TOPDIR)/staging_dir/host/usr/bin:$(PATH)
++MESON_ENDIAN := $(if $(CONFIG_BIG_ENDIAN),big,little)
++
++define CreateCrossconf
++	echo [binaries] >$(CROSS_CONF_FILE)
++	echo c = \'$(TARGET_CC_NOCACHE)\' >>$(CROSS_CONF_FILE)
++	echo cpp = \'$(TARGET_CXX_NOCACHE)\'>>$(CROSS_CONF_FILE)
++	echo ar = \'$(TARGET_AR)\'>>$(CROSS_CONF_FILE)
++	echo strip = \'$(TARGET_CROSS)strip\' >> $(CROSS_CONF_FILE)
++	echo nm = \'$(TARGET_NM)\' >> $(CROSS_CONF_FILE)
++	echo ld = \'$(TARGET_CROSS)ld\' >> $(CROSS_CONF_FILE)
++	echo pkgconfig = \'$(PKG_CONFIG).real\'>>$(CROSS_CONF_FILE)
++
++	echo [host_machine]>>$(CROSS_CONF_FILE)
++	echo system = \'linux\'>>$(CROSS_CONF_FILE)
++	echo cpu_family = \'$(ARCH)\'>>$(CROSS_CONF_FILE)
++	echo cpu = \'$(CONFIG_TARGET_SUBTARGET)\'>>$(CROSS_CONF_FILE)
++	echo endian = \'$(MESON_ENDIAN)\' >> $(CROSS_CONF_FILE)
++	echo [build_machine]>>$(CROSS_CONF_FILE)
++	echo system = \'linux\'>>$(CROSS_CONF_FILE)
++	echo cpu_family = \'x86_64\'>>$(CROSS_CONF_FILE)
++	echo cpu = \'i686\'>>$(CROSS_CONF_FILE)
++	echo endian = \'little\'>>$(CROSS_CONF_FILE)
++endef
++
++define Build/Meson/Configure
++	$(call CreateCrossconf)
++	[ -d "$(PKG_BUILD_DIR)/$(MESON_BUILD_DIR)" ] || mkdir -p "$(PKG_BUILD_DIR)/$(MESON_BUILD_DIR)"
++	cd $(PKG_BUILD_DIR) && \
++	PATH=$(BINPATH) PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) $(HOST_PYTHON3_BIN) $(HOST_MESON_BIN) $(MESON_BUILD_DIR) --cross-file $(CROSS_CONF_FILE) $(MESON_ARGS)
++endef
++
++define Build/Meson/Compile
++	$(call Build/Ninja/Compile,$(MESON_BUILD_DIR))
++endef
++
++define Build/Meson/Install
++	$(call Build/Ninja/Install,$(MESON_BUILD_DIR))
++endef
++
++define Build/Configure
++	$(call Build/Meson/Configure)
++endef
++
++define Build/Compile
++	$(call Build/Meson/Compile)
++endef
++
++define Build/Install
++	$(call Build/Meson/Install)
++endef
++
++endif
+diff --git a/tools/meson/Makefile b/tools/meson/Makefile
+new file mode 100644
+index 00000000000..ead72bc17ef
+--- /dev/null
++++ b/tools/meson/Makefile
+@@ -0,0 +1,36 @@
++#
++# Copyright (C) 2019 CZ.NIC, z. s. p. o. (https://www.nic.cz/)
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=meson
++PKG_VERSION:=0.52.0
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=https://github.com/mesonbuild/meson/releases/download/$(PKG_VERSION)/
++PKG_HASH:=d60f75f0dedcc4fd249dbc7519d6f3ce6df490033d276ef1cf27453ef4938d32
++
++PKG_LICENSE:=Apache-2.0
++PKG_LICENSE_FILES:=COPYING
++
++include $(INCLUDE_DIR)/host-build.mk
++
++define Host/Compile
++	true
++endef
++
++define Host/Install
++	$(INSTALL_DIR) $(STAGING_DIR_HOST)/meson
++	$(CP) -R $(HOST_BUILD_DIR)/* $(STAGING_DIR_HOST)/meson/
++endef
++
++define Host/Clean
++	$(call Host/Clean/Default)
++	rm -rf $(STAGING_DIR_HOST)/meson
++endef
++
++$(eval $(call HostBuild))
