@@ -29,6 +29,7 @@ Install("fstools", { critical = true })
 Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
 Install("ebtables", "odhcpd", "odhcp6c", "rpcd", { priority = 40 })
 Install("opkg", "libustream-openssl", { priority = 40 })
+Uninstall("wget-nossl", { priority = 40 }) -- opkg required SSL variant only
 
 -- Turris minimum
 Install("vixie-cron", "syslog-ng", { priority = 40 })
