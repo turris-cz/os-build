@@ -391,12 +391,6 @@ store_hash() {
 	} | tee bin/git-hash
 }
 
-_mapfile_disabled_if_exists() {
-	if [ -f "$1" ]; then
-		mapfile -t -O "${#disabled_packages[@]}" disabled_packages < <(sed 's/#.*//;/^\s*$/d' "$1")
-	fi
-}
-
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them" )
 repatch_feeds() {
 	_report "Getting feeds"
@@ -421,11 +415,6 @@ repatch_feeds() {
 	_report "Installing feeds packages"
 	_perl ./scripts/feeds update -a -i
 	_perl ./scripts/feeds install -a
-	local disabled_packages=()
-	_mapfile_disabled_if_exists "$src_dir/disabled_packages/common"
-	_mapfile_disabled_if_exists "$src_dir/disabled_packages/$TARGET_BOARD"
-	[ ${#disabled_packages[@]} -le 0 ] || \
-		_perl ./scripts/feeds uninstall "${disabled_packages[@]}"
 }
 
 available_commands+=( ["prefetch"]="Runs make download" )
