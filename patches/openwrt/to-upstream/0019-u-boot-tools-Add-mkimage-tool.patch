@@ -1,10 +1,10 @@
-From 172c01b227feba0533a66134a43451e8baffdfc7 Mon Sep 17 00:00:00 2001
+From 17b05f0334a4b49a1304e0c695ea2bc41d933fba Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 20 Mar 2019 16:42:28 +0100
 Subject: [PATCH] u-boot tools: Add mkimage tool
 
 ---
- .../{uboot-envtools => uboot-tools}/Makefile  | 42 ++++++++++++++++---
+ .../{uboot-envtools => uboot-tools}/Makefile  | 51 ++++++++++++++++---
  .../files/apm821xx                            |  0
  .../files/ar71xx                              |  0
  .../files/ath79                               |  0
@@ -23,8 +23,8 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  .../files/ramips                              |  0
  .../files/uboot-envtools.sh                   |  0
  .../patches/001-compile.patch                 |  0
- 19 files changed, 37 insertions(+), 5 deletions(-)
- rename package/boot/{uboot-envtools => uboot-tools}/Makefile (66%)
+ 19 files changed, 44 insertions(+), 7 deletions(-)
+ rename package/boot/{uboot-envtools => uboot-tools}/Makefile (58%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/apm821xx (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/ar71xx (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/ath79 (100%)
@@ -45,10 +45,10 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  rename package/boot/{uboot-envtools => uboot-tools}/patches/001-compile.patch (100%)
 
 diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-tools/Makefile
-similarity index 66%
+similarity index 58%
 rename from package/boot/uboot-envtools/Makefile
 rename to package/boot/uboot-tools/Makefile
-index 71b842b..e01d63a 100644
+index 15579e9..91ac729 100644
 --- a/package/boot/uboot-envtools/Makefile
 +++ b/package/boot/uboot-tools/Makefile
 @@ -7,7 +7,7 @@
@@ -60,7 +60,7 @@ index 71b842b..e01d63a 100644
  PKG_DISTNAME:=u-boot
  PKG_VERSION:=2018.03
  PKG_RELEASE:=3
-@@ -43,23 +43,49 @@ define Package/uboot-envtools/description
+@@ -43,19 +43,50 @@ define Package/uboot-envtools/description
   This package includes tools to read and modify U-Boot bootloader environment.
  endef
  
@@ -73,7 +73,7 @@ index 71b842b..e01d63a 100644
 +  DEPENDS:=+libopenssl @OPENSSL_ENGINE
 +endef
 +
-+define Package/uboot-envtools/description
++define Package/uboot-mkimage/description
 + This package includes tools to create U-Boot bootloader images.
 +endef
 +
@@ -88,15 +88,17 @@ index 71b842b..e01d63a 100644
 +	touch $(PKG_BUILD_DIR)
  endef
  
--TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
--
- define Build/Compile
- 	$(MAKE) -C $(PKG_BUILD_DIR) \
- 		CROSS_COMPILE="$(TARGET_CROSS)" \
- 		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
- 		HOSTLDFLAGS= \
- 		no-dot-config-targets=envtools \
--		envtools
+-MAKE_FLAGS += \
+-	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
+-	TARGET_LDFLAGS="$(TARGET_LDFLAGS)" \
+-	no-dot-config-targets=envtools \
+-	envtools
++define Build/Compile
++	$(MAKE) -C $(PKG_BUILD_DIR) \
++		CROSS_COMPILE="$(TARGET_CROSS)" \
++		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
++		HOSTLDFLAGS= \
++		no-dot-config-targets=envtools \
 +		CROSS_BUILD_TOOLS=1 \
 +		NO_SDL=1 \
 +		envtools defconfig
@@ -110,10 +112,11 @@ index 71b842b..e01d63a 100644
 +		CROSS_BUILD_TOOLS=1 \
 +		NO_SDL=1 \
 +		cross_tools
- endef
++endef
  
  define Package/uboot-envtools/conffiles
-@@ -69,7 +95,7 @@ endef
+ /etc/config/ubootenv
+@@ -64,7 +95,7 @@ endef
  
  define Package/uboot-envtools/install
  	$(INSTALL_DIR) $(1)/usr/sbin
@@ -122,7 +125,7 @@ index 71b842b..e01d63a 100644
  	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
  	$(INSTALL_DIR) $(1)/lib
  	$(INSTALL_DATA) ./files/uboot-envtools.sh $(1)/lib
-@@ -80,4 +106,10 @@ define Package/uboot-envtools/install
+@@ -75,4 +106,10 @@ define Package/uboot-envtools/install
  	)
  endef
  
@@ -206,5 +209,5 @@ similarity index 100%
 rename from package/boot/uboot-envtools/patches/001-compile.patch
 rename to package/boot/uboot-tools/patches/001-compile.patch
 -- 
-2.22.0
+2.23.0
 
