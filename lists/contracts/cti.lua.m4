@@ -1,7 +1,7 @@
 include(utils.m4)dnl
 _FEATURE_GUARD_
 
--- Force-include data collect
-Script("../pkglists/datacollect.lua")
+Install("sentinel-dynfw-client")
+Install("sentinel-minipot", "sentinel-nikola", "turris-survey")
 
 _END_FEATURE_GUARD_
