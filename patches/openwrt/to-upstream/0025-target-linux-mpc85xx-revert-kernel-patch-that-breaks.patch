@@ -1,0 +1,55 @@
+From fc65dacd1b20e47c9a7068e5b9a2edd804c87105 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Tue, 19 Nov 2019 17:48:24 +0100
+Subject: [PATCH] target/linux/mpc85xx: revert kernel patch that breaks MMC
+ access
+
+This patch causes boot to not proceed because kernel won't locate FS on
+MMC. MMC it self is correctly detected but it might not be readable by
+kernel with this patch. Instead kernel panics.
+---
+ ...-of-esdhc-set-DMA-snooping-based-on-.patch | 32 +++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+ create mode 100644 target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch
+
+diff --git a/target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch b/target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch
+new file mode 100644
+index 0000000..ca41d11
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch
+@@ -0,0 +1,32 @@
++From 429cffc87a35214f415f8f0b37d9933b745fa9cb Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
++Date: Tue, 19 Nov 2019 16:47:06 +0100
++Subject: [PATCH 2/2] Revert "mmc: sdhci-of-esdhc: set DMA snooping based on
++ DMA coherence"
++
++This reverts commit 6475db6c42a408c5c0a52dbdb8494310c48ed2d3.
++---
++ drivers/mmc/host/sdhci-of-esdhc.c | 7 +------
++ 1 file changed, 1 insertion(+), 6 deletions(-)
++
++diff --git a/drivers/mmc/host/sdhci-of-esdhc.c b/drivers/mmc/host/sdhci-of-esdhc.c
++index 176cbc67d08a..bcfa84aa2113 100644
++--- a/drivers/mmc/host/sdhci-of-esdhc.c
+++++ b/drivers/mmc/host/sdhci-of-esdhc.c
++@@ -435,12 +435,7 @@ static int esdhc_of_enable_dma(struct sdhci_host *host)
++ 		dma_set_mask_and_coherent(dev, DMA_BIT_MASK(40));
++ 
++ 	value = sdhci_readl(host, ESDHC_DMA_SYSCTL);
++-
++-	if (of_dma_is_coherent(dev->of_node))
++-		value |= ESDHC_DMA_SNOOP;
++-	else
++-		value &= ~ESDHC_DMA_SNOOP;
++-
+++	value |= ESDHC_DMA_SNOOP;
++ 	sdhci_writel(host, value, ESDHC_DMA_SYSCTL);
++ 	return 0;
++ }
++-- 
++2.24.0
++
+-- 
+2.24.0
+
