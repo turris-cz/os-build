@@ -36,7 +36,7 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 
 	Package('updater-ng', {
 		replan = 'immediate',
-		deps = { 'libgcc', 'tos3to4-early' }
+		deps = { 'libgcc', 'busybox', 'tos3to4-early' }
 	})
 	--[[
 	Updater package does not depend on libgcc but it requires it and dependency
