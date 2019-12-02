@@ -364,14 +364,10 @@ patch_openwrt() {
 }
 
 _git_remote_hash() {
-	pushd "$1" > /dev/null
-	# TODO rework
-	br="$(LANG=C git status --long | sed -n 's|HEAD detached from \(.*\)|\1|p')"
-	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is up to date with '\\([^']*\\)'.*|\1|p")"
-	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is ahead of '\\([^']*\\)'.*|\1|p")"
-	[ -n "$br" ] || br=HEAD
-	git log -n1 --pretty=%H	"$br"
-	popd > /dev/null
+	local dir="${1:-}"
+	git -C "$dir" rev-list HEAD | \
+		git -C "$dir" name-rev --stdin --refs='origin/*' | \
+		awk '$2 != "" { print $1; exit }'
 }
 
 available_commands+=( ["store_hash"]="Stores hashes of current build" )
