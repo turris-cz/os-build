@@ -1,0 +1,51 @@
+From 6586aa4e2f083ae46164e8857b3490a650060a64 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Wed, 4 Dec 2019 15:41:14 +0100
+Subject: [PATCH] Revert "haas-proxy: add missing dependency and improve init"
+
+This reverts commit 91926e45a4e0919b46f58858d432ea1f2639ec76.
+---
+ collect/haas-proxy/Makefile              | 4 ++--
+ collect/haas-proxy/files/haas-proxy.init | 4 +---
+ 2 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/collect/haas-proxy/Makefile b/collect/haas-proxy/Makefile
+index 5f380b9a0..1846daf97 100644
+--- a/collect/haas-proxy/Makefile
++++ b/collect/haas-proxy/Makefile
+@@ -8,7 +8,7 @@
+ include $(TOPDIR)/rules.mk
+ PKG_NAME:=haas-proxy
+ PKG_VERSION:=1.9
+-PKG_RELEASE:=11
++PKG_RELEASE:=10
+ 
+ PKG_SOURCE_VERSION:=bbf8629d1d64840407eefc23d2b6c8835365347b
+ PKG_SOURCE_URL:=https://gitlab.labs.nic.cz/haas/proxy/raw/$(PKG_SOURCE_VERSION)/release/
+@@ -27,7 +27,7 @@ define Package/haas-proxy
+   CATEGORY:=Network
+   TITLE:=Honeypot as a Service proxy
+   URL:=https://haas.nic.cz
+-  DEPENDS:=+python3-light +python3-cachetools +python3-bcrypt +python3-requests +python3-twisted +python3-crypto +python3-service-identity +sshpass +@KERNEL_CFS_BANDWIDTH
++  DEPENDS:=+python3-light +python3-cachetools +python3-requests +python3-twisted +python3-crypto +python3-service-identity +sshpass +@KERNEL_CFS_BANDWIDTH
+   CONFLICTS:=mitmproxy
+   VARIANT:=python3
+ endef
+diff --git a/collect/haas-proxy/files/haas-proxy.init b/collect/haas-proxy/files/haas-proxy.init
+index 909f49080..a8be474d1 100644
+--- a/collect/haas-proxy/files/haas-proxy.init
++++ b/collect/haas-proxy/files/haas-proxy.init
+@@ -23,9 +23,7 @@ start_service() {
+ 	procd_open_instance
+ 	procd_set_param command /usr/libexec/haas-proxy-start -n haas_proxy --log-level="$log_level" --device-token="$token" --port="$port"
+ 	[ -z "$log" -o "$log" = "none" ] || procd_append_param command --log="$log"
+-	procd_set_param respawn 3600 5 5
++	procd_set_param respawn "${respawn_threshold:-3600}" "${respawn_timeout:-5}" "${respawn_retry:-5}"
+ 	procd_set_param file /etc/config/haas
+-	procd_set_param stdout 1
+-	procd_set_param stderr 1
+ 	procd_close_instance
+ }
+-- 
+2.24.0
+
