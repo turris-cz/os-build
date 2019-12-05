@@ -1,0 +1,47 @@
+From c1df52804eedb8b689837bd27be84aedbaa60658 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Mon, 19 Feb 2018 22:02:58 +0100
+Subject: [PATCH] kernel: Include kernel magic in all kmods
+
+Kernel modules can greatly depend on configuration of the kernel and might not
+work with different kernel, so always put kernel magic as part of the package
+version.
+
+Also install modules into directories versioned by the kernel magic.
+
+Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ include/kernel-defaults.mk | 2 ++
+ include/kernel.mk          | 4 ++--
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/include/kernel-defaults.mk b/include/kernel-defaults.mk
+index 5e905a2..e263bc2 100644
+--- a/include/kernel-defaults.mk
++++ b/include/kernel-defaults.mk
+@@ -100,6 +100,8 @@ define Kernel/Configure/Default
+ 	}
+ 	$(_SINGLE) [ -d $(LINUX_DIR)/user_headers ] || $(KERNEL_MAKE) INSTALL_HDR_PATH=$(LINUX_DIR)/user_headers headers_install
+ 	grep '=[ym]' $(LINUX_DIR)/.config.set | LC_ALL=C sort | mkhash md5 > $(LINUX_DIR)/.vermagic
++	sed -i '/^CONFIG_LOCALVERSION=.*/ d' $(LINUX_DIR)/.config
++	echo CONFIG_LOCALVERSION=\""-`cat $(LINUX_DIR)/.vermagic`"\"  >> $(LINUX_DIR)/.config;
+ endef
+ 
+ define Kernel/Configure/Initramfs
+diff --git a/include/kernel.mk b/include/kernel.mk
+index 62a8e99..351eefc 100644
+--- a/include/kernel.mk
++++ b/include/kernel.mk
+@@ -195,7 +195,7 @@ define KernelPackage
+     CATEGORY:=Kernel modules
+     DESCRIPTION:=$(DESCRIPTION)
+-    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC))
+-    VERSION:=$(LINUX_VERSION)$(if $(PKG_VERSION),+$(PKG_VERSION))-$(if $(PKG_RELEASE),$(PKG_RELEASE),$(LINUX_RELEASE))
++    VERSION:=$(LINUX_VERSION)$(if $(PKG_VERSION),+$(PKG_VERSION))-$(if $(PKG_RELEASE),$(PKG_RELEASE),$(LINUX_RELEASE))-$(LINUX_VERMAGIC)
++    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC).0)
+     PKGFLAGS:=$(PKGFLAGS)
+     $(call KernelPackage/$(1))
+     $(call KernelPackage/$(1)/$(BOARD))
+-- 
+2.19.1
+
