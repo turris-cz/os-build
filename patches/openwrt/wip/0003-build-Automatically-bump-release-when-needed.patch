@@ -1,4 +1,4 @@
-From a41edb5a9967c4f423809b6a29c065938c376c1c Mon Sep 17 00:00:00 2001
+From ad329d92e0847bbe8b22433442fd4a4a0158369a Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 31 Oct 2018 13:14:23 +0100
 Subject: [PATCH] build: Automatically bump release when needed
@@ -16,10 +16,10 @@ Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
  5 files changed, 47 insertions(+), 2 deletions(-)
 
 diff --git a/config/Config-build.in b/config/Config-build.in
-index 5132497..c48fcd9 100644
+index 3534183..58441ba 100644
 --- a/config/Config-build.in
 +++ b/config/Config-build.in
-@@ -190,6 +190,22 @@ menu "Global build settings"
+@@ -194,6 +194,22 @@ menu "Global build settings"
  			bool "libstdc++"
  	endchoice
  
@@ -43,18 +43,18 @@ index 5132497..c48fcd9 100644
  
  	config PKG_CHECK_FORMAT_SECURITY
 diff --git a/include/kernel.mk b/include/kernel.mk
-index 975cf45..68084fa 100644
+index 93be63d..96f6e43 100644
 --- a/include/kernel.mk
 +++ b/include/kernel.mk
-@@ -208,7 +208,7 @@ define KernelPackage
-     SECTION:=kernel
+@@ -209,7 +209,7 @@ define KernelPackage
      CATEGORY:=Kernel modules
      DESCRIPTION:=$(DESCRIPTION)
+     VERSION:=$(LINUX_VERSION)$(if $(PKG_VERSION),+$(PKG_VERSION))-$(if $(PKG_RELEASE),$(PKG_RELEASE),$(LINUX_RELEASE))-$(LINUX_VERMAGIC)
 -    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC))
 +    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC).0)
-     VERSION:=$(LINUX_VERSION)$(if $(PKG_VERSION),+$(PKG_VERSION))-$(if $(PKG_RELEASE),$(PKG_RELEASE),$(LINUX_RELEASE))
      PKGFLAGS:=$(PKGFLAGS)
      $(call KernelPackage/$(1))
+     $(call KernelPackage/$(1)/$(BOARD))
 diff --git a/include/package-defaults.mk b/include/package-defaults.mk
 index 31e331b..19b5e6f 100644
 --- a/include/package-defaults.mk
@@ -72,10 +72,10 @@ index 31e331b..19b5e6f 100644
    else
      VERSION:=$(PKG_RELEASE)
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index 88571a8..312c8d0 100644
+index c6d002a..90bff76 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -194,6 +194,11 @@ $(_endef)
+@@ -196,6 +196,11 @@ $(_endef)
  			fi; \
  		done; $(Package/$(1)/extra_provides) \
  	) | sort -u > $(PKG_INFO_DIR)/$(1).provides
@@ -87,7 +87,7 @@ index 88571a8..312c8d0 100644
  	$(if $(PROVIDES),@for pkg in $(filter-out $(1),$(PROVIDES)); do cp $(PKG_INFO_DIR)/$(1).provides $(PKG_INFO_DIR)/$$$$pkg.provides; done)
  	$(CheckDependencies)
  
-@@ -208,8 +213,24 @@ $(_endef)
+@@ -210,8 +215,24 @@ $(_endef)
  	)
      endif
  	(cd $$(IDIR_$(1))/CONTROL; \
@@ -113,7 +113,7 @@ index 88571a8..312c8d0 100644
  			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
  		) > control; \
  		chmod 644 control; \
-@@ -245,6 +266,9 @@ $(_endef)
+@@ -247,6 +268,9 @@ $(_endef)
  
  	$(INSTALL_DIR) $$(PDIR_$(1))
  	$(IPKG_BUILD) $$(IDIR_$(1)) $$(PDIR_$(1))
@@ -136,5 +136,5 @@ index 80cb3d6..b0a653f 100644
  BUILD_DIR_HOST:=$(if $(IS_PACKAGE_BUILD),$(BUILD_DIR_BASE)/hostpkg,$(BUILD_DIR_BASE)/host)
  STAGING_DIR_HOST:=$(TOPDIR)/staging_dir/host
 -- 
-2.21.0
+2.24.0
 
