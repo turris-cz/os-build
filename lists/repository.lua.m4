@@ -7,7 +7,7 @@ local optional_extra
 if features.relative_uri then
 	rroot = ".."
 else
-	rroot = repo_base_uri or "https://repo.turris.cz/hbs/" .. board
+	rroot = (repo_base_uri or "https://repo.turris.cz/hbs") .. "/" .. board
 end
 
 for _, feed in ipairs(feeds) do

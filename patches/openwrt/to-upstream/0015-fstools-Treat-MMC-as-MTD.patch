@@ -1,0 +1,61 @@
+From 39f416f6f3941c0dcf377600af26605068f44528 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Tue, 5 Feb 2019 18:55:41 +0100
+Subject: [PATCH] fstools: Treat MMC as MTD
+
+---
+ package/system/fstools/Makefile               |  9 +++++++++
+ .../system/fstools/patches/mmc-is-mtd.patch   | 19 +++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+ create mode 100644 package/system/fstools/patches/mmc-is-mtd.patch
+
+diff --git a/package/system/fstools/Makefile b/package/system/fstools/Makefile
+index 58be215f8f..f7695af2e4 100644
+--- a/package/system/fstools/Makefile
++++ b/package/system/fstools/Makefile
+@@ -66,8 +66,17 @@ define Package/fstools/config
+ 		default n
+ 		help
+ 			This option enables the compression using zlib on the storage device.
++
++	config FSTOOLS_MMC_IS_MTD
++		depends on PACKAGE_block-mount
++		bool "Rootfs is on MMC"
++		default y
++		help
++			This option makes sure that MMC is treated as non-removable and non-unmountable.
+ endef
+ 
++TARGET_CFLAGS+=$(if $(CONFIG_FSTOOLS_MMC_IS_MTD),-DMMC_IS_MTD)
++
+ define Package/snapshot-tool
+   SECTION:=base
+   CATEGORY:=Base system
+diff --git a/package/system/fstools/patches/mmc-is-mtd.patch b/package/system/fstools/patches/mmc-is-mtd.patch
+new file mode 100644
+index 0000000000..da36e86339
+--- /dev/null
++++ b/package/system/fstools/patches/mmc-is-mtd.patch
+@@ -0,0 +1,19 @@
++Index: fstools-2018-12-28-af93f4b8/block.c
++===================================================================
++--- fstools-2018-12-28-af93f4b8.orig/block.c
+++++ fstools-2018-12-28-af93f4b8/block.c
++@@ -523,9 +523,14 @@ static void cache_load(int mtd)
++ 		_cache_load("/dev/mtdblock*");
++ 		_cache_load("/dev/ubiblock*");
++ 		_cache_load("/dev/ubi[0-9]*");
+++#ifdef MMC_IS_MTD
+++		_cache_load("/dev/mmcblk*");
+++#endif
++ 	}
++ 	_cache_load("/dev/loop*");
+++#ifndef MMC_IS_MTD
++ 	_cache_load("/dev/mmcblk*");
+++#endif
++ 	_cache_load("/dev/sd*");
++ 	_cache_load("/dev/hd*");
++ 	_cache_load("/dev/md*");
+-- 
+2.20.1
+

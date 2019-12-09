@@ -33,15 +33,6 @@ if not version_match or not self_version or version_match(self_version, "<60.0.1
 	DIE("Minimal required version of Updater-ng for Turris repository is 60.0.1!")
 end
 
--- Script simplifying lists inclusion when older version of updater is used
-function list_script(list)
-	if features["relative_uri"] then
-		Script(list)
-	else
-		Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/lists/" .. list)
-	end
-end
-
 if not board then
 	local model = model or os_release["OPENWRT_DEVICE_PRODUCT"] or os_release["LEDE_DEVICE_PRODUCT"]
 	if model:match("[Mm]ox") then
@@ -52,6 +43,15 @@ if not board then
 		board = "turris1x"
 	else
 		DIE("Unsupported Turris model: " .. tostring(model))
+	end
+end
+
+-- Script simplifying lists inclusion when older version of updater is used
+function list_script(list)
+	if features["relative_uri"] then
+		Script(list)
+	else
+		Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/" .. board .. "/lists/" .. list)
 	end
 end
 ----------------------------------------------------------------------------------
