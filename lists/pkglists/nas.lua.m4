@@ -15,7 +15,7 @@ Install("kmod-usb-storage-extras", "kmod-usb-storage-uas", { priority = 40 })
 if board == "omnia" then
 	Install("blkdiscard", "fstrim", "asm1062-fix", { priority = 40 })
 elseif board == "turris1x" then
-	Install("kmod-mmc-fsl-p2020", "kmod-fs-reiserfs", "reiserfsprogs", { priority = 40 })
+	Install("kmod-fs-reiserfs", "reiserfsprogs", { priority = 40 })
 end
 
 -- Tools --
