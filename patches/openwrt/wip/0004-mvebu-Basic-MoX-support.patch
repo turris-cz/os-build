@@ -246,7 +246,6 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
  create mode 100644 target/linux/mvebu/patches-4.14/90107-net-dsa-mv88e6xxx-Fix-IRQ-when-loading-module.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90108-net-dsa-mv88e6xxx-fix-races-between-lock-and-irq-fre.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
- create mode 100644 target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90111-net-ethernet-mvneta-Fix-napi-structure-mixup-on-arma.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90112-net-mvneta-fix-mvneta_config_rss-on-armada-3700.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
@@ -12517,115 +12516,6 @@ index 0000000..24bc034
 + 				   dev_name(chip->dev), chip);
 + 	if (err)
 + 		mv88e6xxx_g1_irq_free_common(chip);
-+-- 
-+2.21.0
-+
-diff --git a/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
-new file mode 100644
-index 0000000..543e63f
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90110-net-dsa-mc88e6xxx-Fix-88E6141-6341-2500mbps-SERDES-s.patch
-@@ -0,0 +1,103 @@
-+From dc9c03cbf564ef633cc00038f3a00698e620daad Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Fri, 5 Oct 2018 13:23:05 +0200
-+Subject: [PATCH 110/127] net: dsa: mc88e6xxx: Fix 88E6141/6341 2500mbps SERDES
-+ speed
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+The port_set_speed method for the Topaz family must not be the same
-+as for Peridot family, since on Topaz port 5 is the SERDES port and
-+can be set to 2500mbps spped mode.
-+
-+This patch adds a new method for the Topaz family, allowing the alt_bit
-+mode only for port 0 and 2500 mbps mode for port 5.
-+
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ drivers/net/dsa/mv88e6xxx/chip.c |  4 ++--
-+ drivers/net/dsa/mv88e6xxx/port.c | 25 +++++++++++++++++++++++--
-+ drivers/net/dsa/mv88e6xxx/port.h |  1 +
-+ 3 files changed, 26 insertions(+), 4 deletions(-)
-+
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index 1335c4b5acc1..4dabd878521c 100644
-+--- a/drivers/net/dsa/mv88e6xxx/chip.c
-++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -2822,7 +2822,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
-+ 	.port_set_link = mv88e6xxx_port_set_link,
-+ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
-+ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
-+-	.port_set_speed = mv88e6390_port_set_speed,
-++	.port_set_speed = mv88e6341_port_set_speed,
-+ 	.port_tag_remap = mv88e6095_port_tag_remap,
-+ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
-+ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
-+@@ -3379,7 +3379,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
-+ 	.port_set_link = mv88e6xxx_port_set_link,
-+ 	.port_set_duplex = mv88e6xxx_port_set_duplex,
-+ 	.port_set_rgmii_delay = mv88e6390_port_set_rgmii_delay,
-+-	.port_set_speed = mv88e6390_port_set_speed,
-++	.port_set_speed = mv88e6341_port_set_speed,
-+ 	.port_tag_remap = mv88e6095_port_tag_remap,
-+ 	.port_set_frame_mode = mv88e6351_port_set_frame_mode,
-+ 	.port_set_egress_floods = mv88e6352_port_set_egress_floods,
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index 78c9e6c50ab0..ead75477a6a3 100644
-+--- a/drivers/net/dsa/mv88e6xxx/port.c
-++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -228,8 +228,11 @@ static int mv88e6xxx_port_set_speed(struct mv88e6xxx_chip *chip, int port,
-+ 		ctrl = MV88E6XXX_PORT_MAC_CTL_SPEED_1000;
-+ 		break;
-+ 	case 2500:
-+-		ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000 |
-+-			MV88E6390_PORT_MAC_CTL_ALTSPEED;
-++		if (alt_bit)
-++			ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000 |
-++				MV88E6390_PORT_MAC_CTL_ALTSPEED;
-++		else
-++			ctrl = MV88E6390_PORT_MAC_CTL_SPEED_10000;
-+ 		break;
-+ 	case 10000:
-+ 		/* all bits set, fall through... */
-+@@ -291,6 +294,24 @@ int mv88e6185_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
-+ 	return mv88e6xxx_port_set_speed(chip, port, speed, false, false);
-+ }
-+ 
-++/* Support 10, 100, 200, 1000, 2500 Mbps (e.g. 88E6341) */
-++int mv88e6341_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
-++{
-++	if (speed == SPEED_MAX)
-++		speed = port < 5 ? 1000 : 2500;
-++
-++	if (speed > 2500)
-++		return -EOPNOTSUPP;
-++
-++	if (speed == 200 && port != 0)
-++		return -EOPNOTSUPP;
-++
-++	if (speed == 2500 && port < 5)
-++		return -EOPNOTSUPP;
-++
-++	return mv88e6xxx_port_set_speed(chip, port, speed, !port, true);
-++}
-++
-+ /* Support 10, 100, 200, 1000 Mbps (e.g. 88E6352 family) */
-+ int mv88e6352_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
-+ {
-+diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index b31910023bb6..091aa0057f1f 100644
-+--- a/drivers/net/dsa/mv88e6xxx/port.h
-++++ b/drivers/net/dsa/mv88e6xxx/port.h
-+@@ -279,6 +279,7 @@ int mv88e6xxx_port_set_duplex(struct mv88e6xxx_chip *chip, int port, int dup);
-+ 
-+ int mv88e6065_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
-+ int mv88e6185_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
-++int mv88e6341_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
-+ int mv88e6352_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
-+ int mv88e6390_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
-+ int mv88e6390x_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed);
 +-- 
 +2.21.0
 +
