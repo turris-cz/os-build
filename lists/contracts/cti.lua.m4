@@ -5,6 +5,6 @@ _FEATURE_GUARD_
 Install('common_passwords')
 
 Install("sentinel-dynfw-client")
-Install("sentinel-minipot", "sentinel-nikola", "turris-survey")
+Install("sentinel-minipot", "sentinel-nikola")
 
 _END_FEATURE_GUARD_
