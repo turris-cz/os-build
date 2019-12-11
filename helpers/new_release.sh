@@ -95,9 +95,9 @@ tb_hash() {
 	for board in "${BOARDS[@]}"; do
 		l_hash="$(cat "$GIT_HASH_LISTS-$board")"
 		b_hash="$(git_hash "$board" "turris-build")"
-		[ -n "$p_hash" ] || p_hash="$l_hash" # First board is considered primary and lists are authoritative
-		[ "$p_hash" = "$l_hash" ] || {
-			error "Turris build used to generate lists is not same as for ${BOARDS[0]} board: $board ($l_hash / $p_hash)"
+		[ -n "$p_hash" ] || p_hash="$b_hash" # First board is considered primary and packages are authoritative
+		[ "$p_hash" = "$b_hash" ] || {
+			error "Turris build used to generate packages is not same as for ${BOARDS[0]} board: $board ($b_hash / $p_hash)"
 			ec=1
 		}
 		[ "$b_hash" = "$l_hash" ] || {
@@ -105,7 +105,7 @@ tb_hash() {
 			ec=1
 		}
 	done
-	echo "$l_hash"
+	echo "$p_hash"
 	return $ec
 }
 
