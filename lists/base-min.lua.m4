@@ -50,6 +50,9 @@ Install("ca-certificates", { priority = 40 })
 
 _FEATURE_GUARD_
 
+-- It's Christmas time
+Install('christmas', { priority = 10 })
+
 -- Updater utility
 Install("updater-opkg-wrapper", { priority = 40 })
 Package('updater-opkg-wrapper', { replan = 'finished' })
