@@ -1,7 +1,7 @@
-From 61d3c76c6e893ad455a9a2fa338a3a0541fab57a Mon Sep 17 00:00:00 2001
+From 8f78970364991a6e88e8f7eec3668e390c2a4799 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
-Subject: [PATCH 01/10] mvebu: Basic MoX support
+Subject: [PATCH] mvebu: Basic MoX support
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -11,8 +11,9 @@ Adding basic support for CZ.NICs MoX board.
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
- target/linux/mvebu/config-4.14                |   4 +
- target/linux/mvebu/cortexa53/config-default   |   3 +
+ target/linux/mvebu/config-4.14                |   3 +
+ target/linux/mvebu/cortexa53/config-default   |  12 +
+ target/linux/mvebu/image/Config.in            |  16 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
  ...ark-allow-to-specify-link-capability.patch |  43 -
  ...ecure-remove-null-check-before-kfree.patch |  34 +
@@ -143,7 +144,8 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  ...37xx-periph-Fix-switching-CPU-rate-.patch} |   0
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
- 132 files changed, 14186 insertions(+), 302 deletions(-)
+ 133 files changed, 14210 insertions(+), 302 deletions(-)
+ create mode 100644 target/linux/mvebu/image/Config.in
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90002-crypto-inside-secure-do-not-use-areq-result-for-part.patch
@@ -286,27 +288,75 @@ index 120396a..c29d80f 100644
  CONFIG_NET_DSA_MV88E6XXX=y
  CONFIG_NET_DSA_MV88E6XXX_GLOBAL2=y
  CONFIG_NET_DSA_TAG_DSA=y
-@@ -536,3 +537,6 @@ CONFIG_ZLIB_DEFLATE=y
+ CONFIG_NET_DSA_TAG_EDSA=y
+ CONFIG_NET_FLOW_LIMIT=y
+@@ -496,3 +497,5 @@ CONFIG_ZBOOT_ROM_BSS=0x0
+ CONFIG_ZBOOT_ROM_TEXT=0x0
+ CONFIG_ZLIB_DEFLATE=y
  CONFIG_ZLIB_INFLATE=y
  CONFIG_ZSTD_COMPRESS=y
  CONFIG_ZSTD_DECOMPRESS=y
 +# CONFIG_ARMADA_37XX_WATCHDOG is not set
 +# CONFIG_ARMADA_37XX_RWTM_MBOX is not set
-+# CONFIG_MFD_MOXTET is not set
 diff --git a/target/linux/mvebu/cortexa53/config-default b/target/linux/mvebu/cortexa53/config-default
-index 0041686..40278cd 100644
+index 0041686..1cecbcd 100644
 --- a/target/linux/mvebu/cortexa53/config-default
 +++ b/target/linux/mvebu/cortexa53/config-default
-@@ -41,6 +41,9 @@ CONFIG_ARM64_VA_BITS=39
+@@ -41,6 +41,7 @@ CONFIG_ARM64_VA_BITS=39
  CONFIG_ARM64_VA_BITS_39=y
  # CONFIG_ARM64_VA_BITS_48 is not set
  # CONFIG_ARM64_VHE is not set
 +CONFIG_ARMADA_37XX_WATCHDOG=y
-+CONFIG_ARMADA_37XX_RWTM_MBOX=y
-+CONFIG_ARM_ARMADA_37XX_CPUFREQ=y
  CONFIG_ARMADA_37XX_CLK=y
  CONFIG_ARMADA_AP806_SYSCON=y
  CONFIG_ARMADA_CP110_SYSCON=y
+@@ -75,6 +76,12 @@ CONFIG_HAVE_MEMORY_PRESENT=y
+ CONFIG_HAVE_PATA_PLATFORM=y
+ CONFIG_HAVE_RCU_TABLE_FREE=y
+ CONFIG_HOLES_IN_ZONE=y
++CONFIG_MTD_SPI_NOR=y
++CONFIG_MTD_SPI_NOR_USE_4K_SECTORS=y
++CONFIG_MTD_M25P80=y
++CONFIG_RTC_DRV_DS1307=y
++CONFIG_I2C_PXA=y
++CONFIG_I2C_PXA_SLAVE=n
+ # CONFIG_HUGETLBFS is not set
+ CONFIG_ILLEGAL_POINTER_VALUE=0xdead000000000000
+ CONFIG_MFD_SYSCON=y
+@@ -110,6 +117,11 @@ CONFIG_SYS_SUPPORTS_HUGETLBFS=y
+ CONFIG_THREAD_INFO_IN_TASK=y
+ CONFIG_UNMAP_KERNEL_AT_EL0=y
+ CONFIG_VMAP_STACK=y
++CONFIG_MAILBOX=y
++# CONFIG_MAILBOX_TEST is not set
++CONFIG_BCM_FLEXRM_MBOX=n
++CONFIG_ARMADA_37XX_RWTM_MBOX=y
++CONFIG_KERNEL_CRYPTO_DEV_SAFEXCEL=y
+ CONFIG_ARM64_CRYPTO=y
+ CONFIG_CRYPTO_AES_ARM64=y
+ CONFIG_CRYPTO_AES_ARM64_BS=y
+diff --git a/target/linux/mvebu/image/Config.in b/target/linux/mvebu/image/Config.in
+new file mode 100644
+index 0000000..6b252c8
+--- /dev/null
++++ b/target/linux/mvebu/image/Config.in
+@@ -0,0 +1,16 @@
++if TARGET_mvebu
++
++config TURRIS_MOX_KERNEL
++	bool
++	prompt "Turris MOX kernel extensions"
++	default y if TARGET_mvebu_cortexa53_DEVICE_cznic-mox
++	default n
++	select KERNEL_MFD_MOXTET
++	select KERNEL_GPIO_MOXTET
++	select KERNEL_CRYPTO_DEV_TURRIS_MOX_RWTM
++
++config KERNEL_MFD_MOXTET
++config KERNEL_GPIO_MOXTET
++config KERNEL_CRYPTO_DEV_TURRIS_MOX_RWTM
++
++endif
 diff --git a/target/linux/mvebu/image/cortex-a53.mk b/target/linux/mvebu/image/cortex-a53.mk
 index d7014d6..4c5baf5 100644
 --- a/target/linux/mvebu/image/cortex-a53.mk
@@ -5050,7 +5100,7 @@ diff --git a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-
 similarity index 81%
 rename from target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 rename to target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
-index 2e4be1b..efd10f6 100644
+index 19f8f1e..efd10f6 100644
 --- a/target/linux/mvebu/patches-4.14/408-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 +++ b/target/linux/mvebu/patches-4.14/90044-sfp-move-module-eeprom-ethtool-access-into-netdev-co.patch
 @@ -1,21 +1,24 @@
