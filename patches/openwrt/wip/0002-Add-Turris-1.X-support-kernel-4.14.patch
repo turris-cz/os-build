@@ -1,7 +1,7 @@
-From eba24eeabd2a975fab18b04c009fba870301694e Mon Sep 17 00:00:00 2001
-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-Date: Thu, 4 Jul 2019 11:12:39 +0200
-Subject: [PATCH] kernel: Add Turris 1.X support (kernel 4.14)
+From 269e47e7883996878d8d45210c28ebc66060579d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 17 Feb 2020 11:56:15 +0100
+Subject: [PATCH] Add Turris 1.X support (kernel 4.14)
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -11,26 +11,25 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-4.14              |  56 +++-
- .../files/arch/powerpc/boot/dts/turris.dts    | 296 ++++++++++++++++++
- target/linux/mpc85xx/p2020/config-default     |  24 ++
- target/linux/mpc85xx/p2020/profiles/turris.mk |  29 ++
+ .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
+ target/linux/mpc85xx/image/Makefile           |   8 +
+ target/linux/mpc85xx/p2020/config-default     |  27 ++
  ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 ++++++++++++++
  ...a8k-extend-slave-bus-implementations.patch | 243 ++++++++++++++
- 7 files changed, 872 insertions(+), 7 deletions(-)
- create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris.dts
- create mode 100644 target/linux/mpc85xx/p2020/profiles/turris.mk
+ 7 files changed, 854 insertions(+), 7 deletions(-)
+ create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
  create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
  create mode 100644 target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index aa33a4a..b24bcb6 100755
+index aa33a4a..1ba7fab 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -23,6 +23,10 @@ tplink,tl-wdr4900-v1)
  		"0@eth0" "2:lan:1" "3:lan:2" "4:lan:3" "5:lan:4" "1:wan"
  	ucidef_set_interface_macaddr "wan" "$(macaddr_add $(mtd_get_mac_binary u-boot 0x4fc00) 1)"
  	;;
-+fsl,P2020RDB)
++turris1x)
 +	ucidef_set_interface_lan "lan1 lan2 lan3 lan4 lan5"
 +	ucidef_set_interface_wan "eth2"
 +	;;
@@ -38,7 +37,7 @@ index aa33a4a..b24bcb6 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
-index 77fd10f..3fb04ca 100644
+index 1f26d8c..b7c4815 100644
 --- a/target/linux/mpc85xx/config-4.14
 +++ b/target/linux/mpc85xx/config-4.14
 @@ -42,6 +42,15 @@ CONFIG_BOOKE_WDT=y
@@ -186,16 +185,16 @@ index 77fd10f..3fb04ca 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris.dts
+diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000..b5128a3
+index 0000000..de20d20
 --- /dev/null
-+++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris.dts
++++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 @@ -0,0 +1,296 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
-+ * Copyright 2013 CZ.NIC z.s.p.o. (http://www.nic.cz/)
++ * Copyright 2013-2019 CZ.NIC z.s.p.o. (http://www.nic.cz/)
 + *
 + * This program is free software; you can redistribute  it and/or modify it
 + * under  the terms of  the GNU General  Public License as published by the
@@ -206,8 +205,8 @@ index 0000000..b5128a3
 +/include/ "fsl/p2020si-pre.dtsi"
 +
 +/ {
-+	model = "Turris";
-+	compatible = "fsl,P2020RDB";
++	model = "Turris 1.x";
++	compatible = "turris1x";
 +
 +	aliases {
 +		ethernet0 = &enet0;
@@ -488,8 +487,27 @@ index 0000000..b5128a3
 +};
 +
 +/include/ "fsl/p2020si-post.dtsi"
+diff --git a/target/linux/mpc85xx/image/Makefile b/target/linux/mpc85xx/image/Makefile
+index c0e3112..14a005f 100644
+--- a/target/linux/mpc85xx/image/Makefile
++++ b/target/linux/mpc85xx/image/Makefile
+@@ -141,6 +141,14 @@ define Device/p2020rdb
+ endef
+ TARGET_DEVICES += p2020rdb
+ 
++define Device/turris1x
++  DEVICE_TITLE := Turris 1.x
++  DEVICE_PACKAGES :=  \
++    kmod-hwmon-core kmod-hwmon-lm90 kmod-usb3
++  KERNEL = kernel-bin
++endef
++TARGET_DEVICES += turris1x
++
+ endif
+ 
+ $(eval $(call BuildImage))
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index e652644..71807bc 100644
+index e652644..7913e00 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
 @@ -4,6 +4,10 @@ CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
@@ -503,7 +521,7 @@ index e652644..71807bc 100644
  CONFIG_LOCK_SPIN_ON_OWNER=y
  CONFIG_MPC85xx_RDB=y
  CONFIG_MTD_CFI=y
-@@ -14,6 +18,21 @@ CONFIG_MTD_NAND_ECC_BCH=y
+@@ -14,7 +18,23 @@ CONFIG_MTD_NAND_ECC_BCH=y
  CONFIG_MTD_NAND_FSL_ELBC=y
  CONFIG_MTD_SPLIT_FIRMWARE=y
  CONFIG_MTD_SPLIT_FIT_FW=y
@@ -523,9 +541,11 @@ index e652644..71807bc 100644
 +# CONFIG_MMC_TIFM_SD is not set
 +# CONFIG_MMC_WBSD is not set
  CONFIG_MUTEX_SPIN_ON_OWNER=y
++CONFIG_NET_DSA_QCA8K=y
  CONFIG_NET_FLOW_LIMIT=y
  CONFIG_NR_CPUS=2
-@@ -26,6 +45,11 @@ CONFIG_RFS_ACCEL=y
+ CONFIG_PADATA=y
+@@ -26,6 +46,13 @@ CONFIG_RFS_ACCEL=y
  CONFIG_RPS=y
  CONFIG_RWSEM_SPIN_ON_OWNER=y
  CONFIG_SMP=y
@@ -537,41 +557,8 @@ index e652644..71807bc 100644
  CONFIG_TREE_RCU=y
  CONFIG_TREE_SRCU=y
  CONFIG_XPS=y
-diff --git a/target/linux/mpc85xx/p2020/profiles/turris.mk b/target/linux/mpc85xx/p2020/profiles/turris.mk
-new file mode 100644
-index 0000000..6c1d542
---- /dev/null
-+++ b/target/linux/mpc85xx/p2020/profiles/turris.mk
-@@ -0,0 +1,29 @@
-+JFFS2_BLOCKSIZE := 128k
-+FEATURES += rtc nand ubifs -squashfs
-+NAND_BLOCKSIZE := 2048:128k
-+TURRISNAND_DTS:="turris-bch"
-+TURRISNAND_UBIFS_OPTS:="-m 2048 -e 124KiB -c 2000 -F"
-+TURRISNAND_UBI_OPTS:="-m 2048 -p 128KiB -s 2048"
-+KERNEL_PATCHVER:=4.14
-+KERNELNAME:=zImage turris.dtb
-+
-+define Profile/TURRIS
-+	NAME:=Turris 1.X
-+	PACKAGES:=\
-+		kmod-usb-core kmod-usb2 kmod-usb2-fsl \
-+		kmod-ath9k kmod-hostapd kmod-usb3 wpad \
-+		kmod-usb-storage uboot-turris \
-+		block-mount kmod-hwmon-core kmod-hwmon-lm90 \
-+		nuci updater unbound oneshot logrotate \
-+		mtd-utils mtd-utils-nandwrite start-indicator \
-+		mtd-utils-flash-erase mtd-utils-flash-eraseall mtd-utils-flash-info \
-+		luci luci-i18n-czech cert-backup foris update_mac wget \
-+		userspace_time_sync openssh-moduli watchdog_adjust \
-+		ucollect-config rainbow turris-version \
-+		spidev-test i2c-tools -dropbear
-+endef
-+
-+define Profile/TURRIS/Description
-+	Package set optimized for the Turris 1.X.
-+endef
-+$(eval $(call Profile,TURRIS))
++CONFIG_RTC_NVMEM=y
++CONFIG_NVMEM_SYSFS=y
 diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 new file mode 100644
 index 0000000..d661626
@@ -1055,5 +1042,5 @@ index 0000000..9a24bee
 +2.21.0
 +
 -- 
-2.24.1
+2.25.0
 
