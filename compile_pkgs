@@ -195,6 +195,7 @@ configure() {
 		echo "CONFIG_VERSION_DIST=\"TurrisOS\""
 		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages\""
 		echo "CONFIG_VERSION_NUMBER=\"$("${src_dir}/helpers/turris-version.sh" version)\""
+		echo "CONFIG_VERSION_CODE=\"$(_git_remote_hash)\""
 		echo "CONFIG_VERSION_HOME_URL=\"https://www.turris.cz/\""
 		echo "CONFIG_VERSION_BUG_URL=\"https://gitlab.labs.nic.cz/groups/turris/-/issues\""
 		echo "CONFIG_VERSION_SUPPORT_URL=\"https://www.turris.cz/support/\""
@@ -364,14 +365,10 @@ patch_openwrt() {
 }
 
 _git_remote_hash() {
-	pushd "$1" > /dev/null
-	# TODO rework
-	br="$(LANG=C git status --long | sed -n 's|HEAD detached from \(.*\)|\1|p')"
-	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is up to date with '\\([^']*\\)'.*|\1|p")"
-	[ -n "$br" ] || br="$(LANG=C git status --long | sed -n "s|Your branch is ahead of '\\([^']*\\)'.*|\1|p")"
-	[ -n "$br" ] || br=HEAD
-	git log -n1 --pretty=%H	"$br"
-	popd > /dev/null
+	local dir="${1:-}"
+	git -C "$dir" rev-list HEAD | \
+		git -C "$dir" name-rev --stdin --refs='origin/*' | \
+		awk '$2 != "" { print $1; exit }'
 }
 
 available_commands+=( ["store_hash"]="Stores hashes of current build" )

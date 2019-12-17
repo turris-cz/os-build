@@ -1,0 +1,33 @@
+From 156083844cd950c6a3d7480bd4018511753ec93a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 2 Dec 2019 11:02:22 +0100
+Subject: [PATCH] luci.mk: use origin commit instead of tip commit
+
+This is hack for turris-build system as there can be patches on top of
+original commit and we want to know base commit hash and not hash of
+some patch.
+
+The implementation looks for first reference from origin remote from
+tip. This has to be because of way how patching works the original base
+commit.
+---
+ luci.mk | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/luci.mk b/luci.mk
+index f915381..9f63af0 100644
+--- a/luci.mk
++++ b/luci.mk
+@@ -56,7 +56,8 @@ PKG_VERSION?=$(if $(DUMP),x,$(strip $(shell \
+ 	elif git log -1 >/dev/null 2>/dev/null; then \
+ 		revision="svn-r$$(LC_ALL=C git log -1 | sed -ne 's/.*git-svn-id: .*@\([0-9]\+\) .*/\1/p')"; \
+ 		if [ "$$revision" = "svn-r" ]; then \
+-			set -- $$(git log -1 --format="%ct %h" --abbrev=7); \
++			hash="$$(git rev-list HEAD | git name-rev --stdin --refs='origin/*' | awk '$$2 != "" { print $$1; exit }')"; \
++			set -- $$(git log -1 --format="%ct %h" --abbrev=7 "$$hash"); \
+ 			secs="$$(($$1 % 86400))"; \
+ 			yday="$$(date --utc --date="@$$1" "+%y.%j")"; \
+ 			revision="$$(printf 'git-%s.%05d-%s' "$$yday" "$$secs" "$$2")"; \
+-- 
+2.24.1
+
