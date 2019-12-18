@@ -66,8 +66,10 @@ Uninstall("dropbear", { priority = 40 })
 Install("bind-client", "bind-dig", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", "btrfs-progs", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
-Install("haveged", { priority = 40 })
 Install("umdns", { priority = 40 })
+if board == "turris1x" or board == "omnia" then
+	Install("haveged", { priority = 40 })
+end
 
 -- Turris utility
 Install("turris-version", "start-indicator", { priority = 40 })
