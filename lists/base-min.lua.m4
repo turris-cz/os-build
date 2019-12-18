@@ -50,8 +50,8 @@ Install("ca-certificates", { priority = 40 })
 
 _FEATURE_GUARD_
 
-if board == "omnia" then
-	-- It's Christmas time
+-- It's Christmas time
+if board == "turris1x" or board == "omnia" then
 	Install('christmas', { priority = 10 })
 end
 
