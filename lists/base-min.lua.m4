@@ -37,6 +37,7 @@ Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 if board == "turris1x" then
 	Install("unbound", "unbound-anchor", { priority = 40 })
+	Install("turris-btrfs", { priority = 40 })
 else
 	Install("knot-resolver", { priority = 40 })
 end
