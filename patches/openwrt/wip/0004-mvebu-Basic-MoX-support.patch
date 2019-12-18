@@ -1,4 +1,4 @@
-From 8f78970364991a6e88e8f7eec3668e390c2a4799 Mon Sep 17 00:00:00 2001
+From 25df443a520a28f11ef59209d4381d50c8af721b Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 7 Mar 2018 17:10:32 +0100
 Subject: [PATCH] mvebu: Basic MoX support
@@ -13,7 +13,7 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  target/linux/mvebu/config-4.14                |   3 +
  target/linux/mvebu/cortexa53/config-default   |  12 +
- target/linux/mvebu/image/Config.in            |  16 +
+ target/linux/mvebu/image/Config.in            |  22 +
  target/linux/mvebu/image/cortex-a53.mk        |  11 +
  ...ark-allow-to-specify-link-capability.patch |  43 -
  ...ecure-remove-null-check-before-kfree.patch |  34 +
@@ -144,7 +144,7 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  ...37xx-periph-Fix-switching-CPU-rate-.patch} |   0
  ...37xx-periph-Fix-wrong-return-value-.patch} |   0
  ...37xx-periph-Remove-unused-var-num_p.patch} |   0
- 133 files changed, 14210 insertions(+), 302 deletions(-)
+ 133 files changed, 14216 insertions(+), 302 deletions(-)
  create mode 100644 target/linux/mvebu/image/Config.in
  delete mode 100644 target/linux/mvebu/patches-4.14/527-PCI-aardvark-allow-to-specify-link-capability.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90001-crypto-inside-secure-remove-null-check-before-kfree.patch
@@ -277,16 +277,14 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  rename target/linux/mvebu/patches-4.14/{512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch => 99512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch} (100%)
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
-index 120396a..c29d80f 100644
+index 7a0caee..7d23074 100644
 --- a/target/linux/mvebu/config-4.14
 +++ b/target/linux/mvebu/config-4.14
-@@ -379,6 +379,7 @@ CONFIG_NEED_DMA_MAP_STATE=y
- CONFIG_NEON=y
- # CONFIG_NET_CLS_CGROUP is not set
+@@ -353,6 +353,7 @@ CONFIG_NEON=y
  CONFIG_NET_DSA=y
-+CONFIG_NET_DSA_MV88E6060=y
  CONFIG_NET_DSA_MV88E6XXX=y
  CONFIG_NET_DSA_MV88E6XXX_GLOBAL2=y
++CONFIG_NET_DSA_MV88E6060=y
  CONFIG_NET_DSA_TAG_DSA=y
  CONFIG_NET_DSA_TAG_EDSA=y
  CONFIG_NET_FLOW_LIMIT=y
@@ -294,8 +292,6 @@ index 120396a..c29d80f 100644
  CONFIG_ZBOOT_ROM_TEXT=0x0
  CONFIG_ZLIB_DEFLATE=y
  CONFIG_ZLIB_INFLATE=y
- CONFIG_ZSTD_COMPRESS=y
- CONFIG_ZSTD_DECOMPRESS=y
 +# CONFIG_ARMADA_37XX_WATCHDOG is not set
 +# CONFIG_ARMADA_37XX_RWTM_MBOX is not set
 diff --git a/target/linux/mvebu/cortexa53/config-default b/target/linux/mvebu/cortexa53/config-default
@@ -337,10 +333,10 @@ index 0041686..1cecbcd 100644
  CONFIG_CRYPTO_AES_ARM64_BS=y
 diff --git a/target/linux/mvebu/image/Config.in b/target/linux/mvebu/image/Config.in
 new file mode 100644
-index 0000000..6b252c8
+index 0000000..24c0042
 --- /dev/null
 +++ b/target/linux/mvebu/image/Config.in
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,22 @@
 +if TARGET_mvebu
 +
 +config TURRIS_MOX_KERNEL
@@ -353,12 +349,18 @@ index 0000000..6b252c8
 +	select KERNEL_CRYPTO_DEV_TURRIS_MOX_RWTM
 +
 +config KERNEL_MFD_MOXTET
++	bool
++	default n
 +config KERNEL_GPIO_MOXTET
++	bool
++	default n
 +config KERNEL_CRYPTO_DEV_TURRIS_MOX_RWTM
++	bool
++	default n
 +
 +endif
 diff --git a/target/linux/mvebu/image/cortex-a53.mk b/target/linux/mvebu/image/cortex-a53.mk
-index d7014d6..4c5baf5 100644
+index d7014d6..eaae4d9 100644
 --- a/target/linux/mvebu/image/cortex-a53.mk
 +++ b/target/linux/mvebu/image/cortex-a53.mk
 @@ -27,6 +27,17 @@ define Device/globalscale_espressobin-v7-emmc
@@ -370,7 +372,7 @@ index d7014d6..4c5baf5 100644
 +  KERNEL_NAME := Image dtbs
 +  KERNEL := kernel-bin
 +  DEVICE_TITLE := MOX (CZ.NICs Marvell Armada 3720 Based Board)
-+  DEVICE_PACKAGES := kmod-usb-core kmod-usb2 kmod-usb3 kmod-usb-storage
++  DEVICE_PACKAGES := kmod-usb2
 +  DEVICE_DTS := armada-3720-turris-mox
 +  DTS_DIR := $(DTS_DIR)/marvell
 +  SUPPORTED_DEVICES := cznic,mox
@@ -16591,5 +16593,5 @@ similarity index 100%
 rename from target/linux/mvebu/patches-4.14/512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
 rename to target/linux/mvebu/patches-4.14/99512-clk-mvebu-armada-37xx-periph-Remove-unused-var-num_p.patch
 -- 
-2.24.1
+2.25.0
 
