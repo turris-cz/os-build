@@ -1,6 +1,8 @@
 include(utils.m4)dnl
 include(repository.m4)dnl
 
+list_script('base-fix')
+
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
