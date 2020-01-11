@@ -5,9 +5,10 @@ _FEATURE_GUARD_
 Install("procd-ujail",  { priority = 40 })
 
 -- Seccomp --
-if board ~= "turris1x" then
+if board == "omnia" then
 	Install("procd-seccomp",  { priority = 40 })
-	Install("libseccomp", "scmp_sys_resolver",  { priority = 40 })
 end
+
+Install("libseccomp", "scmp_sys_resolver",  { priority = 40 })
 
 _END_FEATURE_GUARD_
