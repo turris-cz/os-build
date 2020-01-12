@@ -1,7 +1,7 @@
 include(utils.m4)dnl
 include(repository.m4)dnl
 
-list_script('base-fix')
+list_script('base-fix.lua')
 
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
