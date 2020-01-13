@@ -1,4 +1,4 @@
-From f43fa864e0047e6d4b1ab555ba5c5b74e7c4a6d8 Mon Sep 17 00:00:00 2001
+From ad329d92e0847bbe8b22433442fd4a4a0158369a Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 31 Oct 2018 13:14:23 +0100
 Subject: [PATCH] build: Automatically bump release when needed
@@ -9,16 +9,17 @@ and bump release number if it did.
 Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
 ---
  config/Config-build.in      | 16 ++++++++++++++++
+ include/kernel.mk           |  2 +-
  include/package-defaults.mk |  4 ++++
  include/package-ipkg.mk     | 26 +++++++++++++++++++++++++-
  rules.mk                    |  1 +
- 4 files changed, 46 insertions(+), 1 deletion(-)
+ 5 files changed, 47 insertions(+), 2 deletions(-)
 
 diff --git a/config/Config-build.in b/config/Config-build.in
-index 4076c293d4..cee3443602 100644
+index 3534183..58441ba 100644
 --- a/config/Config-build.in
 +++ b/config/Config-build.in
-@@ -181,6 +181,22 @@ menu "Global build settings"
+@@ -194,6 +194,22 @@ menu "Global build settings"
  			bool "libstdc++"
  	endchoice
  
@@ -41,8 +42,21 @@ index 4076c293d4..cee3443602 100644
  	comment "Hardening build options"
  
  	config PKG_CHECK_FORMAT_SECURITY
+diff --git a/include/kernel.mk b/include/kernel.mk
+index 93be63d..96f6e43 100644
+--- a/include/kernel.mk
++++ b/include/kernel.mk
+@@ -209,7 +209,7 @@ define KernelPackage
+     CATEGORY:=Kernel modules
+     DESCRIPTION:=$(DESCRIPTION)
+     VERSION:=$(LINUX_VERSION)$(if $(PKG_VERSION),+$(PKG_VERSION))-$(if $(PKG_RELEASE),$(PKG_RELEASE),$(LINUX_RELEASE))-$(LINUX_VERMAGIC)
+-    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC))
++    EXTRA_DEPENDS:=kernel (=$(LINUX_VERSION)-$(LINUX_RELEASE)-$(LINUX_VERMAGIC).0)
+     PKGFLAGS:=$(PKGFLAGS)
+     $(call KernelPackage/$(1))
+     $(call KernelPackage/$(1)/$(BOARD))
 diff --git a/include/package-defaults.mk b/include/package-defaults.mk
-index 31e331b2d5..19b5e6fa51 100644
+index 31e331b..19b5e6f 100644
 --- a/include/package-defaults.mk
 +++ b/include/package-defaults.mk
 @@ -28,7 +28,11 @@ define Package/Default
@@ -58,10 +72,10 @@ index 31e331b2d5..19b5e6fa51 100644
    else
      VERSION:=$(PKG_RELEASE)
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index 457f2e7652..cb5518b89a 100644
+index c6d002a..90bff76 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -190,6 +190,11 @@ $(_endef)
+@@ -196,6 +196,11 @@ $(_endef)
  			fi; \
  		done; $(Package/$(1)/extra_provides) \
  	) | sort -u > $(PKG_INFO_DIR)/$(1).provides
@@ -73,7 +87,7 @@ index 457f2e7652..cb5518b89a 100644
  	$(if $(PROVIDES),@for pkg in $(filter-out $(1),$(PROVIDES)); do cp $(PKG_INFO_DIR)/$(1).provides $(PKG_INFO_DIR)/$$$$pkg.provides; done)
  	$(CheckDependencies)
  
-@@ -204,8 +209,24 @@ $(_endef)
+@@ -210,8 +215,24 @@ $(_endef)
  	)
      endif
  	(cd $$(IDIR_$(1))/CONTROL; \
@@ -99,7 +113,7 @@ index 457f2e7652..cb5518b89a 100644
  			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
  		) > control; \
  		chmod 644 control; \
-@@ -241,6 +262,9 @@ $(_endef)
+@@ -247,6 +268,9 @@ $(_endef)
  
  	$(INSTALL_DIR) $$(PDIR_$(1))
  	$(IPKG_BUILD) $$(IDIR_$(1)) $$(PDIR_$(1))
@@ -110,7 +124,7 @@ index 457f2e7652..cb5518b89a 100644
  
      $(1)-clean:
 diff --git a/rules.mk b/rules.mk
-index e97b3f6491..c786d1b75a 100644
+index 80cb3d6..b0a653f 100644
 --- a/rules.mk
 +++ b/rules.mk
 @@ -161,6 +161,7 @@ STAGING_DIR_ROOT:=$(STAGING_DIR)/root-$(BOARD)
@@ -122,5 +136,5 @@ index e97b3f6491..c786d1b75a 100644
  BUILD_DIR_HOST:=$(if $(IS_PACKAGE_BUILD),$(BUILD_DIR_BASE)/hostpkg,$(BUILD_DIR_BASE)/host)
  STAGING_DIR_HOST:=$(TOPDIR)/staging_dir/host
 -- 
-2.19.2
+2.24.0
 

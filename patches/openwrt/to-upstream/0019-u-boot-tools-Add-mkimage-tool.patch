@@ -1,0 +1,213 @@
+From 17b05f0334a4b49a1304e0c695ea2bc41d933fba Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Wed, 20 Mar 2019 16:42:28 +0100
+Subject: [PATCH] u-boot tools: Add mkimage tool
+
+---
+ .../{uboot-envtools => uboot-tools}/Makefile  | 51 ++++++++++++++++---
+ .../files/apm821xx                            |  0
+ .../files/ar71xx                              |  0
+ .../files/ath79                               |  0
+ .../files/cns3xxx                             |  0
+ .../files/imx6                                |  0
+ .../files/ipq40xx                             |  0
+ .../files/ipq806x                             |  0
+ .../files/kirkwood                            |  0
+ .../files/lantiq                              |  0
+ .../files/layerscape                          |  0
+ .../files/mpc85xx                             |  0
+ .../files/mvebu                               |  0
+ .../{uboot-envtools => uboot-tools}/files/mxs |  0
+ .../files/oxnas                               |  0
+ .../files/pistachio                           |  0
+ .../files/ramips                              |  0
+ .../files/uboot-envtools.sh                   |  0
+ .../patches/001-compile.patch                 |  0
+ 19 files changed, 44 insertions(+), 7 deletions(-)
+ rename package/boot/{uboot-envtools => uboot-tools}/Makefile (58%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/apm821xx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/ar71xx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/ath79 (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/cns3xxx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/imx6 (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/ipq40xx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/ipq806x (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/kirkwood (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/lantiq (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/layerscape (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/mpc85xx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/mvebu (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/mxs (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/oxnas (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/pistachio (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/ramips (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/uboot-envtools.sh (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/patches/001-compile.patch (100%)
+
+diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-tools/Makefile
+similarity index 58%
+rename from package/boot/uboot-envtools/Makefile
+rename to package/boot/uboot-tools/Makefile
+index 15579e9..91ac729 100644
+--- a/package/boot/uboot-envtools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -7,7 +7,7 @@
+ 
+ include $(TOPDIR)/rules.mk
+ 
+-PKG_NAME:=uboot-envtools
++PKG_NAME:=uboot-tools
+ PKG_DISTNAME:=u-boot
+ PKG_VERSION:=2018.03
+ PKG_RELEASE:=3
+@@ -43,19 +43,50 @@ define Package/uboot-envtools/description
+  This package includes tools to read and modify U-Boot bootloader environment.
+ endef
+ 
++define Package/uboot-mkimage
++  SECTION:=utils
++  CATEGORY:=Utilities
++  SUBMENU:=Boot Loaders
++  TITLE:=create U-Boot bootloader images
++  URL:=http://www.denx.de/wiki/U-Boot
++  DEPENDS:=+libopenssl @OPENSSL_ENGINE
++endef
++
++define Package/uboot-mkimage/description
++ This package includes tools to create U-Boot bootloader images.
++endef
++
++TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
++
+ define Build/Configure
+ 	touch $(PKG_BUILD_DIR)/include/config.h
+ 	mkdir -p $(PKG_BUILD_DIR)/include/config
+ 	touch $(PKG_BUILD_DIR)/include/config/auto.conf
+ 	mkdir -p $(PKG_BUILD_DIR)/include/generated
+ 	touch $(PKG_BUILD_DIR)/include/generated/autoconf.h
++	touch $(PKG_BUILD_DIR)
+ endef
+ 
+-MAKE_FLAGS += \
+-	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
+-	TARGET_LDFLAGS="$(TARGET_LDFLAGS)" \
+-	no-dot-config-targets=envtools \
+-	envtools
++define Build/Compile
++	$(MAKE) -C $(PKG_BUILD_DIR) \
++		CROSS_COMPILE="$(TARGET_CROSS)" \
++		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
++		HOSTLDFLAGS= \
++		no-dot-config-targets=envtools \
++		CROSS_BUILD_TOOLS=1 \
++		NO_SDL=1 \
++		envtools defconfig
++	mv $(PKG_BUILD_DIR)/tools/env/fw_printenv $(PKG_BUILD_DIR)
++	sed -i 's|^\(CONFIG_RSA.*\)=y|# \1 is not set|' $(PKG_BUILD_DIR)/.config
++	sed -i 's|^\(CONFIG_FIT_SIGNATURE\)=y|# \1 is not set|' $(PKG_BUILD_DIR)/.config
++	$(MAKE) -C $(PKG_BUILD_DIR) \
++		CROSS_COMPILE="$(TARGET_CROSS)" \
++		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
++		HOSTLDFLAGS= \
++		CROSS_BUILD_TOOLS=1 \
++		NO_SDL=1 \
++		cross_tools
++endef
+ 
+ define Package/uboot-envtools/conffiles
+ /etc/config/ubootenv
+@@ -64,7 +95,7 @@ endef
+ 
+ define Package/uboot-envtools/install
+ 	$(INSTALL_DIR) $(1)/usr/sbin
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/env/fw_printenv $(1)/usr/sbin
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/fw_printenv $(1)/usr/sbin/fw_printenv
+ 	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
+ 	$(INSTALL_DIR) $(1)/lib
+ 	$(INSTALL_DATA) ./files/uboot-envtools.sh $(1)/lib
+@@ -75,4 +106,10 @@ define Package/uboot-envtools/install
+ 	)
+ endef
+ 
++define Package/uboot-mkimage/install
++	$(INSTALL_DIR) $(1)/usr/sbin
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/mkimage $(1)/usr/sbin
++endef
++
+ $(eval $(call BuildPackage,uboot-envtools))
++$(eval $(call BuildPackage,uboot-mkimage))
+diff --git a/package/boot/uboot-envtools/files/apm821xx b/package/boot/uboot-tools/files/apm821xx
+similarity index 100%
+rename from package/boot/uboot-envtools/files/apm821xx
+rename to package/boot/uboot-tools/files/apm821xx
+diff --git a/package/boot/uboot-envtools/files/ar71xx b/package/boot/uboot-tools/files/ar71xx
+similarity index 100%
+rename from package/boot/uboot-envtools/files/ar71xx
+rename to package/boot/uboot-tools/files/ar71xx
+diff --git a/package/boot/uboot-envtools/files/ath79 b/package/boot/uboot-tools/files/ath79
+similarity index 100%
+rename from package/boot/uboot-envtools/files/ath79
+rename to package/boot/uboot-tools/files/ath79
+diff --git a/package/boot/uboot-envtools/files/cns3xxx b/package/boot/uboot-tools/files/cns3xxx
+similarity index 100%
+rename from package/boot/uboot-envtools/files/cns3xxx
+rename to package/boot/uboot-tools/files/cns3xxx
+diff --git a/package/boot/uboot-envtools/files/imx6 b/package/boot/uboot-tools/files/imx6
+similarity index 100%
+rename from package/boot/uboot-envtools/files/imx6
+rename to package/boot/uboot-tools/files/imx6
+diff --git a/package/boot/uboot-envtools/files/ipq40xx b/package/boot/uboot-tools/files/ipq40xx
+similarity index 100%
+rename from package/boot/uboot-envtools/files/ipq40xx
+rename to package/boot/uboot-tools/files/ipq40xx
+diff --git a/package/boot/uboot-envtools/files/ipq806x b/package/boot/uboot-tools/files/ipq806x
+similarity index 100%
+rename from package/boot/uboot-envtools/files/ipq806x
+rename to package/boot/uboot-tools/files/ipq806x
+diff --git a/package/boot/uboot-envtools/files/kirkwood b/package/boot/uboot-tools/files/kirkwood
+similarity index 100%
+rename from package/boot/uboot-envtools/files/kirkwood
+rename to package/boot/uboot-tools/files/kirkwood
+diff --git a/package/boot/uboot-envtools/files/lantiq b/package/boot/uboot-tools/files/lantiq
+similarity index 100%
+rename from package/boot/uboot-envtools/files/lantiq
+rename to package/boot/uboot-tools/files/lantiq
+diff --git a/package/boot/uboot-envtools/files/layerscape b/package/boot/uboot-tools/files/layerscape
+similarity index 100%
+rename from package/boot/uboot-envtools/files/layerscape
+rename to package/boot/uboot-tools/files/layerscape
+diff --git a/package/boot/uboot-envtools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
+similarity index 100%
+rename from package/boot/uboot-envtools/files/mpc85xx
+rename to package/boot/uboot-tools/files/mpc85xx
+diff --git a/package/boot/uboot-envtools/files/mvebu b/package/boot/uboot-tools/files/mvebu
+similarity index 100%
+rename from package/boot/uboot-envtools/files/mvebu
+rename to package/boot/uboot-tools/files/mvebu
+diff --git a/package/boot/uboot-envtools/files/mxs b/package/boot/uboot-tools/files/mxs
+similarity index 100%
+rename from package/boot/uboot-envtools/files/mxs
+rename to package/boot/uboot-tools/files/mxs
+diff --git a/package/boot/uboot-envtools/files/oxnas b/package/boot/uboot-tools/files/oxnas
+similarity index 100%
+rename from package/boot/uboot-envtools/files/oxnas
+rename to package/boot/uboot-tools/files/oxnas
+diff --git a/package/boot/uboot-envtools/files/pistachio b/package/boot/uboot-tools/files/pistachio
+similarity index 100%
+rename from package/boot/uboot-envtools/files/pistachio
+rename to package/boot/uboot-tools/files/pistachio
+diff --git a/package/boot/uboot-envtools/files/ramips b/package/boot/uboot-tools/files/ramips
+similarity index 100%
+rename from package/boot/uboot-envtools/files/ramips
+rename to package/boot/uboot-tools/files/ramips
+diff --git a/package/boot/uboot-envtools/files/uboot-envtools.sh b/package/boot/uboot-tools/files/uboot-envtools.sh
+similarity index 100%
+rename from package/boot/uboot-envtools/files/uboot-envtools.sh
+rename to package/boot/uboot-tools/files/uboot-envtools.sh
+diff --git a/package/boot/uboot-envtools/patches/001-compile.patch b/package/boot/uboot-tools/patches/001-compile.patch
+similarity index 100%
+rename from package/boot/uboot-envtools/patches/001-compile.patch
+rename to package/boot/uboot-tools/patches/001-compile.patch
+-- 
+2.23.0
+

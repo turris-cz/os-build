@@ -1,6 +1,8 @@
 include(utils.m4)dnl
 include(repository.m4)dnl
 
+list_script('base-fix.lua')
+
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
@@ -37,7 +39,7 @@ Install("logrotate", { priority = 40 })
 Install("dnsmasq-full", { priority = 40 })
 if board == "turris1x" then
 	Install("unbound", "unbound-anchor", { priority = 40 })
-	Install("turris-btrfs", { priority = 40 })
+	Install("turris-btrfs", { priority = 40 }) -- Currently only SD card root is supported
 else
 	Install("knot-resolver", { priority = 40 })
 end

@@ -1,0 +1,48 @@
+From 7a2f402737576e926cd82124ef7d673c250adeea Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Tue, 5 Mar 2019 18:58:13 +0100
+Subject: [PATCH] dnsmasq: fix dhcp leases script execution
+
+---
+ package/network/services/dnsmasq/Makefile            |  2 +-
+ .../network/services/dnsmasq/files/dhcp-script.sh    | 12 +++++++++++-
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/package/network/services/dnsmasq/Makefile b/package/network/services/dnsmasq/Makefile
+index dc20ada..4a93a2f 100644
+--- a/package/network/services/dnsmasq/Makefile
++++ b/package/network/services/dnsmasq/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=dnsmasq
+ PKG_UPSTREAM_VERSION:=2.80
+ PKG_VERSION:=$(subst test,~~test,$(subst rc,~rc,$(PKG_UPSTREAM_VERSION)))
+-PKG_RELEASE:=15
++PKG_RELEASE:=16
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_UPSTREAM_VERSION).tar.xz
+ PKG_SOURCE_URL:=http://thekelleys.org.uk/dnsmasq
+diff --git a/package/network/services/dnsmasq/files/dhcp-script.sh b/package/network/services/dnsmasq/files/dhcp-script.sh
+index 8603269..a52e6eb 100755
+--- a/package/network/services/dnsmasq/files/dhcp-script.sh
++++ b/package/network/services/dnsmasq/files/dhcp-script.sh
+@@ -1,6 +1,16 @@
+ #!/bin/sh
+ 
+-[ -f "$USER_DHCPSCRIPT" ] && . "$USER_DHCPSCRIPT" "$@"
++if [ -f "$USER_DHCPSCRIPT" ]; then
++	filename=$(basename "$USER_DHCPSCRIPT")
++	ext="${filename##*.}"
++	if [ "$ext" == "py" ]; then
++	$USER_DHCPSCRIPT "$@"
++	else
++	. "$USER_DHCPSCRIPT" "$@"
++	fi
++fi
++
++
+ 
+ case "$1" in
+ 	add)
+-- 
+2.23.0
+

@@ -24,8 +24,8 @@ diff --git a/package/base-files/Makefile b/package/base-files/Makefile
 index 2923a1c..f96228a 100644
 --- a/package/base-files/Makefile
 +++ b/package/base-files/Makefile
-@@ -195,6 +195,17 @@ define Package/base-files/install
- 		$(VERSION_SED_SCRIPT) $(1)/etc/opkg/distfeeds.conf)
+@@ -209,6 +209,17 @@ define Package/base-files/install
+ 		rm -f $(1)/sbin/pkg_check,)
  endef
  
 +define Package/base-files/postinst
@@ -47,12 +47,11 @@ new file mode 100644
 index 0000000..a1a1c74
 --- /dev/null
 +++ b/package/base-files/files/etc/services_wanted
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,57 @@
 +asm1062-fix
 +atd
 +atsha204-feed-entropy
 +boot
-+btrfs-scan
 +cron
 +cups
 +dev-detect
@@ -106,35 +105,34 @@ index 0000000..a1a1c74
 +updater-journal-recover
 +urandom_seed
 +usbmode
-+watchdog_adjust
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
 index edce75e..6bd0701 100755
 --- a/package/base-files/files/lib/functions.sh
 +++ b/package/base-files/files/lib/functions.sh
-@@ -244,13 +244,17 @@ default_postinst() {
+@@ -251,14 +251,16 @@ default_postinst() {
  
  	local shell="$(which bash)"
- 	for i in $(grep -s "^/etc/init.d/" "$root/usr/lib/opkg/info/${pkgname}.list"); do
+ 	for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
 -		if [ -n "$root" ]; then
 -			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 -		else
 -			if [ "$PKG_UPGRADE" != "1" ]; then
 -				"$i" enable
+-			fi
+-			"$i" start
 +		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
 +			if [ -n "$root" ]; then
 +				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 +			else
-+				if [ "$PKG_UPGRADE" != "1" ]; then
-+					"$i" enable
-+				fi
- 			fi
--			"$i" start
-+		fi
-+		if [ -z "$root" -a "$pkgname" \!= "updater" -a "$pkgname" \!= "base-files" ] && "$i" enabled; then
-+			"$i" restart
++				[ "$PKG_UPGRADE" = "1" ] || "$i" enable
++ 			fi
  		fi
++		if [ -z "$root" ] && "$i" enabled; then
++			"$i" restart
++ 		fi
  	done
  
+ 	return $ret
 -- 
 2.24.0
 

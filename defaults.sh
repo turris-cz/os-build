@@ -5,4 +5,4 @@
 # Expected values are:
 #   "hbd" for master branch
 #   "hbs" for release branch
-PUBLISH_BRANCH="hbs"
+PUBLISH_BRANCH="hbd"

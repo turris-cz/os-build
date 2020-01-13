@@ -1,38 +1,22 @@
-From a0376b192655bd06c18e54095282bac5ba5c6570 Mon Sep 17 00:00:00 2001
+From 7aefacc2c13a668d00b7cab701e195875c3c979c Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 1 May 2019 21:45:31 +0200
 Subject: [PATCH] procd: New style of cgroups
 
 ---
- package/system/procd/Makefile                 |  2 +-
- .../new-style-of-cgroup-hiearchy.patch        | 57 +++++++++++++++++++
- 2 files changed, 58 insertions(+), 1 deletion(-)
+ .../new-style-of-cgroup-hiearchy.patch        | 56 +++++++++++++++++++
+ 1 file changed, 56 insertions(+)
  create mode 100644 package/system/procd/patches/new-style-of-cgroup-hiearchy.patch
 
-diff --git a/package/system/procd/Makefile b/package/system/procd/Makefile
-index 5971e0293d..3cea5b803e 100644
---- a/package/system/procd/Makefile
-+++ b/package/system/procd/Makefile
-@@ -15,7 +15,7 @@ PKG_SOURCE_URL=$(PROJECT_GIT)/project/procd.git
- PKG_SOURCE_DATE:=2018-03-28
- PKG_SOURCE_VERSION:=dfb68f8556df63878add145ad9c656381bc20656
- PKG_MIRROR_HASH:=8d2c70fb0264a6548e39acc5ab1c44cec50fc550c4f931760b0796f8893c9b7f
--CMAKE_INSTALL:=1
-+CMAKE_INSTALL:=2
- 
- PKG_LICENSE:=GPL-2.0
- PKG_LICENSE_FILES:=
 diff --git a/package/system/procd/patches/new-style-of-cgroup-hiearchy.patch b/package/system/procd/patches/new-style-of-cgroup-hiearchy.patch
 new file mode 100644
-index 0000000000..1d7430269d
+index 0000000000..8b530b0659
 --- /dev/null
 +++ b/package/system/procd/patches/new-style-of-cgroup-hiearchy.patch
-@@ -0,0 +1,57 @@
-+Index: procd-2018-03-28-dfb68f85/initd/early.c
-+===================================================================
-+--- procd-2018-03-28-dfb68f85.orig/initd/early.c
-++++ procd-2018-03-28-dfb68f85/initd/early.c
-+@@ -52,14 +52,51 @@ early_console(const char *dev)
+@@ -0,0 +1,56 @@
++--- a/initd/early.c
+++++ b/initd/early.c
++@@ -53,6 +53,43 @@ early_console(const char *dev)
 + }
 + 
 + static void
@@ -76,15 +60,16 @@ index 0000000000..1d7430269d
 + early_mounts(void)
 + {
 + 	unsigned int oldumask = umask(0);
-+ 
-+ 	mount("proc", "/proc", "proc", MS_NOATIME | MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
-+ 	mount("sysfs", "/sys", "sysfs", MS_NOATIME | MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
-+-	mount("cgroup", "/sys/fs/cgroup", "cgroup",  MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
-+ 	mount("tmpfs", "/dev", "tmpfs", MS_NOATIME | MS_NOSUID, "mode=0755,size=512K");
-++	mount_cgroups();
-+ 	ignore(symlink("/tmp/shm", "/dev/shm"));
-+ 	mkdir("/dev/pts", 0755);
-+ 	mount("devpts", "/dev/pts", "devpts", MS_NOATIME | MS_NOEXEC | MS_NOSUID, "mode=600");
++@@ -60,8 +97,8 @@ early_mounts(void)
++ 	if (!is_container()) {
++ 		mount("proc", "/proc", "proc", MS_NOATIME | MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
++ 		mount("sysfs", "/sys", "sysfs", MS_NOATIME | MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
++-		mount("cgroup", "/sys/fs/cgroup", "cgroup",  MS_NODEV | MS_NOEXEC | MS_NOSUID, 0);
++ 		mount("tmpfs", "/dev", "tmpfs", MS_NOATIME | MS_NOSUID, "mode=0755,size=512K");
+++		mount_cgroups();
++ 		ignore(symlink("/tmp/shm", "/dev/shm"));
++ 		mkdir("/dev/pts", 0755);
++ 		mount("devpts", "/dev/pts", "devpts", MS_NOATIME | MS_NOEXEC | MS_NOSUID, "mode=600");
 -- 
 2.21.0
 

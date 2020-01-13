@@ -1,18 +1,29 @@
-From 075f3c24e415e46be888a115fe7b307d415e2a56 Mon Sep 17 00:00:00 2001
+From 5af85a2af762c03ece85621a87666963ff11e9bf Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 23 Jan 2019 22:31:51 +0100
 Subject: [PATCH] Disable ABI stuff for now
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- include/package-ipkg.mk | 1 -
- 1 file changed, 1 deletion(-)
+ include/package-ipkg.mk | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
 
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index c374faa647..6ab798c613 100644
+index 9ca4879bfa..5d6dddb43e 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -144,7 +144,6 @@ ifeq ($(DUMP),)
+@@ -93,9 +93,8 @@ _endef=endef
+ 
+ ifeq ($(DUMP),)
+   define BuildTarget/ipkg
+-    ABIV_$(1):=$(call GetABISuffix,$(1))
+     PDIR_$(1):=$(call FeedPackageDir,$(1))
+-    IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
++    IPKG_$(1):=$$(PDIR_$(1))/$(1)_$(VERSION)_$(PKGARCH).ipk
+     IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
+     KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
+ 
+@@ -148,21 +147,20 @@ ifeq ($(DUMP),)
  
      $(STAGING_DIR_ROOT)/stamp/.$(1)_installed: $(PKG_BUILD_DIR)/.pkgdir/$(1).installed
  	mkdir -p $(STAGING_DIR_ROOT)/stamp
@@ -20,6 +31,23 @@ index c374faa647..6ab798c613 100644
  	$(call locked,$(CP) $(PKG_BUILD_DIR)/.pkgdir/$(1)/. $(STAGING_DIR_ROOT)/,root-copy)
  	touch $$@
  
+-    Package/$(1)/DEPENDS := $$(call mergelist,$$(foreach dep,$$(filter-out @%,$$(IDEPEND_$(1))),$$(dep)$$(call GetABISuffix,$$(dep))))
++    Package/$(1)/DEPENDS := $$(call mergelist,$$(foreach dep,$$(filter-out @%,$$(IDEPEND_$(1))),$$(dep)))
+     ifneq ($$(EXTRA_DEPENDS),)
+       Package/$(1)/DEPENDS := $$(EXTRA_DEPENDS)$$(if $$(Package/$(1)/DEPENDS),$$(comma) $$(Package/$(1)/DEPENDS))
+     endif
+ 
+ $(_define) Package/$(1)/CONTROL
+-Package: $(1)$$(ABIV_$(1))
++Package: $(1)
+ Version: $(VERSION)
+ $$(call addfield,Depends,$$(Package/$(1)/DEPENDS)
+ )$$(call addfield,Conflicts,$$(call mergelist,$(CONFLICTS))
+-)$$(call addfield,Provides,$$(call mergelist,$$(filter-out $(1)$$(ABIV_$(1)),$(PROVIDES)$$(if $$(ABIV_$(1)), $(1) $(foreach provide,$(PROVIDES),$(provide)$$(call GetABISuffix,$(provide))))))
++)$$(call addfield,Provides,$$(call mergelist,$$(filter-out $(1),$(PROVIDES)))
+ )$$(call addfield,Alternatives,$$(call mergelist,$(ALTERNATIVES))
+ )$$(call addfield,Source,$(SOURCE)
+ )$$(call addfield,SourceName,$(1)
 -- 
 2.20.1
 
