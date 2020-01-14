@@ -1,4 +1,4 @@
-From fc65dacd1b20e47c9a7068e5b9a2edd804c87105 Mon Sep 17 00:00:00 2001
+From dbff59c613d7e5c1025339284e1a54bd787bd1bb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 19 Nov 2019 17:48:24 +0100
 Subject: [PATCH] target/linux/mpc85xx: revert kernel patch that breaks MMC
@@ -7,10 +7,14 @@ Subject: [PATCH] target/linux/mpc85xx: revert kernel patch that breaks MMC
 This patch causes boot to not proceed because kernel won't locate FS on
 MMC. MMC it self is correctly detected but it might not be readable by
 kernel with this patch. Instead kernel panics.
+
+Second patch causes timeouts on SD card access.
 ---
  ...-of-esdhc-set-DMA-snooping-based-on-.patch | 32 +++++++++++++++++++
- 1 file changed, 32 insertions(+)
+ ...i-of-esdhc-fix-P2020-errata-handling.patch | 28 ++++++++++++++++
+ 2 files changed, 60 insertions(+)
  create mode 100644 target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch
+ create mode 100644 target/linux/mpc85xx/patches-4.14/902-Revert-mmc-sdhci-of-esdhc-fix-P2020-errata-handling.patch
 
 diff --git a/target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch b/target/linux/mpc85xx/patches-4.14/901-Revert-mmc-sdhci-of-esdhc-set-DMA-snooping-based-on-.patch
 new file mode 100644
@@ -50,6 +54,40 @@ index 0000000..ca41d11
 +-- 
 +2.24.0
 +
+diff --git a/target/linux/mpc85xx/patches-4.14/902-Revert-mmc-sdhci-of-esdhc-fix-P2020-errata-handling.patch b/target/linux/mpc85xx/patches-4.14/902-Revert-mmc-sdhci-of-esdhc-fix-P2020-errata-handling.patch
+new file mode 100644
+index 0000000..6588838
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-4.14/902-Revert-mmc-sdhci-of-esdhc-fix-P2020-errata-handling.patch
+@@ -0,0 +1,28 @@
++From 3fba5ddea116f401caf88443181a7f640a05655a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
++Date: Tue, 14 Jan 2020 10:50:11 +0100
++Subject: [PATCH] Revert "mmc: sdhci-of-esdhc: fix P2020 errata handling"
++
++This reverts commit 5a07ace7375231e6eb79667a2784c0bf023f87da.
++---
++ drivers/mmc/host/sdhci-of-esdhc.c | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/mmc/host/sdhci-of-esdhc.c b/drivers/mmc/host/sdhci-of-esdhc.c
++index 9a1ab39ee35e..bf8d02a996b6 100644
++--- a/drivers/mmc/host/sdhci-of-esdhc.c
+++++ b/drivers/mmc/host/sdhci-of-esdhc.c
++@@ -886,8 +886,8 @@ static int sdhci_esdhc_probe(struct platform_device *pdev)
++ 		host->quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
++ 
++ 	if (of_find_compatible_node(NULL, NULL, "fsl,p2020-esdhc")) {
++-		host->quirks |= SDHCI_QUIRK_RESET_AFTER_REQUEST;
++-		host->quirks |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
+++		host->quirks2 |= SDHCI_QUIRK_RESET_AFTER_REQUEST;
+++		host->quirks2 |= SDHCI_QUIRK_BROKEN_TIMEOUT_VAL;
++ 	}
++ 
++ 	if (of_device_is_compatible(np, "fsl,p5040-esdhc") ||
++-- 
++2.25.0
++
 -- 
-2.24.0
+2.25.0
 
