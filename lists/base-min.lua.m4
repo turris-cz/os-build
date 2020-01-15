@@ -50,11 +50,6 @@ Install("ca-certificates", { priority = 40 })
 
 _FEATURE_GUARD_
 
--- It's Christmas time
-if board == "turris1x" or board == "omnia" then
-	Install('christmas', { priority = 10 })
-end
-
 -- Updater utility
 Install("updater-opkg-wrapper", { priority = 40 })
 Package('updater-opkg-wrapper', { replan = 'finished' })
