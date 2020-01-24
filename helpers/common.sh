@@ -15,12 +15,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ## Common printing functions ############
+
+# Detect tty if IS_TTY not already set
+if [ -z "${IS_TTY+x}" ]; then
+	export IS_TTY=""
+	[ -t 2 ] && IS_TTY="1"
+fi
+
 _color_echo() {
 	local name="$1"
 	local color="$2"
 	local text="$3"
 	shift 2
-	if [ -t 2 ] || [ -n "$IS_TTY" ]; then
+	if [ -n "$IS_TTY" ]; then
 		echo -e "\033[${color}m${text}"'\033[0m' >&2
 	else
 		echo "$name: $text" >&2
