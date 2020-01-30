@@ -82,10 +82,10 @@ end
 if board == "mox" then
 	Install("mox-otp", { priority = 40 })
 elseif board == "omnia" then
-	Install("rainbow-omnia", { priority = 40 })
+	Install("turris-rainbow", { priority = 40 })
 	Install("libatsha204", { priority = 40 })
 elseif board == "turris1x" then
-	Install("rainbow", { priority = 40 })
+	Install("turris-rainbow", { priority = 40 })
 	Install("libatsha204", "update_mac", { priority = 40 })
 end
 if board ~= "turris1x" then
