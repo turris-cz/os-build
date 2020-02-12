@@ -5,7 +5,7 @@ We have to update updater first so we do immediate replan and update only update
 itself.
 ]]
 
-if not version_match or not self_version or version_match(self_version, "<63.0") then
+if not version_match or not self_version or version_match(self_version, "<64.0") then
 
 	local board
 	if model:match("[Oo]mnia") then
@@ -47,12 +47,31 @@ if not version_match or not self_version or version_match(self_version, "<63.0")
 	being installed the configuration is also migrated at the same time.
 	]]
 
+else
+
+	--[[
+	The process of update is that we first update only updater and minimal system
+	dependencies with it. That replaces libc and pretty much breaks whole system.
+	We do it by just including minimal subset of latest feeds together with Turris
+	OS 3.x feeds. With next replan all Turris OS 3.x feeds are no longer used that
+	unfortunately can cause update fault because there might be requests for
+	packages that were available in Turris OS 3.x but are no more. In such
+	situation system stays in broken state.
+
+	Setting that all installs are optional solves this and ensures that update is
+	going to proceed and that result is working system.
+
+	This does not solve problem ultimately. It instead moves problem for user to
+	solver later when migration is completed. User have to modify its requests.
+	]]
+	Mode("optional_installs")
+
 end
 
 --[[
 Ubus is used by init scripts to communicate with procd. The problem this creates
 is that new version of ubus is unable to communicate with old ubusd. This means
-that we have restart ubusd as soon as possible. We do it in postinst of ubus
+that we have to restart ubusd as soon as possible. We do it in postinst of ubus
 package but there can be multiple service restarts before that and every such call
 to ubus takes few minutes because of ubus timeouts. It also causes action to not
 be executed. This uses replan to trick updater to update ubus as soon as possible
