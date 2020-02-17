@@ -183,28 +183,12 @@ configure() {
 	[ -n "${TARGET_BOARD}" ] || _die "No board selected!"
 	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
 	{
-		echo "CONFIG_DEVEL=y"
-		echo "CONFIG_CCACHE=y"
 		[ -n "$DL_MIRROR" ] && echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR"
-		echo "CONFIG_VERSION_DIST=\"TurrisOS\""
 		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages\""
 		echo "CONFIG_VERSION_NUMBER=\"$("${src_dir}/helpers/turris-version.sh" version)\""
 		echo "CONFIG_VERSION_CODE=\"$(_git_remote_hash)\""
-		echo "CONFIG_VERSION_HOME_URL=\"https://www.turris.cz/\""
-		echo "CONFIG_VERSION_BUG_URL=\"https://gitlab.labs.nic.cz/groups/turris/-/issues\""
-		echo "CONFIG_VERSION_SUPPORT_URL=\"https://www.turris.cz/support/\""
-		echo "CONFIG_ALL_KMODS=y"
-		echo "CONFIG_ALL=y"
 	} >> .config
 	_make defconfig diffconfig
-	OPENWRT_ARCH="$(sed -n 's|^CONFIG_TARGET_BOARD="\([^"]*\)"|\1|p' .config)"
-	EXTRA_KERNEL="$(cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* | sed -n 's|^[[:blank:]]*CONFIG_KERNEL|CONFIG|p')"
-	local to_commit=()
-	for config in target/linux/"${OPENWRT_ARCH}"/config-*; do
-		echo "${EXTRA_KERNEL}" >> "$config"
-		to_commit+=( "$config" )
-	done
-	_git commit -m 'kernel: Add customized kernel options' "${to_commit[@]}"
 }
 
 available_commands+=( ["update_mirror"]="Updates all local mirrors" )
