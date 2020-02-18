@@ -1,5 +1,4 @@
 include(utils.m4)dnl
-include(luci-utils.m4)dnl
 _FEATURE_GUARD_
 
 -- Kernel --
@@ -38,7 +37,7 @@ Install("wget", "rsync", "rsyncd", { priority = 40 })
 forInstall(samba4,client,server,admin,utils)
 
 -- Luci
-luci_app("hd-idle","minidlna", "samba4")
+Install("luci-app-hd-idle","luci-app-minidlna", "luci-app-samba4", { priority = 40 })
 
 -- Encryption --
 Install("cryptsetup", "kmod-cryptodev", "kmod-crypto-user", { priority = 40 })

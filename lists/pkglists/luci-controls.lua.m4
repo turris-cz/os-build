@@ -1,11 +1,37 @@
 include(utils.m4)dnl
-include(luci-utils.m4)dnl
 _FEATURE_GUARD_
 
-luci_app("ahcp", "adblock", "bcp38", "firewall", "minidlna", "mjpg-streamer", "sqm", "statistics", "tinyproxy", "transmission", "upnp")
-if board == "omnia" or board == "turris1x" then
-	luci_app('rainbow')
+local apps = {
+	"ahcp",
+	"adblock",
+	"bcp38",
+	"firewall",
+	"minidlna",
+	"mjpg-streamer",
+	"sqm",
+	"statistics",
+	"tinyproxy",
+	"transmission",
+	"upnp"
+}
+
+local proto = {
+	"openconnect",
+	"relay",
+	"vpnc"
+}
+
+
+for _, app in pairs(apps) do
+	Install("luci-app-" .. app, { priority = 40 })
 end
-luci_proto("openconnect", "relay", "vpnc")
+
+if board == "omnia" or board == "turris1x" then
+	Install('luci-app-rainbow', { priority = 40 })
+end
+
+for _, proto in pairs(proto) do
+	Install("luci-proto-" .. proto, { priority = 40 })
+end
 
 _END_FEATURE_GUARD_
