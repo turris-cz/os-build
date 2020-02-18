@@ -194,30 +194,31 @@ configure() {
 available_commands+=( ["update_mirror"]="Updates all local mirrors" )
 update_mirror() {
 	[ -n "$GIT_MIRROR" ] || return 0
+	[ -d "$GIT_MIRROR" ] || return 0
 	[ -z "$mirror_updated" ] || return 0
 
-	report "Updating local mirrors"
-	mkdir -p "$GIT_MIRROR"
-	pushd "$GIT_MIRROR"
-	if [ ! -d openwrt ]; then
-		git clone --mirror "$OPENWRT_URL" openwrt
-	fi
-	OPENWRT_URL="$GIT_MIRROR/openwrt"
-	for mirror in ./*; do
-		cd "$mirror" || continue
-		if ! git remote update --prune; then
-			sleep $(( 1 + RANDOM % 30 ))
+	_report "Updating local mirrors"
+	flock --exclusive "$GIT_MIRROR" "$SHELL" -s "$GIT_MIRROR" <<"EOF"
+		cd "$1"
+		for mirror in ./*; do
+			[ -d "$mirror" ] || continue
+			cd "$mirror"
 			git remote update --prune
-		fi
-		cd "$GIT_MIRROR"
-	done
-	popd
+			cd "$1"
+		done
+EOF
 	mirror_updated="yes"
 }
 
 _checkout_init() {
 	report "Checking out clean OpenWRT repository"
 	update_mirror
+	if [ -n "$GIT_MIRROR" ]; then
+		mkdir -p "$GIT_MIRROR"
+		[ -d "$GIT_MIRROR/openwrt" ] || \
+			git clone --mirror "$OPENWRT_URL" "$GIT_MIRROR/openwrt"
+		OPENWRT_URL="$GIT_MIRROR/openwrt"
+	fi
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
