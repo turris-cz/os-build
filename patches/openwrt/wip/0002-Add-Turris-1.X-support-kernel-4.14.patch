@@ -1,4 +1,4 @@
-From 269e47e7883996878d8d45210c28ebc66060579d Mon Sep 17 00:00:00 2001
+From 4191adbf3751ee6212ab0d9faa25e4eea4a76285 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 4.14)
@@ -10,26 +10,26 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-4.14              |  56 +++-
+ target/linux/mpc85xx/config-4.14              |  60 +++-
  .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
  target/linux/mpc85xx/image/Makefile           |   8 +
  target/linux/mpc85xx/p2020/config-default     |  27 ++
  ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 ++++++++++++++
  ...a8k-extend-slave-bus-implementations.patch | 243 ++++++++++++++
- 7 files changed, 854 insertions(+), 7 deletions(-)
+ 7 files changed, 858 insertions(+), 7 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
  create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
  create mode 100644 target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index aa33a4a..1ba7fab 100755
+index aa33a4a..b24bcb6 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -23,6 +23,10 @@ tplink,tl-wdr4900-v1)
  		"0@eth0" "2:lan:1" "3:lan:2" "4:lan:3" "5:lan:4" "1:wan"
  	ucidef_set_interface_macaddr "wan" "$(macaddr_add $(mtd_get_mac_binary u-boot 0x4fc00) 1)"
  	;;
-+turris1x)
++fsl,P2020RDB)
 +	ucidef_set_interface_lan "lan1 lan2 lan3 lan4 lan5"
 +	ucidef_set_interface_wan "eth2"
 +	;;
@@ -37,7 +37,7 @@ index aa33a4a..1ba7fab 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-4.14 b/target/linux/mpc85xx/config-4.14
-index 1f26d8c..b7c4815 100644
+index 77fd10f..da038dc 100644
 --- a/target/linux/mpc85xx/config-4.14
 +++ b/target/linux/mpc85xx/config-4.14
 @@ -42,6 +42,15 @@ CONFIG_BOOKE_WDT=y
@@ -149,7 +149,16 @@ index 1f26d8c..b7c4815 100644
  # CONFIG_P1022_DS is not set
  # CONFIG_P1022_RDK is not set
  # CONFIG_P1023_RDB is not set
-@@ -279,11 +312,12 @@ CONFIG_PPC_DOORBELL=y
+@@ -257,6 +290,8 @@ CONFIG_PHYSICAL_ALIGN=0x04000000
+ CONFIG_PHYSICAL_START=0x00000000
+ # CONFIG_PHYS_64BIT is not set
+ # CONFIG_PPA8548 is not set
++CONFIG_NET_DSA=y
++CONFIG_NET_DSA_QCA8K=y
+ CONFIG_PPC=y
+ CONFIG_PPC32=y
+ # CONFIG_PPC64 is not set
+@@ -279,11 +314,12 @@ CONFIG_PPC_DOORBELL=y
  # CONFIG_PPC_EARLY_DEBUG is not set
  # CONFIG_PPC_EPAPR_HV_PIC is not set
  CONFIG_PPC_FSL_BOOK3E=y
@@ -163,7 +172,7 @@ index 1f26d8c..b7c4815 100644
  CONFIG_PPC_MMU_NOHASH=y
  # CONFIG_PPC_MM_SLICES is not set
  # CONFIG_PPC_MPC106 is not set
-@@ -329,6 +363,7 @@ CONFIG_SPE=y
+@@ -329,6 +365,7 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -171,7 +180,7 @@ index 1f26d8c..b7c4815 100644
  CONFIG_SPI_MASTER=y
  CONFIG_SRCU=y
  # CONFIG_STRIP_ASM_SYMS is not set
-@@ -352,6 +387,13 @@ CONFIG_UCC=y
+@@ -352,6 +389,13 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -185,16 +194,22 @@ index 1f26d8c..b7c4815 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
+@@ -362,3 +406,5 @@ CONFIG_WATCHDOG_CORE=y
+ # CONFIG_XPS_USB_HCD_XILINX is not set
+ CONFIG_XZ_DEC_BCJ=y
+ CONFIG_XZ_DEC_POWERPC=y
++# CONFIG_FB_FSL_DIU is not set
++# CONFIG_VGA_CONSOLE is not set
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000..de20d20
+index 0000000..b5128a3
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 @@ -0,0 +1,296 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
-+ * Copyright 2013-2019 CZ.NIC z.s.p.o. (http://www.nic.cz/)
++ * Copyright 2013 CZ.NIC z.s.p.o. (http://www.nic.cz/)
 + *
 + * This program is free software; you can redistribute  it and/or modify it
 + * under  the terms of  the GNU General  Public License as published by the
@@ -205,8 +220,8 @@ index 0000000..de20d20
 +/include/ "fsl/p2020si-pre.dtsi"
 +
 +/ {
-+	model = "Turris 1.x";
-+	compatible = "turris1x";
++	model = "Turris";
++	compatible = "fsl,P2020RDB";
 +
 +	aliases {
 +		ethernet0 = &enet0;
@@ -1042,5 +1057,5 @@ index 0000000..9a24bee
 +2.21.0
 +
 -- 
-2.25.0
+2.25.1
 
