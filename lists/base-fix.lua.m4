@@ -23,3 +23,10 @@ if installed and installed["samba36-server"] and not installed["samba4-server"] 
 	migration correctly and run this fix.
 	]]
 end
+
+-- Fix package alternatives with updater version 65.0
+if not version_match or not installed or
+		(installed["updater-ng"] and version_match(installed["updater-ng"].version, "<65.0")) then
+	Install("fix-updater-v65.0-alternatives-update")
+	Package("fix-updater-v65.0-alternatives-update", { replan = "finished" })
+end
