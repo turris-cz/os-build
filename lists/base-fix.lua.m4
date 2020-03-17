@@ -30,3 +30,10 @@ if not version_match or not installed or
 	Install("fix-updater-v65.0-alternatives-update")
 	Package("fix-updater-v65.0-alternatives-update", { replan = "finished" })
 end
+
+-- Migrate Quad9 DNS config (it was renamed/split)
+if not version_match or not installed or
+		(installed["resolver-conf"] and version_match(installed["resolver-conf"].version, "<0.0.1-32")) then
+	Install("fix-dns-forward-quad9-split")
+	Package("fix-dns-forward-quad9-split", { replan = "finished" })
+end
