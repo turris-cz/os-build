@@ -9,8 +9,6 @@ forInstall(kmod-fs,autofs4,btrfs,cifs,exfat,exportfs,ext4,hfs,hfsplus,msdos,nfs,
 forInstall(kmod-nls,cp1250,cp1251,cp437,cp775,cp850,cp852,cp862,cp864,cp866,cp932,iso8859-1,iso8859-13,iso8859-15,iso8859-2,iso8859-6,iso8859-8,koi8r,utf8)
 -- Raid
 forInstall(kmod-md,linear,multipath,raid0,raid1,raid10,raid456)
--- Additional kernel drivers
-Install("kmod-usb-storage-extras", "kmod-usb-storage-uas", { priority = 40 })
 -- Disk maintenance
 Install("blkdiscard", "fstrim", { priority = 40 })
 -- Fix for SATA card sent with Omnia NAS pack
