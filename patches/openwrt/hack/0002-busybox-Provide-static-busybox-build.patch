@@ -1,4 +1,4 @@
-From c4425ebefa9ab1e63a4010e226e7c5f5639b6f1c Mon Sep 17 00:00:00 2001
+From d70faec1334f085d6bbf84c0b8a59b81c7184a5f Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Thu, 22 Feb 2018 14:46:46 +0100
 Subject: [PATCH] busybox: Provide static busybox build
@@ -7,13 +7,13 @@ Can be handy, but currently it is quite hacky.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- package/utils/busybox/Makefile                |   40 +
+ package/utils/busybox/Makefile                |   42 +
  .../utils/busybox/files/busybox-static.config | 1127 +++++++++++++++++
- 2 files changed, 1167 insertions(+)
+ 2 files changed, 1169 insertions(+)
  create mode 100644 package/utils/busybox/files/busybox-static.config
 
 diff --git a/package/utils/busybox/Makefile b/package/utils/busybox/Makefile
-index 9b80ed1..ef74405 100644
+index 01441d1..278ef92 100644
 --- a/package/utils/busybox/Makefile
 +++ b/package/utils/busybox/Makefile
 @@ -54,6 +54,20 @@ define Package/busybox/description
@@ -37,10 +37,11 @@ index 9b80ed1..ef74405 100644
  define Package/busybox/config
  	source "$(SOURCE)/Config.in"
  endef
-@@ -94,9 +108,24 @@ endif
- define Build/Configure
- 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" > $(PKG_BUILD_DIR)/.config
+@@ -99,9 +113,26 @@ ifeq ($(DEVICE_TYPE),nas)
+ endif
+ 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
  	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
++
 +	mv $(PKG_BUILD_DIR)/.config $(PKG_BUILD_DIR)/.config-regular
 +	cp ./files/busybox-static.config $(PKG_BUILD_DIR)/.config
 +	echo 'CONFIG_STATIC=y' >> $(PKG_BUILD_DIR)/.config
@@ -59,10 +60,11 @@ index 9b80ed1..ef74405 100644
 +	rm -f $(PKG_BUILD_DIR)/busybox.links
 +	$(call Build/Compile/Default,CONFIG_PREFIX="$(PKG_INSTALL_DIR)" busybox.links)
 +	$(call Build/Compile/Default,CONFIG_PREFIX="$(PKG_INSTALL_DIR)" install)
++
  	$(call Build/Compile/Default, \
  		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
  		all install \
-@@ -117,4 +146,15 @@ endif
+@@ -125,4 +156,15 @@ endif
  	-rm -rf $(1)/lib64
  endef
  
@@ -1212,5 +1214,5 @@ index 0000000..3468908
 +CONFIG_FEATURE_IPC_SYSLOG_BUFFER_SIZE=0
 +# CONFIG_FEATURE_KMSG_SYSLOG is not set
 -- 
-2.24.0
+2.26.0
 
