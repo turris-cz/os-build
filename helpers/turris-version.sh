@@ -27,9 +27,12 @@ news_text() {
 
 news_notification() {
 	local text
-        # escape problematic
+	# escape problematic characters
 	text="$(news_text | sed 's|\\|\\\\|g; s|\$|\\$|g; s|"|\\"|g')"
-	[ -z "$text" ] && return
+	[ -z "$text" ] && {
+		echo "true" # Just so we execute something
+		return
+	}
 	echo "create_notification -s news \"$text\""
 }
 
