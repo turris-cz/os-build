@@ -225,8 +225,12 @@ EOF
 	mirror_updated="yes"
 }
 
-_checkout_init() {
-	report "Checking out clean OpenWRT repository"
+available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
+checkout() {
+	local target="${OPENWRT_BRANCH%#}"
+	report "Starting out: $target"
+
+	report "Checking out OpenWRT repository"
 	update_mirror
 	if [ -n "$GIT_MIRROR" ]; then
 		mkdir -p "$GIT_MIRROR"
@@ -237,61 +241,30 @@ _checkout_init() {
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
-}
+	if [ -z "$GIT_MIRROR" -a "${OPENWRT_BRANCH:0:1}" = "#" ]; then
+		# If we are downloading directly from server we can't fetch specific
+		# commit so fetch everything
+		git fetch origin
+		git checkout -f "$target"
+	else
+		git fetch ${CLONE_DEEP+--depth 1} origin "$target"
+		git checkout -f FETCH_HEAD
+	fi
 
-_checkout_clean() {
-	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
-	git clean -dff
+	git clean -dff -e '/turris-build.conf'
 	find . -name '*.rej' -delete
-	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
+
 	git rev-parse --short HEAD > version
 	echo "/turris-build.conf" >> ./.gitignore
 	echo "/version" >> ./.gitignore
 	_git commit -m 'gitignore: Ignore some more files' ./.gitignore
+
+	cp "$src_dir"/feeds.conf .
+
 	if [ -n "$DL_MIRROR" ]; then
 		mkdir -p "$DL_MIRROR"
 		rm -rf dl && ln -s "$DL_MIRROR" dl
 	fi
-}
-
-available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
-checkout() {
-	report "Starting out fresh!"
-	_checkout_init
-	local githash
-	githash="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
-	if [ -n "$githash" ]; then
-		git fetch origin
-		git checkout -f "$githash"
-	else
-		git fetch ${CLONE_DEEP+--depth 1} origin "$OPENWRT_BRANCH"
-		git checkout -f "origin/$OPENWRT_BRANCH"
-	fi
-	_checkout_clean
-	cp "$src_dir"/feeds.conf .
-}
-
-available_commands+=( ["repo_checkout"]="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz" )
-repo_checkout() {
-	report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
-	curl "https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
-	_checkout_init
-	git fetch
-	git checkout -f "$(awk -F : '/^openwrt:/{print $2}' repo-git-hashes)"
-	GIT_HASHES="$(cat repo-git-hashes)"
-	_checkout_clean
-	echo "$GIT_HASHES" > repo-git-hashes
-	rm -f feeds.conf
-	local line githash
-	while read -r line; do
-		# TODO clean this awk
-		githash="$(awk -F : "/^feeds\/$(echo "$line" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
-		if [ -z "$githash" ]; then
-			echo "$line" >> feeds.conf
-		else
-			echo "$line" | sed "s/[;^].*$//;s/$/\^$githash/" >> feeds.conf
-		fi
-	done < "$src_dir/feeds.conf"
 }
 
 available_commands+=( ["clean_ccache"]="Clean persistent ccache paths" )
@@ -485,17 +458,6 @@ prepare_tools() {
 	compile_target
 }
 
-available_commands+=( ["repo_prepare"]="Same as prepare but instead of checkout uses repo_checkout" )
-repo_prepare() {
-	repo_checkout
-	clean
-	patch_openwrt
-	repatch_feeds
-	gen_version
-	configure
-	set_ccache
-}
-
 available_commands+=( ["autopkg"]="	Deploy autopkg scripts that can be used for rolling software development" )
 autopkg() {
 	report "Deploying autopkg scripts"
@@ -520,7 +482,7 @@ print_help() {
 	echo "	-h, --help	Show this help text"
 	echo
 	echo "Advanced options:"
-	echo "	-p BRANCH	Name of the target build alias. This is used to set OPKG feeds and for repo_checkout. If not specified '$PUBLISH_BRANCH' is used."
+	echo "	-p BRANCH	Name of the target build alias. This is used to set OPKG feeds. If not specified '$PUBLISH_BRANCH' is used."
 	echo "	-l		Do not update local git mirrors. Use them as they are to fetch OpenWRT and its feeds."
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-x		Enable debug mode"
