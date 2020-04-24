@@ -14,11 +14,14 @@ local foris_plugins = {
 }
 
 local reforis_plugins = {
+	"data-collection",
 	"diagnostics",
 	"netboot",
+	"netmetr",
 	"openvpn",
 	"remote-access",
 	"remote-devices",
+	"remote-wifi-settings",
 	"snapshots",
 }
 
