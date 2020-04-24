@@ -1,0 +1,38 @@
+From 92bb91f1fd1d594575cd7d971795da41f5689492 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <Michal@Hrusecky.net>
+Date: Fri, 24 Apr 2020 00:39:29 +0200
+Subject: [PATCH] mvebu/kernel: Ship also lzma compressed image
+
+Temporal workaround for U-Boot btrfs bug, can be dropped once U-Boot is updated
+everywhere.
+---
+ package/kernel/linux/Makefile          | 3 +++
+ target/linux/mvebu/cortexa53/target.mk | 1 +
+ 2 files changed, 4 insertions(+)
+
+diff --git a/package/kernel/linux/Makefile b/package/kernel/linux/Makefile
+index f41badc..b5e8409 100644
+--- a/package/kernel/linux/Makefile
++++ b/package/kernel/linux/Makefile
+@@ -58,6 +58,9 @@ define Package/kernel/install
+ 		$(foreach k, $(filter-out dtbs,$(KERNELNAME)), \
+ 			$(CP) $(LINUX_DIR)/arch/$(LINUX_KARCH)/boot/$(IMAGES_DIR)/$(k) "$(1)"/boot; \
+ 		)
++ifneq (,$(findstring Image.lzma,$(KERNEL_IMAGES)))
++		$(STAGING_DIR_HOST)/bin/lzma e "$(1)"/boot/Image "$(1)"/boot/Image.lzma
++endif
+ 		$(foreach d, $(DEVICE_DTS), \
+ 			$(CP) $(DTS_DIR)/$(d) "$(1)"/boot; \
+ 		)
+diff --git a/target/linux/mvebu/cortexa53/target.mk b/target/linux/mvebu/cortexa53/target.mk
+index fe89d08..d4c49c2 100644
+--- a/target/linux/mvebu/cortexa53/target.mk
++++ b/target/linux/mvebu/cortexa53/target.mk
+@@ -14,3 +14,4 @@ FEATURES+=ext4
+ DEFAULT_PACKAGES+=e2fsprogs ethtool mkf2fs partx-utils
+ 
+ KERNELNAME:=Image dtbs
++KERNEL_IMAGES:=Image Image.lzma
+-- 
+2.26.1
+
