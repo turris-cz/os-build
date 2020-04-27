@@ -14,11 +14,14 @@ local foris_plugins = {
 }
 
 local reforis_plugins = {
+	"data-collection",
 	"diagnostics",
 	"netboot",
+	"netmetr",
 	"openvpn",
 	"remote-access",
 	"remote-devices",
+	"remote-wifi-settings",
 	"snapshots",
 }
 
@@ -49,8 +52,13 @@ end
 Install("foris", { priority = 40 })
 Install("foris-diagnostics-plugin", "foris-storage-plugin", { priority = 40 })
 
+Install("reforis", { priority = 40 })
+Install("reforis-diagnostics-plugin", { priority = 40 })
+Install("reforis-snapshots-plugin", { priority = 40 })
+
 if for_l10n then
 	for_l10n("foris-l10n-")
+	for_l10n("reforis-l10n-")
 	for_l10n('pkglists-l10n-')
 end
 
