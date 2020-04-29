@@ -1,0 +1,1328 @@
+From d0ca3c92da27e4e3091eb592986f5df0eecc39de Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Thu, 30 Apr 2020 00:18:17 +0200
+Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
+
+---
+ target/linux/mvebu/cortexa53/config-5.4       |  13 ++
+ target/linux/mvebu/image/cortexa53.mk         |  12 +
+ ...-3720-turris-mox-forbid-SDR104-on-SD.patch |  33 +++
+ ...mada-3720-turris-mox-fix-SFP-binding.patch |  34 +++
+ ...is-mox-rwtm-support-ECDSA-signatures.patch | 159 +++++++++++++
+ ...da-3720-turris-mox-add-firmware-node.patch |  38 ++++
+ ...-fix-annoying-1.8V-regulator-warning.patch |  57 +++++
+ ...in-link-immediately-after-enabling-t.patch |  61 +++++
+ ...-t-blindly-enable-ASPM-L0s-and-don-t.patch |  59 +++++
+ ...Zero-max-link-speed-value-is-invalid.patch |  32 +++
+ ...9-PCI-aardvark-Improve-link-training.patch | 208 ++++++++++++++++++
+ ...10-PCI-aardvark-Issue-PERST-via-GPIO.patch | 114 ++++++++++
+ .../9911-PCI-aardvark-Add-PHY-support.patch   | 152 +++++++++++++
+ ...x-implement-phylink-AN-restart-on-Se.patch | 137 ++++++++++++
+ ...m64-restart-Armada-3700-restart-code.patch |  44 ++++
+ 15 files changed, 1153 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9905-mmc-sdhci-xenon-fix-annoying-1.8V-regulator-warning.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9906-PCI-aardvark-Train-link-immediately-after-enabling-t.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9907-PCI-aardvark-Don-t-blindly-enable-ASPM-L0s-and-don-t.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9909-PCI-aardvark-Improve-link-training.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9910-PCI-aardvark-Issue-PERST-via-GPIO.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9911-PCI-aardvark-Add-PHY-support.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
+
+diff --git a/target/linux/mvebu/cortexa53/config-5.4 b/target/linux/mvebu/cortexa53/config-5.4
+index d9c4714..c8aefc8 100644
+--- a/target/linux/mvebu/cortexa53/config-5.4
++++ b/target/linux/mvebu/cortexa53/config-5.4
+@@ -87,6 +87,8 @@ CONFIG_ARM64_VA_BITS_39=y
+ # CONFIG_ARM64_VA_BITS_48 is not set
+ # CONFIG_ARM64_VHE is not set
+ CONFIG_ARMADA_37XX_CLK=y
++CONFIG_ARMADA_37XX_RWTM_MBOX=y
++CONFIG_ARMADA_37XX_WATCHDOG=y
+ CONFIG_ARMADA_AP806_SYSCON=y
+ CONFIG_ARMADA_AP_CP_HELPER=y
+ CONFIG_ARMADA_CP110_SYSCON=y
+@@ -134,6 +136,7 @@ CONFIG_GENERIC_CSUM=y
+ CONFIG_GENERIC_GETTIMEOFDAY=y
+ CONFIG_GENERIC_PINCONF=y
+ CONFIG_GENERIC_TIME_VSYSCALL=y
++CONFIG_GPIO_MOXTET=y
+ CONFIG_HAVE_ALIGNED_STRUCT_PAGE=y
+ CONFIG_HAVE_ARCH_HUGE_VMAP=y
+ CONFIG_HAVE_ARCH_JUMP_LABEL_RELATIVE=y
+@@ -156,6 +159,8 @@ CONFIG_HAVE_PATA_PLATFORM=y
+ CONFIG_HAVE_RCU_TABLE_FREE=y
+ CONFIG_HOLES_IN_ZONE=y
+ # CONFIG_HUGETLBFS is not set
++CONFIG_I2C_PXA=y
++# CONFIG_I2C_PXA_SLAVE is not set
+ CONFIG_ILLEGAL_POINTER_VALUE=0xdead000000000000
+ CONFIG_INLINE_READ_LOCK=y
+ CONFIG_INLINE_READ_LOCK_BH=y
+@@ -179,10 +184,16 @@ CONFIG_INLINE_WRITE_UNLOCK_BH=y
+ CONFIG_INLINE_WRITE_UNLOCK_IRQRESTORE=y
+ # CONFIG_IONIC is not set
+ CONFIG_KASAN_STACK=1
++CONFIG_MAILBOX=y
++# CONFIG_MAILBOX_TEST is not set
+ # CONFIG_MEMORY_HOTPLUG is not set
+ CONFIG_MFD_SYSCON=y
+ CONFIG_MMC_SDHCI_XENON=y
+ CONFIG_MODULES_USE_ELF_RELA=y
++CONFIG_MOXTET=y
++CONFIG_MTD_M25P80=y
++CONFIG_MTD_SPI_NOR=y
++CONFIG_MTD_SPI_NOR_USE_4K_SECTORS=y
+ CONFIG_MVEBU_GICP=y
+ CONFIG_MVEBU_ICU=y
+ CONFIG_MVEBU_ODMI=y
+@@ -209,6 +220,7 @@ CONFIG_QUEUED_SPINLOCKS=y
+ # CONFIG_RANDOMIZE_BASE is not set
+ CONFIG_REGULATOR_GPIO=y
+ CONFIG_RODATA_FULL_DEFAULT_ENABLED=y
++CONFIG_RTC_DRV_DS1307=y
+ CONFIG_SERIAL_8250_FSL=y
+ # CONFIG_SERIAL_AMBA_PL011 is not set
+ CONFIG_SPARSEMEM=y
+@@ -221,6 +233,7 @@ CONFIG_SWIOTLB=y
+ CONFIG_SYSCTL_EXCEPTION_TRACE=y
+ CONFIG_SYS_SUPPORTS_HUGETLBFS=y
+ CONFIG_THREAD_INFO_IN_TASK=y
++CONFIG_TURRIS_MOX_RWTM=y
+ CONFIG_UBSAN_ALIGNMENT=y
+ CONFIG_UNMAP_KERNEL_AT_EL0=y
+ CONFIG_VMAP_STACK=y
+diff --git a/target/linux/mvebu/image/cortexa53.mk b/target/linux/mvebu/image/cortexa53.mk
+index ff8f2c0..0ed004a 100644
+--- a/target/linux/mvebu/image/cortexa53.mk
++++ b/target/linux/mvebu/image/cortexa53.mk
+@@ -1,3 +1,15 @@
++define Device/cznic-mox
++  KERNEL_NAME := Image dtbs
++  KERNEL := kernel-bin
++  DEVICE_VENDOR := CZ.NIC
++  DEVICE_MODEL := Turris MOX
++  DEVICE_DTS := armada-3720-turris-mox
++  DEVICE_PACKAGES := kmod-usb2
++  DEVICE_DTS_DIR := $(DTS_DIR)/marvell
++  SUPPORTED_DEVICES := cznic,mox
++endef
++TARGET_DEVICES += cznic-mox
++
+ define Device/glinet_gl-mv1000
+   $(call Device/Default-arm64)
+   DEVICE_VENDOR := GL.iNet
+diff --git a/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch b/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
+new file mode 100644
+index 0000000..a2f4416
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
+@@ -0,0 +1,33 @@
++From 3bb12f25b9be5f79d270b5f05b8a9b746b45bfa1 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Thu, 30 Apr 2020 00:05:10 +0200
++Subject: [PATCH] arm64: dts: armada-3720-turris-mox: forbid SDR104 on SDIO
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Use sdhci-caps-mask to forbid SDR104 mode on the SDIO capable SDHCI
++controller. Otherwise the device cannot pass electromagnetic
++interference certifications.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++index 5f350cc71a2f..9dfba76678fa 100644
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
+++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++@@ -171,6 +171,8 @@
++ 	marvell,pad-type = "sd";
++ 	vqmmc-supply = <&vsdio_reg>;
++ 	mmc-pwrseq = <&sdhci1_pwrseq>;
+++	/* forbid SDR104 */
+++	sdhci-caps-mask = <0x2 0x0>;
++ 	status = "okay";
++ };
++ 
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch b/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
+new file mode 100644
+index 0000000..3e16e9d
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
+@@ -0,0 +1,34 @@
++From 444b54cc3d270639b62bd82e55003e2cd142eb3c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 6 May 2020 21:25:51 +0200
++Subject: [PATCH] arm64: dts: armada-3720-turris-mox: fix SFP binding
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The sfp compatible should be 'sff,sfp', not 'sff,sfp+'. We used patched
++kernel where the latter was working.
++
++Fixes: 7109d817db2e ("arm64: dts: marvell: add DTS for Turris Mox")
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Cc: Gregory CLEMENT <gregory.clement@bootlin.com>
++---
++ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++index bb42d1e6a4e9..6a2ec6625880 100644
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
+++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++@@ -95,7 +95,7 @@ sdhci1_pwrseq: sdhci1-pwrseq {
++ 	};
++ 
++ 	sfp: sfp {
++-		compatible = "sff,sfp+";
+++		compatible = "sff,sfp";
++ 		i2c-bus = <&i2c0>;
++ 		los-gpio = <&moxtet_sfp 0 GPIO_ACTIVE_HIGH>;
++ 		tx-fault-gpio = <&moxtet_sfp 1 GPIO_ACTIVE_HIGH>;
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
+new file mode 100644
+index 0000000..2675558
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
+@@ -0,0 +1,159 @@
++From 2cce7cc15a531c2e7c708040dc5aab269e8bb543 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 29 Apr 2020 19:11:48 +0200
++Subject: [PATCH] firmware: turris-mox-rwtm: support ECDSA signatures
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The firmware on Turris MOX secure processor also offers signing messages
++with ECDSA with the private key burned into OTP. This patch adds support
++for this.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/firmware/turris-mox-rwtm.c | 108 ++++++++++++++++++++++++++---
++ 1 file changed, 100 insertions(+), 8 deletions(-)
++
++diff --git a/drivers/firmware/turris-mox-rwtm.c b/drivers/firmware/turris-mox-rwtm.c
++index 72be58960e54..d2bf8cd624ac 100644
++--- a/drivers/firmware/turris-mox-rwtm.c
+++++ b/drivers/firmware/turris-mox-rwtm.c
++@@ -69,6 +69,10 @@ struct mox_rwtm {
++ 	/* public key burned in eFuse */
++ 	int has_pubkey;
++ 	u8 pubkey[135];
+++
+++	/* signature process */
+++	u32 last_sig[34];
+++	int last_sig_done;
++ };
++ 
++ struct mox_kobject {
++@@ -132,17 +136,93 @@ MOX_ATTR_RO(mac_address1, "%pM\n", board_info);
++ MOX_ATTR_RO(mac_address2, "%pM\n", board_info);
++ MOX_ATTR_RO(pubkey, "%s\n", pubkey);
++ 
++-static int mox_get_status(enum mbox_cmd cmd, u32 retval)
+++static ssize_t
+++do_sign_show(struct kobject *kobj, struct kobj_attribute *a, char *buf)
++ {
++-	if (MBOX_STS_CMD(retval) != cmd ||
++-	    MBOX_STS_ERROR(retval) != MBOX_STS_SUCCESS)
++-		return -EIO;
++-	else if (MBOX_STS_ERROR(retval) == MBOX_STS_FAIL)
++-		return -(int)MBOX_STS_VALUE(retval);
++-	else
++-		return MBOX_STS_VALUE(retval);
+++	struct mox_rwtm *rwtm = to_rwtm(kobj);
+++
+++	if (!rwtm->last_sig_done)
+++		return -ENODATA;
+++
+++	rwtm->last_sig_done = 0;
+++	memcpy(buf, rwtm->last_sig, 136);
+++
+++	/* 2 arrays of 17 32-bit words are 136 bytes */
+++	return 136;
+++}
+++
+++static ssize_t
+++do_sign_store(struct kobject *kobj, struct kobj_attribute *a, const char *buf,
+++	      size_t count)
+++{
+++	struct mox_rwtm *rwtm = to_rwtm(kobj);
+++	struct armada_37xx_rwtm_rx_msg *reply = &rwtm->reply;
+++	struct armada_37xx_rwtm_tx_msg msg;
+++	int ret;
+++
+++	/* the input is a SHA-512 hash, so exactly 64 bytes have to be read */
+++	if (count != 64)
+++		return -EINVAL;
+++
+++	/* if last result is not zero user has not read that information yet */
+++	if (rwtm->last_sig_done)
+++		return -EBUSY;
+++
+++	if (!mutex_trylock(&rwtm->busy))
+++		return -EBUSY;
+++
+++	/*
+++	 * Here we have to send:
+++	 *   1. Address of the input to sign.
+++	 *      The input is an array of 17 32-bit words, the first (most
+++	 *      significat) is 0, the rest 16 words are copied from the SHA-512
+++	 *      hash given by the user and converted from BE to LE.
+++	 *   2. Address of the buffer where ECDSA signature value R shall be
+++	 *      stored by the rWTM firmware.
+++	 *   3. Address of the buffer where ECDSA signature value S shall be
+++	 *      stored by the rWTM firmware.
+++	 */
+++	memset(rwtm->buf, 0, 4);
+++	memcpy(rwtm->buf + 4, buf, 64);
+++	be32_to_cpu_array(rwtm->buf, rwtm->buf, 17);
+++
+++	msg.command = MBOX_CMD_SIGN;
+++	msg.args[0] = 1;
+++	msg.args[1] = rwtm->buf_phys;
+++	msg.args[2] = rwtm->buf_phys + 68;
+++	msg.args[3] = rwtm->buf_phys + 2 * 68;
+++	ret = mbox_send_message(rwtm->mbox, &msg);
+++	if (ret < 0)
+++		goto unlock_mutex;
+++
+++	ret = wait_for_completion_interruptible(&rwtm->cmd_done);
+++	if (ret < 0)
+++		goto unlock_mutex;
+++
+++	ret = MBOX_STS_VALUE(reply->retval);
+++	if (MBOX_STS_ERROR(reply->retval) != MBOX_STS_SUCCESS)
+++		goto unlock_mutex;
+++
+++	/*
+++	 * Here we read the R and S values of the ECDSA signature
+++	 * computed by the rWTM firmware and convert their words from
+++	 * LE to BE.
+++	 */
+++	memcpy(rwtm->last_sig, rwtm->buf + 68, 136);
+++	cpu_to_be32_array(rwtm->last_sig, rwtm->last_sig, 34);
+++	rwtm->last_sig_done = 1;
+++
+++	mutex_unlock(&rwtm->busy);
+++	return count;
+++unlock_mutex:
+++	mutex_unlock(&rwtm->busy);
+++	return ret;
++ }
++ 
+++/* only root should be able to sign */
+++static struct kobj_attribute mox_attr_do_sign =
+++	__ATTR(do_sign, 0600, do_sign_show, do_sign_store);
+++
++ static const struct attribute *mox_rwtm_attrs[] = {
++ 	&mox_attr_serial_number.attr,
++ 	&mox_attr_board_version.attr,
++@@ -150,9 +230,21 @@ static const struct attribute *mox_rwtm_attrs[] = {
++ 	&mox_attr_mac_address1.attr,
++ 	&mox_attr_mac_address2.attr,
++ 	&mox_attr_pubkey.attr,
+++	&mox_attr_do_sign.attr,
++ 	NULL
++ };
++ 
+++static int mox_get_status(enum mbox_cmd cmd, u32 retval)
+++{
+++	if (MBOX_STS_CMD(retval) != cmd ||
+++	    MBOX_STS_ERROR(retval) != MBOX_STS_SUCCESS)
+++		return -EIO;
+++	else if (MBOX_STS_ERROR(retval) == MBOX_STS_FAIL)
+++		return -(int)MBOX_STS_VALUE(retval);
+++	else
+++		return MBOX_STS_VALUE(retval);
+++}
+++
++ static void mox_rwtm_rx_callback(struct mbox_client *cl, void *data)
++ {
++ 	struct mox_rwtm *rwtm = dev_get_drvdata(cl->dev);
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch b/target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
+new file mode 100644
+index 0000000..8adaa26
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
+@@ -0,0 +1,38 @@
++From ef32204560c1542862471ca3e27414b03ba1ef8b Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 29 Apr 2020 19:13:57 +0200
++Subject: [PATCH] arm64: dts: armada-3720-turris-mox: add firmware node
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add the node representing the firmware running on the secure processor.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Signed-off-by: Gregory CLEMENT <gregory.clement@bootlin.com>
++---
++ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 8 ++++++++
++ 1 file changed, 8 insertions(+)
++
++diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++index 5f350cc71a2f..bb42d1e6a4e9 100644
++--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
+++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
++@@ -106,6 +106,14 @@
++ 		/* enabled by U-Boot if SFP module is present */
++ 		status = "disabled";
++ 	};
+++
+++	firmware {
+++		turris-mox-rwtm {
+++			compatible = "cznic,turris-mox-rwtm";
+++			mboxes = <&rwtm 0>;
+++			status = "okay";
+++		};
+++	};
++ };
++ 
++ &i2c0 {
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9905-mmc-sdhci-xenon-fix-annoying-1.8V-regulator-warning.patch b/target/linux/mvebu/patches-5.4/9905-mmc-sdhci-xenon-fix-annoying-1.8V-regulator-warning.patch
+new file mode 100644
+index 0000000..409c08e
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9905-mmc-sdhci-xenon-fix-annoying-1.8V-regulator-warning.patch
+@@ -0,0 +1,57 @@
++From 6799011b6d8461aea453ea08c61c9a66c63e6211 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Mon, 20 Apr 2020 10:04:44 +0200
++Subject: [PATCH] mmc: sdhci-xenon: fix annoying 1.8V regulator warning
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++For some reason the Host Control2 register of the Xenon SDHCI controller
++sometimes reports the bit representing 1.8V signaling as 0 when read
++after it was written as 1. Subsequent read reports 1.
++
++This causes the sdhci_start_signal_voltage_switch function to report
++  1.8V regulator output did not become stable
++
++When CONFIG_PM is enabled, the host is suspended and resumend many
++times, and in each resume the switch to 1.8V is called, and so the
++kernel log reports this message annoyingly often.
++
++Do an empty read of the Host Control2 register in Xenon's
++.voltage_switch method to circumvent this.
++
++This patch fixes this particular problem on Turris MOX.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Fixes: 8d876bf472db ("mmc: sdhci-xenon: wait 5ms after set 1.8V...")
++Cc: stable@vger.kernel.org # v4.16+
++Link: https://lore.kernel.org/r/20200420080444.25242-1-marek.behun@nic.cz
++Signed-off-by: Ulf Hansson <ulf.hansson@linaro.org>
++---
++ drivers/mmc/host/sdhci-xenon.c | 10 ++++++++++
++ 1 file changed, 10 insertions(+)
++
++diff --git a/drivers/mmc/host/sdhci-xenon.c b/drivers/mmc/host/sdhci-xenon.c
++index 1dea1ba66f7b..4703cd540c7f 100644
++--- a/drivers/mmc/host/sdhci-xenon.c
+++++ b/drivers/mmc/host/sdhci-xenon.c
++@@ -235,6 +235,16 @@ static void xenon_voltage_switch(struct sdhci_host *host)
++ {
++ 	/* Wait for 5ms after set 1.8V signal enable bit */
++ 	usleep_range(5000, 5500);
+++
+++	/*
+++	 * For some reason the controller's Host Control2 register reports
+++	 * the bit representing 1.8V signaling as 0 when read after it was
+++	 * written as 1. Subsequent read reports 1.
+++	 *
+++	 * Since this may cause some issues, do an empty read of the Host
+++	 * Control2 register here to circumvent this.
+++	 */
+++	sdhci_readw(host, SDHCI_HOST_CONTROL2);
++ }
++ 
++ static const struct sdhci_ops sdhci_xenon_ops = {
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9906-PCI-aardvark-Train-link-immediately-after-enabling-t.patch b/target/linux/mvebu/patches-5.4/9906-PCI-aardvark-Train-link-immediately-after-enabling-t.patch
+new file mode 100644
+index 0000000..5bc3bca
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9906-PCI-aardvark-Train-link-immediately-after-enabling-t.patch
+@@ -0,0 +1,61 @@
++From 735453eaf61d778adcb5809688f8f0e9dfbb2c9b Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Sun, 19 Apr 2020 23:33:23 +0200
++Subject: [PATCH] PCI: aardvark: Train link immediately after enabling
++ training
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Adding even 100ms (PCI_PM_D3COLD_WAIT) delay between enabling link
++training and starting link training causes detection issues with some
++buggy cards (such as Compex WLE900VX).
++
++Move the code which enables link training immediately before the one
++which starts link traning.
++
++This fixes detection issues of Compex WLE900VX card on Turris MOX after
++cold boot.
++
++Fixes: f4c7d053d7f7 ("PCI: aardvark: Wait for endpoint to be ready...")
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 15 +++++++++------
++ 1 file changed, 9 insertions(+), 6 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 97245e076548..8beb474ea5b6 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -299,11 +299,6 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	reg |= LANE_COUNT_1;
++ 	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
++ 
++-	/* Enable link training */
++-	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
++-	reg |= LINK_TRAINING_EN;
++-	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
++-
++ 	/* Enable MSI */
++ 	reg = advk_readl(pcie, PCIE_CORE_CTRL2_REG);
++ 	reg |= PCIE_CORE_CTRL2_MSI_ENABLE;
++@@ -337,7 +332,15 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	reg |= PIO_CTRL_ADDR_WIN_DISABLE;
++ 	advk_writel(pcie, reg, PIO_CTRL);
++ 
++-	/* Start link training */
+++	/* Enable link training */
+++	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
+++	reg |= LINK_TRAINING_EN;
+++	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
+++
+++	/*
+++	 * Start link training immediately after enabling it.
+++	 * This solves problems for some buggy cards.
+++	 */
++ 	reg = advk_readl(pcie, PCIE_CORE_LINK_CTRL_STAT_REG);
++ 	reg |= PCIE_CORE_LINK_TRAINING;
++ 	advk_writel(pcie, reg, PCIE_CORE_LINK_CTRL_STAT_REG);
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9907-PCI-aardvark-Don-t-blindly-enable-ASPM-L0s-and-don-t.patch b/target/linux/mvebu/patches-5.4/9907-PCI-aardvark-Don-t-blindly-enable-ASPM-L0s-and-don-t.patch
+new file mode 100644
+index 0000000..29ea549
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9907-PCI-aardvark-Don-t-blindly-enable-ASPM-L0s-and-don-t.patch
+@@ -0,0 +1,59 @@
++From ed471a9347c305020d73ef4ffa902a2a45ab4d3f Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Sun, 19 Apr 2020 23:37:13 +0200
++Subject: [PATCH] PCI: aardvark: Don't blindly enable ASPM L0s and don't
++ write to read-only register
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Trying to change Link Status register does not have any effect as this
++is a read-only register. Trying to overwrite bits for Negotiated Link
++Width does not make sense.
++
++In future proper change of link width can be done via Lane Count Select
++bits in PCIe Control 0 register.
++
++Trying to unconditionally enable ASPM L0s via ASPM Control bits in Link
++Control register is wrong. There should be at least some detection if
++endpoint supports L0s as isn't mandatory.
++
++Moreover ASPM Control bits in Link Control register are controlled by
++pcie/aspm.c code which sets it according to system ASPM settings,
++immediately after aardvark driver probes. So setting these bits by
++aardvark driver has no long running effect.
++
++Remove code which touches ASPM L0s bits from this driver and let
++kernel's ASPM implementation to set ASPM state properly.
++
++Some users are reporting issues that this code is problematic for some
++Intel wifi cards and removing it fixes them, see e.g.:
++https://bugzilla.kernel.org/show_bug.cgi?id=196339
++
++If problems with Intel wifi cards occur even after this commit, then
++pcie/aspm.c code could be modified / hooked to not enable ASPM L0s state
++for affected problematic cards.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 4 ----
++ 1 file changed, 4 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 8beb474ea5b6..f3e52d608f85 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -347,10 +347,6 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 
++ 	advk_pcie_wait_for_link(pcie);
++ 
++-	reg = PCIE_CORE_LINK_L0S_ENTRY |
++-		(1 << PCIE_CORE_LINK_WIDTH_SHIFT);
++-	advk_writel(pcie, reg, PCIE_CORE_LINK_CTRL_STAT_REG);
++-
++ 	reg = advk_readl(pcie, PCIE_CORE_CMD_STATUS_REG);
++ 	reg |= PCIE_CORE_CMD_MEM_ACCESS_EN |
++ 		PCIE_CORE_CMD_IO_ACCESS_EN |
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch b/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
+new file mode 100644
+index 0000000..c0e1d31
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
+@@ -0,0 +1,32 @@
++From 57f57d71dd25cf06e6255fdae946682c07d90469 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Fri, 24 Apr 2020 12:20:30 +0200
++Subject: [PATCH] PCI: of: Zero max-link-speed value is invalid
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Interpret zero value of max-link-speed property as invalid,
++as the device tree bindings documentation specifies.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/of.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/drivers/pci/of.c b/drivers/pci/of.c
++index 36891e7deee3..4080ad884612 100644
++--- a/drivers/pci/of.c
+++++ b/drivers/pci/of.c
++@@ -547,7 +547,7 @@ int of_pci_get_max_link_speed(struct device_node *node)
++ 	u32 max_link_speed;
++ 
++ 	if (of_property_read_u32(node, "max-link-speed", &max_link_speed) ||
++-	    max_link_speed > 4)
+++	    max_link_speed == 0 || max_link_speed > 4)
++ 		return -EINVAL;
++ 
++ 	return max_link_speed;
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9909-PCI-aardvark-Improve-link-training.patch b/target/linux/mvebu/patches-5.4/9909-PCI-aardvark-Improve-link-training.patch
+new file mode 100644
+index 0000000..40a7488
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9909-PCI-aardvark-Improve-link-training.patch
+@@ -0,0 +1,208 @@
++From 1b8c2d9e99974e160fed5e17c43bd85d022bd684 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Sun, 19 Apr 2020 23:45:24 +0200
++Subject: [PATCH] PCI: aardvark: Improve link training
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Currently the aardvark driver trains link in PCIe gen2 mode. This may
++cause some buggy gen1 cards (such as Compex WLE900VX) to be unstable or
++even not detected. Moreover when ASPM code tries to retrain link second
++time, these cards may stop responding and link goes down. If gen1 is
++used this does not happen.
++
++Unconditionally forcing gen1 is not a good solution since it may have
++performance impact on gen2 cards.
++
++To overcome this, read 'max-link-speed' property (as defined in PCI
++device tree bindings) and use this as max gen mode. Then iteratively try
++link training at this mode or lower until successful. After successful
++link training choose final controller gen based on Negotiated Link Speed
++from Link Status register, which should match card speed.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/pci/controller/pci-aardvark.c | 114 ++++++++++++++++++++------
++ 1 file changed, 89 insertions(+), 25 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index f3e52d608f85..dea6d591465f 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -39,6 +39,7 @@
++ #define PCIE_CORE_LINK_CTRL_STAT_REG				0xd0
++ #define     PCIE_CORE_LINK_L0S_ENTRY				BIT(0)
++ #define     PCIE_CORE_LINK_TRAINING				BIT(5)
+++#define     PCIE_CORE_LINK_SPEED_SHIFT				16
++ #define     PCIE_CORE_LINK_WIDTH_SHIFT				20
++ #define PCIE_CORE_ERR_CAPCTL_REG				0x118
++ #define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX			BIT(5)
++@@ -200,6 +201,7 @@ struct advk_pcie {
++ 	struct mutex msi_used_lock;
++ 	u16 msi_msg;
++ 	int root_bus_nr;
+++	int link_gen;
++ 	struct pci_bridge_emul bridge;
++ };
++ 
++@@ -224,20 +226,16 @@ static int advk_pcie_link_up(struct advk_pcie *pcie)
++ 
++ static int advk_pcie_wait_for_link(struct advk_pcie *pcie)
++ {
++-	struct device *dev = &pcie->pdev->dev;
++ 	int retries;
++ 
++ 	/* check if the link is up or not */
++ 	for (retries = 0; retries < LINK_WAIT_MAX_RETRIES; retries++) {
++-		if (advk_pcie_link_up(pcie)) {
++-			dev_info(dev, "link up\n");
+++		if (advk_pcie_link_up(pcie))
++ 			return 0;
++-		}
++ 
++ 		usleep_range(LINK_WAIT_USLEEP_MIN, LINK_WAIT_USLEEP_MAX);
++ 	}
++ 
++-	dev_err(dev, "link never came up\n");
++ 	return -ETIMEDOUT;
++ }
++ 
++@@ -252,6 +250,85 @@ static void advk_pcie_wait_for_retrain(struct advk_pcie *pcie)
++ 	}
++ }
++ 
+++static int advk_pcie_train_at_gen(struct advk_pcie *pcie, int gen)
+++{
+++	int ret, neg_gen;
+++	u32 reg;
+++
+++	/* Setup link speed */
+++	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
+++	reg &= ~PCIE_GEN_SEL_MSK;
+++	if (gen == 3)
+++		reg |= SPEED_GEN_3;
+++	else if (gen == 2)
+++		reg |= SPEED_GEN_2;
+++	else
+++		reg |= SPEED_GEN_1;
+++	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
+++
+++	/*
+++	 * Enable link training. This is not needed in every call to this
+++	 * function, just once suffices, but it does not break anything either.
+++	 */
+++	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
+++	reg |= LINK_TRAINING_EN;
+++	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
+++
+++	/*
+++	 * Start link training immediately after enabling it.
+++	 * This solves problems for some buggy cards.
+++	 */
+++	reg = advk_readl(pcie, PCIE_CORE_LINK_CTRL_STAT_REG);
+++	reg |= PCIE_CORE_LINK_TRAINING;
+++	advk_writel(pcie, reg, PCIE_CORE_LINK_CTRL_STAT_REG);
+++
+++	ret = advk_pcie_wait_for_link(pcie);
+++	if (ret)
+++		return ret;
+++
+++	reg = advk_readl(pcie, PCIE_CORE_LINK_CTRL_STAT_REG);
+++	neg_gen = (reg >> PCIE_CORE_LINK_SPEED_SHIFT) & 0xf;
+++
+++	return neg_gen;
+++}
+++
+++static void advk_pcie_train_link(struct advk_pcie *pcie)
+++{
+++	struct device *dev = &pcie->pdev->dev;
+++	int neg_gen = -1, gen;
+++
+++	/*
+++	 * Try link training at link gen specified by device tree property
+++	 * 'max-link-speed'. If this fails, iteratively train at lower gen.
+++	 */
+++	for (gen = pcie->link_gen; gen > 0; --gen) {
+++		neg_gen = advk_pcie_train_at_gen(pcie, gen);
+++		if (neg_gen > 0)
+++			break;
+++	}
+++
+++	if (neg_gen < 0)
+++		goto err;
+++
+++	/*
+++	 * After successful training if negotiated gen is lower than requested,
+++	 * train again on negotiated gen. This solves some stability issues for
+++	 * some buggy gen1 cards.
+++	 */
+++	if (neg_gen < gen) {
+++		gen = neg_gen;
+++		neg_gen = advk_pcie_train_at_gen(pcie, gen);
+++	}
+++
+++	if (neg_gen == gen) {
+++		dev_info(dev, "link up at gen %i\n", gen);
+++		return;
+++	}
+++
+++err:
+++	dev_err(dev, "link never came up\n");
+++}
+++
++ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ {
++ 	u32 reg;
++@@ -287,12 +364,6 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 		PCIE_CORE_CTRL2_TD_ENABLE;
++ 	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
++ 
++-	/* Set GEN2 */
++-	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
++-	reg &= ~PCIE_GEN_SEL_MSK;
++-	reg |= SPEED_GEN_2;
++-	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
++-
++ 	/* Set lane X1 */
++ 	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
++ 	reg &= ~LANE_CNT_MSK;
++@@ -332,20 +403,7 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	reg |= PIO_CTRL_ADDR_WIN_DISABLE;
++ 	advk_writel(pcie, reg, PIO_CTRL);
++ 
++-	/* Enable link training */
++-	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
++-	reg |= LINK_TRAINING_EN;
++-	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
++-
++-	/*
++-	 * Start link training immediately after enabling it.
++-	 * This solves problems for some buggy cards.
++-	 */
++-	reg = advk_readl(pcie, PCIE_CORE_LINK_CTRL_STAT_REG);
++-	reg |= PCIE_CORE_LINK_TRAINING;
++-	advk_writel(pcie, reg, PCIE_CORE_LINK_CTRL_STAT_REG);
++-
++-	advk_pcie_wait_for_link(pcie);
+++	advk_pcie_train_link(pcie);
++ 
++ 	reg = advk_readl(pcie, PCIE_CORE_CMD_STATUS_REG);
++ 	reg |= PCIE_CORE_CMD_MEM_ACCESS_EN |
++@@ -1028,6 +1086,12 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 		return ret;
++ 	}
++ 
+++	ret = of_pci_get_max_link_speed(dev->of_node);
+++	if (ret <= 0 || ret > 3)
+++		pcie->link_gen = 3;
+++	else
+++		pcie->link_gen = ret;
+++
++ 	advk_pcie_setup_hw(pcie);
++ 
++ 	advk_sw_pci_bridge_init(pcie);
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9910-PCI-aardvark-Issue-PERST-via-GPIO.patch b/target/linux/mvebu/patches-5.4/9910-PCI-aardvark-Issue-PERST-via-GPIO.patch
+new file mode 100644
+index 0000000..d52d6a9
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9910-PCI-aardvark-Issue-PERST-via-GPIO.patch
+@@ -0,0 +1,114 @@
++From 15a78b11de5728ce81fed094a9e67731bc1c5f31 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Mon, 20 Apr 2020 00:18:52 +0200
++Subject: [PATCH] PCI: aardvark: Issue PERST via GPIO
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add support for issuing PERST via GPIO specified in 'reset-gpios'
++property (as described in PCI device tree bindings).
++
++Some buggy cards (e.g. Compex WLE900VX or WLE1216) are not detected
++after reboot when PERST is not issued during driver initialization.
++
++If bootloader already enabled link training then issuing PERST has no
++effect for some buggy cards (e.g. Compex WLE900VX) and these cards are
++not detected. We therefore clear the LINK_TRAINING_EN register before.
++
++It was observed that Compex WLE900VX card needs to be in PERST reset
++for at least 10ms if bootloader enabled link training.
++
++Tested on Turris MOX.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 40 +++++++++++++++++++++++++++
++ 1 file changed, 40 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index dea6d591465f..6e9a71e2bb52 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -9,6 +9,7 @@
++  */
++ 
++ #include <linux/delay.h>
+++#include <linux/gpio.h>
++ #include <linux/interrupt.h>
++ #include <linux/irq.h>
++ #include <linux/irqdomain.h>
++@@ -17,6 +18,7 @@
++ #include <linux/init.h>
++ #include <linux/platform_device.h>
++ #include <linux/of_address.h>
+++#include <linux/of_gpio.h>
++ #include <linux/of_pci.h>
++ 
++ #include "../pci.h"
++@@ -203,6 +205,7 @@ struct advk_pcie {
++ 	int root_bus_nr;
++ 	int link_gen;
++ 	struct pci_bridge_emul bridge;
+++	struct gpio_desc *reset_gpio;
++ };
++ 
++ static inline void advk_writel(struct advk_pcie *pcie, u32 val, u64 reg)
++@@ -329,10 +332,31 @@ static void advk_pcie_train_link(struct advk_pcie *pcie)
++ 	dev_err(dev, "link never came up\n");
++ }
++ 
+++static void advk_pcie_issue_perst(struct advk_pcie *pcie)
+++{
+++	u32 reg;
+++
+++	if (!pcie->reset_gpio)
+++		return;
+++
+++	/* PERST does not work for some cards when link training is enabled */
+++	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
+++	reg &= ~LINK_TRAINING_EN;
+++	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
+++
+++	/* 10ms delay is needed for some cards */
+++	dev_info(&pcie->pdev->dev, "issuing PERST via reset GPIO for 10ms\n");
+++	gpiod_set_value_cansleep(pcie->reset_gpio, 1);
+++	usleep_range(10000, 11000);
+++	gpiod_set_value_cansleep(pcie->reset_gpio, 0);
+++}
+++
++ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ {
++ 	u32 reg;
++ 
+++	advk_pcie_issue_perst(pcie);
+++
++ 	/* Set to Direct mode */
++ 	reg = advk_readl(pcie, CTRL_CONFIG_REG);
++ 	reg &= ~(CTRL_MODE_MASK << CTRL_MODE_SHIFT);
++@@ -1086,6 +1110,22 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 		return ret;
++ 	}
++ 
+++	pcie->reset_gpio = devm_gpiod_get_from_of_node(dev, dev->of_node,
+++						       "reset-gpios", 0,
+++						       GPIOD_OUT_LOW,
+++						       "pcie1-reset");
+++	ret = PTR_ERR_OR_ZERO(pcie->reset_gpio);
+++	if (ret) {
+++		if (ret == -ENOENT) {
+++			pcie->reset_gpio = NULL;
+++		} else {
+++			if (ret != -EPROBE_DEFER)
+++				dev_err(dev, "Failed to get reset-gpio: %i\n",
+++					ret);
+++			return ret;
+++		}
+++	}
+++
++ 	ret = of_pci_get_max_link_speed(dev->of_node);
++ 	if (ret <= 0 || ret > 3)
++ 		pcie->link_gen = 3;
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9911-PCI-aardvark-Add-PHY-support.patch b/target/linux/mvebu/patches-5.4/9911-PCI-aardvark-Add-PHY-support.patch
+new file mode 100644
+index 0000000..21f2539
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9911-PCI-aardvark-Add-PHY-support.patch
+@@ -0,0 +1,152 @@
++From 045fd525801987b5fa58b7dae0ee36cde24bd788 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Mon, 20 Apr 2020 00:34:36 +0200
++Subject: [PATCH] PCI: aardvark: Add PHY support
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++With recent proposed changes for U-Boot it is possible that bootloader
++won't initialize the PHY for this controller (currently the PHY is
++initialized regardless whether PCI is used in U-Boot, but with these
++proposed changes the PHY is initialized only on request).
++
++Since the mvebu-a3700-comphy driver by Miquèl Raynal supports enabling
++PCIe PHY, and since Linux' functionality should be independent on what
++bootloader did, add code for enabling generic PHY if found in device OF
++node.
++
++The mvebu-a3700-comphy driver does PHY powering via SMC calls to ARM
++Trusted Firmware. The corresponding code in ARM Trusted Firmware skips
++one register write which U-Boot does not: step 7 ("Enable TX"), see [1].
++Instead ARM Trusted Firmware expects PCIe driver to do this step,
++probably because the register is in PCIe controller address space,
++instead of PHY address space. We therefore add this step into the
++advk_pcie_setup_hw function.
++
++[1] https://git.trustedfirmware.org/TF-A/trusted-firmware-a.git/tree/drivers/marvell/comphy/phy-comphy-3700.c?h=v2.3-rc2#n836
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Cc: Miquèl Raynal <miquel.raynal@bootlin.com>
++---
++ drivers/pci/controller/pci-aardvark.c | 69 +++++++++++++++++++++++++++
++ 1 file changed, 69 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 6e9a71e2bb52..921c443d632d 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -16,6 +16,7 @@
++ #include <linux/kernel.h>
++ #include <linux/pci.h>
++ #include <linux/init.h>
+++#include <linux/phy/phy.h>
++ #include <linux/platform_device.h>
++ #include <linux/of_address.h>
++ #include <linux/of_gpio.h>
++@@ -103,6 +104,8 @@
++ #define     PCIE_CORE_CTRL2_STRICT_ORDER_ENABLE	BIT(5)
++ #define     PCIE_CORE_CTRL2_OB_WIN_ENABLE	BIT(6)
++ #define     PCIE_CORE_CTRL2_MSI_ENABLE		BIT(10)
+++#define PCIE_CORE_REF_CLK_REG			(CONTROL_BASE_ADDR + 0x14)
+++#define     PCIE_CORE_REF_CLK_TX_ENABLE		BIT(1)
++ #define PCIE_MSG_LOG_REG			(CONTROL_BASE_ADDR + 0x30)
++ #define PCIE_ISR0_REG				(CONTROL_BASE_ADDR + 0x40)
++ #define PCIE_MSG_PM_PME_MASK			BIT(7)
++@@ -206,6 +209,7 @@ struct advk_pcie {
++ 	int link_gen;
++ 	struct pci_bridge_emul bridge;
++ 	struct gpio_desc *reset_gpio;
+++	struct phy *phy;
++ };
++ 
++ static inline void advk_writel(struct advk_pcie *pcie, u32 val, u64 reg)
++@@ -357,6 +361,11 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 
++ 	advk_pcie_issue_perst(pcie);
++ 
+++	/* Enable TX */
+++	reg = advk_readl(pcie, PCIE_CORE_REF_CLK_REG);
+++	reg |= PCIE_CORE_REF_CLK_TX_ENABLE;
+++	advk_writel(pcie, reg, PCIE_CORE_REF_CLK_REG);
+++
++ 	/* Set to Direct mode */
++ 	reg = advk_readl(pcie, CTRL_CONFIG_REG);
++ 	reg &= ~(CTRL_MODE_MASK << CTRL_MODE_SHIFT);
++@@ -1075,6 +1084,62 @@ static int advk_pcie_parse_request_of_pci_ranges(struct advk_pcie *pcie)
++ 	return err;
++ }
++ 
+++static void __maybe_unused advk_pcie_disable_phy(struct advk_pcie *pcie)
+++{
+++	phy_power_off(pcie->phy);
+++	phy_exit(pcie->phy);
+++}
+++
+++static int advk_pcie_enable_phy(struct advk_pcie *pcie)
+++{
+++	int ret;
+++
+++	if (!pcie->phy)
+++		return 0;
+++
+++	ret = phy_init(pcie->phy);
+++	if (ret)
+++		return ret;
+++
+++	ret = phy_set_mode(pcie->phy, PHY_MODE_PCIE);
+++	if (ret) {
+++		phy_exit(pcie->phy);
+++		return ret;
+++	}
+++
+++	ret = phy_power_on(pcie->phy);
+++	if (ret) {
+++		phy_exit(pcie->phy);
+++		return ret;
+++	}
+++
+++	return 0;
+++}
+++
+++static int advk_pcie_setup_phy(struct advk_pcie *pcie)
+++{
+++	struct device *dev = &pcie->pdev->dev;
+++	struct device_node *node = dev->of_node;
+++	int ret = 0;
+++
+++	pcie->phy = devm_of_phy_get(dev, node, NULL);
+++	if (IS_ERR(pcie->phy) && (PTR_ERR(pcie->phy) == -EPROBE_DEFER))
+++		return PTR_ERR(pcie->phy);
+++
+++	/* Old bindings miss the PHY handle */
+++	if (IS_ERR(pcie->phy)) {
+++		dev_warn(dev, "PHY unavailable (%ld)\n", PTR_ERR(pcie->phy));
+++		pcie->phy = NULL;
+++		return 0;
+++	}
+++
+++	ret = advk_pcie_enable_phy(pcie);
+++	if (ret)
+++		dev_err(dev, "Failed to initialize PHY (%d)\n", ret);
+++
+++	return ret;
+++}
+++
++ static int advk_pcie_probe(struct platform_device *pdev)
++ {
++ 	struct device *dev = &pdev->dev;
++@@ -1132,6 +1197,10 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 	else
++ 		pcie->link_gen = ret;
++ 
+++	ret = advk_pcie_setup_phy(pcie);
+++	if (ret)
+++		return ret;
+++
++ 	advk_pcie_setup_hw(pcie);
++ 
++ 	advk_sw_pci_bridge_init(pcie);
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch b/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
+new file mode 100644
+index 0000000..47a9739
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
+@@ -0,0 +1,137 @@
++From ebf692d8fb2608fed2a2a4cb721a92a33d5a9667 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Tue, 5 May 2020 14:22:17 +0200
++Subject: [PATCH] net: dsa: mv88e6xxx: implement phylink AN restart on Serdes
++ PHY for Topaz
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Implement .phylink_mac_an_restart method for Topaz switches for the
++SERDES capable port. For some reason without this when the Topaz is
++connected on Turris MOX in distributed configuration with Peridot,
++Topaz's Serdes doesn't get enabled in phylink_start, although Peridot
++does.
++
++This is implemented in upstream by a superior commit
++a5a6858b793f ("net: dsa: mv88e6xxx: extend phylink to Serdes PHYs")
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c   | 22 ++++++++++++++++++++++
++ drivers/net/dsa/mv88e6xxx/chip.h   |  3 +++
++ drivers/net/dsa/mv88e6xxx/serdes.c | 17 +++++++++++++++++
++ drivers/net/dsa/mv88e6xxx/serdes.h |  1 +
++ 4 files changed, 43 insertions(+)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 6787d560e9e3..33b391376352 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -629,6 +629,25 @@ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++ 		dev_err(ds->dev, "p%d: failed to configure MAC\n", port);
++ }
++ 
+++static void mv88e6xxx_mac_an_restart(struct dsa_switch *ds, int port)
+++{
+++	struct mv88e6xxx_chip *chip = ds->priv;
+++	u8 lane;
+++	int err = 0;
+++
+++	if (!chip->info->ops->serdes_an_restart)
+++		return;
+++
+++	mv88e6xxx_reg_lock(chip);
+++	lane = mv88e6xxx_serdes_get_lane(chip, port);
+++	if (lane)
+++		err = chip->info->ops->serdes_an_restart(chip, port, lane);
+++	mv88e6xxx_reg_unlock(chip);
+++
+++	if (err)
+++		dev_err(chip->dev, "p%d: failed restarting SERDES AN\n", port);
+++}
+++
++ static void mv88e6xxx_mac_link_force(struct dsa_switch *ds, int port, int link)
++ {
++ 	struct mv88e6xxx_chip *chip = ds->priv;
++@@ -3203,6 +3222,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.serdes_an_restart = mv88e6390_serdes_an_restart,
++ 	.serdes_power = mv88e6390_serdes_power,
++ 	.serdes_get_lane = mv88e6341_serdes_get_lane,
++ 	.serdes_irq_mapping = mv88e6390_serdes_irq_mapping,
++@@ -3917,6 +3937,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++ 	.reset = mv88e6352_g1_reset,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.serdes_an_restart = mv88e6390_serdes_an_restart,
++ 	.serdes_power = mv88e6390_serdes_power,
++ 	.serdes_get_lane = mv88e6341_serdes_get_lane,
++ 	.serdes_irq_mapping = mv88e6390_serdes_irq_mapping,
++@@ -4934,6 +4955,7 @@ static const struct dsa_switch_ops mv88e6xxx_switch_ops = {
++ 	.get_tag_protocol	= mv88e6xxx_get_tag_protocol,
++ 	.setup			= mv88e6xxx_setup,
++ 	.phylink_validate	= mv88e6xxx_validate,
+++	.phylink_mac_an_restart = mv88e6xxx_mac_an_restart,
++ 	.phylink_mac_link_state	= mv88e6xxx_link_state,
++ 	.phylink_mac_config	= mv88e6xxx_mac_config,
++ 	.phylink_mac_link_down	= mv88e6xxx_mac_link_down,
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
++index e9b1a1ac9a8e..3adbbf3fd52a 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.h
+++++ b/drivers/net/dsa/mv88e6xxx/chip.h
++@@ -482,6 +482,9 @@ struct mv88e6xxx_ops {
++ 	/* SERDES lane mapping */
++ 	u8 (*serdes_get_lane)(struct mv88e6xxx_chip *chip, int port);
++ 
+++	int (*serdes_an_restart)(struct mv88e6xxx_chip *chip, int port,
+++				 u8 lane);
+++
++ 	/* SERDES interrupt handling */
++ 	unsigned int (*serdes_irq_mapping)(struct mv88e6xxx_chip *chip,
++ 					   int port);
++diff --git a/drivers/net/dsa/mv88e6xxx/serdes.c b/drivers/net/dsa/mv88e6xxx/serdes.c
++index 902feb398746..e28d24076800 100644
++--- a/drivers/net/dsa/mv88e6xxx/serdes.c
+++++ b/drivers/net/dsa/mv88e6xxx/serdes.c
++@@ -423,6 +423,23 @@ int mv88e6390_serdes_power(struct mv88e6xxx_chip *chip, int port, u8 lane,
++ 	return 0;
++ }
++ 
+++int mv88e6390_serdes_an_restart(struct mv88e6xxx_chip *chip, int port, u8 lane)
+++{
+++	u16 val;
+++	int err;
+++
+++	err = mv88e6390_serdes_read(chip, lane, MDIO_MMD_PHYXS,
+++				    MV88E6390_SGMII_CONTROL, &val);
+++	if (err)
+++		return err;
+++
+++	val |= BMCR_ANRESTART;
+++	err = mv88e6390_serdes_write(chip, lane, MDIO_MMD_PHYXS,
+++				     MV88E6390_SGMII_CONTROL, val);
+++
+++	return err;
+++}
+++
++ static void mv88e6390_serdes_irq_link_sgmii(struct mv88e6xxx_chip *chip,
++ 					    int port, u8 lane)
++ {
++diff --git a/drivers/net/dsa/mv88e6xxx/serdes.h b/drivers/net/dsa/mv88e6xxx/serdes.h
++index bd8df36ab537..5994652a9baa 100644
++--- a/drivers/net/dsa/mv88e6xxx/serdes.h
+++++ b/drivers/net/dsa/mv88e6xxx/serdes.h
++@@ -78,6 +78,7 @@ u8 mv88e6341_serdes_get_lane(struct mv88e6xxx_chip *chip, int port);
++ u8 mv88e6352_serdes_get_lane(struct mv88e6xxx_chip *chip, int port);
++ u8 mv88e6390_serdes_get_lane(struct mv88e6xxx_chip *chip, int port);
++ u8 mv88e6390x_serdes_get_lane(struct mv88e6xxx_chip *chip, int port);
+++int mv88e6390_serdes_an_restart(struct mv88e6xxx_chip *chip, int port, u8 lane);
++ unsigned int mv88e6352_serdes_irq_mapping(struct mv88e6xxx_chip *chip,
++ 					  int port);
++ unsigned int mv88e6390_serdes_irq_mapping(struct mv88e6xxx_chip *chip,
++-- 
++2.24.1
++
+diff --git a/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch b/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
+new file mode 100644
+index 0000000..21c4c3c
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
+@@ -0,0 +1,44 @@
++From 2540a6ba05712695b7528cafc6e5f744835fd980 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Mon, 14 Jan 2019 17:00:04 +0100
++Subject: [PATCH] arm64: restart: Armada 3700 restart code
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++This is a bugfix for Turris Mox, do not send to mainline.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ arch/arm64/kernel/process.c | 15 +++++++++++----
++ 1 file changed, 11 insertions(+), 4 deletions(-)
++
++diff --git a/arch/arm64/kernel/process.c b/arch/arm64/kernel/process.c
++index fab013c5ee8c..5749b8ebda2b 100644
++--- a/arch/arm64/kernel/process.c
+++++ b/arch/arm64/kernel/process.c
++@@ -197,10 +197,17 @@ void machine_restart(char *cmd)
++ 		efi_reboot(reboot_mode, NULL);
++ 
++ 	/* Now call the architecture specific reboot code. */
++-	if (arm_pm_restart)
++-		arm_pm_restart(reboot_mode, cmd);
++-	else
++-		do_kernel_restart(cmd);
+++	if (0) {
+++		if (arm_pm_restart)
+++			arm_pm_restart(reboot_mode, cmd);
+++		else
+++			do_kernel_restart(cmd);
+++	} else {
+++		void __iomem *r = ioremap(0xd0013000, 0x1000);
+++		writel(0x1d1e, r + 0x840);
+++		iounmap(r);
+++		mdelay(1000);
+++	}
++ 
++ 	/*
++ 	 * Whoops - the architecture was unable to reboot.
++-- 
++2.24.1
++
+-- 
+2.24.1
+
