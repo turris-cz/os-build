@@ -1,0 +1,44 @@
+From b847bb8c6ead622f2da19f405e56cab237c2f225 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Mon, 18 May 2020 10:05:47 +0200
+Subject: [PATCH] ppp: add sleep for unreliable DSL (PPP) connection
+
+This patch is a hack. It should not be sent to upstream!
+It was added in Turris OS 3.x without any further
+explanation and it seems to help as a connection is established.
+
+More details are included in:
+https://gitlab.labs.nic.cz/turris/turris-build/issues/107
+---
+ package/network/services/ppp/Makefile     | 2 +-
+ package/network/services/ppp/files/ppp.sh | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/package/network/services/ppp/Makefile b/package/network/services/ppp/Makefile
+index d21d1e0438..c600218cab 100644
+--- a/package/network/services/ppp/Makefile
++++ b/package/network/services/ppp/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+ PKG_NAME:=ppp
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL:=https://github.com/paulusmack/ppp
+diff --git a/package/network/services/ppp/files/ppp.sh b/package/network/services/ppp/files/ppp.sh
+index b553effd88..6c162c5f6b 100755
+--- a/package/network/services/ppp/files/ppp.sh
++++ b/package/network/services/ppp/files/ppp.sh
+@@ -133,6 +133,7 @@ ppp_generic_setup() {
+ 	[ "${keepalive_adaptive:-1}" -lt 1 ] && lcp_adaptive=""
+ 	[ -n "$connect" ] || json_get_var connect connect
+ 	[ -n "$disconnect" ] || json_get_var disconnect disconnect
++	sleep 10
+ 
+ 	proto_run_command "$config" /usr/sbin/pppd \
+ 		nodetach ipparam "$config" \
+-- 
+2.26.2
+
