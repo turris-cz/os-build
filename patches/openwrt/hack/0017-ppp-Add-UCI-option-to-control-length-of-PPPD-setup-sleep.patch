@@ -1,0 +1,75 @@
+From 5705f6a1f417c6a89a3012552bdaf3b3217756ef Mon Sep 17 00:00:00 2001
+From: Vojtech Myslivec <vojtech.myslivec@nic.cz>
+Date: Mon, 18 May 2020 19:10:23 +0200
+Subject: [PATCH 17/17] ppp: Add UCI option to control length of PPPD setup
+ sleep
+
+This patch improves previous 'ppp: add sleep for unreliable DSL (PPP)
+connection' patch by introduce `pppd_sleep` UCI option.
+
+`pppd_sleep` option could be used to control the length of "sleeping"
+before ppp daemon is started and if set to 0 or less, no sleep would
+happened at all. Default value is 10 which match the original hardcoded
+value.
+
+This patch is a hack vol.2 and it should not be sent to upstream!
+
+More details are included in:
+https://gitlab.labs.nic.cz/turris/turris-build/issues/107
+---
+ package/network/services/ppp/Makefile     |  2 +-
+ package/network/services/ppp/files/ppp.sh | 11 +++++++++--
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/package/network/services/ppp/Makefile b/package/network/services/ppp/Makefile
+index c600218cab..e4cb4c11cc 100644
+--- a/package/network/services/ppp/Makefile
++++ b/package/network/services/ppp/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+ PKG_NAME:=ppp
+-PKG_RELEASE:=4
++PKG_RELEASE:=5
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL:=https://github.com/paulusmack/ppp
+diff --git a/package/network/services/ppp/files/ppp.sh b/package/network/services/ppp/files/ppp.sh
+index 6c162c5f6b..1fd3ec1064 100755
+--- a/package/network/services/ppp/files/ppp.sh
++++ b/package/network/services/ppp/files/ppp.sh
+@@ -71,6 +71,7 @@ ppp_generic_init_config() {
+ 	proto_config_add_string keepalive
+ 	proto_config_add_boolean keepalive_adaptive
+ 	proto_config_add_int demand
++	proto_config_add_int pppd_sleep
+ 	proto_config_add_string pppd_options
+ 	proto_config_add_string 'connect:file'
+ 	proto_config_add_string 'disconnect:file'
+@@ -88,7 +89,7 @@ ppp_generic_setup() {
+ 	local config="$1"; shift
+ 	local localip
+ 
+-	json_get_vars ip6table demand keepalive keepalive_adaptive username password pppd_options pppname unnumbered persist maxfail holdoff peerdns
++	json_get_vars ip6table demand keepalive keepalive_adaptive username password pppd_sleep pppd_options pppname unnumbered persist maxfail holdoff peerdns
+ 
+ 	[ ! -e /proc/sys/net/ipv6 ] && ipv6=0 || json_get_var ipv6 ipv6
+ 
+@@ -133,7 +134,13 @@ ppp_generic_setup() {
+ 	[ "${keepalive_adaptive:-1}" -lt 1 ] && lcp_adaptive=""
+ 	[ -n "$connect" ] || json_get_var connect connect
+ 	[ -n "$disconnect" ] || json_get_var disconnect disconnect
+-	sleep 10
++
++	# Workaround for unreliable PPPD connection setup
++	[ -n "$pppd_sleep" ] || pppd_sleep=10
++	[ "$pppd_sleep" -gt 0 ] && {
++		echo "ppp: warning: Sleeping for '$pppd_sleep' seconds" >&2
++		sleep "$pppd_sleep"
++	}
+ 
+ 	proto_run_command "$config" /usr/sbin/pppd \
+ 		nodetach ipparam "$config" \
+-- 
+2.26.2
+
