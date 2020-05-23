@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-USIGN_VERSION=f34a383eeed6282fa16fb021157a60c75f33fdcd
+USIGN_VERSION=f1f65026a94137c91b5466b149ef3ea3f20091e9
 UPDATER_VERSION=master
 
 SRC_USIGN="https://git.openwrt.org/project/usign.git"
