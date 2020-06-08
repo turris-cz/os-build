@@ -20,7 +20,7 @@ if not version_match or not self_version or version_match(self_version, "<64.0")
 	We provide access to only HBS repository and to only minimal set of feeds. We
 	don't need anything more to update updater.
 	]]
-	Repository("turris", "https://repo.turris.cz/hbk/" .. board .. "/packages", {
+	Repository("turris", "https://repo.turris.cz/hbs/" .. board .. "/packages", {
 		priority = 60,
 		subdirs = { "base", "core", "packages", "turrispackages"}
 	})
