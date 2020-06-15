@@ -25,11 +25,11 @@ if not version_match or not self_version or version_match(self_version, "<64.0")
 		subdirs = { "base", "core", "packages", "turrispackages"}
 	})
 
-	Install('updater-ng', { critical = true })
+	Install('updater-ng', 'tos3to4-early', { critical = true })
 
-	Package('updater-ng', {
+	Package('tos3to4-early', {
 		replan = 'immediate',
-		deps = { 'libgcc', 'busybox', 'tos3to4-early' }
+		deps = { 'libgcc', 'busybox', 'updater-ng' }
 	})
 	--[[
 	Updater package does not depend on libgcc but it requires it and dependency
