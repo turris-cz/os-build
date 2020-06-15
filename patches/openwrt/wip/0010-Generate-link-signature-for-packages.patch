@@ -1,0 +1,84 @@
+From 100a6a0c9c0cb1649086e7eda6c279d621ce4483 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Mon, 15 Jun 2020 21:38:58 +0200
+Subject: [PATCH] Generate link signature for packages
+
+This should solve most of the cases when new build of package with same
+version is linked against newer or different version of library or that
+new feature is linked in. This generates hash for all library and
+dynamic symbols of all dynamic executables we are able to locate. Update
+can check for this field and reinstall package if current install has
+different signature. This comes from reality that single repository
+snapshot has consistent link dependencies between packages and just
+packages that are installed with same version from older snapshot can
+break this dependency.
+---
+ include/package-ipkg.mk       |  8 ++++++++
+ scripts/gen-link-signature.sh | 23 +++++++++++++++++++++++
+ 2 files changed, 31 insertions(+)
+ create mode 100755 scripts/gen-link-signature.sh
+
+diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
+index 90bff76949..5642e2a0d6 100644
+--- a/include/package-ipkg.mk
++++ b/include/package-ipkg.mk
+@@ -83,6 +83,12 @@ ifneq ($(PKG_NAME),toolchain)
+ 		fi; \
+ 	)
+   endef
++  define GenerateLinkSignature
++	LINK_SIGNATURE="$$$$( \
++		export READELF=$(TARGET_CROSS)readelf; \
++		$(SCRIPT_DIR)/gen-link-signature.sh "$$(IDIR_$(1))"; \
++	)";
++  endef
+ endif
+ 
+ _addsep=$(word 1,$(1))$(foreach w,$(wordlist 2,$(words $(1)),$(1)),$(strip $(2) $(w)))
+@@ -227,12 +233,14 @@ $(_endef)
+ 		diff -q "$(AUTOBUMP_DB_PATH)"/new/$(1).base_ver "$(AUTOBUMP_DB_PATH)"/old/$(1).base_ver 2> /dev/null || BUILD_VER=0; \
+ 		echo "$$$$BUILD_VER" > "$(AUTOBUMP_DB_PATH)"/new/$(1).build_num; \
+                 fi; \
++		$(GenerateLinkSignature) \
+ 		( \
+ 			if [ -n "$$(CONFIG_AUTOBUMP_PACKAGES)" ]; then \
+ 				echo "$$$$CONTROL" | sed 's|\(Version: .*\)|\1.'"$$$$BUILD_VER|"; \
+ 			else \
+ 				echo "$$$$CONTROL"; \
+ 			fi; \
++			echo "LinkSignature:" "$$$$LINK_SIGNATURE"; \
+ 			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
+ 		) > control; \
+ 		chmod 644 control; \
+diff --git a/scripts/gen-link-signature.sh b/scripts/gen-link-signature.sh
+new file mode 100755
+index 0000000000..e54e712a3b
+--- /dev/null
++++ b/scripts/gen-link-signature.sh
+@@ -0,0 +1,23 @@
++#!/usr/bin/env bash
++SELF=${0##*/}
++
++READELF="${READELF:-readelf}"
++TARGETS=$*
++
++[ -z "$TARGETS" ] && {
++  echo "$SELF: no directories / files specified" >&2
++  echo "usage: $SELF [PATH...]d" >&2
++  exit 1
++}
++
++find $TARGETS -type f -a -exec file {} \; | \
++	sed -n -e 's/^\(.*\):.*ELF.*\(executable\|shared object\).*,.*/\1/p' | \
++	while read -r TARGET; do
++		# Libraries
++		"$READELF" -d "$TARGET" | awk '$2 == "(NEEDED)" { print $NF }'
++		# Dynamic Symbols (undefined that means provided by libraries)
++		"$READELF" --dyn-syms "$TARGET" | awk '$7 == "UND" && $8 { print $8 }'
++	done | \
++	sort -u | \
++	md5sum | \
++	cut -d' ' -f1
+-- 
+2.27.0
+
