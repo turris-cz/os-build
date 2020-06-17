@@ -1,0 +1,50 @@
+From 33889ecac1f9460aa05d375b74b090f5a64d7f23 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Tue, 16 Jun 2020 16:28:13 +0200
+Subject: [PATCH] hostapd: fix compilation of wpa_supplicant
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ubus patch as it seems have been broken by some rebase in the past as
+the location of line that adds ubus object file was in condition for
+CONFIG_MACSEC. That condition was adding object files that are not
+touched by ubus patch. This means ubus.o does not have to be included in
+that case. When it has to be and when build fails is when CONFIG_AP is
+set. All files included in wpa_supplicant that are touched by this patch
+are in this condition. This means that this is for sure the original
+place for it.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+---
+ .../services/hostapd/patches/600-ubus_support.patch       | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/package/network/services/hostapd/patches/600-ubus_support.patch b/package/network/services/hostapd/patches/600-ubus_support.patch
+index d2d45ac971..f0a637e4b6 100644
+--- a/package/network/services/hostapd/patches/600-ubus_support.patch
++++ b/package/network/services/hostapd/patches/600-ubus_support.patch
+@@ -284,16 +284,16 @@
+  ifdef CONFIG_CODE_COVERAGE
+  CFLAGS += -O0 -fprofile-arcs -ftest-coverage
+  LIBS += -lgcov
+-@@ -887,6 +893,9 @@ OBJS += ../src/pae/ieee802_1x_secy_ops.o
+- ifdef CONFIG_AP
+- OBJS += ../src/ap/wpa_auth_kay.o
++@@ -956,6 +962,9 @@ ifdef CONFIG_CTRL_IFACE_MIB
++ CFLAGS += -DCONFIG_CTRL_IFACE_MIB
+  endif
++ OBJS += ../src/ap/ctrl_iface_ap.o
+ +ifdef CONFIG_UBUS
+ +OBJS += ../src/ap/ubus.o
+ +endif
+  endif
+  
+- ifdef CONFIG_IEEE8021X_EAPOL
++ CFLAGS += -DEAP_SERVER -DEAP_SERVER_IDENTITY
+ --- a/wpa_supplicant/wpa_supplicant.c
+ +++ b/wpa_supplicant/wpa_supplicant.c
+ @@ -6797,6 +6797,8 @@ struct wpa_supplicant * wpa_supplicant_a
+-- 
+2.27.0
+
