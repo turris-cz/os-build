@@ -17,3 +17,5 @@ end
 
 INFO("Target Turris OS: _TURRIS_OS_VERSION_")
 DBG("Current Turris OS: " .. tostring(os_release.VERSION))
+
+list_script('conflicts.lua')
