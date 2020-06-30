@@ -1,4 +1,4 @@
-From 100a6a0c9c0cb1649086e7eda6c279d621ce4483 Mon Sep 17 00:00:00 2001
+From 69e54105161b74714b537ab3b80b0894bfa90fcf Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
 Date: Mon, 15 Jun 2020 21:38:58 +0200
 Subject: [PATCH] Generate link signature for packages
@@ -19,10 +19,10 @@ break this dependency.
  create mode 100755 scripts/gen-link-signature.sh
 
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index 90bff76949..5642e2a0d6 100644
+index 03c0383..7d5adcc 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -83,6 +83,12 @@ ifneq ($(PKG_NAME),toolchain)
+@@ -95,6 +95,12 @@ ifneq ($(PKG_NAME),toolchain)
  		fi; \
  	)
    endef
@@ -35,24 +35,20 @@ index 90bff76949..5642e2a0d6 100644
  endif
  
  _addsep=$(word 1,$(1))$(foreach w,$(wordlist 2,$(words $(1)),$(1)),$(strip $(2) $(w)))
-@@ -227,12 +233,14 @@ $(_endef)
- 		diff -q "$(AUTOBUMP_DB_PATH)"/new/$(1).base_ver "$(AUTOBUMP_DB_PATH)"/old/$(1).base_ver 2> /dev/null || BUILD_VER=0; \
- 		echo "$$$$BUILD_VER" > "$(AUTOBUMP_DB_PATH)"/new/$(1).build_num; \
-                 fi; \
+@@ -223,8 +229,10 @@ $(_endef)
+ 	)
+     endif
+ 	(cd $$(IDIR_$(1))/CONTROL; \
 +		$(GenerateLinkSignature) \
  		( \
- 			if [ -n "$$(CONFIG_AUTOBUMP_PACKAGES)" ]; then \
- 				echo "$$$$CONTROL" | sed 's|\(Version: .*\)|\1.'"$$$$BUILD_VER|"; \
- 			else \
- 				echo "$$$$CONTROL"; \
- 			fi; \
-+			echo "LinkSignature:" "$$$$LINK_SIGNATURE"; \
+ 			echo "$$$$CONTROL"; \
++			echo "LinkSignature: $$$$LINK_SIGNATURE"; \
  			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
  		) > control; \
  		chmod 644 control; \
 diff --git a/scripts/gen-link-signature.sh b/scripts/gen-link-signature.sh
 new file mode 100755
-index 0000000000..e54e712a3b
+index 0000000..e54e712
 --- /dev/null
 +++ b/scripts/gen-link-signature.sh
 @@ -0,0 +1,23 @@
