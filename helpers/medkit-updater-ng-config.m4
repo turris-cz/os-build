@@ -5,13 +5,9 @@ define([foreach],[ifelse(eval($#>2),1,[pushdef([$1],[$3])$2[]popdef([$1])[]ifels
 divert(0)dnl
 
 dnl Set branch from BRANCH variable
-dnl Also enable all lists that were added during medkit generation.
 config turris 'turris'
 	option mode 'branch'
 ifdef([_UPDATER_BRANCH_],	option branch '_UPDATER_BRANCH_'
-)dnl
-ifdef([_LISTS_],foreach([LIST], [	list pkglists 'LIST'
-], _LISTS_)
 )dnl
 
 dnl Enable all languages that were enabled durring medkit generation.
