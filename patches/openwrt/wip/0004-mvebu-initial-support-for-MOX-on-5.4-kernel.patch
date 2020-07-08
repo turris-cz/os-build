@@ -6,8 +6,6 @@ Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
 ---
  target/linux/mvebu/cortexa53/config-5.4       |  13 ++
  target/linux/mvebu/image/cortexa53.mk         |  12 +
- ...-3720-turris-mox-forbid-SDR104-on-SD.patch |  33 +++
- ...mada-3720-turris-mox-fix-SFP-binding.patch |  34 +++
  ...is-mox-rwtm-support-ECDSA-signatures.patch | 159 +++++++++++++
  ...da-3720-turris-mox-add-firmware-node.patch |  38 ++++
  ...in-link-immediately-after-enabling-t.patch |  61 +++++
@@ -19,8 +17,6 @@ Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
  ...x-implement-phylink-AN-restart-on-Se.patch | 137 ++++++++++++
  ...m64-restart-Armada-3700-restart-code.patch |  44 ++++
  14 files changed, 1096 insertions(+)
- create mode 100644 target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
- create mode 100644 target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9906-PCI-aardvark-Train-link-immediately-after-enabling-t.patch
@@ -115,85 +111,6 @@ index ff8f2c0..0ed004a 100644
  define Device/glinet_gl-mv1000
    $(call Device/Default-arm64)
    DEVICE_VENDOR := GL.iNet
-diff --git a/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch b/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
-new file mode 100644
-index 0000000..a2f4416
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.4/9901-arm64-dts-armada-3720-turris-mox-forbid-SDR104-on-SD.patch
-@@ -0,0 +1,33 @@
-+From 3bb12f25b9be5f79d270b5f05b8a9b746b45bfa1 Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Thu, 30 Apr 2020 00:05:10 +0200
-+Subject: [PATCH] arm64: dts: armada-3720-turris-mox: forbid SDR104 on SDIO
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+Use sdhci-caps-mask to forbid SDR104 mode on the SDIO capable SDHCI
-+controller. Otherwise the device cannot pass electromagnetic
-+interference certifications.
-+
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 2 ++
-+ 1 file changed, 2 insertions(+)
-+
-+diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+index 5f350cc71a2f..9dfba76678fa 100644
-+--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+@@ -171,6 +171,8 @@
-+ 	marvell,pad-type = "sd";
-+ 	vqmmc-supply = <&vsdio_reg>;
-+ 	mmc-pwrseq = <&sdhci1_pwrseq>;
-++	/* forbid SDR104 */
-++	sdhci-caps-mask = <0x2 0x0>;
-+ 	status = "okay";
-+ };
-+ 
-+-- 
-+2.24.1
-+
-diff --git a/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch b/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
-new file mode 100644
-index 0000000..3e16e9d
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.4/9902-arm64-dts-armada-3720-turris-mox-fix-SFP-binding.patch
-@@ -0,0 +1,34 @@
-+From 444b54cc3d270639b62bd82e55003e2cd142eb3c Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Wed, 6 May 2020 21:25:51 +0200
-+Subject: [PATCH] arm64: dts: armada-3720-turris-mox: fix SFP binding
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+The sfp compatible should be 'sff,sfp', not 'sff,sfp+'. We used patched
-+kernel where the latter was working.
-+
-+Fixes: 7109d817db2e ("arm64: dts: marvell: add DTS for Turris Mox")
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+Cc: Gregory CLEMENT <gregory.clement@bootlin.com>
-+---
-+ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
-+
-+diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+index bb42d1e6a4e9..6a2ec6625880 100644
-+--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+@@ -95,7 +95,7 @@ sdhci1_pwrseq: sdhci1-pwrseq {
-+ 	};
-+ 
-+ 	sfp: sfp {
-+-		compatible = "sff,sfp+";
-++		compatible = "sff,sfp";
-+ 		i2c-bus = <&i2c0>;
-+ 		los-gpio = <&moxtet_sfp 0 GPIO_ACTIVE_HIGH>;
-+ 		tx-fault-gpio = <&moxtet_sfp 1 GPIO_ACTIVE_HIGH>;
-+-- 
-+2.24.1
-+
 diff --git a/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
 new file mode 100644
 index 0000000..2675558
