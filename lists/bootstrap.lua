@@ -4,7 +4,9 @@ Root script for updater-ng configuration usable for bootstrapping.
 This script expects following variables to be possibly defined in environment:
   BOARD: board name (Mox|Omnia|Turris)
   L10N: commas separated list of languages to be installed in root.
-  LISTS: commas separated list of package lists to be included in root.
+  PKGLISTS: commas separated list of package lists to be included in root. To
+	specify options you can optionally add parentheses at the end of package name
+	and list pipe separated options inside them. (ex: foo(opt1|opt2),fee)
   TESTKEY: if definied non-empty then test kyes are included in installation
 ]]
 
@@ -32,8 +34,13 @@ Export('for_l10n')
 -- Aways include base script
 Script('base.lua')
 -- Include any additional lists
-for list in os.getenv('LISTS'):gmatch('[^,]+') do
-	Script(list .. '.lua')
+for list in os.getenv('PKGLISTS'):gmatch('[^,)]+') do
+	options = {}
+	Export("options")
+	for opt in list:match('%((.*)%)$'):gmatch('[^|]+') do
+		options[opt] = true
+	end
+	Script(list:match('^[^(]+') .. '.lua')
 end
 
 if os.getenv('TESTKEY') then
