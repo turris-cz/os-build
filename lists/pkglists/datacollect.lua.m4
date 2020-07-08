@@ -1,6 +1,8 @@
 include(utils.m4)dnl
 _FEATURE_GUARD_
 
+Install("reforis-data-collection-plugin", { priority = 40 })
+
 if not options or options.survey ~= false then
 	Install("turris-survey", { priority = 40 })
 end
