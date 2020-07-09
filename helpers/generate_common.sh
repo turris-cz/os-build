@@ -86,6 +86,7 @@ updater_ng_repodetect() {
 get_updater_ng() {
 	if ! git_get "$SRC_UPDATER" turris-tools/updater-ng "$UPDATER_VERSION"; then
 		(
+			cd turris-tools/updater-ng
 			./bootstrap
 			./configure --disable-tests --disable-linters --disable-docs --disable-valgrind
 			make
