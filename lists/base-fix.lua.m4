@@ -48,3 +48,10 @@ if not version_match or not installed or
 	Install("fix-dns-forward-quad9-split")
 	Package("fix-dns-forward-quad9-split", { replan = "finished" })
 end
+
+-- Migrate original pkglists to separate config with options in place
+if not version_match or not installed or
+		(installed["pkglists"] and version_match(installed["pkglists"].version, "<1.3")) then
+	Install("fix-pkglists-options")
+	Package("fix-pkglists-options", { replan = "finished" })
+end

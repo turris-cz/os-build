@@ -6,7 +6,6 @@ list_script('base-fix.lua')
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
-Package('l10n_supported', { replan = 'finished' })
 
 -- Critical minimum
 Install("base-files", "busybox", "dns-resolver", { critical = true })
@@ -54,9 +53,12 @@ _FEATURE_GUARD_
 
 -- Updater utility
 Install("updater-opkg-wrapper", { priority = 40 })
+Install('switch-branch', { priority = 40 })
+
+Package('l10n-supported', { replan = 'finished' })
 Package('updater-opkg-wrapper', { replan = 'finished' })
 Package('localrepo', { replan = 'finished' })
-Package('switch-branch', { priority = 40 })
+Package('switch-branch', { replan = 'finished' })
 
 -- Utility
 Install("ip-full", "tc", "genl", "ip-bridge", "ss", "nstat", "devlink", "rdma", { priority = 40 })

@@ -25,6 +25,17 @@ news_text() {
 	awk '/^-+$/{if(flg) nextfile; else flg=1;next} flg==1{prev=$0;flg=2;next} flg==2{ if (prev !~ /^$/) {print prev};prev=$0}' "$news_file"
 }
 
+news_notification() {
+	local text
+	# escape problematic characters
+	text="$(news_text | sed 's|\\|\\\\|g; s|\$|\\$|g; s|"|\\"|g')"
+	[ -z "$text" ] && {
+		echo "true" # Just so we execute something
+		return
+	}
+	echo "create_notification -s news \"$text\""
+}
+
 gen_package() {
 	version="$(get_version)"
 	mkdir -p "$output"
@@ -59,9 +70,8 @@ endef
 
 define Package/turris-version/postinst
 #!/bin/sh
-# Danger: spaces are not ordinary spaces, but special unicode ones
 [ -n "\$\$IPKG_INSTROOT" ] || {
-create_notification -s news "$(news_text | sed -e 's/"/\\"/g' -e 's/^[[:blank:]]*\*[[:blank:]]*/ • /')"
+	$(news_notification)
 }
 endef
 

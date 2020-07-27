@@ -25,7 +25,7 @@ export BOARD=
 export BRANCH="$PUBLISH_BRANCH"
 export UPDATER_BRANCH=
 export L10N=cs,de
-export LISTS=
+export PKGLISTS=
 export UPDATER_SCRIPT=
 export OVERLAY=
 export SIGN_KEY=
@@ -65,7 +65,12 @@ while [ $# -gt 0 ]; do
 			echo "  --lists, -p PKGLIST,.."
 			echo "    What lists should be added to medkit. In default no"
 			echo "    additional lists will be added. Multiple lists can be"
-			echo "    specified by separating them by commas."
+			echo "    specified by separating them by commas. Options for them"
+			echo "    can be specified in parentheses and divided by pipe. Note"
+			echo "    that lists are included in medkit but not configured. This"
+			echo "    means that they will be removed with first update. To"
+			echo "    prevent this you have to include our own"
+			echo "    /etc/config/pkglists in overlay."
 			echo "  --updater-script FILE"
 			echo "    Run file as updater's script. It is executed after primary"
 			echo "    entry script of this tool."
@@ -99,7 +104,7 @@ while [ $# -gt 0 ]; do
 			;;
 		--lists|-p)
 			shift
-			LISTS="$1"
+			PKGLISTS="$1"
 			;;
 		--updater-script)
 			shift
@@ -145,7 +150,6 @@ updater_ng_repodetect "$BRANCH" "$BOARD"
 get_usign
 get_updater_ng
 
-export PATH="$PATH:$(dirname "$USIGN")"
 ## Generate root ##
 exec fakeroot -- /bin/bash -s <<EOF
 set -e
@@ -167,7 +171,6 @@ touch root/usr/lib/opkg/status
 ## Generate /etc/config/updater
 m4args=()
 [ -z "\$UPDATER_BRANCH" ] || m4args+=("-D_BRANCH_='\$UPDATER_BRANCH'")
-[ -z "\$LISTS" ] || m4args+=("-D_LISTS_='\$LISTS'")
 [ -z "\$L10N" ] || m4args+=("-D_LANGS_=\$L10N")
 m4 "\${m4args[@]}" "\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" > root/etc/config/updater
 

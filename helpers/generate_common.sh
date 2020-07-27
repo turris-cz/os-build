@@ -85,8 +85,13 @@ updater_ng_repodetect() {
 
 get_updater_ng() {
 	if ! git_get "$SRC_UPDATER" turris-tools/updater-ng "$UPDATER_VERSION"; then
-		make -C turris-tools/updater-ng NO_DOC=1 LUA_COMPILE=no
+		(
+			cd turris-tools/updater-ng
+			./bootstrap
+			./configure --disable-tests --disable-linters --disable-docs --disable-valgrind
+			make
+		)
 	fi
-	export PKGUPDATE="$(pwd)/turris-tools/updater-ng/bin/pkgupdate"
-	export OPKG_TRANS="$(pwd)/turris-tools/updater-ng/bin/opkg-trans"
+	export PKGUPDATE="$PWD/turris-tools/updater-ng/pkgupdate"
+	export PKGTRANSACTION="$PWD/turris-tools/updater-ng/pkgtransaction"
 }
