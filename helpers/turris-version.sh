@@ -70,7 +70,6 @@ endef
 
 define Package/turris-version/postinst
 #!/bin/sh
-# Danger: spaces are not ordinary spaces, but special unicode ones
 [ -n "\$\$IPKG_INSTROOT" ] || {
 	$(news_notification)
 }
