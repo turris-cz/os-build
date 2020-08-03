@@ -34,13 +34,17 @@ Export('for_l10n')
 -- Aways include base script
 Script('base.lua')
 -- Include any additional lists
-for list in os.getenv('PKGLISTS'):gmatch('[^,)]+') do
+for list in os.getenv('PKGLISTS'):gmatch('[^,]+') do
+	local list_name = list:match('^[^(]+') .. ".lua"
+	local list_options = list:match('%((.*)%)$')
 	options = {}
 	Export("options")
-	for opt in list:match('%((.*)%)$'):gmatch('[^|]+') do
-		options[opt] = true
+	if list_options then
+		for opt in list_options:gmatch('[^|]+') do
+			options[opt] = true
+		end
 	end
-	Script(list:match('^[^(]+') .. '.lua')
+	Script(list_name .. '.lua')
 end
 
 if os.getenv('TESTKEY') then
