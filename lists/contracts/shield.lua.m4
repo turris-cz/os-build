@@ -15,11 +15,11 @@ Install("ip_autoselector", "firewall-redirect-192_168_1_1", { priority = 45 })
 Install('common_passwords', { priority = 45 })
 
 options = {
-    "dynfw" = true,
-    "haas" = true,
-    "survey" = true,
-    "nikola" = true,
-    "minipot" = true,
+    ["dynfw"] = true,
+    ["haas"] = true,
+    ["survey"] = true,
+    ["nikola"] = true,
+    ["minipot"] = true,
 }
 Export("options")
 Script("../pkglists/datacollection.lua")
