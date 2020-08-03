@@ -26,6 +26,7 @@ export BRANCH="$PUBLISH_BRANCH"
 export UPDATER_BRANCH=
 export L10N=cs,de
 export PKGLISTS=
+export CONTRACT=
 export UPDATER_SCRIPT=
 export OVERLAY=
 export SIGN_KEY=
@@ -33,6 +34,8 @@ export OUTPUT=
 export TESTKEY=
 
 export TURRIS_BUILD_DIR="$src_dir"
+
+default_output_ext=""
 
 ## Parse arguments ##
 while [ $# -gt 0 ]; do
@@ -71,6 +74,8 @@ while [ $# -gt 0 ]; do
 			echo "    means that they will be removed with first update. To"
 			echo "    prevent this you have to include our own"
 			echo "    /etc/config/pkglists in overlay."
+			echo "  --contract CONTRACT"
+			echo "    Build medkit for router under CONTRACT."
 			echo "  --updater-script FILE"
 			echo "    Run file as updater's script. It is executed after primary"
 			echo "    entry script of this tool."
@@ -106,6 +111,12 @@ while [ $# -gt 0 ]; do
 			shift
 			PKGLISTS="$1"
 			;;
+		--contract)
+			[ -z "$CONTRACT" ] || die "--contract can be specified only once"
+			shift
+			CONTRACT="$1"
+			default_output_ext="-contract-$1"
+			;;
 		--updater-script)
 			shift
 			UPDATER_SCRIPT="$1"
@@ -119,31 +130,16 @@ while [ $# -gt 0 ]; do
 			SIGN_KEY="$1"
 			;;
 		*)
-			if [ -z "$OUTPUT" ]; then
-				OUTPUT="$1"
-			else
-				echo "Unknown option: $1" >&2
-				exit 1
-			fi
+			[ -z "$OUTPUT" ] || die "Unknown option: $1"
+			OUTPUT="$1"
 			;;
 	esac
 	shift
 done
 
 [ -n "$BOARD" ] || die "You have to specify target Turris router."
-[ -n "$OUTPUT" ] || {
-	case "$BOARD" in
-		mox)
-			OUTPUT=mox-medkit.tar.gz
-			;;
-		omnia)
-			OUTPUT=omnia-medkit.tar.gz
-			;;
-		turris1x)
-			OUTPUT=turris-medkit.tar.gz
-			;;
-	esac
-}
+[ -n "$OUTPUT" ] || \
+	OUTPUT="$BOARD-medkit$default_output_ext.tar.gz"
 OUTPUT="$(readlink -f "$OUTPUT")"
 
 updater_ng_repodetect "$BRANCH" "$BOARD"
