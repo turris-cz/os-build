@@ -46,6 +46,11 @@ for list in os.getenv('PKGLISTS'):gmatch('[^,]+') do
 	end
 	Script(list_name .. '.lua')
 end
+-- Include contract if specified
+local contract = os.getenv('CONTRACT')
+if contract then
+	Script('contracts/' .. contract .. '.lua')
+end
 
 if os.getenv('TESTKEY') then
 	Install('cznic-repo-keys-test')
