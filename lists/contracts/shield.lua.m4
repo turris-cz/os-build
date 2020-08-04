@@ -22,7 +22,7 @@ options = {
     ["minipot"] = true,
 }
 Export("options")
-Script("../pkglists/datacollection.lua")
+Script("../pkglists/datacollect.lua")
 Unexport("options")
 
 -- Extra software
