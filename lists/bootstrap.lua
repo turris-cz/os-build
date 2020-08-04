@@ -57,7 +57,7 @@ end
 -- Include contract if specified
 local env_contract = os.getenv('CONTRACT')
 if env_contract and env_contract ~= "" then
-	Script('contracts/' .. contract .. '.lua')
+	Script('contracts/' .. env_contract .. '.lua')
 end
 
 local env_testkey = os.getenv('TESTKEY')
