@@ -5,7 +5,7 @@ _FEATURE_GUARD_
 Install('common_passwords')
 
 -- Data collection
-Install('i_agree_with_eula')
+Install('sentinel-i_agree_with_eula')
 
 options = {
     ["dynfw"] = true,
