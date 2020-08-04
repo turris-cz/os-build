@@ -4,7 +4,7 @@ Root script for updater-ng configuration used for medkit generation.
 
 -- Get target board
 model = os.getenv('BOARD')
-if not model then
+if not model or model == "" then
 	-- TODO we might ask interactively
 	DIE("Target model has to be provided by BOARD environment variable.")
 end
