@@ -2,7 +2,7 @@ include(utils.m4)dnl
 _FEATURE_GUARD_
 
 -- No more Foris and LuCI and data collect UI
-Uninstall("foris", "luci", "luci-base", { priority = 45 })
+Uninstall("foris", "luci", "luci-base", "turris-webapps", { priority = 45 })
 Uninstall("reforis-data-collection-plugin", { priority = 45 })
 
 -- Alternative versions of packages
