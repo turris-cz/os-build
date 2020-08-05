@@ -35,4 +35,8 @@ if options and options.statistics then
 	Install("luci-app-statistics", { priority = 40 })
 end
 
+if options and options.wireguard then
+        Install("luci-app-wireguard", { priority = 40 })
+end
+
 _END_FEATURE_GUARD_
