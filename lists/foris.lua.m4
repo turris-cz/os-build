@@ -31,7 +31,7 @@ if for_l10n and features.request_condition then
 		for _, plugin in pairs(foris_plugins) do
 			local fplugin = "foris-" .. plugin .. "-plugin"
 			Install(fplugin .. "-l10n-" .. lang, {
-				priority = 40,
+				priority = 10,
 				optional = true,
 				condition = fplugin
 			})
@@ -39,7 +39,7 @@ if for_l10n and features.request_condition then
 		for _, plugin in pairs(reforis_plugins) do
 			local refplugin = "reforis-" .. plugin .. "-plugin"
 			Install(refplugin .. "-l10n-" .. lang, {
-				priority = 40,
+				priority = 10,
 				optional = true,
 				condition = refplugin
 			})
