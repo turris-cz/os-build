@@ -54,4 +54,11 @@ function list_script(list)
 		Script((repo_base_uri or "https://repo.turris.cz/hbs") .. "/" .. board .. "/lists/" .. list)
 	end
 end
+
+-- Our own version of for_l10n to override priority
+function for_l10n(fragment)
+	for _, lang in pairs(l10n or {}) do
+		Install(fragment .. lang, {optional = true, priority = 10})
+	end
+end
 ----------------------------------------------------------------------------------

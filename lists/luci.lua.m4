@@ -88,11 +88,11 @@ local luci_apps = {
 }
 
 -- Conditional install requests for language packages
-if for_l10n and features.request_condition then
+if features.request_condition then
 	for _, lang in pairs({"en", unpack(l10n or {})}) do
 		for _, name in pairs(luci_apps) do
 			Install("luci-i18n-" .. name .. "-" .. lang, {
-				priority = 40,
+				priority = 10,
 				optional = true,
 				condition = "luci-app-" .. name
 			})
@@ -103,13 +103,12 @@ end
 
 Install("luci", "luci-base", "luci-lighttpd", { priority = 40 })
 if for_l10n then
-	Install("luci-i18n-base-en", { optional = true })
+	Install("luci-i18n-base-en", { optional = true, priority = 10 })
 	for_l10n("luci-i18n-base-")
 end
 
 Install("luci-app-commands", { priority = 40 })
 Install("luci-proto-ipv6", "luci-proto-ppp", { priority = 40 })
-
 -- Install resolver-debug for DNS debuging
 Install("resolver-debug", { priority = 40 })
 
