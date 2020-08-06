@@ -9,7 +9,7 @@ Uninstall("reforis-data-collection-plugin", { priority = 45 })
 Install("shield-support", "reforis-shield", { priority = 45 })
 
 -- Extra usability packages
-Install("ip_autoselector", "firewall-redirect-192_168_1_1", { priority = 45 })
+Install("ip_autoselector", "firewall-redirect-192-168-1-1", { priority = 45 })
 
 -- Extra security
 Install('common_passwords', { priority = 45 })
