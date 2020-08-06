@@ -13,6 +13,7 @@ Install("ip_autoselector", "firewall-redirect-192-168-1-1", { priority = 45 })
 
 -- Extra security
 Install('common_passwords', { priority = 45 })
+Install('sentinel-i_agree_with_eula', { priority = 45 })
 
 options = {
     ["dynfw"] = true,
