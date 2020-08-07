@@ -27,7 +27,13 @@ Script("../pkglists/datacollect.lua")
 Unexport("options")
 
 -- Extra software
-Script("../pkglists/netmetr.lua")
+options = {
+    ["netmetr"] = true,
+    ["dev-detect"] = true,
+}
+Export("options")
+Script("../pkglists/net_monitoring.lua")
+Unexport("options")
 Script("../pkglists/openvpn.lua")
 
 _END_FEATURE_GUARD_
