@@ -3,7 +3,6 @@ _FEATURE_GUARD_
 
 -- No more Foris and LuCI and data collect UI
 Uninstall("foris", "luci", "luci-base", "turris-webapps", { priority = 45 })
-Uninstall("reforis-data-collection-plugin", { priority = 45 })
 
 -- Alternative versions of packages
 Install("shield-support", "reforis-shield", { priority = 45 })
@@ -27,7 +26,13 @@ Script("../pkglists/datacollect.lua")
 Unexport("options")
 
 -- Extra software
-Script("../pkglists/netmetr.lua")
+options = {
+    ["netmetr"] = true,
+    ["dev-detect"] = true,
+}
+Export("options")
+Script("../pkglists/net_monitoring.lua")
+Unexport("options")
 Script("../pkglists/openvpn.lua")
 
 _END_FEATURE_GUARD_
