@@ -16,7 +16,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-src_dir="$(dirname "$(readlink -f "$0")")"
+src_dir="$(dirname "$(readlink -f "$0/..")")"
 . "$src_dir/helpers/common.sh"
 . "$src_dir/helpers/generate_common.sh"
 
@@ -55,7 +55,7 @@ while [ $# -gt 0 ]; do
 			echo "    values are: turris1x, omnia, mox"
 			echo "  --branch, -b BRANCH"
 			echo "    Set given branch as source for packages used to generate "
-			echo "    this medkit. If this option is not set then 'hbl' is used."
+			echo "    this medkit. If this option is not set then '$PUBLISH_BRANCH' is used."
 			echo "    Note that this does not sets that branch to updater-ng"
 			echo "    configuration. You have to use --updater-branch for that."
 			echo "  --updater-branch BRANCH"
