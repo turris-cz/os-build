@@ -33,7 +33,7 @@ Script('base.lua')
 local env_pkglists = os.getenv('PKGLISTS')
 if env_pkglists then
 	for list in env_pkglists:gmatch('[^,]+') do
-		local list_name = list:match('^[^(]+') .. ".lua"
+		local list_name = list:match('^[^(]+')
 		local list_options = list:match('%((.*)%)$')
 		options = {}
 		Export("options")
