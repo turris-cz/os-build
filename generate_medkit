@@ -21,17 +21,17 @@ src_dir="$(dirname "$(readlink -f "$0")")"
 . "$src_dir/helpers/generate_common.sh"
 
 . "$src_dir/defaults.sh"
-export BOARD=
+export BOOTSTRAP_BOARD=
 export BRANCH="$PUBLISH_BRANCH"
-export UPDATER_BRANCH=
-export L10N=cs,de
-export PKGLISTS=
-export CONTRACT=
+export BOOTSTRAP_UPDATER_BRANCH=
+export BOOTSTRAP_L10N=cs,de
+export BOOTSTRAP_PKGLISTS=
+export BOOTSTRAP_CONTRACT=
 export UPDATER_SCRIPT=
 export OVERLAY=
 export SIGN_KEY=
 export OUTPUT=
-export TESTKEY=
+export BOOTSTRAP_TESTKEY=
 
 export TURRIS_BUILD_DIR="$src_dir"
 
@@ -92,7 +92,7 @@ while [ $# -gt 0 ]; do
 			;;
 		--target|-t)
 			shift
-			BOARD="$1"
+			BOOTSTRAP_BOARD="$1"
 			;;
 		--branch|-b)
 			shift
@@ -100,21 +100,21 @@ while [ $# -gt 0 ]; do
 			;;
 		--updater-branch)
 			shift
-			UPDATER_BRANCH="$1"
-			TESTKEY=y
+			BOOTSTRAP_UPDATER_BRANCH="$1"
+			BOOTSTRAP_TESTKEY=y
 			;;
 		--localization|-l)
 			shift
-			L10N="$1"
+			BOOTSTRAP_L10N="$1"
 			;;
 		--lists|-p)
 			shift
-			PKGLISTS="$1"
+			BOOTSTRAP_PKGLISTS="$1"
 			;;
 		--contract)
 			[ -z "$CONTRACT" ] || die "--contract can be specified only once"
 			shift
-			CONTRACT="$1"
+			BOOTSTRAP_CONTRACT="$1"
 			default_output_ext="-contract-$1"
 			;;
 		--updater-script)
@@ -142,7 +142,7 @@ done
 	OUTPUT="$BOARD-medkit$default_output_ext.tar.gz"
 OUTPUT="$(readlink -f "$OUTPUT")"
 
-updater_ng_repodetect "$BRANCH" "$BOARD"
+updater_ng_repodetect "$BRANCH" "$BOOTSTRAP_BOARD"
 get_usign
 get_updater_ng
 
@@ -163,12 +163,6 @@ touch root/usr/lib/opkg/status
 "\$PKGUPDATE" \
 	-R "$(pwd)"/root --out-of-root --batch \
 	"file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua"
-
-## Generate /etc/config/updater
-m4args=()
-[ -z "\$UPDATER_BRANCH" ] || m4args+=("-D_BRANCH_='\$UPDATER_BRANCH'")
-[ -z "\$L10N" ] || m4args+=("-D_LANGS_=\$L10N")
-m4 "\${m4args[@]}" "\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" > root/etc/config/updater
 
 ## Overlay user's files
 if [ -n "\$OVERLAY" ]; then
