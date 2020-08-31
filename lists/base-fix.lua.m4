@@ -55,3 +55,12 @@ if not version_match or not installed or
 	Install("fix-pkglists-options")
 	Package("fix-pkglists-options", { replan = "finished" })
 end
+
+-- Restore previous non-empty version of /etc/config/foris
+-- With Turris OS 5.1.0 there was a bug, which removed content of /etc/config/foris and it slipped
+-- through testing. This fix just reverts older version of affected file from
+-- snapshots.
+if root_dir == "/" and version_match(os_release.VERSION, "<5.1.1") then
+	Install("fix-config-foris-restore")
+	Package("fix-config-foris-restore", { replan = "finished" })
+end
