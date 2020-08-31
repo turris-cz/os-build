@@ -56,7 +56,7 @@ if not version_match or not installed or
 	Package("fix-pkglists-options", { replan = "finished" })
 end
 
--- Remove no longer generated task log
+-- Remove no longer generated task log from Updater
 if not version_match or not installed or
 		(installed["updater-supervisor"] and version_match(installed["updater-supervisor"].version, "<1.3.2")) then
 	Install("fix-updater-rm-log")
