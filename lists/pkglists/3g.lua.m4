@@ -10,6 +10,6 @@ Install("usb-modeswitch", { priority = 40 })
 forInstall(kmod,nf-nathelper-extra,usb-net-rndis,usb-net-qmi-wwan,usb-serial-option,usb-serial-qualcomm)
 
 -- Luci
-Install("luci-proto-3g", { priority = 40 })
+Install("luci-proto-3g", "luci-proto-qmi", { priority = 40 })
 
 _END_FEATURE_GUARD_
