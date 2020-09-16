@@ -9,6 +9,12 @@ list_script('luci.lua')
 list_script('foris.lua')
 list_script('terminal-apps.lua')
 
+-- Install various timezone information so local time would work
+        zoneinfo = {"core", "atlantic", "asia", "africa", "australia-nz", "europe", "northamerica", "india", "pacific", "poles", "simple", "southamerica"}
+        for _, zone in pairs(zoneinfo) do
+                Install("zoneinfo-" .. zone, { priority = 40 })
+        end
+
 -- WebAPPs
 Install("turris-webapps", { priority = 40 })
 Install("turris-webapps-netdata", { condition = "netdata", priority = 40 })
