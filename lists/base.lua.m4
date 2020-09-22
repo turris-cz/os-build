@@ -18,6 +18,10 @@ list_script('terminal-apps.lua')
 -- WebAPPs
 Install("turris-webapps", { priority = 40 })
 Install("turris-webapps-netdata", { condition = "netdata", priority = 40 })
+Install("turris-webapps-transmission", { condition = "transmission-web", priority = 40 })
+Install("turris-webapps-tvheadend", { condition = "tvheadend", priority = 40 })
+Install("turris-webapps-nextcloud", { condition = "nextcloud", priority = 40 })
+
 
 -- IPv6
 Install("ds-lite", "6in4", "6rd", "6to4", { priority = 40 })
