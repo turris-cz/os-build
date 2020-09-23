@@ -72,7 +72,10 @@ fetch_files() {
 	GIT_HASH_LISTS="$FETCH_DIR/git-hash-lists"
 	GIT_HASH_PACKAGES="$FETCH_DIR/git-hash-packages"
 	TOS_VERSION="$FETCH_DIR/tos-version"
-	local release_date_raw="$(curl -s --head "$REPO/$branch/mox/packages/git-hash.sig" | sed -n 's/^Last-Modified: //p')"
+	local release_date_raw
+	release_date_raw="$(
+		curl -s --head "$REPO/$branch/mox/packages/git-hash.sig" | \
+			awk -F: 'tolower($1) == "last-modified" { $1=""; print $2; exit }')"
 	RELEASE_DATE="$(date --iso-8601=second -d "$release_date_raw")"
 
 	for board in "${BOARDS[@]}"; do
