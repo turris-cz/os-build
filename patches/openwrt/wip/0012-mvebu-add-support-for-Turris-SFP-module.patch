@@ -1,0 +1,4992 @@
+From 0d0a5a7562688ef450eb1b5a5d8aa622e0196c56 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Thu, 24 Sep 2020 00:28:51 +0200
+Subject: [PATCH] mvebu: add support for Turris SFP module
+
+---
+ target/linux/mvebu/config-5.4                 |   1 +
+ .../8500-net-phylink-use-more-linkmode_.patch |  59 ++++
+ ...pagate-phy_attach_direct-return-code.patch |  48 +++
+ ...ove-clause-45-PHY-ksettings_set-impl.patch | 132 ++++++++
+ ...nd-clause-45-PHY-validation-workarou.patch |  84 ++++++
+ ...rror-on-failure-to-read-sfp-soft-sta.patch |  46 +++
+ ...x-failure-to-register-on-x86-systems.patch |  42 +++
+ ...-phy-add-PHY_INTERFACE_MODE_10GBASER.patch |  82 +++++
+ ...ing-PHY_INTERFACE_MODE_10GBASER-rath.patch | 263 ++++++++++++++++
+ ...ded-IRQ-print-to-phylink_bringup_phy.patch |  98 ++++++
+ ...w-2.5BASE-T-5GBASE-T-and-10GBASE-T-f.patch |  39 +++
+ ...phylink-allow-in-band-AN-for-USXGMII.patch |  35 +++
+ ...re-manual-flow-control-is-selected-a.patch | 107 +++++++
+ ...s-to-resolve-negotiated-flow-control.patch | 160 ++++++++++
+ ...e-phylib-resolved-flow-control-modes.patch |  67 ++++
+ ...e-error-message-when-validate-failed.patch |  41 +++
+ ...link-Test-if-MAC-PCS-support-Autoneg.patch |  31 ++
+ ...e-linkmode_test_bit-take-const-point.patch |  34 +++
+ ...s-for-parsing-SGMII-auto-negotiation.patch | 113 +++++++
+ ...mii_lpa_to_ethtool_lpa_x-to-linkmode.patch |  75 +++++
+ ...link-pcs-add-802.3-clause-22-helpers.patch | 271 +++++++++++++++++
+ ...link-pcs-add-802.3-clause-45-helpers.patch |  69 +++++
+ ...ge-phylink_mii_c22_pcs_set_advertise.patch |  77 +++++
+ ...y-add-supported_interfaces-to-phylib.patch |  58 ++++
+ ...supported_interfaces-to-marvell-PHYs.patch |  33 ++
+ ...ported_interfaces-to-marvell10g-PHYs.patch |  29 ++
+ .../8567-net-sfp-add-interface-bitmap.patch   | 248 +++++++++++++++
+ ...nk-improve-initial-mac-configuration.patch | 104 +++++++
+ ...ylink-use-phy-interface-mode-bitmaps.patch | 199 ++++++++++++
+ ...ta-fill-in-phy-interface-mode-bitmap.patch |  43 +++
+ ...-support-I2C-MDIO-protocol-for-RollB.patch | 285 ++++++++++++++++++
+ ...support-for-multigig-RollBall-module.patch | 171 +++++++++++
+ ...t-fail-attaching-phy-on-1000base-x-2.patch |  37 +++
+ ...PHYs-know-what-interfaces-are-suppor.patch | 111 +++++++
+ ...ll10g-read-copper-results-from-CSSR1.patch | 208 +++++++++++++
+ ...-net-phy-marvell10g-add-mdix-control.patch | 123 ++++++++
+ ...0g-add-energy-detect-power-down-tuna.patch | 152 ++++++++++
+ ...10g-place-in-powersave-mode-at-probe.patch |  95 ++++++
+ ...ll-introduce-read_poll_timeout-macro.patch |  77 +++++
+ ...duce-phy_read_mmd_poll_timeout-macro.patch |  53 ++++
+ ...0g-use-phy_read_mmd_poll_timeout-to-.patch |  51 ++++
+ ...t-marvell10g-report-firmware-version.patch |  65 ++++
+ ...oft-reset-the-PHY-when-coming-out-of.patch |  59 ++++
+ ...rvell10g-limit-soft-reset-to-88x3310.patch |  33 ++
+ ...ll10g-fix-temperature-sensor-on-2110.patch |  89 ++++++
+ ...0g-change-MACTYPE-according-to-host-.patch | 216 +++++++++++++
+ ...vell10g-fix-null-pointer-dereference.patch |  88 ++++++
+ 47 files changed, 4601 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.4/8500-net-phylink-use-more-linkmode_.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8543-net-phylink-propagate-phy_attach_direct-return-code.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8544-net-phylink-improve-clause-45-PHY-ksettings_set-impl.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8545-net-phylink-extend-clause-45-PHY-validation-workarou.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8546-net-sfp-report-error-on-failure-to-read-sfp-soft-sta.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8547-net-phylink-fix-failure-to-register-on-x86-systems.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8548-net-phy-add-PHY_INTERFACE_MODE_10GBASER.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8549-net-switch-to-using-PHY_INTERFACE_MODE_10GBASER-rath.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8550-net-phy-Added-IRQ-print-to-phylink_bringup_phy.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8551-net-phylink-Allow-2.5BASE-T-5GBASE-T-and-10GBASE-T-f.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8552-net-phylink-allow-in-band-AN-for-USXGMII.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8553-net-phylink-ensure-manual-flow-control-is-selected-a.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8554-net-add-helpers-to-resolve-negotiated-flow-control.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8555-net-phylink-use-phylib-resolved-flow-control-modes.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8556-phylink-Improve-error-message-when-validate-failed.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8557-net-phylink-Test-if-MAC-PCS-support-Autoneg.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8558-net-linkmode-make-linkmode_test_bit-take-const-point.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8559-mii-Add-helpers-for-parsing-SGMII-auto-negotiation.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8560-net-mii-convert-mii_lpa_to_ethtool_lpa_x-to-linkmode.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8561-net-phylink-pcs-add-802.3-clause-22-helpers.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8562-net-phylink-pcs-add-802.3-clause-45-helpers.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8563-net-phylink-change-phylink_mii_c22_pcs_set_advertise.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8564-net-phy-add-supported_interfaces-to-phylib.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8565-net-phy-add-supported_interfaces-to-marvell-PHYs.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8566-net-phy-add-supported_interfaces-to-marvell10g-PHYs.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8567-net-sfp-add-interface-bitmap.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8568-net-phylink-improve-initial-mac-configuration.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8569-net-phylink-use-phy-interface-mode-bitmaps.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8570-net-mvneta-fill-in-phy-interface-mode-bitmap.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8571-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8573-net-phylink-don-t-fail-attaching-phy-on-1000base-x-2.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8574-net-phylink-let-PHYs-know-what-interfaces-are-suppor.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8575-net-phy-marvell10g-read-copper-results-from-CSSR1.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8576-net-phy-marvell10g-add-mdix-control.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8577-net-phy-marvell10g-add-energy-detect-power-down-tuna.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8578-net-phy-marvell10g-place-in-powersave-mode-at-probe.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8579-iopoll-introduce-read_poll_timeout-macro.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8580-net-phy-introduce-phy_read_mmd_poll_timeout-macro.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8581-net-phy-marvell10g-use-phy_read_mmd_poll_timeout-to-.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8582-net-marvell10g-report-firmware-version.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8583-net-marvell10g-soft-reset-the-PHY-when-coming-out-of.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8584-net-phy-marvell10g-limit-soft-reset-to-88x3310.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8585-net-phy-marvell10g-fix-temperature-sensor-on-2110.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8586-net-phy-marvell10g-change-MACTYPE-according-to-host-.patch
+ create mode 100644 target/linux/mvebu/patches-5.4/8587-net-phy-marvell10g-fix-null-pointer-dereference.patch
+
+diff --git a/target/linux/mvebu/config-5.4 b/target/linux/mvebu/config-5.4
+index a13cb8d..eca5632 100644
+--- a/target/linux/mvebu/config-5.4
++++ b/target/linux/mvebu/config-5.4
+@@ -310,6 +310,7 @@ CONFIG_MACH_MVEBU_V7=y
+ CONFIG_MAGIC_SYSRQ=y
+ CONFIG_MANGLE_BOOTARGS=y
+ CONFIG_MARVELL_PHY=y
++CONFIG_MARVELL_10G_PHY=y
+ CONFIG_MDIO_BUS=y
+ CONFIG_MDIO_DEVICE=y
+ CONFIG_MDIO_I2C=y
+diff --git a/target/linux/mvebu/patches-5.4/8500-net-phylink-use-more-linkmode_.patch b/target/linux/mvebu/patches-5.4/8500-net-phylink-use-more-linkmode_.patch
+new file mode 100644
+index 0000000..2c096a5
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8500-net-phylink-use-more-linkmode_.patch
+@@ -0,0 +1,59 @@
++From 5ab0904a72907660913194a4c40cb16a73f98978 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 15 Oct 2019 11:28:46 +0100
++Subject: [PATCH 8500/8586] net: phylink: use more linkmode_*
++
++Use more linkmode_* helpers rather than open-coding the bitmap
++operations.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 7 ++-----
++ include/linux/linkmode.h  | 6 ++++++
++ 2 files changed, 8 insertions(+), 5 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index bf5bbb565cf5..fa04d6cfded2 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -133,9 +133,7 @@ static int phylink_is_empty_linkmode(const unsigned long *linkmode)
++ 	phylink_set(tmp, Pause);
++ 	phylink_set(tmp, Asym_Pause);
++ 
++-	bitmap_andnot(tmp, linkmode, tmp, __ETHTOOL_LINK_MODE_MASK_NBITS);
++-
++-	return linkmode_empty(tmp);
+++	return linkmode_subset(linkmode, tmp);
++ }
++ 
++ static const char *phylink_an_mode_str(unsigned int mode)
++@@ -1754,8 +1752,7 @@ static int phylink_sfp_module_insert(void *upstream,
++ 	if (phy_interface_mode_is_8023z(iface) && pl->phydev)
++ 		return -EINVAL;
++ 
++-	changed = !bitmap_equal(pl->supported, support,
++-				__ETHTOOL_LINK_MODE_MASK_NBITS);
+++	changed = !linkmode_equal(pl->supported, support);
++ 	if (changed) {
++ 		linkmode_copy(pl->supported, support);
++ 		linkmode_copy(pl->link_config.advertising, config.advertising);
++diff --git a/include/linux/linkmode.h b/include/linux/linkmode.h
++index a99c58866860..fe740031339d 100644
++--- a/include/linux/linkmode.h
+++++ b/include/linux/linkmode.h
++@@ -82,4 +82,10 @@ static inline int linkmode_equal(const unsigned long *src1,
++ 	return bitmap_equal(src1, src2, __ETHTOOL_LINK_MODE_MASK_NBITS);
++ }
++ 
+++static inline int linkmode_subset(const unsigned long *src1,
+++				  const unsigned long *src2)
+++{
+++	return bitmap_subset(src1, src2, __ETHTOOL_LINK_MODE_MASK_NBITS);
+++}
+++
++ #endif /* __LINKMODE_H */
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8543-net-phylink-propagate-phy_attach_direct-return-code.patch b/target/linux/mvebu/patches-5.4/8543-net-phylink-propagate-phy_attach_direct-return-code.patch
+new file mode 100644
+index 0000000..7d093f7
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8543-net-phylink-propagate-phy_attach_direct-return-code.patch
+@@ -0,0 +1,48 @@
++From 71a4288b354a607b631990d135558270bc7b4083 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Thu, 12 Dec 2019 17:16:12 +0000
++Subject: [PATCH 8543/8586] net: phylink: propagate phy_attach_direct() return
++ code
++
++of_phy_attach() hides the return value of phy_attach_direct(), forcing
++us to return a "generic" ENODEV error code that is indistinguishable
++from the lack-of-phy-property case.
++
++Switch to using of_phy_find_device() to find the PHY device, and then
++propagating any phy_attach_direct() error back to the caller.
++
++Link: https://lore.kernel.org/lkml/20191210113829.GT25745@shell.armlinux.org.uk
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: Jakub Kicinski <jakub.kicinski@netronome.com>
++---
++ drivers/net/phy/phylink.c | 9 ++++++---
++ 1 file changed, 6 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index e49232266c79..2a0dd05e6109 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -860,14 +860,17 @@ int phylink_of_phy_connect(struct phylink *pl, struct device_node *dn,
++ 		return 0;
++ 	}
++ 
++-	phy_dev = of_phy_attach(pl->netdev, phy_node, flags,
++-				pl->link_interface);
+++	phy_dev = of_phy_find_device(phy_node);
++ 	/* We're done with the phy_node handle */
++ 	of_node_put(phy_node);
++-
++ 	if (!phy_dev)
++ 		return -ENODEV;
++ 
+++	ret = phy_attach_direct(pl->netdev, phy_dev, flags,
+++				pl->link_interface);
+++	if (ret)
+++		return ret;
+++
++ 	ret = phylink_bringup_phy(pl, phy_dev, pl->link_config.interface);
++ 	if (ret)
++ 		phy_detach(phy_dev);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8544-net-phylink-improve-clause-45-PHY-ksettings_set-impl.patch b/target/linux/mvebu/patches-5.4/8544-net-phylink-improve-clause-45-PHY-ksettings_set-impl.patch
+new file mode 100644
+index 0000000..1ed8dd8
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8544-net-phylink-improve-clause-45-PHY-ksettings_set-impl.patch
+@@ -0,0 +1,132 @@
++From 46b9ce1de0cbe081a0f52a9da2611107adb99019 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 13 Dec 2019 18:22:02 +0000
++Subject: [PATCH 8544/8586] net: phylink: improve clause 45 PHY ksettings_set
++ implementation
++
++While testing ethtool with the Methode DM7052 module, it was noticed
++that attempting to set the advertising mask results in the mask being
++truncated to the support offered by the currently chosen PHY interface
++mode.
++
++When a PHY dynamically changes the PHY interface mode, limiting the
++advertising mask in this way is not correct - if the PHY happened to
++negotiate 10GBASE-T, and selected 10GBASE-R as the host interface, we
++don't want to restrict the advertisement to just 10GBASE-* modes.
++
++Rework setting the advertisement to take account of this; do not pass
++the requested advertisement through phylink_validate(), but rely on
++the advertisement restriction (supported mask) set when the PHY was
++initially setup.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 84 ++++++++++++++++++++++++---------------
++ 1 file changed, 53 insertions(+), 31 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 2a0dd05e6109..298104ef78b8 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -1230,44 +1230,66 @@ int phylink_ethtool_ksettings_set(struct phylink *pl,
++ 		__set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, config.advertising);
++ 	}
++ 
++-	if (phylink_validate(pl, support, &config))
++-		return -EINVAL;
++-
++-	/* If autonegotiation is enabled, we must have an advertisement */
++-	if (config.an_enabled && phylink_is_empty_linkmode(config.advertising))
++-		return -EINVAL;
++-
++-	our_kset = *kset;
++-	linkmode_copy(our_kset.link_modes.advertising, config.advertising);
++-	our_kset.base.speed = config.speed;
++-	our_kset.base.duplex = config.duplex;
++-
++-	/* If we have a PHY, configure the phy */
++ 	if (pl->phydev) {
+++		/* If we have a PHY, we process the kset change via phylib.
+++		 * phylib will call our link state function if the PHY
+++		 * parameters have changed, which will trigger a resolve
+++		 * and update the MAC configuration.
+++		 */
+++		our_kset = *kset;
+++		linkmode_copy(our_kset.link_modes.advertising,
+++			      config.advertising);
+++		our_kset.base.speed = config.speed;
+++		our_kset.base.duplex = config.duplex;
+++
++ 		ret = phy_ethtool_ksettings_set(pl->phydev, &our_kset);
++ 		if (ret)
++ 			return ret;
++-	}
++ 
++-	mutex_lock(&pl->state_mutex);
++-	/* Configure the MAC to match the new settings */
++-	linkmode_copy(pl->link_config.advertising, our_kset.link_modes.advertising);
++-	pl->link_config.interface = config.interface;
++-	pl->link_config.speed = our_kset.base.speed;
++-	pl->link_config.duplex = our_kset.base.duplex;
++-	pl->link_config.an_enabled = our_kset.base.autoneg != AUTONEG_DISABLE;
+++		mutex_lock(&pl->state_mutex);
+++		/* Save the new configuration */
+++		linkmode_copy(pl->link_config.advertising,
+++			      our_kset.link_modes.advertising);
+++		pl->link_config.interface = config.interface;
+++		pl->link_config.speed = our_kset.base.speed;
+++		pl->link_config.duplex = our_kset.base.duplex;
+++		pl->link_config.an_enabled = our_kset.base.autoneg !=
+++					     AUTONEG_DISABLE;
+++		mutex_unlock(&pl->state_mutex);
+++	} else {
+++		/* For a fixed link, this isn't able to change any parameters,
+++		 * which just leaves inband mode.
+++		 */
+++		if (phylink_validate(pl, support, &config))
+++			return -EINVAL;
++ 
++-	/* If we have a PHY, phylib will call our link state function if the
++-	 * mode has changed, which will trigger a resolve and update the MAC
++-	 * configuration. For a fixed link, this isn't able to change any
++-	 * parameters, which just leaves inband mode.
++-	 */
++-	if (pl->cur_link_an_mode == MLO_AN_INBAND &&
++-	    !test_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state)) {
++-		phylink_mac_config(pl, &pl->link_config);
++-		phylink_mac_an_restart(pl);
+++		/* If autonegotiation is enabled, we must have an advertisement */
+++		if (config.an_enabled &&
+++		    phylink_is_empty_linkmode(config.advertising))
+++			return -EINVAL;
+++
+++		mutex_lock(&pl->state_mutex);
+++		linkmode_copy(pl->link_config.advertising, config.advertising);
+++		pl->link_config.interface = config.interface;
+++		pl->link_config.speed = config.speed;
+++		pl->link_config.duplex = config.duplex;
+++		pl->link_config.an_enabled = kset->base.autoneg !=
+++					     AUTONEG_DISABLE;
+++
+++		if (pl->cur_link_an_mode == MLO_AN_INBAND &&
+++		    !test_bit(PHYLINK_DISABLE_STOPPED,
+++			      &pl->phylink_disable_state)) {
+++			/* If in 802.3z mode, this updates the advertisement.
+++			 *
+++			 * If we are in SGMII mode without a PHY, there is no
+++			 * advertisement; the only thing we have is the pause
+++			 * modes which can only come from a PHY.
+++			 */
+++			phylink_mac_config(pl, &pl->link_config);
+++			phylink_mac_an_restart(pl);
+++		}
+++		mutex_unlock(&pl->state_mutex);
++ 	}
++-	mutex_unlock(&pl->state_mutex);
++ 
++ 	return 0;
++ }
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8545-net-phylink-extend-clause-45-PHY-validation-workarou.patch b/target/linux/mvebu/patches-5.4/8545-net-phylink-extend-clause-45-PHY-validation-workarou.patch
+new file mode 100644
+index 0000000..cd2dca5
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8545-net-phylink-extend-clause-45-PHY-validation-workarou.patch
+@@ -0,0 +1,84 @@
++From c4302983c40445d19e360bfa1eb6b9069bdbda58 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 13 Dec 2019 18:22:07 +0000
++Subject: [PATCH 8545/8586] net: phylink: extend clause 45 PHY validation
++ workaround
++
++Commit e45d1f5288b8 ("net: phylink: support Clause 45 PHYs on SFP+
++modules") added a workaround to support clause 45 PHYs which
++dynamically switch their interface mode on SFP+ modules.  This was
++implemented by validating the PHYs supported/advertising using
++PHY_INTERFACE_MODE_NA, rather than the specific interface mode that
++we attached the PHY with.
++
++However, we already have a situation where phylink is used to connect
++a Marvell 88X3310 PHY which also behaves in exactly the same way, but
++which seemingly doesn't need this.  The reason seems to be that the
++mvpp2 driver sets a whole bunch of link modes for
++PHY_INTERFACE_MODE_10GKR down to 10Mb/s, despite 10GBASE-R not actually
++supporting anything but 10Gb/s speeds.
++
++When testing with drivers that (correctly) take the mvneta approach,
++where the validate() method only returns what can be supported /
++advertised for the specified link mode, we find that Clause 45 PHYs do
++not behave as we expect: their advertisement is restricted to what
++the current link will support, rather than what the PHY supports
++through its dynamic switching.
++
++Extend this workaround to all such cases; if we have a Clause 45 PHY
++attaching via any means, except in USXGMII, XAUI and RXAUI which are
++all unable to support this dynamic switching or have other solutions
++to it, then we need to validate using PHY_INTERFACE_MODE_NA.
++
++This should allow mvpp2 to switch to a more conformant validate()
++implementation.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 22 +++++++++++++---------
++ 1 file changed, 13 insertions(+), 9 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 298104ef78b8..0065e8e8c623 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -736,7 +736,19 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ 	memset(&config, 0, sizeof(config));
++ 	linkmode_copy(supported, phy->supported);
++ 	linkmode_copy(config.advertising, phy->advertising);
++-	config.interface = interface;
+++
+++	/* Clause 45 PHYs switch their Serdes lane between several different
+++	 * modes, normally 10GBASE-R, SGMII. Some use 2500BASE-X for 2.5G
+++	 * speeds. We really need to know which interface modes the PHY and
+++	 * MAC supports to properly work out which linkmodes can be supported.
+++	 */
+++	if (phy->is_c45 &&
+++	    interface != PHY_INTERFACE_MODE_RXAUI &&
+++	    interface != PHY_INTERFACE_MODE_XAUI &&
+++	    interface != PHY_INTERFACE_MODE_USXGMII)
+++		config.interface = PHY_INTERFACE_MODE_NA;
+++	else
+++		config.interface = interface;
++ 
++ 	ret = phylink_validate(pl, supported, &config);
++ 	if (ret)
++@@ -1905,14 +1917,6 @@ static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
++ 	if (ret < 0)
++ 		return ret;
++ 
++-	/* Clause 45 PHYs switch their Serdes lane between several different
++-	 * modes, normally 10GBASE-R, SGMII. Some use 2500BASE-X for 2.5G
++-	 * speeds.  We really need to know which interface modes the PHY and
++-	 * MAC supports to properly work out which linkmodes can be supported.
++-	 */
++-	if (phy->is_c45)
++-		interface = PHY_INTERFACE_MODE_NA;
++-
++ 	ret = phylink_bringup_phy(pl, phy, interface);
++ 	if (ret)
++ 		phy_detach(phy);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8546-net-sfp-report-error-on-failure-to-read-sfp-soft-sta.patch b/target/linux/mvebu/patches-5.4/8546-net-sfp-report-error-on-failure-to-read-sfp-soft-sta.patch
+new file mode 100644
+index 0000000..2fd37bd
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8546-net-sfp-report-error-on-failure-to-read-sfp-soft-sta.patch
+@@ -0,0 +1,46 @@
++From 0be0dc493d87e96d0b34441777173f69bfd48432 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 17 Dec 2019 13:50:29 +0000
++Subject: [PATCH 8546/8586] net: sfp: report error on failure to read sfp soft
++ status
++
++Report a rate-limited error if we fail to read the SFP soft status,
++and preserve the current status in that case. This avoids I2C bus
++errors from triggering a link flap.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/sfp.c | 11 +++++++++--
++ 1 file changed, 9 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index e54aef921038..73c2969f11a4 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -442,13 +442,20 @@ static unsigned int sfp_soft_get_state(struct sfp *sfp)
++ {
++ 	unsigned int state = 0;
++ 	u8 status;
+++	int ret;
++ 
++-	if (sfp_read(sfp, true, SFP_STATUS, &status, sizeof(status)) ==
++-		     sizeof(status)) {
+++	ret = sfp_read(sfp, true, SFP_STATUS, &status, sizeof(status));
+++	if (ret == sizeof(status)) {
++ 		if (status & SFP_STATUS_RX_LOS)
++ 			state |= SFP_F_LOS;
++ 		if (status & SFP_STATUS_TX_FAULT)
++ 			state |= SFP_F_TX_FAULT;
+++	} else {
+++		dev_err_ratelimited(sfp->dev,
+++				    "failed to read SFP soft status: %d\n",
+++				    ret);
+++		/* Preserve the current state */
+++		state = sfp->state;
++ 	}
++ 
++ 	return state & sfp->state_soft_mask;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8547-net-phylink-fix-failure-to-register-on-x86-systems.patch b/target/linux/mvebu/patches-5.4/8547-net-phylink-fix-failure-to-register-on-x86-systems.patch
+new file mode 100644
+index 0000000..89ccba7
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8547-net-phylink-fix-failure-to-register-on-x86-systems.patch
+@@ -0,0 +1,42 @@
++From 5015775018c91b0e73ba0e1fe62fbe6c1e002fda Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 3 Jan 2020 15:13:56 +0000
++Subject: [PATCH 8547/8586] net: phylink: fix failure to register on x86
++ systems
++
++The kernel test robot reports a boot failure with qemu in 5.5-rc,
++referencing commit 2203cbf2c8b5 ("net: sfp: move fwnode parsing into
++sfp-bus layer"). This is caused by phylink_create() being passed a
++NULL fwnode, causing fwnode_property_get_reference_args() to return
++-EINVAL.
++
++Don't attempt to attach to a SFP bus if we have no fwnode, which
++avoids this issue.
++
++Reported-by: kernel test robot <rong.a.chen@intel.com>
++Fixes: 2203cbf2c8b5 ("net: sfp: move fwnode parsing into sfp-bus layer")
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 0065e8e8c623..850e5f86e932 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -571,6 +571,9 @@ static int phylink_register_sfp(struct phylink *pl,
++ 	struct sfp_bus *bus;
++ 	int ret;
++ 
+++	if (!fwnode)
+++		return 0;
+++
++ 	bus = sfp_bus_find_fwnode(fwnode);
++ 	if (IS_ERR(bus)) {
++ 		ret = PTR_ERR(bus);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8548-net-phy-add-PHY_INTERFACE_MODE_10GBASER.patch b/target/linux/mvebu/patches-5.4/8548-net-phy-add-PHY_INTERFACE_MODE_10GBASER.patch
+new file mode 100644
+index 0000000..08079f1
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8548-net-phy-add-PHY_INTERFACE_MODE_10GBASER.patch
+@@ -0,0 +1,82 @@
++From a1d3dba2b5e1f568d5de316cc6998dd6ea9f6bff Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 3 Jan 2020 20:43:17 +0000
++Subject: [PATCH 8548/8586] net: phy: add PHY_INTERFACE_MODE_10GBASER
++
++Recent discussion has revealed that the use of PHY_INTERFACE_MODE_10GKR
++is incorrect. Add a 10GBASE-R definition, document both the -R and -KR
++versions, and the fact that 10GKR was used incorrectly.
++
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ Documentation/networking/phy.rst | 18 ++++++++++++++++++
++ include/linux/phy.h              | 12 ++++++++----
++ 2 files changed, 26 insertions(+), 4 deletions(-)
++
++diff --git a/Documentation/networking/phy.rst b/Documentation/networking/phy.rst
++index a689966bc4be..8adeca741ff9 100644
++--- a/Documentation/networking/phy.rst
+++++ b/Documentation/networking/phy.rst
++@@ -267,6 +267,24 @@ Some of the interface modes are described below:
++     duplex, pause or other settings.  This is dependent on the MAC and/or
++     PHY behaviour.
++ 
+++``PHY_INTERFACE_MODE_10GBASER``
+++    This is the IEEE 802.3 Clause 49 defined 10GBASE-R protocol used with
+++    various different mediums. Please refer to the IEEE standard for a
+++    definition of this.
+++
+++    Note: 10GBASE-R is just one protocol that can be used with XFI and SFI.
+++    XFI and SFI permit multiple protocols over a single SERDES lane, and
+++    also defines the electrical characteristics of the signals with a host
+++    compliance board plugged into the host XFP/SFP connector. Therefore,
+++    XFI and SFI are not PHY interface types in their own right.
+++
+++``PHY_INTERFACE_MODE_10GKR``
+++    This is the IEEE 802.3 Clause 49 defined 10GBASE-R with Clause 73
+++    autonegotiation. Please refer to the IEEE standard for further
+++    information.
+++
+++    Note: due to legacy usage, some 10GBASE-R usage incorrectly makes
+++    use of this definition.
++ 
++ Pause frames / flow control
++ ===========================
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index 80750783b5b0..14fbadac1777 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -99,9 +99,11 @@ typedef enum {
++ 	PHY_INTERFACE_MODE_2500BASEX,
++ 	PHY_INTERFACE_MODE_RXAUI,
++ 	PHY_INTERFACE_MODE_XAUI,
++-	/* 10GBASE-KR, XFI, SFI - single lane 10G Serdes */
++-	PHY_INTERFACE_MODE_10GKR,
+++	/* 10GBASE-R, XFI, SFI - single lane 10G Serdes */
+++	PHY_INTERFACE_MODE_10GBASER,
++ 	PHY_INTERFACE_MODE_USXGMII,
+++	/* 10GBASE-KR - with Clause 73 AN */
+++	PHY_INTERFACE_MODE_10GKR,
++ 	PHY_INTERFACE_MODE_MAX,
++ } phy_interface_t;
++ 
++@@ -175,10 +177,12 @@ static inline const char *phy_modes(phy_interface_t interface)
++ 		return "rxaui";
++ 	case PHY_INTERFACE_MODE_XAUI:
++ 		return "xaui";
++-	case PHY_INTERFACE_MODE_10GKR:
++-		return "10gbase-kr";
+++	case PHY_INTERFACE_MODE_10GBASER:
+++		return "10gbase-r";
++ 	case PHY_INTERFACE_MODE_USXGMII:
++ 		return "usxgmii";
+++	case PHY_INTERFACE_MODE_10GKR:
+++		return "10gbase-kr";
++ 	default:
++ 		return "unknown";
++ 	}
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8549-net-switch-to-using-PHY_INTERFACE_MODE_10GBASER-rath.patch b/target/linux/mvebu/patches-5.4/8549-net-switch-to-using-PHY_INTERFACE_MODE_10GBASER-rath.patch
+new file mode 100644
+index 0000000..f3d2a0b
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8549-net-switch-to-using-PHY_INTERFACE_MODE_10GBASER-rath.patch
+@@ -0,0 +1,263 @@
++From 0f9e62f7567122200d3f79be451cc662e82d5963 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 3 Jan 2020 20:43:23 +0000
++Subject: [PATCH 8549/8586] net: switch to using PHY_INTERFACE_MODE_10GBASER
++ rather than 10GKR
++
++Switch network drivers, phy drivers, and SFP/phylink over to use the
++more correct 10GBASE-R, rather than 10GBASE-KR. 10GBASE-KR is backplane
++ethernet, which is 10GBASE-R with autonegotiation on top, which our
++current usage on the affected platforms does not have.
++
++The only remaining user of PHY_INTERFACE_MODE_10GKR is the Aquantia
++PHY, which has a separate mode for 10GBASE-KR.
++
++For Marvell mvpp2, we detect 10GBASE-KR, and rewrite it to 10GBASE-R
++for compatibility with existing DT - this is the only network driver
++at present that makes use of PHY_INTERFACE_MODE_10GKR.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ .../net/ethernet/marvell/mvpp2/mvpp2_main.c   | 19 +++++++++++++-----
++ drivers/net/phy/aquantia_main.c               |  7 +++++--
++ drivers/net/phy/marvell10g.c                  |  9 +++++----
++ drivers/net/phy/phylink.c                     |  1 +
++ drivers/net/phy/sfp-bus.c                     |  2 +-
++ drivers/phy/marvell/phy-mvebu-cp110-comphy.c  | 20 +++++++++----------
++ 6 files changed, 36 insertions(+), 22 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index 0f136f1af5d1..3b971c998379 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -1114,7 +1114,7 @@ mvpp2_shared_interrupt_mask_unmask(struct mvpp2_port *port, bool mask)
++ /* Port configuration routines */
++ static bool mvpp2_is_xlg(phy_interface_t interface)
++ {
++-	return interface == PHY_INTERFACE_MODE_10GKR ||
+++	return interface == PHY_INTERFACE_MODE_10GBASER ||
++ 	       interface == PHY_INTERFACE_MODE_XAUI;
++ }
++ 
++@@ -1200,7 +1200,7 @@ static int mvpp22_gop_init(struct mvpp2_port *port)
++ 	case PHY_INTERFACE_MODE_2500BASEX:
++ 		mvpp22_gop_init_sgmii(port);
++ 		break;
++-	case PHY_INTERFACE_MODE_10GKR:
+++	case PHY_INTERFACE_MODE_10GBASER:
++ 		if (port->gop_id != 0)
++ 			goto invalid_conf;
++ 		mvpp22_gop_init_10gkr(port);
++@@ -1649,7 +1649,7 @@ static void mvpp22_pcs_reset_deassert(struct mvpp2_port *port)
++ 	xpcs = priv->iface_base + MVPP22_XPCS_BASE(port->gop_id);
++ 
++ 	switch (port->phy_interface) {
++-	case PHY_INTERFACE_MODE_10GKR:
+++	case PHY_INTERFACE_MODE_10GBASER:
++ 		val = readl(mpcs + MVPP22_MPCS_CLK_RESET);
++ 		val |= MAC_CLK_RESET_MAC | MAC_CLK_RESET_SD_RX |
++ 		       MAC_CLK_RESET_SD_TX;
++@@ -4754,7 +4754,7 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 
++ 	/* Invalid combinations */
++ 	switch (state->interface) {
++-	case PHY_INTERFACE_MODE_10GKR:
+++	case PHY_INTERFACE_MODE_10GBASER:
++ 	case PHY_INTERFACE_MODE_XAUI:
++ 		if (port->gop_id != 0)
++ 			goto empty_set;
++@@ -4776,7 +4776,7 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 	phylink_set(mask, Asym_Pause);
++ 
++ 	switch (state->interface) {
++-	case PHY_INTERFACE_MODE_10GKR:
+++	case PHY_INTERFACE_MODE_10GBASER:
++ 	case PHY_INTERFACE_MODE_XAUI:
++ 	case PHY_INTERFACE_MODE_NA:
++ 		if (port->gop_id == 0) {
++@@ -5230,6 +5230,15 @@ static int mvpp2_port_probe(struct platform_device *pdev,
++ 		goto err_free_netdev;
++ 	}
++ 
+++	/*
+++	 * Rewrite 10GBASE-KR to 10GBASE-R for compatibility with existing DT.
+++	 * Existing usage of 10GBASE-KR is not correct; no backplane
+++	 * negotiation is done, and this driver does not actually support
+++	 * 10GBASE-KR.
+++	 */
+++	if (phy_mode == PHY_INTERFACE_MODE_10GKR)
+++		phy_mode = PHY_INTERFACE_MODE_10GBASER;
+++
++ 	if (port_node) {
++ 		comphy = devm_of_phy_get(&pdev->dev, port_node, NULL);
++ 		if (IS_ERR(comphy)) {
++diff --git a/drivers/net/phy/aquantia_main.c b/drivers/net/phy/aquantia_main.c
++index 975789d9349d..31927b2c7d5a 100644
++--- a/drivers/net/phy/aquantia_main.c
+++++ b/drivers/net/phy/aquantia_main.c
++@@ -358,9 +358,11 @@ static int aqr107_read_status(struct phy_device *phydev)
++ 
++ 	switch (FIELD_GET(MDIO_PHYXS_VEND_IF_STATUS_TYPE_MASK, val)) {
++ 	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_KR:
++-	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_XFI:
++ 		phydev->interface = PHY_INTERFACE_MODE_10GKR;
++ 		break;
+++	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_XFI:
+++		phydev->interface = PHY_INTERFACE_MODE_10GBASER;
+++		break;
++ 	case MDIO_PHYXS_VEND_IF_STATUS_TYPE_USXGMII:
++ 		phydev->interface = PHY_INTERFACE_MODE_USXGMII;
++ 		break;
++@@ -493,7 +495,8 @@ static int aqr107_config_init(struct phy_device *phydev)
++ 	    phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
++ 	    phydev->interface != PHY_INTERFACE_MODE_XGMII &&
++ 	    phydev->interface != PHY_INTERFACE_MODE_USXGMII &&
++-	    phydev->interface != PHY_INTERFACE_MODE_10GKR)
+++	    phydev->interface != PHY_INTERFACE_MODE_10GKR &&
+++	    phydev->interface != PHY_INTERFACE_MODE_10GBASER)
++ 		return -ENODEV;
++ 
++ 	WARN(phydev->interface == PHY_INTERFACE_MODE_XGMII,
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 3b99882692e3..ac8520dc0913 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -281,7 +281,7 @@ static int mv3310_config_init(struct phy_device *phydev)
++ 	    phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
++ 	    phydev->interface != PHY_INTERFACE_MODE_XAUI &&
++ 	    phydev->interface != PHY_INTERFACE_MODE_RXAUI &&
++-	    phydev->interface != PHY_INTERFACE_MODE_10GKR)
+++	    phydev->interface != PHY_INTERFACE_MODE_10GBASER)
++ 		return -ENODEV;
++ 
++ 	return 0;
++@@ -363,16 +363,17 @@ static void mv3310_update_interface(struct phy_device *phydev)
++ {
++ 	if ((phydev->interface == PHY_INTERFACE_MODE_SGMII ||
++ 	     phydev->interface == PHY_INTERFACE_MODE_2500BASEX ||
++-	     phydev->interface == PHY_INTERFACE_MODE_10GKR) && phydev->link) {
+++	     phydev->interface == PHY_INTERFACE_MODE_10GBASER) &&
+++	    phydev->link) {
++ 		/* The PHY automatically switches its serdes interface (and
++-		 * active PHYXS instance) between Cisco SGMII, 10GBase-KR and
+++		 * active PHYXS instance) between Cisco SGMII, 10GBase-R and
++ 		 * 2500BaseX modes according to the speed.  Florian suggests
++ 		 * setting phydev->interface to communicate this to the MAC.
++ 		 * Only do this if we are already in one of the above modes.
++ 		 */
++ 		switch (phydev->speed) {
++ 		case SPEED_10000:
++-			phydev->interface = PHY_INTERFACE_MODE_10GKR;
+++			phydev->interface = PHY_INTERFACE_MODE_10GBASER;
++ 			break;
++ 		case SPEED_2500:
++ 			phydev->interface = PHY_INTERFACE_MODE_2500BASEX;
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 850e5f86e932..a894c602801f 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -298,6 +298,7 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
++ 			break;
++ 
++ 		case PHY_INTERFACE_MODE_10GKR:
+++		case PHY_INTERFACE_MODE_10GBASER:
++ 			phylink_set(pl->supported, 10baseT_Half);
++ 			phylink_set(pl->supported, 10baseT_Full);
++ 			phylink_set(pl->supported, 100baseT_Half);
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index 36c54a1f1b6c..e1400ee9b2b1 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -373,7 +373,7 @@ phy_interface_t sfp_select_interface(struct sfp_bus *bus,
++ 	    phylink_test(link_modes, 10000baseLRM_Full) ||
++ 	    phylink_test(link_modes, 10000baseER_Full) ||
++ 	    phylink_test(link_modes, 10000baseT_Full))
++-		return PHY_INTERFACE_MODE_10GKR;
+++		return PHY_INTERFACE_MODE_10GBASER;
++ 
++ 	if (phylink_test(link_modes, 2500baseX_Full))
++ 		return PHY_INTERFACE_MODE_2500BASEX;
++diff --git a/drivers/phy/marvell/phy-mvebu-cp110-comphy.c b/drivers/phy/marvell/phy-mvebu-cp110-comphy.c
++index e3b87c94aaf6..e41367f36ee1 100644
++--- a/drivers/phy/marvell/phy-mvebu-cp110-comphy.c
+++++ b/drivers/phy/marvell/phy-mvebu-cp110-comphy.c
++@@ -221,7 +221,7 @@ static const struct mvebu_comphy_conf mvebu_comphy_cp110_modes[] = {
++ 	ETH_CONF(2, 0, PHY_INTERFACE_MODE_SGMII, 0x1, COMPHY_FW_MODE_SGMII),
++ 	ETH_CONF(2, 0, PHY_INTERFACE_MODE_2500BASEX, 0x1, COMPHY_FW_MODE_HS_SGMII),
++ 	ETH_CONF(2, 0, PHY_INTERFACE_MODE_RXAUI, 0x1, COMPHY_FW_MODE_RXAUI),
++-	ETH_CONF(2, 0, PHY_INTERFACE_MODE_10GKR, 0x1, COMPHY_FW_MODE_XFI),
+++	ETH_CONF(2, 0, PHY_INTERFACE_MODE_10GBASER, 0x1, COMPHY_FW_MODE_XFI),
++ 	GEN_CONF(2, 0, PHY_MODE_USB_HOST_SS, COMPHY_FW_MODE_USB3H),
++ 	GEN_CONF(2, 0, PHY_MODE_SATA, COMPHY_FW_MODE_SATA),
++ 	GEN_CONF(2, 0, PHY_MODE_PCIE, COMPHY_FW_MODE_PCIE),
++@@ -235,14 +235,14 @@ static const struct mvebu_comphy_conf mvebu_comphy_cp110_modes[] = {
++ 	/* lane 4 */
++ 	ETH_CONF(4, 0, PHY_INTERFACE_MODE_SGMII, 0x2, COMPHY_FW_MODE_SGMII),
++ 	ETH_CONF(4, 0, PHY_INTERFACE_MODE_2500BASEX, 0x2, COMPHY_FW_MODE_HS_SGMII),
++-	ETH_CONF(4, 0, PHY_INTERFACE_MODE_10GKR, 0x2, COMPHY_FW_MODE_XFI),
+++	ETH_CONF(4, 0, PHY_INTERFACE_MODE_10GBASER, 0x2, COMPHY_FW_MODE_XFI),
++ 	ETH_CONF(4, 0, PHY_INTERFACE_MODE_RXAUI, 0x2, COMPHY_FW_MODE_RXAUI),
++ 	GEN_CONF(4, 0, PHY_MODE_USB_DEVICE_SS, COMPHY_FW_MODE_USB3D),
++ 	GEN_CONF(4, 1, PHY_MODE_USB_HOST_SS, COMPHY_FW_MODE_USB3H),
++ 	GEN_CONF(4, 1, PHY_MODE_PCIE, COMPHY_FW_MODE_PCIE),
++ 	ETH_CONF(4, 1, PHY_INTERFACE_MODE_SGMII, 0x1, COMPHY_FW_MODE_SGMII),
++ 	ETH_CONF(4, 1, PHY_INTERFACE_MODE_2500BASEX, -1, COMPHY_FW_MODE_HS_SGMII),
++-	ETH_CONF(4, 1, PHY_INTERFACE_MODE_10GKR, -1, COMPHY_FW_MODE_XFI),
+++	ETH_CONF(4, 1, PHY_INTERFACE_MODE_10GBASER, -1, COMPHY_FW_MODE_XFI),
++ 	/* lane 5 */
++ 	ETH_CONF(5, 1, PHY_INTERFACE_MODE_RXAUI, 0x2, COMPHY_FW_MODE_RXAUI),
++ 	GEN_CONF(5, 1, PHY_MODE_SATA, COMPHY_FW_MODE_SATA),
++@@ -342,7 +342,7 @@ static int mvebu_comphy_ethernet_init_reset(struct mvebu_comphy_lane *lane)
++ 		 MVEBU_COMPHY_SERDES_CFG0_RXAUI_MODE);
++ 
++ 	switch (lane->submode) {
++-	case PHY_INTERFACE_MODE_10GKR:
+++	case PHY_INTERFACE_MODE_10GBASER:
++ 		val |= MVEBU_COMPHY_SERDES_CFG0_GEN_RX(0xe) |
++ 		       MVEBU_COMPHY_SERDES_CFG0_GEN_TX(0xe);
++ 		break;
++@@ -417,7 +417,7 @@ static int mvebu_comphy_ethernet_init_reset(struct mvebu_comphy_lane *lane)
++ 	/* refclk selection */
++ 	val = readl(priv->base + MVEBU_COMPHY_MISC_CTRL0(lane->id));
++ 	val &= ~MVEBU_COMPHY_MISC_CTRL0_REFCLK_SEL;
++-	if (lane->submode == PHY_INTERFACE_MODE_10GKR)
+++	if (lane->submode == PHY_INTERFACE_MODE_10GBASER)
++ 		val |= MVEBU_COMPHY_MISC_CTRL0_ICP_FORCE;
++ 	writel(val, priv->base + MVEBU_COMPHY_MISC_CTRL0(lane->id));
++ 
++@@ -564,7 +564,7 @@ static int mvebu_comphy_set_mode_rxaui(struct phy *phy)
++ 	return mvebu_comphy_init_plls(lane);
++ }
++ 
++-static int mvebu_comphy_set_mode_10gkr(struct phy *phy)
+++static int mvebu_comphy_set_mode_10gbaser(struct phy *phy)
++ {
++ 	struct mvebu_comphy_lane *lane = phy_get_drvdata(phy);
++ 	struct mvebu_comphy_priv *priv = lane->priv;
++@@ -735,8 +735,8 @@ static int mvebu_comphy_power_on_legacy(struct phy *phy)
++ 	case PHY_INTERFACE_MODE_RXAUI:
++ 		ret = mvebu_comphy_set_mode_rxaui(phy);
++ 		break;
++-	case PHY_INTERFACE_MODE_10GKR:
++-		ret = mvebu_comphy_set_mode_10gkr(phy);
+++	case PHY_INTERFACE_MODE_10GBASER:
+++		ret = mvebu_comphy_set_mode_10gbaser(phy);
++ 		break;
++ 	default:
++ 		return -ENOTSUPP;
++@@ -782,8 +782,8 @@ static int mvebu_comphy_power_on(struct phy *phy)
++ 				lane->id);
++ 			fw_speed = COMPHY_FW_SPEED_3125;
++ 			break;
++-		case PHY_INTERFACE_MODE_10GKR:
++-			dev_dbg(priv->dev, "set lane %d to 10G-KR mode\n",
+++		case PHY_INTERFACE_MODE_10GBASER:
+++			dev_dbg(priv->dev, "set lane %d to 10GBASE-R mode\n",
++ 				lane->id);
++ 			fw_speed = COMPHY_FW_SPEED_103125;
++ 			break;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8550-net-phy-Added-IRQ-print-to-phylink_bringup_phy.patch b/target/linux/mvebu/patches-5.4/8550-net-phy-Added-IRQ-print-to-phylink_bringup_phy.patch
+new file mode 100644
+index 0000000..8f92e65
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8550-net-phy-Added-IRQ-print-to-phylink_bringup_phy.patch
+@@ -0,0 +1,98 @@
++From 28f1d8ebfa44c18850eece13140cf286f9b6eb9c Mon Sep 17 00:00:00 2001
++From: Florian Fainelli <f.fainelli@gmail.com>
++Date: Sun, 12 Jan 2020 09:35:38 -0800
++Subject: [PATCH 8550/8586] net: phy: Added IRQ print to phylink_bringup_phy()
++
++The information about the PHY attached to the PHYLINK instance is useful
++but is missing the IRQ prints that phy_attached_info() adds.
++phy_attached_info() is a bit long and it would not be possible to use
++phylink_info() anyway.
++
++Signed-off-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phy_device.c | 12 ++++++++++--
++ drivers/net/phy/phylink.c    |  7 +++++--
++ include/linux/phy.h          |  2 ++
++ 3 files changed, 17 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/net/phy/phy_device.c b/drivers/net/phy/phy_device.c
++index 110924d62744..a292d8db3a1d 100644
++--- a/drivers/net/phy/phy_device.c
+++++ b/drivers/net/phy/phy_device.c
++@@ -1108,9 +1108,8 @@ void phy_attached_info(struct phy_device *phydev)
++ EXPORT_SYMBOL(phy_attached_info);
++ 
++ #define ATTACHED_FMT "attached PHY driver [%s] (mii_bus:phy_addr=%s, irq=%s)"
++-void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
+++char *phy_attached_info_irq(struct phy_device *phydev)
++ {
++-	const char *drv_name = phydev->drv ? phydev->drv->name : "unbound";
++ 	char *irq_str;
++ 	char irq_num[8];
++ 
++@@ -1127,6 +1126,14 @@ void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
++ 		break;
++ 	}
++ 
+++	return kasprintf(GFP_KERNEL, "%s", irq_str);
+++}
+++EXPORT_SYMBOL(phy_attached_info_irq);
+++
+++void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
+++{
+++	const char *drv_name = phydev->drv ? phydev->drv->name : "unbound";
+++	char *irq_str = phy_attached_info_irq(phydev);
++ 
++ 	if (!fmt) {
++ 		phydev_info(phydev, ATTACHED_FMT "\n",
++@@ -1143,6 +1150,7 @@ void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
++ 		vprintk(fmt, ap);
++ 		va_end(ap);
++ 	}
+++	kfree(irq_str);
++ }
++ EXPORT_SYMBOL(phy_attached_print);
++ 
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index a894c602801f..b175eab5cb11 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -726,6 +726,7 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ {
++ 	struct phylink_link_state config;
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
+++	char *irq_str;
++ 	int ret;
++ 
++ 	/*
++@@ -761,9 +762,11 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ 	phy->phylink = pl;
++ 	phy->phy_link_change = phylink_phy_change;
++ 
+++	irq_str = phy_attached_info_irq(phy);
++ 	phylink_info(pl,
++-		     "PHY [%s] driver [%s]\n", dev_name(&phy->mdio.dev),
++-		     phy->drv->name);
+++		     "PHY [%s] driver [%s] (irq=%s)\n",
+++		     dev_name(&phy->mdio.dev), phy->drv->name, irq_str);
+++	kfree(irq_str);
++ 
++ 	mutex_lock(&phy->lock);
++ 	mutex_lock(&pl->state_mutex);
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index 14fbadac1777..5b873139607e 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -1074,6 +1074,8 @@ static inline const char *phydev_name(const struct phy_device *phydev)
++ 
++ void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
++ 	__printf(2, 3);
+++char *phy_attached_info_irq(struct phy_device *phydev)
+++	__malloc;
++ void phy_attached_info(struct phy_device *phydev);
++ 
++ /* Clause 22 PHY */
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8551-net-phylink-Allow-2.5BASE-T-5GBASE-T-and-10GBASE-T-f.patch b/target/linux/mvebu/patches-5.4/8551-net-phylink-Allow-2.5BASE-T-5GBASE-T-and-10GBASE-T-f.patch
+new file mode 100644
+index 0000000..1ce30d4
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8551-net-phylink-Allow-2.5BASE-T-5GBASE-T-and-10GBASE-T-f.patch
+@@ -0,0 +1,39 @@
++From 5252cf1d759e4d9397c880a0861bb94c2c9dc281 Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Thu, 16 Jan 2020 19:36:56 +0200
++Subject: [PATCH 8551/8586] net: phylink: Allow 2.5BASE-T, 5GBASE-T and
++ 10GBASE-T for the 10G link modes
++
++For some reason, PHYLINK does not put the copper modes for 802.3bz
++(NBASE-T) and 802.3an-2006 (10GBASE-T) in the PHY's supported mask, when
++the PHY-MAC connection is a 10G-capable one (10GBase-KR, 10GBase-R,
++USXGMII). One possible way through which the cable side can work at the
++lower speed is by having the PHY emit PAUSE frames towards the MAC. So
++fix that omission.
++
++Also include the 2500Base-X fiber mode in this list while we're at it.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 4 ++++
++ 1 file changed, 4 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index b175eab5cb11..fe61eaa33382 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -306,6 +306,10 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
++ 			phylink_set(pl->supported, 1000baseT_Half);
++ 			phylink_set(pl->supported, 1000baseT_Full);
++ 			phylink_set(pl->supported, 1000baseX_Full);
+++			phylink_set(pl->supported, 2500baseT_Full);
+++			phylink_set(pl->supported, 2500baseX_Full);
+++			phylink_set(pl->supported, 5000baseT_Full);
+++			phylink_set(pl->supported, 10000baseT_Full);
++ 			phylink_set(pl->supported, 10000baseKR_Full);
++ 			phylink_set(pl->supported, 10000baseCR_Full);
++ 			phylink_set(pl->supported, 10000baseSR_Full);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8552-net-phylink-allow-in-band-AN-for-USXGMII.patch b/target/linux/mvebu/patches-5.4/8552-net-phylink-allow-in-band-AN-for-USXGMII.patch
+new file mode 100644
+index 0000000..0452cd0
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8552-net-phylink-allow-in-band-AN-for-USXGMII.patch
+@@ -0,0 +1,35 @@
++From c4f261a42ffb7bc180973fbb0689bd97deae4880 Mon Sep 17 00:00:00 2001
++From: Alex Marginean <alexandru.marginean@nxp.com>
++Date: Sat, 18 Jan 2020 14:19:15 +0200
++Subject: [PATCH 8552/8586] net: phylink: allow in-band AN for USXGMII
++
++USXGMII supports passing link information in-band between PHY and MAC PCS,
++add it to the list of protocols that support in-band AN mode.
++
++Being a MAC-PHY protocol that can auto-negotiate link speeds up to 10
++Gbps, we populate the initial supported mask with the entire spectrum of
++link modes up to 10G that PHYLINK supports, and we let the driver reduce
++that mask in its .phylink_validate method.
++
++Signed-off-by: Alex Marginean <alexandru.marginean@nxp.com>
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index fe61eaa33382..3c97e013a99f 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -297,6 +297,7 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
++ 			phylink_set(pl->supported, 2500baseX_Full);
++ 			break;
++ 
+++		case PHY_INTERFACE_MODE_USXGMII:
++ 		case PHY_INTERFACE_MODE_10GKR:
++ 		case PHY_INTERFACE_MODE_10GBASER:
++ 			phylink_set(pl->supported, 10baseT_Half);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8553-net-phylink-ensure-manual-flow-control-is-selected-a.patch b/target/linux/mvebu/patches-5.4/8553-net-phylink-ensure-manual-flow-control-is-selected-a.patch
+new file mode 100644
+index 0000000..3b885f2
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8553-net-phylink-ensure-manual-flow-control-is-selected-a.patch
+@@ -0,0 +1,107 @@
++From 5f9add3cc2eb11a11c4ddc0cb9769bebd8a38761 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 15 Feb 2020 15:49:43 +0000
++Subject: [PATCH 8553/8586] net: phylink: ensure manual flow control is
++ selected appropriately
++
++Split the application of manually controlled flow control modes from
++phylink_resolve_flow(), so that we can use alternative providers of
++flow control resolution.
++
++We also want to clear the MLO_PAUSE_AN flag when autoneg is disabled,
++since flow control can't be negotiated in this circumstance.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 42 +++++++++++++++++++++++----------------
++ 1 file changed, 25 insertions(+), 17 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 3c97e013a99f..5c3c9c0af167 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -338,6 +338,18 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
++ 	return 0;
++ }
++ 
+++static void phylink_apply_manual_flow(struct phylink *pl,
+++				      struct phylink_link_state *state)
+++{
+++	/* If autoneg is disabled, pause AN is also disabled */
+++	if (!state->an_enabled)
+++		state->pause &= ~MLO_PAUSE_AN;
+++
+++	/* Manual configuration of pause modes */
+++	if (!(pl->link_config.pause & MLO_PAUSE_AN))
+++		state->pause = pl->link_config.pause;
+++}
+++
++ static void phylink_mac_config(struct phylink *pl,
++ 			       const struct phylink_link_state *state)
++ {
++@@ -407,25 +419,20 @@ static void phylink_resolve_flow(struct phylink *pl,
++ 				 struct phylink_link_state *state)
++ {
++ 	int new_pause = 0;
+++	int pause = 0;
++ 
++-	if (pl->link_config.pause & MLO_PAUSE_AN) {
++-		int pause = 0;
+++	if (phylink_test(pl->link_config.advertising, Pause))
+++		pause |= MLO_PAUSE_SYM;
+++	if (phylink_test(pl->link_config.advertising, Asym_Pause))
+++		pause |= MLO_PAUSE_ASYM;
++ 
++-		if (phylink_test(pl->link_config.advertising, Pause))
++-			pause |= MLO_PAUSE_SYM;
++-		if (phylink_test(pl->link_config.advertising, Asym_Pause))
++-			pause |= MLO_PAUSE_ASYM;
+++	pause &= state->pause;
++ 
++-		pause &= state->pause;
++-
++-		if (pause & MLO_PAUSE_SYM)
++-			new_pause = MLO_PAUSE_TX | MLO_PAUSE_RX;
++-		else if (pause & MLO_PAUSE_ASYM)
++-			new_pause = state->pause & MLO_PAUSE_SYM ?
++-				 MLO_PAUSE_TX : MLO_PAUSE_RX;
++-	} else {
++-		new_pause = pl->link_config.pause & MLO_PAUSE_TXRX_MASK;
++-	}
+++	if (pause & MLO_PAUSE_SYM)
+++		new_pause = MLO_PAUSE_TX | MLO_PAUSE_RX;
+++	else if (pause & MLO_PAUSE_ASYM)
+++		new_pause = state->pause & MLO_PAUSE_SYM ?
+++			 MLO_PAUSE_TX : MLO_PAUSE_RX;
++ 
++ 	state->pause &= ~MLO_PAUSE_TXRX_MASK;
++ 	state->pause |= new_pause;
++@@ -494,6 +501,7 @@ static void phylink_resolve(struct work_struct *w)
++ 		case MLO_AN_PHY:
++ 			link_state = pl->phy_state;
++ 			phylink_resolve_flow(pl, &link_state);
+++			phylink_apply_manual_flow(pl, &link_state);
++ 			phylink_mac_config_up(pl, &link_state);
++ 			break;
++ 
++@@ -518,6 +526,7 @@ static void phylink_resolve(struct work_struct *w)
++ 				 * the pause mode bits. */
++ 				link_state.pause |= pl->phy_state.pause;
++ 				phylink_resolve_flow(pl, &link_state);
+++				phylink_apply_manual_flow(pl, &link_state);
++ 				phylink_mac_config(pl, &link_state);
++ 			}
++ 			break;
++@@ -1006,7 +1015,6 @@ void phylink_start(struct phylink *pl)
++ 	 * a fixed-link to start with the correct parameters, and also
++ 	 * ensures that we set the appropriate advertisement for Serdes links.
++ 	 */
++-	phylink_resolve_flow(pl, &pl->link_config);
++ 	phylink_mac_config(pl, &pl->link_config);
++ 
++ 	/* Restart autonegotiation if using 802.3z to ensure that the link
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8554-net-add-helpers-to-resolve-negotiated-flow-control.patch b/target/linux/mvebu/patches-5.4/8554-net-add-helpers-to-resolve-negotiated-flow-control.patch
+new file mode 100644
+index 0000000..d8007b2
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8554-net-add-helpers-to-resolve-negotiated-flow-control.patch
+@@ -0,0 +1,160 @@
++From 34da89c94569ed4a4c7ae8cab7cf51118c37a902 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 15 Feb 2020 15:49:27 +0000
++Subject: [PATCH 8554/8586] net: add helpers to resolve negotiated flow control
++
++Add a couple of helpers to resolve negotiated flow control. Two helpers
++are provided:
++
++- linkmode_resolve_pause() which takes the link partner and local
++  advertisements, and decodes whether we should enable TX or RX pause
++  at the MAC. This is useful outside of phylib, e.g. in phylink.
++- phy_get_pause(), which returns the TX/RX enablement status for the
++  current negotiation results of the PHY.
++
++This allows us to centralise the flow control resolution, rather than
++spreading it around.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/Makefile     |  3 ++-
++ drivers/net/phy/linkmode.c   | 44 ++++++++++++++++++++++++++++++++++++
++ drivers/net/phy/phy_device.c | 26 +++++++++++++++++++++
++ include/linux/linkmode.h     |  4 ++++
++ include/linux/phy.h          |  3 +++
++ 5 files changed, 79 insertions(+), 1 deletion(-)
++ create mode 100644 drivers/net/phy/linkmode.c
++
++diff --git a/drivers/net/phy/Makefile b/drivers/net/phy/Makefile
++index a03437e091f3..693beac6bef4 100644
++--- a/drivers/net/phy/Makefile
+++++ b/drivers/net/phy/Makefile
++@@ -1,7 +1,8 @@
++ # SPDX-License-Identifier: GPL-2.0
++ # Makefile for Linux PHY drivers and MDIO bus drivers
++ 
++-libphy-y			:= phy.o phy-c45.o phy-core.o phy_device.o
+++libphy-y			:= phy.o phy-c45.o phy-core.o phy_device.o \
+++				   linkmode.o
++ mdio-bus-y			+= mdio_bus.o mdio_device.o
++ 
++ ifdef CONFIG_MDIO_DEVICE
++diff --git a/drivers/net/phy/linkmode.c b/drivers/net/phy/linkmode.c
++new file mode 100644
++index 000000000000..969918795228
++--- /dev/null
+++++ b/drivers/net/phy/linkmode.c
++@@ -0,0 +1,44 @@
+++// SPDX-License-Identifier: GPL-2.0+
+++#include <linux/linkmode.h>
+++
+++/**
+++ * linkmode_resolve_pause - resolve the allowable pause modes
+++ * @local_adv: local advertisement in ethtool format
+++ * @partner_adv: partner advertisement in ethtool format
+++ * @tx_pause: pointer to bool to indicate whether transmit pause should be
+++ * enabled.
+++ * @rx_pause: pointer to bool to indicate whether receive pause should be
+++ * enabled.
+++ *
+++ * Flow control is resolved according to our and the link partners
+++ * advertisements using the following drawn from the 802.3 specs:
+++ *  Local device  Link partner
+++ *  Pause AsymDir Pause AsymDir Result
+++ *    0     X       0     X     Disabled
+++ *    0     1       1     0     Disabled
+++ *    0     1       1     1     TX
+++ *    1     0       0     X     Disabled
+++ *    1     X       1     X     TX+RX
+++ *    1     1       0     1     RX
+++ */
+++void linkmode_resolve_pause(const unsigned long *local_adv,
+++			    const unsigned long *partner_adv,
+++			    bool *tx_pause, bool *rx_pause)
+++{
+++	__ETHTOOL_DECLARE_LINK_MODE_MASK(m);
+++
+++	linkmode_and(m, local_adv, partner_adv);
+++	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT, m)) {
+++		*tx_pause = true;
+++		*rx_pause = true;
+++	} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, m)) {
+++		*tx_pause = linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+++					      partner_adv);
+++		*rx_pause = linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+++					      local_adv);
+++	} else {
+++		*tx_pause = false;
+++		*rx_pause = false;
+++	}
+++}
+++EXPORT_SYMBOL_GPL(linkmode_resolve_pause);
++diff --git a/drivers/net/phy/phy_device.c b/drivers/net/phy/phy_device.c
++index a292d8db3a1d..ac99a2f89f72 100644
++--- a/drivers/net/phy/phy_device.c
+++++ b/drivers/net/phy/phy_device.c
++@@ -2178,6 +2178,32 @@ bool phy_validate_pause(struct phy_device *phydev,
++ }
++ EXPORT_SYMBOL(phy_validate_pause);
++ 
+++/**
+++ * phy_get_pause - resolve negotiated pause modes
+++ * @phydev: phy_device struct
+++ * @tx_pause: pointer to bool to indicate whether transmit pause should be
+++ * enabled.
+++ * @rx_pause: pointer to bool to indicate whether receive pause should be
+++ * enabled.
+++ *
+++ * Resolve and return the flow control modes according to the negotiation
+++ * result. This includes checking that we are operating in full duplex mode.
+++ * See linkmode_resolve_pause() for further details.
+++ */
+++void phy_get_pause(struct phy_device *phydev, bool *tx_pause, bool *rx_pause)
+++{
+++	if (phydev->duplex != DUPLEX_FULL) {
+++		*tx_pause = false;
+++		*rx_pause = false;
+++		return;
+++	}
+++
+++	return linkmode_resolve_pause(phydev->advertising,
+++				      phydev->lp_advertising,
+++				      tx_pause, rx_pause);
+++}
+++EXPORT_SYMBOL(phy_get_pause);
+++
++ static bool phy_drv_supports_irq(struct phy_driver *phydrv)
++ {
++ 	return phydrv->config_intr && phydrv->ack_interrupt;
++diff --git a/include/linux/linkmode.h b/include/linux/linkmode.h
++index fe740031339d..f10fb34f2173 100644
++--- a/include/linux/linkmode.h
+++++ b/include/linux/linkmode.h
++@@ -88,4 +88,8 @@ static inline int linkmode_subset(const unsigned long *src1,
++ 	return bitmap_subset(src1, src2, __ETHTOOL_LINK_MODE_MASK_NBITS);
++ }
++ 
+++void linkmode_resolve_pause(const unsigned long *local_adv,
+++			    const unsigned long *partner_adv,
+++			    bool *tx_pause, bool *rx_pause);
+++
++ #endif /* __LINKMODE_H */
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index 5b873139607e..24d21f68ea9b 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -1173,6 +1173,9 @@ void phy_set_sym_pause(struct phy_device *phydev, bool rx, bool tx,
++ void phy_set_asym_pause(struct phy_device *phydev, bool rx, bool tx);
++ bool phy_validate_pause(struct phy_device *phydev,
++ 			struct ethtool_pauseparam *pp);
+++void phy_get_pause(struct phy_device *phydev, bool *tx_pause, bool *rx_pause);
+++void phy_resolve_pause(unsigned long *local_adv, unsigned long *partner_adv,
+++		       bool *tx_pause, bool *rx_pause);
++ 
++ int phy_register_fixup(const char *bus_id, u32 phy_uid, u32 phy_uid_mask,
++ 		       int (*run)(struct phy_device *));
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8555-net-phylink-use-phylib-resolved-flow-control-modes.patch b/target/linux/mvebu/patches-5.4/8555-net-phylink-use-phylib-resolved-flow-control-modes.patch
+new file mode 100644
+index 0000000..39ceab0
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8555-net-phylink-use-phylib-resolved-flow-control-modes.patch
+@@ -0,0 +1,67 @@
++From 4469714037783da0eb0506c7b6bfb48888b253ce Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 15 Feb 2020 15:49:48 +0000
++Subject: [PATCH 8555/8586] net: phylink: use phylib resolved flow control
++ modes
++
++Use the new phy_get_pause() helper to get the resolved pause modes for
++a PHY rather than resolving the pause modes ourselves. We temporarily
++retain our pause mode resolution for causes where there is no PHY
++attached, e.g. for fixed-link modes.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 17 +++++++++--------
++ 1 file changed, 9 insertions(+), 8 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 5c3c9c0af167..bd155fc120de 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -500,7 +500,6 @@ static void phylink_resolve(struct work_struct *w)
++ 		switch (pl->cur_link_an_mode) {
++ 		case MLO_AN_PHY:
++ 			link_state = pl->phy_state;
++-			phylink_resolve_flow(pl, &link_state);
++ 			phylink_apply_manual_flow(pl, &link_state);
++ 			phylink_mac_config_up(pl, &link_state);
++ 			break;
++@@ -523,9 +522,8 @@ static void phylink_resolve(struct work_struct *w)
++ 				link_state.interface = pl->phy_state.interface;
++ 
++ 				/* If we have a PHY, we need to update with
++-				 * the pause mode bits. */
++-				link_state.pause |= pl->phy_state.pause;
++-				phylink_resolve_flow(pl, &link_state);
+++				 * the PHY flow control bits. */
+++				link_state.pause = pl->phy_state.pause;
++ 				phylink_apply_manual_flow(pl, &link_state);
++ 				phylink_mac_config(pl, &link_state);
++ 			}
++@@ -714,15 +712,18 @@ static void phylink_phy_change(struct phy_device *phydev, bool up,
++ 			       bool do_carrier)
++ {
++ 	struct phylink *pl = phydev->phylink;
+++	bool tx_pause, rx_pause;
+++
+++	phy_get_pause(phydev, &tx_pause, &rx_pause);
++ 
++ 	mutex_lock(&pl->state_mutex);
++ 	pl->phy_state.speed = phydev->speed;
++ 	pl->phy_state.duplex = phydev->duplex;
++ 	pl->phy_state.pause = MLO_PAUSE_NONE;
++-	if (phydev->pause)
++-		pl->phy_state.pause |= MLO_PAUSE_SYM;
++-	if (phydev->asym_pause)
++-		pl->phy_state.pause |= MLO_PAUSE_ASYM;
+++	if (tx_pause)
+++		pl->phy_state.pause |= MLO_PAUSE_TX;
+++	if (rx_pause)
+++		pl->phy_state.pause |= MLO_PAUSE_RX;
++ 	pl->phy_state.interface = phydev->interface;
++ 	pl->phy_state.link = up;
++ 	mutex_unlock(&pl->state_mutex);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8556-phylink-Improve-error-message-when-validate-failed.patch b/target/linux/mvebu/patches-5.4/8556-phylink-Improve-error-message-when-validate-failed.patch
+new file mode 100644
+index 0000000..0ecfeec
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8556-phylink-Improve-error-message-when-validate-failed.patch
+@@ -0,0 +1,41 @@
++From 5e632bfc4263dae4bf633cdbda8c67394957ab04 Mon Sep 17 00:00:00 2001
++From: Hauke Mehrtens <hauke@hauke-m.de>
++Date: Mon, 2 Mar 2020 00:55:02 +0100
++Subject: [PATCH 8556/8586] phylink: Improve error message when validate failed
++
++This should improve the error message when the PHY validate in the MAC
++driver failed. I ran into this problem multiple times that I put wrong
++interface values into the device tree and was searching why it is
++failing with -22 (-EINVAL). This should make it easier to spot the
++problem.
++
++Signed-off-by: Hauke Mehrtens <hauke@hauke-m.de>
++Acked-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 8 +++++++-
++ 1 file changed, 7 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index bd155fc120de..0904842803f9 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -771,8 +771,14 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ 		config.interface = interface;
++ 
++ 	ret = phylink_validate(pl, supported, &config);
++-	if (ret)
+++	if (ret) {
+++		phylink_warn(pl, "validation of %s with support %*pb and advertisement %*pb failed: %d\n",
+++			     phy_modes(config.interface),
+++			     __ETHTOOL_LINK_MODE_MASK_NBITS, phy->supported,
+++			     __ETHTOOL_LINK_MODE_MASK_NBITS, config.advertising,
+++			     ret);
++ 		return ret;
+++	}
++ 
++ 	phy->phylink = pl;
++ 	phy->phy_link_change = phylink_phy_change;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8557-net-phylink-Test-if-MAC-PCS-support-Autoneg.patch b/target/linux/mvebu/patches-5.4/8557-net-phylink-Test-if-MAC-PCS-support-Autoneg.patch
+new file mode 100644
+index 0000000..55856ac
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8557-net-phylink-Test-if-MAC-PCS-support-Autoneg.patch
+@@ -0,0 +1,31 @@
++From cae369eab74f302006ad3d46e214bdaf90f17542 Mon Sep 17 00:00:00 2001
++From: Jose Abreu <Jose.Abreu@synopsys.com>
++Date: Mon, 9 Mar 2020 09:36:25 +0100
++Subject: [PATCH 8557/8586] net: phylink: Test if MAC/PCS support Autoneg
++
++We may have cases where MAC or PCS do not support Autoneg. Check if it
++is supported after validate callback is called.
++
++Signed-off-by: Jose Abreu <Jose.Abreu@synopsys.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 0904842803f9..5297dadac2a6 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -333,6 +333,9 @@ static int phylink_parse_mode(struct phylink *pl, struct fwnode_handle *fwnode)
++ 				    "failed to validate link configuration for in-band status\n");
++ 			return -EINVAL;
++ 		}
+++
+++		/* Check if MAC/PCS also supports Autoneg. */
+++		pl->link_config.an_enabled = phylink_test(pl->supported, Autoneg);
++ 	}
++ 
++ 	return 0;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8558-net-linkmode-make-linkmode_test_bit-take-const-point.patch b/target/linux/mvebu/patches-5.4/8558-net-linkmode-make-linkmode_test_bit-take-const-point.patch
+new file mode 100644
+index 0000000..88fbc69
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8558-net-linkmode-make-linkmode_test_bit-take-const-point.patch
+@@ -0,0 +1,34 @@
++From 15f55bfce3f959303dc485e27867cb3cb7714feb Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 15 Feb 2020 23:57:36 +0000
++Subject: [PATCH 8558/8586] net: linkmode: make linkmode_test_bit() take const
++ pointer
++
++linkmode_test_bit() does not modify the address; test_bit() is also
++declared const volatile for the same reason. There's no need for
++linkmode_test_bit() to be any different, and allows implementation of
++helpers that take a const linkmode pointer.
++
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/linux/linkmode.h | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/include/linux/linkmode.h b/include/linux/linkmode.h
++index f10fb34f2173..9ec210f31d06 100644
++--- a/include/linux/linkmode.h
+++++ b/include/linux/linkmode.h
++@@ -71,7 +71,7 @@ static inline void linkmode_change_bit(int nr, volatile unsigned long *addr)
++ 	__change_bit(nr, addr);
++ }
++ 
++-static inline int linkmode_test_bit(int nr, volatile unsigned long *addr)
+++static inline int linkmode_test_bit(int nr, const volatile unsigned long *addr)
++ {
++ 	return test_bit(nr, addr);
++ }
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8559-mii-Add-helpers-for-parsing-SGMII-auto-negotiation.patch b/target/linux/mvebu/patches-5.4/8559-mii-Add-helpers-for-parsing-SGMII-auto-negotiation.patch
+new file mode 100644
+index 0000000..6ec0023
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8559-mii-Add-helpers-for-parsing-SGMII-auto-negotiation.patch
+@@ -0,0 +1,113 @@
++From ef1f2d257dab46eb563127e75a8c7046756ab0bb Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 6 Jan 2020 03:34:09 +0200
++Subject: [PATCH 8559/8586] mii: Add helpers for parsing SGMII auto-negotiation
++
++Typically a MAC PCS auto-configures itself after it receives the
++negotiated copper-side link settings from the PHY, but some MAC devices
++are more special and need manual interpretation of the SGMII AN result.
++
++In other cases, the PCS exposes the entire tx_config_reg base page as it
++is transmitted on the wire during auto-negotiation, so it makes sense to
++be able to decode the equivalent lp_advertised bit mask from the raw u16
++(of course, "lp" considering the PCS to be the local PHY).
++
++Therefore, add the bit definitions for the SGMII registers 4 and 5
++(local device ability, link partner ability), as well as a link_mode
++conversion helper that can be used to feed the AN results into
++phy_resolve_aneg_linkmode.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/linux/mii.h      | 50 ++++++++++++++++++++++++++++++++++++++++
++ include/uapi/linux/mii.h | 12 ++++++++++
++ 2 files changed, 62 insertions(+)
++
++diff --git a/include/linux/mii.h b/include/linux/mii.h
++index 4ce8901a1af6..18c6208f56fc 100644
++--- a/include/linux/mii.h
+++++ b/include/linux/mii.h
++@@ -372,6 +372,56 @@ static inline u32 mii_lpa_to_ethtool_lpa_x(u32 lpa)
++ 	return result | mii_adv_to_ethtool_adv_x(lpa);
++ }
++ 
+++/**
+++ * mii_lpa_mod_linkmode_adv_sgmii
+++ * @lp_advertising: pointer to destination link mode.
+++ * @lpa: value of the MII_LPA register
+++ *
+++ * A small helper function that translates MII_LPA bits to
+++ * linkmode advertisement settings for SGMII.
+++ * Leaves other bits unchanged.
+++ */
+++static inline void
+++mii_lpa_mod_linkmode_lpa_sgmii(unsigned long *lp_advertising, u32 lpa)
+++{
+++	u32 speed_duplex = lpa & LPA_SGMII_DPX_SPD_MASK;
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_1000HALF);
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_1000FULL);
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_100HALF);
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_100FULL);
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_10HALF);
+++
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT, lp_advertising,
+++			 speed_duplex == LPA_SGMII_10FULL);
+++}
+++
+++/**
+++ * mii_lpa_to_linkmode_adv_sgmii
+++ * @advertising: pointer to destination link mode.
+++ * @lpa: value of the MII_LPA register
+++ *
+++ * A small helper function that translates MII_ADVERTISE bits
+++ * to linkmode advertisement settings when in SGMII mode.
+++ * Clears the old value of advertising.
+++ */
+++static inline void mii_lpa_to_linkmode_lpa_sgmii(unsigned long *lp_advertising,
+++						 u32 lpa)
+++{
+++	linkmode_zero(lp_advertising);
+++
+++	mii_lpa_mod_linkmode_lpa_sgmii(lp_advertising, lpa);
+++}
+++
++ /**
++  * mii_adv_mod_linkmode_adv_t
++  * @advertising:pointer to destination link mode.
++diff --git a/include/uapi/linux/mii.h b/include/uapi/linux/mii.h
++index 51b48e4be1f2..0b9c3beda345 100644
++--- a/include/uapi/linux/mii.h
+++++ b/include/uapi/linux/mii.h
++@@ -131,6 +131,18 @@
++ #define NWAYTEST_LOOPBACK	0x0100	/* Enable loopback for N-way   */
++ #define NWAYTEST_RESV2		0xfe00	/* Unused...                   */
++ 
+++/* MAC and PHY tx_config_Reg[15:0] for SGMII in-band auto-negotiation.*/
+++#define ADVERTISE_SGMII		0x0001	/* MAC can do SGMII            */
+++#define LPA_SGMII		0x0001	/* PHY can do SGMII            */
+++#define LPA_SGMII_DPX_SPD_MASK	0x1C00	/* SGMII duplex and speed bits */
+++#define LPA_SGMII_10HALF	0x0000	/* Can do 10mbps half-duplex   */
+++#define LPA_SGMII_10FULL	0x1000	/* Can do 10mbps full-duplex   */
+++#define LPA_SGMII_100HALF	0x0400	/* Can do 100mbps half-duplex  */
+++#define LPA_SGMII_100FULL	0x1400	/* Can do 100mbps full-duplex  */
+++#define LPA_SGMII_1000HALF	0x0800	/* Can do 1000mbps half-duplex */
+++#define LPA_SGMII_1000FULL	0x1800	/* Can do 1000mbps full-duplex */
+++#define LPA_SGMII_LINK		0x8000	/* PHY link with copper-side partner */
+++
++ /* 1000BASE-T Control register */
++ #define ADVERTISE_1000FULL	0x0200  /* Advertise 1000BASE-T full duplex */
++ #define ADVERTISE_1000HALF	0x0100  /* Advertise 1000BASE-T half duplex */
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8560-net-mii-convert-mii_lpa_to_ethtool_lpa_x-to-linkmode.patch b/target/linux/mvebu/patches-5.4/8560-net-mii-convert-mii_lpa_to_ethtool_lpa_x-to-linkmode.patch
+new file mode 100644
+index 0000000..7fe0e74
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8560-net-mii-convert-mii_lpa_to_ethtool_lpa_x-to-linkmode.patch
+@@ -0,0 +1,75 @@
++From 09cfc6ce3f91cdd9c83975fa013f9ffeb0544708 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 14 Mar 2020 10:09:53 +0000
++Subject: [PATCH 8560/8586] net: mii: convert mii_lpa_to_ethtool_lpa_x() to
++ linkmode variant
++
++Add a LPA to linkmode decoder for 1000BASE-X protocols; this decoder
++only provides the modify semantics similar to other such decoders.
++This replaces the unused mii_lpa_to_ethtool_lpa_x() helper.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/linux/mii.h | 37 +++++++++++++++++++------------------
++ 1 file changed, 19 insertions(+), 18 deletions(-)
++
++diff --git a/include/linux/mii.h b/include/linux/mii.h
++index 18c6208f56fc..309de4a3e6e7 100644
++--- a/include/linux/mii.h
+++++ b/include/linux/mii.h
++@@ -354,24 +354,6 @@ static inline u32 mii_adv_to_ethtool_adv_x(u32 adv)
++ 	return result;
++ }
++ 
++-/**
++- * mii_lpa_to_ethtool_lpa_x
++- * @adv: value of the MII_LPA register
++- *
++- * A small helper function that translates MII_LPA
++- * bits, when in 1000Base-X mode, to ethtool
++- * LP advertisement settings.
++- */
++-static inline u32 mii_lpa_to_ethtool_lpa_x(u32 lpa)
++-{
++-	u32 result = 0;
++-
++-	if (lpa & LPA_LPACK)
++-		result |= ADVERTISED_Autoneg;
++-
++-	return result | mii_adv_to_ethtool_adv_x(lpa);
++-}
++-
++ /**
++  * mii_lpa_mod_linkmode_adv_sgmii
++  * @lp_advertising: pointer to destination link mode.
++@@ -535,6 +517,25 @@ static inline u32 linkmode_adv_to_lcl_adv_t(unsigned long *advertising)
++ 	return lcl_adv;
++ }
++ 
+++/**
+++ * mii_lpa_mod_linkmode_x - decode the link partner's config_reg to linkmodes
+++ * @linkmodes: link modes array
+++ * @lpa: config_reg word from link partner
+++ * @fd_bit: link mode for 1000XFULL bit
+++ */
+++static inline void mii_lpa_mod_linkmode_x(unsigned long *linkmodes, u16 lpa,
+++					 int fd_bit)
+++{
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, linkmodes,
+++			 lpa & LPA_LPACK);
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_Pause_BIT, linkmodes,
+++			 lpa & LPA_1000XPAUSE);
+++	linkmode_mod_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, linkmodes,
+++			 lpa & LPA_1000XPAUSE_ASYM);
+++	linkmode_mod_bit(fd_bit, linkmodes,
+++			 lpa & LPA_1000XFULL);
+++}
+++
++ /**
++  * mii_advertise_flowctrl - get flow control advertisement flags
++  * @cap: Flow control capabilities (FLOW_CTRL_RX, FLOW_CTRL_TX or both)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8561-net-phylink-pcs-add-802.3-clause-22-helpers.patch b/target/linux/mvebu/patches-5.4/8561-net-phylink-pcs-add-802.3-clause-22-helpers.patch
+new file mode 100644
+index 0000000..59d6978
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8561-net-phylink-pcs-add-802.3-clause-22-helpers.patch
+@@ -0,0 +1,271 @@
++From d9fe7969dab86b1acd78262e42c748af3acb1e02 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 17 Mar 2020 14:52:36 +0000
++Subject: [PATCH 8561/8586] net: phylink: pcs: add 802.3 clause 22 helpers
++
++Implement helpers for PCS accessed via the MII bus using 802.3 clause
++22 cycles, conforming to 802.3 clause 37 and Cisco SGMII specifications
++for the advertisement word.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 206 ++++++++++++++++++++++++++++++++++++++
++ include/linux/phylink.h   |   6 ++
++ include/uapi/linux/mii.h  |   5 +
++ 3 files changed, 217 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 5297dadac2a6..9dfbbf2c1a80 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -2001,4 +2001,210 @@ void phylink_helper_basex_speed(struct phylink_link_state *state)
++ }
++ EXPORT_SYMBOL_GPL(phylink_helper_basex_speed);
++ 
+++static void phylink_decode_c37_word(struct phylink_link_state *state,
+++				    uint16_t config_reg, int speed)
+++{
+++	bool tx_pause, rx_pause;
+++	int fd_bit;
+++
+++	if (speed == SPEED_2500)
+++		fd_bit = ETHTOOL_LINK_MODE_2500baseX_Full_BIT;
+++	else
+++		fd_bit = ETHTOOL_LINK_MODE_1000baseX_Full_BIT;
+++
+++	mii_lpa_mod_linkmode_x(state->lp_advertising, config_reg, fd_bit);
+++
+++	if (linkmode_test_bit(fd_bit, state->advertising) &&
+++	    linkmode_test_bit(fd_bit, state->lp_advertising)) {
+++		state->speed = speed;
+++		state->duplex = DUPLEX_FULL;
+++	} else {
+++		/* negotiation failure */
+++		state->link = false;
+++	}
+++
+++	linkmode_resolve_pause(state->advertising, state->lp_advertising,
+++			       &tx_pause, &rx_pause);
+++
+++	if (tx_pause)
+++		state->pause |= MLO_PAUSE_TX;
+++	if (rx_pause)
+++		state->pause |= MLO_PAUSE_RX;
+++}
+++
+++static void phylink_decode_sgmii_word(struct phylink_link_state *state,
+++				      uint16_t config_reg)
+++{
+++	if (!(config_reg & LPA_SGMII_LINK)) {
+++		state->link = false;
+++		return;
+++	}
+++
+++	switch (config_reg & LPA_SGMII_SPD_MASK) {
+++	case LPA_SGMII_10:
+++		state->speed = SPEED_10;
+++		break;
+++	case LPA_SGMII_100:
+++		state->speed = SPEED_100;
+++		break;
+++	case LPA_SGMII_1000:
+++		state->speed = SPEED_1000;
+++		break;
+++	default:
+++		state->link = false;
+++		return;
+++	}
+++	if (config_reg & LPA_SGMII_FULL_DUPLEX)
+++		state->duplex = DUPLEX_FULL;
+++	else
+++		state->duplex = DUPLEX_HALF;
+++}
+++
+++/**
+++ * phylink_mii_c22_pcs_get_state() - read the MAC PCS state
+++ * @pcs: a pointer to a &struct mdio_device.
+++ * @state: a pointer to a &struct phylink_link_state.
+++ *
+++ * Helper for MAC PCS supporting the 802.3 clause 22 register set for
+++ * clause 37 negotiation and/or SGMII control.
+++ *
+++ * Read the MAC PCS state from the MII device configured in @config and
+++ * parse the Clause 37 or Cisco SGMII link partner negotiation word into
+++ * the phylink @state structure. This is suitable to be directly plugged
+++ * into the mac_pcs_get_state() member of the struct phylink_mac_ops
+++ * structure.
+++ */
+++void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,
+++				   struct phylink_link_state *state)
+++{
+++	struct mii_bus *bus = pcs->bus;
+++	int addr = pcs->addr;
+++	int bmsr, lpa;
+++
+++	bmsr = mdiobus_read(bus, addr, MII_BMSR);
+++	lpa = mdiobus_read(bus, addr, MII_LPA);
+++	if (bmsr < 0 || lpa < 0) {
+++		state->link = false;
+++		return;
+++	}
+++
+++	state->link = !!(bmsr & BMSR_LSTATUS);
+++	state->an_complete = !!(bmsr & BMSR_ANEGCOMPLETE);
+++	if (!state->link)
+++		return;
+++
+++	switch (state->interface) {
+++	case PHY_INTERFACE_MODE_1000BASEX:
+++		phylink_decode_c37_word(state, lpa, SPEED_1000);
+++		break;
+++
+++	case PHY_INTERFACE_MODE_2500BASEX:
+++		phylink_decode_c37_word(state, lpa, SPEED_2500);
+++		break;
+++
+++	case PHY_INTERFACE_MODE_SGMII:
+++		phylink_decode_sgmii_word(state, lpa);
+++		break;
+++
+++	default:
+++		state->link = false;
+++		break;
+++	}
+++}
+++EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_get_state);
+++
+++/**
+++ * phylink_mii_c22_pcs_set_advertisement() - configure the clause 37 PCS
+++ *	advertisement
+++ * @pcs: a pointer to a &struct mdio_device.
+++ * @state: a pointer to the state being configured.
+++ *
+++ * Helper for MAC PCS supporting the 802.3 clause 22 register set for
+++ * clause 37 negotiation and/or SGMII control.
+++ *
+++ * Configure the clause 37 PCS advertisement as specified by @state. This
+++ * does not trigger a renegotiation; phylink will do that via the
+++ * mac_an_restart() method of the struct phylink_mac_ops structure.
+++ *
+++ * Returns negative error code on failure to configure the advertisement,
+++ * zero if no change has been made, or one if the advertisement has changed.
+++ */
+++int phylink_mii_c22_pcs_set_advertisement(struct mdio_device *pcs,
+++					const struct phylink_link_state *state)
+++{
+++	struct mii_bus *bus = pcs->bus;
+++	int addr = pcs->addr;
+++	int val, ret;
+++	u16 adv;
+++
+++	switch (state->interface) {
+++	case PHY_INTERFACE_MODE_1000BASEX:
+++	case PHY_INTERFACE_MODE_2500BASEX:
+++		adv = ADVERTISE_1000XFULL;
+++		if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+++				      state->advertising))
+++			adv |= ADVERTISE_1000XPAUSE;
+++		if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT,
+++				      state->advertising))
+++			adv |= ADVERTISE_1000XPSE_ASYM;
+++
+++		val = mdiobus_read(bus, addr, MII_ADVERTISE);
+++		if (val < 0)
+++			return val;
+++
+++		if (val == adv)
+++			return 0;
+++
+++		ret = mdiobus_write(bus, addr, MII_ADVERTISE, adv);
+++		if (ret < 0)
+++			return ret;
+++
+++		return 1;
+++
+++	case PHY_INTERFACE_MODE_SGMII:
+++		val = mdiobus_read(bus, addr, MII_ADVERTISE);
+++		if (val < 0)
+++			return val;
+++
+++		if (val == 0x0001)
+++			return 0;
+++
+++		ret = mdiobus_write(bus, addr, MII_ADVERTISE, 0x0001);
+++		if (ret < 0)
+++			return ret;
+++
+++		return 1;
+++
+++	default:
+++		/* Nothing to do for other modes */
+++		return 0;
+++	}
+++}
+++EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_set_advertisement);
+++
+++/**
+++ * phylink_mii_c22_pcs_an_restart() - restart 802.3z autonegotiation
+++ * @pcs: a pointer to a &struct mdio_device.
+++ *
+++ * Helper for MAC PCS supporting the 802.3 clause 22 register set for
+++ * clause 37 negotiation.
+++ *
+++ * Restart the clause 37 negotiation with the link partner. This is
+++ * suitable to be directly plugged into the mac_pcs_get_state() member
+++ * of the struct phylink_mac_ops structure.
+++ */
+++void phylink_mii_c22_pcs_an_restart(struct mdio_device *pcs)
+++{
+++	struct mii_bus *bus = pcs->bus;
+++	int val, addr = pcs->addr;
+++
+++	val = mdiobus_read(bus, addr, MII_BMCR);
+++	if (val >= 0) {
+++		val |= BMCR_ANRESTART;
+++
+++		mdiobus_write(bus, addr, MII_BMCR, val);
+++	}
+++}
+++EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_an_restart);
+++
++ MODULE_LICENSE("GPL v2");
++diff --git a/include/linux/phylink.h b/include/linux/phylink.h
++index 300ecdb6790a..e29defdfa8c5 100644
++--- a/include/linux/phylink.h
+++++ b/include/linux/phylink.h
++@@ -279,4 +279,10 @@ int phylink_mii_ioctl(struct phylink *, struct ifreq *, int);
++ void phylink_set_port_modes(unsigned long *bits);
++ void phylink_helper_basex_speed(struct phylink_link_state *state);
++ 
+++void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,
+++				   struct phylink_link_state *state);
+++int phylink_mii_c22_pcs_set_advertisement(struct mdio_device *pcs,
+++					const struct phylink_link_state *state);
+++void phylink_mii_c22_pcs_an_restart(struct mdio_device *pcs);
+++
++ #endif
++diff --git a/include/uapi/linux/mii.h b/include/uapi/linux/mii.h
++index 0b9c3beda345..90f9b4e1ba27 100644
++--- a/include/uapi/linux/mii.h
+++++ b/include/uapi/linux/mii.h
++@@ -134,11 +134,16 @@
++ /* MAC and PHY tx_config_Reg[15:0] for SGMII in-band auto-negotiation.*/
++ #define ADVERTISE_SGMII		0x0001	/* MAC can do SGMII            */
++ #define LPA_SGMII		0x0001	/* PHY can do SGMII            */
+++#define LPA_SGMII_SPD_MASK	0x0c00	/* SGMII speed mask            */
+++#define LPA_SGMII_FULL_DUPLEX	0x1000	/* SGMII full duplex           */
++ #define LPA_SGMII_DPX_SPD_MASK	0x1C00	/* SGMII duplex and speed bits */
+++#define LPA_SGMII_10		0x0000	/* 10Mbps                      */
++ #define LPA_SGMII_10HALF	0x0000	/* Can do 10mbps half-duplex   */
++ #define LPA_SGMII_10FULL	0x1000	/* Can do 10mbps full-duplex   */
+++#define LPA_SGMII_100		0x0400	/* 100Mbps                     */
++ #define LPA_SGMII_100HALF	0x0400	/* Can do 100mbps half-duplex  */
++ #define LPA_SGMII_100FULL	0x1400	/* Can do 100mbps full-duplex  */
+++#define LPA_SGMII_1000		0x0800	/* 1000Mbps                    */
++ #define LPA_SGMII_1000HALF	0x0800	/* Can do 1000mbps half-duplex */
++ #define LPA_SGMII_1000FULL	0x1800	/* Can do 1000mbps full-duplex */
++ #define LPA_SGMII_LINK		0x8000	/* PHY link with copper-side partner */
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8562-net-phylink-pcs-add-802.3-clause-45-helpers.patch b/target/linux/mvebu/patches-5.4/8562-net-phylink-pcs-add-802.3-clause-45-helpers.patch
+new file mode 100644
+index 0000000..96acaab
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8562-net-phylink-pcs-add-802.3-clause-45-helpers.patch
+@@ -0,0 +1,69 @@
++From 9a2e28eedd2a69fb875c23224b21e0afacc61944 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 17 Mar 2020 14:52:41 +0000
++Subject: [PATCH 8562/8586] net: phylink: pcs: add 802.3 clause 45 helpers
++
++Implement helpers for PCS accessed via the MII bus using 802.3 clause
++45 cycles for 10GBASE-R. Only link up/down is supported, 10G full
++duplex is assumed.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 30 ++++++++++++++++++++++++++++++
++ include/linux/phylink.h   |  2 ++
++ 2 files changed, 32 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 9dfbbf2c1a80..25cc437a469e 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -2207,4 +2207,34 @@ void phylink_mii_c22_pcs_an_restart(struct mdio_device *pcs)
++ }
++ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_an_restart);
++ 
+++#define C45_ADDR(d,a)	(MII_ADDR_C45 | (d) << 16 | (a))
+++void phylink_mii_c45_pcs_get_state(struct mdio_device *pcs,
+++				   struct phylink_link_state *state)
+++{
+++	struct mii_bus *bus = pcs->bus;
+++	int addr = pcs->addr;
+++	int stat;
+++
+++	stat = mdiobus_read(bus, addr, C45_ADDR(MDIO_MMD_PCS, MDIO_STAT1));
+++	if (stat < 0) {
+++		state->link = false;
+++		return;
+++	}
+++
+++	state->link = !!(stat & MDIO_STAT1_LSTATUS);
+++	if (!state->link)
+++		return;
+++
+++	switch (state->interface) {
+++	case PHY_INTERFACE_MODE_10GBASER:
+++		state->speed = SPEED_10000;
+++		state->duplex = DUPLEX_FULL;
+++		break;
+++
+++	default:
+++		break;
+++	}
+++}
+++EXPORT_SYMBOL_GPL(phylink_mii_c45_pcs_get_state);
+++
++ MODULE_LICENSE("GPL v2");
++diff --git a/include/linux/phylink.h b/include/linux/phylink.h
++index e29defdfa8c5..867eb0ab053d 100644
++--- a/include/linux/phylink.h
+++++ b/include/linux/phylink.h
++@@ -285,4 +285,6 @@ int phylink_mii_c22_pcs_set_advertisement(struct mdio_device *pcs,
++ 					const struct phylink_link_state *state);
++ void phylink_mii_c22_pcs_an_restart(struct mdio_device *pcs);
++ 
+++void phylink_mii_c45_pcs_get_state(struct mdio_device *pcs,
+++				   struct phylink_link_state *state);
++ #endif
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8563-net-phylink-change-phylink_mii_c22_pcs_set_advertise.patch b/target/linux/mvebu/patches-5.4/8563-net-phylink-change-phylink_mii_c22_pcs_set_advertise.patch
+new file mode 100644
+index 0000000..6499615
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8563-net-phylink-change-phylink_mii_c22_pcs_set_advertise.patch
+@@ -0,0 +1,77 @@
++From a72ff8dc8f0de524e23ba61315545f9af821d850 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Mon, 30 Mar 2020 18:44:44 +0100
++Subject: [PATCH 8563/8586] net: phylink: change
++ phylink_mii_c22_pcs_set_advertisement() prototype
++
++Change phylink_mii_c22_pcs_set_advertisement() to take only the PHY
++interface and advertisement mask, rather than the full phylink state.
++
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 12 +++++++-----
++ include/linux/phylink.h   |  3 ++-
++ 2 files changed, 9 insertions(+), 6 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 25cc437a469e..7d06230743ee 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -2117,7 +2117,8 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_get_state);
++  * phylink_mii_c22_pcs_set_advertisement() - configure the clause 37 PCS
++  *	advertisement
++  * @pcs: a pointer to a &struct mdio_device.
++- * @state: a pointer to the state being configured.
+++ * @interface: the PHY interface mode being configured
+++ * @advertising: the ethtool advertisement mask
++  *
++  * Helper for MAC PCS supporting the 802.3 clause 22 register set for
++  * clause 37 negotiation and/or SGMII control.
++@@ -2130,22 +2131,23 @@ EXPORT_SYMBOL_GPL(phylink_mii_c22_pcs_get_state);
++  * zero if no change has been made, or one if the advertisement has changed.
++  */
++ int phylink_mii_c22_pcs_set_advertisement(struct mdio_device *pcs,
++-					const struct phylink_link_state *state)
+++					  phy_interface_t interface,
+++					  const unsigned long *advertising)
++ {
++ 	struct mii_bus *bus = pcs->bus;
++ 	int addr = pcs->addr;
++ 	int val, ret;
++ 	u16 adv;
++ 
++-	switch (state->interface) {
+++	switch (interface) {
++ 	case PHY_INTERFACE_MODE_1000BASEX:
++ 	case PHY_INTERFACE_MODE_2500BASEX:
++ 		adv = ADVERTISE_1000XFULL;
++ 		if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
++-				      state->advertising))
+++				      advertising))
++ 			adv |= ADVERTISE_1000XPAUSE;
++ 		if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT,
++-				      state->advertising))
+++				      advertising))
++ 			adv |= ADVERTISE_1000XPSE_ASYM;
++ 
++ 		val = mdiobus_read(bus, addr, MII_ADVERTISE);
++diff --git a/include/linux/phylink.h b/include/linux/phylink.h
++index 867eb0ab053d..641720ef712f 100644
++--- a/include/linux/phylink.h
+++++ b/include/linux/phylink.h
++@@ -282,7 +282,8 @@ void phylink_helper_basex_speed(struct phylink_link_state *state);
++ void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,
++ 				   struct phylink_link_state *state);
++ int phylink_mii_c22_pcs_set_advertisement(struct mdio_device *pcs,
++-					const struct phylink_link_state *state);
+++					  phy_interface_t interface,
+++					  const unsigned long *advertising);
++ void phylink_mii_c22_pcs_an_restart(struct mdio_device *pcs);
++ 
++ void phylink_mii_c45_pcs_get_state(struct mdio_device *pcs,
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8564-net-phy-add-supported_interfaces-to-phylib.patch b/target/linux/mvebu/patches-5.4/8564-net-phy-add-supported_interfaces-to-phylib.patch
+new file mode 100644
+index 0000000..05b9c41
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8564-net-phy-add-supported_interfaces-to-phylib.patch
+@@ -0,0 +1,58 @@
++From aa0897dc1d3088f53f705f1d94454aa3abbf1d70 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Mon, 23 Dec 2019 23:24:17 +0000
++Subject: [PATCH 8564/8586] net: phy: add supported_interfaces to phylib
++
++Add a supported_interfaces member to phylib so we know which
++interfaces a PHY supports. Currently, set any unconverted driver
++to indicate all interfaces are supported.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ include/linux/phy.h | 23 +++++++++++++++++++++++
++ 1 file changed, 23 insertions(+)
++
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index 24d21f68ea9b..2bf28a737521 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -107,6 +107,26 @@ typedef enum {
++ 	PHY_INTERFACE_MODE_MAX,
++ } phy_interface_t;
++ 
+++/* PHY interface mode bitmap handling */
+++#define DECLARE_PHY_INTERFACE_MASK(name) \
+++	DECLARE_BITMAP(name, PHY_INTERFACE_MODE_MAX)
+++
+++static inline void phy_interface_zero(unsigned long *intf)
+++{
+++	bitmap_zero(intf, PHY_INTERFACE_MODE_MAX);
+++}
+++
+++static inline bool phy_interface_empty(const unsigned long *intf)
+++{
+++	return bitmap_empty(intf, PHY_INTERFACE_MODE_MAX);
+++}
+++
+++static inline void phy_interface_and(unsigned long *dst, const unsigned long *a,
+++				     const unsigned long *b)
+++{
+++	bitmap_and(dst, a, b, PHY_INTERFACE_MODE_MAX);
+++}
+++
++ /**
++  * phy_supported_speeds - return all speeds currently supported by a phy device
++  * @phy: The phy device to return supported speeds of.
++@@ -412,6 +432,9 @@ struct phy_device {
++ 	/* used with phy_speed_down */
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(adv_old);
++ 
+++	/* bitmap of supported interfaces */
+++	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
+++
++ 	/* Energy efficient ethernet modes which should be prohibited */
++ 	u32 eee_broken_modes;
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8565-net-phy-add-supported_interfaces-to-marvell-PHYs.patch b/target/linux/mvebu/patches-5.4/8565-net-phy-add-supported_interfaces-to-marvell-PHYs.patch
+new file mode 100644
+index 0000000..9e2827b
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8565-net-phy-add-supported_interfaces-to-marvell-PHYs.patch
+@@ -0,0 +1,33 @@
++From 9149ffed98466afd5ad9b46f7862eedd2a8556b7 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Mon, 23 Dec 2019 23:25:49 +0000
++Subject: [PATCH 8565/8586] net: phy: add supported_interfaces to marvell PHYs
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/marvell.c | 9 +++++++++
++ 1 file changed, 9 insertions(+)
++
++diff --git a/drivers/net/phy/marvell.c b/drivers/net/phy/marvell.c
++index 91cf1d167263..eba3169e6d1c 100644
++--- a/drivers/net/phy/marvell.c
+++++ b/drivers/net/phy/marvell.c
++@@ -2091,6 +2091,15 @@ static int marvell_probe(struct phy_device *phydev)
++ 
++ 	phydev->priv = priv;
++ 
+++	__set_bit(PHY_INTERFACE_MODE_GMII, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_SGMII, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_TBI, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_ID, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_RXID, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_TXID, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RTBI, phydev->supported_interfaces);
+++
++ 	return 0;
++ }
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8566-net-phy-add-supported_interfaces-to-marvell10g-PHYs.patch b/target/linux/mvebu/patches-5.4/8566-net-phy-add-supported_interfaces-to-marvell10g-PHYs.patch
+new file mode 100644
+index 0000000..c22e6d7
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8566-net-phy-add-supported_interfaces-to-marvell10g-PHYs.patch
+@@ -0,0 +1,29 @@
++From 434cbd7c8237a3db507a0f186c7c2879e48ad4c6 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Mon, 23 Dec 2019 23:26:04 +0000
++Subject: [PATCH 8566/8586] net: phy: add supported_interfaces to marvell10g
++ PHYs
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/marvell10g.c | 4 ++++
++ 1 file changed, 4 insertions(+)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index ac8520dc0913..1c805b2bcb69 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -216,6 +216,10 @@ static int mv3310_probe(struct phy_device *phydev)
++ 	    (phydev->c45_ids.devices_in_package & mmd_mask) != mmd_mask)
++ 		return -ENODEV;
++ 
+++	__set_bit(PHY_INTERFACE_MODE_SGMII, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_2500BASEX, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_10GBASER, phydev->supported_interfaces);
+++
++ 	ret = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MV_PMA_BOOT);
++ 	if (ret < 0)
++ 		return ret;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8567-net-sfp-add-interface-bitmap.patch b/target/linux/mvebu/patches-5.4/8567-net-sfp-add-interface-bitmap.patch
+new file mode 100644
+index 0000000..4b282af
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8567-net-sfp-add-interface-bitmap.patch
+@@ -0,0 +1,248 @@
++From 25e566b35a2aa3d795137e883bdf985b7959dee6 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 11:57:39 +0000
++Subject: [PATCH 8567/8586] net: sfp: add interface bitmap
++
++Add parsing the SFP EEPROM to supported phy interface modes.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/marvell10g.c |  3 +-
++ drivers/net/phy/phylink.c    |  3 +-
++ drivers/net/phy/sfp-bus.c    | 69 +++++++++++++++++++++++++++++----------
++ include/linux/sfp.h          |  5 +--
++ 4 files changed, 59 insertions(+), 21 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index df9f674f1b3af..fe97b16095867 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -354,9 +354,10 @@ static int mv3310_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
++ {
++ 	struct phy_device *phydev = upstream;
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(support) = { 0, };
+++	DECLARE_PHY_INTERFACE_MASK(interfaces);
++ 	phy_interface_t iface;
++ 
++-	sfp_parse_support(phydev->sfp_bus, id, support);
+++	sfp_parse_support(phydev->sfp_bus, id, support, interfaces);
++ 	iface = sfp_select_interface(phydev->sfp_bus, support);
++ 
++ 	if (iface != PHY_INTERFACE_MODE_10GBASER) {
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 7d06230743ee..0fe5865691f9 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -1844,11 +1844,12 @@ static int phylink_sfp_module_insert(void *upstream,
++ {
++ 	struct phylink *pl = upstream;
++ 	unsigned long *support = pl->sfp_support;
+++	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
++ 
++ 	ASSERT_RTNL();
++ 
++ 	linkmode_zero(support);
++-	sfp_parse_support(pl->sfp_bus, id, support);
+++	sfp_parse_support(pl->sfp_bus, id, support, sfp_interfaces);
++ 	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, support);
++ 
++ 	/* If this module may have a PHY connecting later, defer until later */
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index e1400ee9b2b1..07dc29ecaf1c 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -13,7 +13,8 @@
++ struct sfp_quirk {
++ 	const char *vendor;
++ 	const char *part;
++-	void (*modes)(const struct sfp_eeprom_id *id, unsigned long *modes);
+++	void (*modes)(const struct sfp_eeprom_id *id, unsigned long *modes,
+++		      unsigned long *interfaces);
++ };
++ 
++ /**
++@@ -39,9 +40,10 @@ struct sfp_bus {
++ };
++ 
++ static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++-				unsigned long *modes)
+++				unsigned long *modes, unsigned long *interfaces)
++ {
++ 	phylink_set(modes, 2500baseX_Full);
+++	__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
++ }
++ 
++ static const struct sfp_quirk sfp_quirks[] = {
++@@ -211,12 +213,14 @@ EXPORT_SYMBOL_GPL(sfp_may_have_phy);
++  * @bus: a pointer to the &struct sfp_bus structure for the sfp module
++  * @id: a pointer to the module's &struct sfp_eeprom_id
++  * @support: pointer to an array of unsigned long for the ethtool support mask
+++ * @interfaces: pointer to an array of unsigned long for phy interface modes
+++ *		mask
++  *
++  * Parse the EEPROM identification information and derive the supported
++  * ethtool link modes for the module.
++  */
++ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++-		       unsigned long *support)
+++		       unsigned long *support, unsigned long *interfaces)
++ {
++ 	unsigned int br_min, br_nom, br_max;
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes) = { 0, };
++@@ -243,48 +247,71 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 	}
++ 
++ 	/* Set ethtool support from the compliance fields. */
++-	if (id->base.e10g_base_sr)
+++	if (id->base.e10g_base_sr) {
++ 		phylink_set(modes, 10000baseSR_Full);
++-	if (id->base.e10g_base_lr)
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++	}
+++	if (id->base.e10g_base_lr) {
++ 		phylink_set(modes, 10000baseLR_Full);
++-	if (id->base.e10g_base_lrm)
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++	}
+++	if (id->base.e10g_base_lrm) {
++ 		phylink_set(modes, 10000baseLRM_Full);
++-	if (id->base.e10g_base_er)
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++	}
+++	if (id->base.e10g_base_er) {
++ 		phylink_set(modes, 10000baseER_Full);
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++	}
++ 	if (id->base.e1000_base_sx ||
++ 	    id->base.e1000_base_lx ||
++-	    id->base.e1000_base_cx)
+++	    id->base.e1000_base_cx) {
++ 		phylink_set(modes, 1000baseX_Full);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++	}
++ 	if (id->base.e1000_base_t) {
++ 		phylink_set(modes, 1000baseT_Half);
++ 		phylink_set(modes, 1000baseT_Full);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_SGMII, interfaces);
++ 	}
++ 
++ 	/* 1000Base-PX or 1000Base-BX10 */
++ 	if ((id->base.e_base_px || id->base.e_base_bx10) &&
++-	    br_min <= 1300 && br_max >= 1200)
+++	    br_min <= 1300 && br_max >= 1200) {
++ 		phylink_set(modes, 1000baseX_Full);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++	}
++ 
++ 	/* For active or passive cables, select the link modes
++ 	 * based on the bit rates and the cable compliance bytes.
++ 	 */
++ 	if ((id->base.sfp_ct_passive || id->base.sfp_ct_active) && br_nom) {
++ 		/* This may look odd, but some manufacturers use 12000MBd */
++-		if (br_min <= 12000 && br_max >= 10300)
+++		if (br_min <= 12000 && br_max >= 10300) {
++ 			phylink_set(modes, 10000baseCR_Full);
++-		if (br_min <= 3200 && br_max >= 3100)
+++			__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++		}
+++		if (br_min <= 3200 && br_max >= 3100) {
++ 			phylink_set(modes, 2500baseX_Full);
++-		if (br_min <= 1300 && br_max >= 1200)
+++			__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
+++		}
+++		if (br_min <= 1300 && br_max >= 1200) {
++ 			phylink_set(modes, 1000baseX_Full);
+++			__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++		}
++ 	}
++ 	if (id->base.sfp_ct_passive) {
++-		if (id->base.passive.sff8431_app_e)
+++		if (id->base.passive.sff8431_app_e) {
++ 			phylink_set(modes, 10000baseCR_Full);
+++			__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
+++		}
++ 	}
++ 	if (id->base.sfp_ct_active) {
++ 		if (id->base.active.sff8431_app_e ||
++ 		    id->base.active.sff8431_lim) {
++ 			phylink_set(modes, 10000baseCR_Full);
+++			__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
++ 		}
++ 	}
++ 
++@@ -309,12 +336,14 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 	case SFF8024_ECC_10GBASE_T_SFI:
++ 	case SFF8024_ECC_10GBASE_T_SR:
++ 		phylink_set(modes, 10000baseT_Full);
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
++ 		break;
++ 	case SFF8024_ECC_5GBASE_T:
++ 		phylink_set(modes, 5000baseT_Full);
++ 		break;
++ 	case SFF8024_ECC_2_5GBASE_T:
++ 		phylink_set(modes, 2500baseT_Full);
+++		__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
++ 		break;
++ 	default:
++ 		dev_warn(bus->sfp_dev,
++@@ -327,10 +356,14 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 	if (id->base.fc_speed_100 ||
++ 	    id->base.fc_speed_200 ||
++ 	    id->base.fc_speed_400) {
++-		if (id->base.br_nominal >= 31)
+++		if (id->base.br_nominal >= 31) {
++ 			phylink_set(modes, 2500baseX_Full);
++-		if (id->base.br_nominal >= 12)
+++			__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
+++		}
+++		if (id->base.br_nominal >= 12) {
++ 			phylink_set(modes, 1000baseX_Full);
+++			__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++		}
++ 	}
++ 
++ 	/* If we haven't discovered any modes that this module supports, try
++@@ -341,12 +374,14 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 	if (bitmap_empty(modes, __ETHTOOL_LINK_MODE_MASK_NBITS)) {
++ 		/* If the encoding and bit rate allows 1000baseX */
++ 		if (id->base.encoding == SFF8024_ENCODING_8B10B && br_nom &&
++-		    br_min <= 1300 && br_max >= 1200)
+++		    br_min <= 1300 && br_max >= 1200) {
++ 			phylink_set(modes, 1000baseX_Full);
+++			__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+++		}
++ 	}
++ 
++ 	if (bus->sfp_quirk)
++-		bus->sfp_quirk->modes(id, modes);
+++		bus->sfp_quirk->modes(id, modes, interfaces);
++ 
++ 	bitmap_or(support, support, modes, __ETHTOOL_LINK_MODE_MASK_NBITS);
++ 
++diff --git a/include/linux/sfp.h b/include/linux/sfp.h
++index 38893e4dd0f0..2da1a5181779 100644
++--- a/include/linux/sfp.h
+++++ b/include/linux/sfp.h
++@@ -535,7 +535,7 @@ int sfp_parse_port(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 		   unsigned long *support);
++ bool sfp_may_have_phy(struct sfp_bus *bus, const struct sfp_eeprom_id *id);
++ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++-		       unsigned long *support);
+++		       unsigned long *support, unsigned long *interfaces);
++ phy_interface_t sfp_select_interface(struct sfp_bus *bus,
++ 				     unsigned long *link_modes);
++ 
++@@ -565,7 +565,8 @@ static inline bool sfp_may_have_phy(struct sfp_bus *bus,
++ 
++ static inline void sfp_parse_support(struct sfp_bus *bus,
++ 				     const struct sfp_eeprom_id *id,
++-				     unsigned long *support)
+++				     unsigned long *support,
+++				     unsigned long *interfaces)
++ {
++ }
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8568-net-phylink-improve-initial-mac-configuration.patch b/target/linux/mvebu/patches-5.4/8568-net-phylink-improve-initial-mac-configuration.patch
+new file mode 100644
+index 0000000..0a986d0
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8568-net-phylink-improve-initial-mac-configuration.patch
+@@ -0,0 +1,104 @@
++From 14f777465c0ac04ecb16e8d6f3bba9b3b4bcd8d6 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Sat, 15 Feb 2020 15:50:03 +0000
++Subject: [PATCH 8568/8586] net: phylink: improve initial mac configuration
++
++Improve the initial MAC configuration so we get a configuration which
++more represents the final operating mode, in particular with respect
++to the flow control settings.
++
++We do this by:
++1) more fully initialising our phy state, so we can use this as the
++   initial state for PHY based connections.
++2) reading the fixed link state.
++3) ensuring that in-band mode has sane pause settings for SGMII vs
++   802.3z negotiation modes.
++
++In all three cases, we ensure that state->link is false, just in case
++any MAC drivers have other ideas by mis-using this member, and we also
++take account of manual pause mode configuration at this point.
++
++This avoids MLO_PAUSE_AN being seen in mac_config() when operating in
++PHY, fixed mode or inband SGMII mode, thereby giving cleaner semantics
++to the pause flags.  As a result of this, the pause flags now indicate
++in a mode-independent way what is required from a mac_config()
++implementation.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 36 ++++++++++++++++++++++++++++++++++--
++ 1 file changed, 34 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 0fe5865691f9..ea32f38db10e 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -410,6 +410,35 @@ static void phylink_get_fixed_state(struct phylink *pl, struct phylink_link_stat
++ 		state->link = !!gpiod_get_value_cansleep(pl->link_gpio);
++ }
++ 
+++static void phylink_mac_initial_config(struct phylink *pl)
+++{
+++	struct phylink_link_state link_state;
+++
+++	switch (pl->cur_link_an_mode) {
+++	case MLO_AN_PHY:
+++		link_state = pl->phy_state;
+++		break;
+++
+++	case MLO_AN_FIXED:
+++		phylink_get_fixed_state(pl, &link_state);
+++		break;
+++
+++	case MLO_AN_INBAND:
+++		link_state = pl->link_config;
+++		if (link_state.interface == PHY_INTERFACE_MODE_SGMII)
+++			link_state.pause = MLO_PAUSE_NONE;
+++		break;
+++
+++	default: /* can't happen */
+++		return;
+++	}
+++
+++	link_state.link = false;
+++
+++	phylink_apply_manual_flow(pl, &link_state);
+++	phylink_mac_config(pl, &link_state);
+++}
+++
++ /* Flow control is resolved according to our and the link partners
++  * advertisements using the following drawn from the 802.3 specs:
++  *  Local device  Link partner
++@@ -796,6 +825,9 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ 	mutex_lock(&pl->state_mutex);
++ 	pl->phydev = phy;
++ 	pl->phy_state.interface = interface;
+++	pl->phy_state.pause = MLO_PAUSE_NONE;
+++	pl->phy_state.speed = SPEED_UNKNOWN;
+++	pl->phy_state.duplex = DUPLEX_UNKNOWN;
++ 	linkmode_copy(pl->supported, supported);
++ 	linkmode_copy(pl->link_config.advertising, config.advertising);
++ 
++@@ -1025,7 +1057,7 @@ void phylink_start(struct phylink *pl)
++ 	 * a fixed-link to start with the correct parameters, and also
++ 	 * ensures that we set the appropriate advertisement for Serdes links.
++ 	 */
++-	phylink_mac_config(pl, &pl->link_config);
+++	phylink_mac_initial_config(pl);
++ 
++ 	/* Restart autonegotiation if using 802.3z to ensure that the link
++ 	 * parameters are properly negotiated.  This is necessary for DSA
++@@ -1834,7 +1866,7 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
++ 
++ 	if (changed && !test_bit(PHYLINK_DISABLE_STOPPED,
++ 				 &pl->phylink_disable_state))
++-		phylink_mac_config(pl, &pl->link_config);
+++		phylink_mac_initial_config(pl);
++ 
++ 	return ret;
++ }
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8569-net-phylink-use-phy-interface-mode-bitmaps.patch b/target/linux/mvebu/patches-5.4/8569-net-phylink-use-phy-interface-mode-bitmaps.patch
+new file mode 100644
+index 0000000..db052d3
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8569-net-phylink-use-phy-interface-mode-bitmaps.patch
+@@ -0,0 +1,199 @@
++From 8bbed6c9486473abb6671246bf8337c2d6ef27fa Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 12:12:43 +0000
++Subject: [PATCH 8569/8586] net: phylink: use phy interface mode bitmaps
++
++Use the phy interface mode bitmaps for SFP modules and PHYs to select
++the operating interface for SFPs and PHYs with SFPs.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/phylink.c | 116 +++++++++++++++++++++++++++++++-------
++ include/linux/phylink.h   |   1 +
++ 2 files changed, 98 insertions(+), 19 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index ea32f38db10e..99d46bf7e4e0 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -73,6 +73,7 @@ struct phylink {
++ 
++ 	struct sfp_bus *sfp_bus;
++ 	bool sfp_may_have_phy;
+++	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(sfp_support);
++ 	u8 sfp_port;
++ };
++@@ -1789,6 +1790,41 @@ static void phylink_sfp_detach(void *upstream, struct sfp_bus *bus)
++ 	pl->netdev->sfp_bus = NULL;
++ }
++ 
+++static const phy_interface_t phylink_sfp_interface_preference[] = {
+++	PHY_INTERFACE_MODE_USXGMII,
+++	PHY_INTERFACE_MODE_10GBASER,
+++	PHY_INTERFACE_MODE_10GKR,
+++	PHY_INTERFACE_MODE_2500BASEX,
+++	PHY_INTERFACE_MODE_SGMII,
+++	PHY_INTERFACE_MODE_1000BASEX,
+++};
+++
+++static phy_interface_t phylink_select_interface(struct phylink *pl,
+++						const unsigned long *intf,
+++						const char *intf_name)
+++{
+++	DECLARE_PHY_INTERFACE_MASK(u);
+++	phy_interface_t interface;
+++	size_t i;
+++
+++	phy_interface_and(u, intf, pl->config->supported_interfaces);
+++
+++	interface = PHY_INTERFACE_MODE_NA;
+++	for (i = 0; i < ARRAY_SIZE(phylink_sfp_interface_preference); i++)
+++		if (test_bit(phylink_sfp_interface_preference[i], u)) {
+++			interface = phylink_sfp_interface_preference[i];
+++			break;
+++		}
+++
+++	phylink_info(pl, "interfaces=[mac=%*pbl %s=%*pbl] selected %d (%s)\n",
+++		     (int)PHY_INTERFACE_MODE_MAX,
+++		     pl->config->supported_interfaces,
+++		     intf_name, (int)PHY_INTERFACE_MODE_MAX, intf,
+++		     interface, phy_modes(interface));
+++
+++	return interface;
+++}
+++
++ static int phylink_sfp_config(struct phylink *pl, u8 mode,
++ 			      const unsigned long *supported,
++ 			      const unsigned long *advertising)
++@@ -1871,25 +1907,33 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
++ 	return ret;
++ }
++ 
+++static int phylink_sfp_config_nophy(struct phylink *pl)
+++{
+++	if (!phy_interface_empty(pl->config->supported_interfaces))
+++		phylink_select_interface(pl, pl->sfp_interfaces, "sfp");
+++
+++	return phylink_sfp_config(pl, MLO_AN_INBAND,
+++				  pl->sfp_support, pl->sfp_support);
+++}
+++
++ static int phylink_sfp_module_insert(void *upstream,
++ 				     const struct sfp_eeprom_id *id)
++ {
++ 	struct phylink *pl = upstream;
++-	unsigned long *support = pl->sfp_support;
++-	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
++ 
++ 	ASSERT_RTNL();
++ 
++-	linkmode_zero(support);
++-	sfp_parse_support(pl->sfp_bus, id, support, sfp_interfaces);
++-	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, support);
+++	linkmode_zero(pl->sfp_support);
+++	phy_interface_zero(pl->sfp_interfaces);
+++	sfp_parse_support(pl->sfp_bus, id, pl->sfp_support, pl->sfp_interfaces);
+++	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, pl->sfp_support);
++ 
++ 	/* If this module may have a PHY connecting later, defer until later */
++ 	pl->sfp_may_have_phy = sfp_may_have_phy(pl->sfp_bus, id);
++ 	if (pl->sfp_may_have_phy)
++ 		return 0;
++ 
++-	return phylink_sfp_config(pl, MLO_AN_INBAND, support, support);
+++	return phylink_sfp_config_nophy(pl);
++ }
++ 
++ static int phylink_sfp_module_start(void *upstream)
++@@ -1908,8 +1952,7 @@ static int phylink_sfp_module_start(void *upstream)
++ 	if (!pl->sfp_may_have_phy)
++ 		return 0;
++ 
++-	return phylink_sfp_config(pl, MLO_AN_INBAND,
++-				  pl->sfp_support, pl->sfp_support);
+++	return phylink_sfp_config_nophy(pl);
++ }
++ 
++ static void phylink_sfp_module_stop(void *upstream)
++@@ -1970,19 +2013,54 @@ static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
++ 	else
++ 		mode = MLO_AN_INBAND;
++ 
++-	/* Do the initial configuration */
++-	ret = phylink_sfp_config(pl, mode, phy->supported, phy->advertising);
++-	if (ret < 0)
++-		return ret;
+++	if (!phy_interface_empty(phy->supported_interfaces) &&
+++	    !phy_interface_empty(pl->config->supported_interfaces)) {
+++		interface = phylink_select_interface(pl,
+++						     phy->supported_interfaces,
+++						     "phy");
+++		if (interface == PHY_INTERFACE_MODE_NA) {
+++			phylink_err(pl,
+++				    "selection of interface for PHY failed\n");
+++			return -EINVAL;
+++		}
++ 
++-	interface = pl->link_config.interface;
++-	ret = phylink_attach_phy(pl, phy, interface);
++-	if (ret < 0)
++-		return ret;
+++		if (pl->cur_link_an_mode != mode ||
+++		    pl->link_config.interface != interface) {
+++			pl->link_config.interface = interface;
+++			pl->cur_link_an_mode = mode;
++ 
++-	ret = phylink_bringup_phy(pl, phy, interface);
++-	if (ret)
++-		phy_detach(phy);
+++			phylink_info(pl, "switched to %s/%s link mode\n",
+++				     phylink_an_mode_str(mode),
+++				     phy_modes(interface));
+++		}
+++
+++		ret = phylink_attach_phy(pl, phy, interface);
+++		if (ret < 0)
+++			return ret;
+++
+++		ret = phylink_bringup_phy(pl, phy, interface);
+++		if (ret)
+++			phy_detach(phy);
+++
+++		if (!test_bit(PHYLINK_DISABLE_STOPPED,
+++			      &pl->phylink_disable_state))
+++			phylink_mac_initial_config(pl);
+++	} else {
+++		/* Do the initial configuration */
+++		ret = phylink_sfp_config(pl, mode, phy->supported,
+++					phy->advertising);
+++		if (ret < 0)
+++			return ret;
+++
+++		interface = pl->link_config.interface;
+++		ret = phylink_attach_phy(pl, phy, interface);
+++		if (ret < 0)
+++			return ret;
+++
+++		ret = phylink_bringup_phy(pl, phy, interface);
+++		if (ret)
+++			phy_detach(phy);
+++	}
++ 
++ 	return ret;
++ }
++diff --git a/include/linux/phylink.h b/include/linux/phylink.h
++index 641720ef712f..31e61ea4e3e2 100644
++--- a/include/linux/phylink.h
+++++ b/include/linux/phylink.h
++@@ -67,6 +67,7 @@ enum phylink_op_type {
++ struct phylink_config {
++ 	struct device *dev;
++ 	enum phylink_op_type type;
+++	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
++ };
++ 
++ /**
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8570-net-mvneta-fill-in-phy-interface-mode-bitmap.patch b/target/linux/mvebu/patches-5.4/8570-net-mvneta-fill-in-phy-interface-mode-bitmap.patch
+new file mode 100644
+index 0000000..6f9d85b
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8570-net-mvneta-fill-in-phy-interface-mode-bitmap.patch
+@@ -0,0 +1,43 @@
++From 429204abeca76e1f10f837454519fe12a95856a7 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 12:15:38 +0000
++Subject: [PATCH 8570/8586] net: mvneta: fill in phy interface mode bitmap
++
++Fill in the phy interface mode bitmap for the Marvell mvneta driver, so
++phylink can know which interfaces are supported by the MAC.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 16 ++++++++++++++++
++ 1 file changed, 16 insertions(+)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index ccb2abd18d6c..c857ff3d5aef 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -4556,6 +4556,22 @@ static int mvneta_probe(struct platform_device *pdev)
++ 
++ 	pp->phylink_config.dev = &dev->dev;
++ 	pp->phylink_config.type = PHYLINK_NETDEV;
+++	__set_bit(PHY_INTERFACE_MODE_SGMII,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_ID,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_RXID,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII_TXID,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_QSGMII,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_1000BASEX,
+++		  pp->phylink_config.supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_2500BASEX,
+++		  pp->phylink_config.supported_interfaces);
++ 
++ 	phylink = phylink_create(&pp->phylink_config, pdev->dev.fwnode,
++ 				 phy_mode, &mvneta_phylink_ops);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8571-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch b/target/linux/mvebu/patches-5.4/8571-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch
+new file mode 100644
+index 0000000..4e5424e
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8571-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch
+@@ -0,0 +1,285 @@
++From cfd8925a008d441d5dd502a4f5259d898bf14892 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 12 Aug 2020 16:12:02 +0200
++Subject: [PATCH 8571/8586] net: phy: mdio-i2c: support I2C MDIO protocol for
++ RollBall SFP modules
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Some multigig SFPs from RollBall and Hilink do not expose functional
++MDIO access to the internal PHY of the SFP via I2C address 0x56
++(although there seems to be read-only clause 22 access on this address).
++
++Instead these SFPs PHY can be accessed via I2C via the SFP Enhanced
++Digital Diagnostic Interface - I2C address 0x51.
++
++This extends the mdio-i2c driver so that when SFP PHY address 17 is used
++(which in mdio-i2c terms corresponds to I2C address 0x51), then this
++different protocol is used for MDIO access.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/mdio-i2c.c | 197 +++++++++++++++++++++++++++++++++++--
++ 1 file changed, 187 insertions(+), 10 deletions(-)
++
++diff --git a/drivers/net/phy/mdio-i2c.c b/drivers/net/phy/mdio-i2c.c
++index 0dce67672548..a529b69c123f 100644
++--- a/drivers/net/phy/mdio-i2c.c
+++++ b/drivers/net/phy/mdio-i2c.c
++@@ -3,12 +3,14 @@
++  * MDIO I2C bridge
++  *
++  * Copyright (C) 2015-2016 Russell King
+++ * Copyright (C) 2020 Marek Behun
++  *
++  * Network PHYs can appear on I2C buses when they are part of SFP module.
++  * This driver exposes these PHYs to the networking PHY code, allowing
++  * our PHY drivers access to these PHYs, and so allowing configuration
++  * of their settings.
++  */
+++#include <linux/delay.h>
++ #include <linux/i2c.h>
++ #include <linux/phy.h>
++ 
++@@ -17,11 +19,17 @@
++ /*
++  * I2C bus addresses 0x50 and 0x51 are normally an EEPROM, which is
++  * specified to be present in SFP modules.  These correspond with PHY
++- * addresses 16 and 17.  Disallow access to these "phy" addresses.
+++ * addresses 16 and 17.  Disallow access to 0x50 "phy" address.
+++ * Use RollBall protocol when accessing via the 0x51 address.
++  */
++ static bool i2c_mii_valid_phy_id(int phy_id)
++ {
++-	return phy_id != 0x10 && phy_id != 0x11;
+++	return phy_id != 0x10;
+++}
+++
+++static bool i2c_mii_rollball_phy_id(int phy_id)
+++{
+++	return phy_id == 0x11;
++ }
++ 
++ static unsigned int i2c_mii_phy_addr(int phy_id)
++@@ -29,16 +37,13 @@ static unsigned int i2c_mii_phy_addr(int
++ 	return phy_id + 0x40;
++ }
++ 
++-static int i2c_mii_read(struct mii_bus *bus, int phy_id, int reg)
+++static int i2c_mii_read_default(struct mii_bus *bus, int phy_id, int reg)
++ {
++ 	struct i2c_adapter *i2c = bus->priv;
++ 	struct i2c_msg msgs[2];
++ 	u8 addr[3], data[2], *p;
++ 	int bus_addr, ret;
++ 
++-	if (!i2c_mii_valid_phy_id(phy_id))
++-		return 0xffff;
++-
++ 	p = addr;
++ 	if (reg & MII_ADDR_C45) {
++ 		*p++ = 0x20 | ((reg >> 16) & 31);
++@@ -63,16 +68,13 @@ static int i2c_mii_read(struct mii_bus *
++ 	return data[0] << 8 | data[1];
++ }
++ 
++-static int i2c_mii_write(struct mii_bus *bus, int phy_id, int reg, u16 val)
+++static int i2c_mii_write_default(struct mii_bus *bus, int phy_id, int reg, u16 val)
++ {
++ 	struct i2c_adapter *i2c = bus->priv;
++ 	struct i2c_msg msg;
++ 	int ret;
++ 	u8 data[5], *p;
++ 
++-	if (!i2c_mii_valid_phy_id(phy_id))
++-		return 0;
++-
++ 	p = data;
++ 	if (reg & MII_ADDR_C45) {
++ 		*p++ = (reg >> 16) & 31;
++@@ -92,6 +94,181 @@ static int i2c_mii_write(struct mii_bus
++ 	return ret < 0 ? ret : 0;
++ }
++ 
+++/* RollBall SFPs do not access internal PHY via I2C address 0x56, but
+++ * instead via address 0x51, when SFP page is set to 0x03 and password to
+++ * 0xffffffff:
+++ *
+++ * address  size  contents  description
+++ * -------  ----  --------  -----------
+++ * 0x80     1     CMD       0x01/0x02/0x04 for write/read/done
+++ * 0x81     1     DEV       Clause 45 device
+++ * 0x82     2     REG       Clause 45 register
+++ * 0x84     2     VAL       Register value
+++ */
+++#define ROLLBALL_CMD_ADDR		0x80
+++#define ROLLBALL_DATA_ADDR		0x81
+++
+++#define ROLLBALL_CMD_WRITE		0x01
+++#define ROLLBALL_CMD_READ		0x02
+++#define ROLLBALL_CMD_DONE		0x04
+++
+++static int i2c_rollball_mii_poll(struct mii_bus *bus, int bus_addr, u8 *buf, size_t len)
+++{
+++	struct i2c_adapter *i2c = bus->priv;
+++	struct i2c_msg msgs[2];
+++	u8 buf0[2], *res;
+++	int i, ret;
+++
+++	buf0[0] = ROLLBALL_CMD_ADDR;
+++
+++	msgs[0].addr = bus_addr;
+++	msgs[0].flags = 0;
+++	msgs[0].len = 1;
+++	msgs[0].buf = &buf0[0];
+++
+++	res = buf ? buf : &buf0[1];
+++
+++	msgs[1].addr = bus_addr;
+++	msgs[1].flags = I2C_M_RD;
+++	msgs[1].len = buf ? len : 1;
+++	msgs[1].buf = res;
+++
+++	/* By experiment it takes up to 70 ms to access a register for these SFPs. Sleep 20ms
+++	  * between iteratios and try 10 times.
+++	  */
+++	i = 10;
+++	do {
+++		msleep(20);
+++
+++		ret = i2c_transfer(i2c, msgs, ARRAY_SIZE(msgs));
+++		if (ret < 0)
+++			return ret;
+++		else if (ret != ARRAY_SIZE(msgs))
+++			return -EIO;
+++
+++		if (*res == ROLLBALL_CMD_DONE)
+++			return 0;
+++	} while (i-- > 0);
+++
+++	dev_dbg(&bus->dev, "poll timed out\n");
+++
+++	return -ETIMEDOUT;
+++}
+++
+++static int i2c_rollball_mii_cmd(struct mii_bus *bus, int bus_addr, u8 cmd, u8 *data, size_t len)
+++{
+++	struct i2c_adapter *i2c = bus->priv;
+++	struct i2c_msg msgs[2];
+++	u8 cmdbuf[2];
+++	int ret;
+++
+++	msgs[0].addr = bus_addr;
+++	msgs[0].flags = 0;
+++	msgs[0].len = len;
+++	msgs[0].buf = data;
+++
+++	cmdbuf[0] = ROLLBALL_CMD_ADDR;
+++	cmdbuf[1] = cmd;
+++
+++	msgs[1].addr = bus_addr;
+++	msgs[1].flags = 0;
+++	msgs[1].len = sizeof(cmdbuf);
+++	msgs[1].buf = cmdbuf;
+++
+++	ret = i2c_transfer(i2c, msgs, 2);
+++	if (ret < 0)
+++		return ret;
+++
+++	return ret == ARRAY_SIZE(msgs) ? 0 : -EIO;
+++}
+++
+++static int i2c_mii_read_rollball(struct mii_bus *bus, int phy_id, int reg)
+++{
+++	u8 buf[4], res[6];
+++	int bus_addr, ret;
+++	u16 val;
+++
+++	if (!(reg & MII_ADDR_C45))
+++		return -EOPNOTSUPP;
+++
+++	buf[0] = ROLLBALL_DATA_ADDR;
+++	buf[1] = (reg >> 16) & 0x1f;
+++	buf[2] = (reg >> 8) & 0xff;
+++	buf[3] = reg & 0xff;
+++
+++	bus_addr = i2c_mii_phy_addr(phy_id);
+++
+++	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_READ, buf, sizeof(buf));
+++	if (ret < 0)
+++		return ret;
+++
+++	ret = i2c_rollball_mii_poll(bus, bus_addr, res, sizeof(res));
+++	if (ret == -ETIMEDOUT)
+++		return 0xffff;
+++	else if (ret < 0)
+++		return ret;
+++
+++	val = res[4];
+++	val <<= 8;
+++	val |= res[5];
+++
+++	dev_dbg(&bus->dev, "read reg %02x:%04x = %04x\n", (reg >> 16) & 0x1f, reg & 0xffff, val);
+++
+++	return val;
+++}
+++
+++static int i2c_mii_write_rollball(struct mii_bus *bus, int phy_id, int reg, u16 val)
+++{
+++	int bus_addr, ret;
+++	u8 buf[6];
+++
+++	if (!(reg & MII_ADDR_C45))
+++		return -EOPNOTSUPP;
+++
+++	buf[0] = ROLLBALL_DATA_ADDR;
+++	buf[1] = (reg >> 16) & 0x1f;
+++	buf[2] = (reg >> 8) & 0xff;
+++	buf[3] = reg & 0xff;
+++	buf[4] = val >> 8;
+++	buf[5] = val & 0xff;
+++
+++	bus_addr = i2c_mii_phy_addr(phy_id);
+++
+++	ret = i2c_rollball_mii_cmd(bus, bus_addr, ROLLBALL_CMD_WRITE, buf, sizeof(buf));
+++	if (ret < 0)
+++		return ret;
+++
+++	ret = i2c_rollball_mii_poll(bus, bus_addr, NULL, 0);
+++	if (ret < 0)
+++		return ret;
+++
+++	dev_dbg(&bus->dev, "write reg %02x:%04x = %04x\n", (reg >> 16) & 0x1f, reg & 0xffff, val);
+++
+++	return 0;
+++}
+++
+++static int i2c_mii_read(struct mii_bus *bus, int phy_id, int reg)
+++{
+++	if (!i2c_mii_valid_phy_id(phy_id))
+++		return 0xffff;
+++
+++	if (i2c_mii_rollball_phy_id(phy_id))
+++		return i2c_mii_read_rollball(bus, phy_id, reg);
+++	else
+++		return i2c_mii_read_default(bus, phy_id, reg);
+++}
+++
+++static int i2c_mii_write(struct mii_bus *bus, int phy_id, int reg, u16 val)
+++{
+++	if (!i2c_mii_valid_phy_id(phy_id))
+++		return 0;
+++
+++	if (i2c_mii_rollball_phy_id(phy_id))
+++		return i2c_mii_write_rollball(bus, phy_id, reg, val);
+++	else
+++		return i2c_mii_write_default(bus, phy_id, reg, val);
+++}
+++
++ struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c)
++ {
++ 	struct mii_bus *mii;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch b/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch
+new file mode 100644
+index 0000000..fa69547
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch
+@@ -0,0 +1,171 @@
++From edae63276a1d5e736f88b80aff0e4cbc3a787473 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 12 Aug 2020 16:14:54 +0200
++Subject: [PATCH 8572/8586] net: phy: sfp: add support for multigig RollBall
++ modules
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++This adds support for multigig copper SFP modules from RollBall/Hilink.
++These modules have a specific way to access clause 45 registers of the
++internal PHY.
++
++We also need to wait at least 25 seconds after deasserting TX disable
++before accessing the PHY. The code waits for 30 seconds just to be sure.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/sfp.c | 67 +++++++++++++++++++++++++++++++++++++++----
++ 1 file changed, 62 insertions(+), 5 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 73c2969f11a4..a7404b16628f 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -165,6 +165,7 @@ static const enum gpiod_flags gpio_flags[] = {
++  * on board (for a copper SFP) time to initialise.
++  */
++ #define T_WAIT			msecs_to_jiffies(50)
+++#define T_WAIT_LONG_PHY		msecs_to_jiffies(30000)
++ #define T_START_UP		msecs_to_jiffies(300)
++ #define T_START_UP_BAD_GPON	msecs_to_jiffies(60000)
++ 
++@@ -204,8 +205,11 @@ static const enum gpiod_flags gpio_flags[] = {
++ 
++ /* SFP modules appear to always have their PHY configured for bus address
++  * 0x56 (which with mdio-i2c, translates to a PHY address of 22).
+++ * RollBall SFPs access phy via SFP Enhanced Digital Diagnostic Interface
+++ * via address 0x51 (mdio-i2c will use RollBall protocol on this address).
++  */
++-#define SFP_PHY_ADDR	22
+++#define SFP_PHY_ADDR		22
+++#define SFP_PHY_ADDR_ROLLBALL	17
++ 
++ struct sff_data {
++ 	unsigned int gpios;
++@@ -220,6 +224,7 @@ struct sfp {
++ 	struct phy_device *mod_phy;
++ 	const struct sff_data *type;
++ 	u32 max_power_mW;
+++	int phy_addr;
++ 
++ 	unsigned int (*get_state)(struct sfp *);
++ 	void (*set_state)(struct sfp *, unsigned int);
++@@ -248,6 +253,7 @@ struct sfp {
++ 	struct sfp_eeprom_id id;
++ 	unsigned int module_power_mW;
++ 	unsigned int module_t_start_up;
+++	unsigned int module_t_wait;
++ 
++ #if IS_ENABLED(CONFIG_HWMON)
++ 	struct sfp_diag diag;
++@@ -1431,7 +1437,7 @@ static int sfp_sm_probe_phy(struct sfp *sfp, bool is_c45)
++ 	struct phy_device *phy;
++ 	int err;
++ 
++-	phy = get_phy_device(sfp->i2c_mii, SFP_PHY_ADDR, is_c45);
+++	phy = get_phy_device(sfp->i2c_mii, sfp->phy_addr, is_c45);
++ 	if (phy == ERR_PTR(-ENODEV))
++ 		return PTR_ERR(phy);
++ 	if (IS_ERR(phy)) {
++@@ -1632,11 +1638,39 @@ static int sfp_sm_mod_hpower(struct sfp *sfp, bool enable)
++ 	return 0;
++ }
++ 
+++static int sfp_rollball_init_mdio(struct sfp *sfp)
+++{
+++	u8 page, password[4];
+++	int err;
+++
+++	page = 3;
+++
+++	err = sfp_write(sfp, true, SFP_PAGE, &page, 1);
+++	if (err != 1) {
+++		dev_err(sfp->dev, "Failed to set SFP page for RollBall MDIO access: %d\n", err);
+++		return err;
+++	}
+++
+++	password[0] = 0xff;
+++	password[1] = 0xff;
+++	password[2] = 0xff;
+++	password[3] = 0xff;
+++
+++	err = sfp_write(sfp, true, 0x7b, password, 4);
+++	if (err != 4) {
+++		dev_err(sfp->dev, "Failed to write password for RollBall MDIO access; %d\n", err);
+++		return err;
+++	}
+++
+++	return 0;
+++}
+++
++ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ {
++ 	/* SFP module inserted - read I2C data */
++ 	struct sfp_eeprom_id id;
++ 	bool cotsworks;
+++	bool rollball;
++ 	u8 check;
++ 	int ret;
++ 
++@@ -1691,6 +1725,24 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 		}
++ 	}
++ 
+++	sfp->phy_addr = SFP_PHY_ADDR;
+++
+++	rollball = ((!memcmp(id.base.vendor_name, "OEM             ", 16) ||
+++		     !memcmp(id.base.vendor_name, "Turris          ", 16)) &&
+++		    (!memcmp(id.base.vendor_pn, "SFP-10G-T       ", 16) ||
+++		     !memcmp(id.base.vendor_pn, "RTSFP-10        ", 16) ||
+++		     !memcmp(id.base.vendor_pn, "RTSFP-2.5G      ", 16)));
+++	if (rollball) {
+++		sfp->phy_addr = SFP_PHY_ADDR_ROLLBALL;
+++		ret = sfp_rollball_init_mdio(sfp);
+++		if (ret < 0)
+++			return ret;
+++
+++		/* RollBall SFPs may have wrong (zero) extended compliacne code burned in EEPROM.
+++		 * To try to probe for PHY we need the correct one */
+++		id.base.extended_cc = SFF8024_ECC_10GBASE_T_SFI;
+++	}
+++
++ 	sfp->id = id;
++ 
++ 	dev_info(sfp->dev, "module %.*s %.*s rev %.*s sn %.*s dc %.*s\n",
++@@ -1724,6 +1776,11 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 	else
++ 		sfp->module_t_start_up = T_START_UP;
++ 
+++	if (rollball)
+++		sfp->module_t_wait = T_WAIT_LONG_PHY;
+++	else
+++		sfp->module_t_wait = T_WAIT;
+++
++ 	return 0;
++ }
++ 
++@@ -1919,7 +1976,7 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
++ 		 * while TX_DISABLE is asserted. The earliest we want to do
++ 		 * anything (such as probe for a PHY) is 50ms.
++ 		 */
++-		sfp_sm_next(sfp, SFP_S_WAIT, T_WAIT);
+++		sfp_sm_next(sfp, SFP_S_WAIT, sfp->module_t_wait);
++ 		break;
++ 
++ 	case SFP_S_WAIT:
++@@ -1933,8 +1990,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
++ 			 * deasserting.
++ 			 */
++ 			timeout = sfp->module_t_start_up;
++-			if (timeout > T_WAIT)
++-				timeout -= T_WAIT;
+++			if (timeout > sfp->module_t_wait)
+++				timeout -= sfp->module_t_wait;
++ 			else
++ 				timeout = 1;
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8573-net-phylink-don-t-fail-attaching-phy-on-1000base-x-2.patch b/target/linux/mvebu/patches-5.4/8573-net-phylink-don-t-fail-attaching-phy-on-1000base-x-2.patch
+new file mode 100644
+index 0000000..4901b52
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8573-net-phylink-don-t-fail-attaching-phy-on-1000base-x-2.patch
+@@ -0,0 +1,37 @@
++From 5b9a8d4b7c87569e9073fdd1027f1457ccf6a972 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 12 Aug 2020 19:04:39 +0200
++Subject: [PATCH 8573/8586] net: phylink: don't fail attaching phy on
++ 1000base-x/2500base-x mode
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Some SFPs may contain an internal PHY which may in some cases want to
++connect with the host interface in 1000base-x/2500base-x mode.
++Do not fail if such PHY is being attached in one of these PHY interface
++modes.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/phylink.c | 4 +---
++ 1 file changed, 1 insertion(+), 3 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 99d46bf7e4e0..001149c189cc 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -851,9 +851,7 @@ static int phylink_bringup_phy(struct phylink *pl, struct phy_device *phy,
++ static int phylink_attach_phy(struct phylink *pl, struct phy_device *phy,
++ 			      phy_interface_t interface)
++ {
++-	if (WARN_ON(pl->cfg_link_an_mode == MLO_AN_FIXED ||
++-		    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
++-		     phy_interface_mode_is_8023z(interface))))
+++	if (WARN_ON(pl->cfg_link_an_mode == MLO_AN_FIXED))
++ 		return -EINVAL;
++ 
++ 	if (pl->phydev)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8574-net-phylink-let-PHYs-know-what-interfaces-are-suppor.patch b/target/linux/mvebu/patches-5.4/8574-net-phylink-let-PHYs-know-what-interfaces-are-suppor.patch
+new file mode 100644
+index 0000000..e25efaa
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8574-net-phylink-let-PHYs-know-what-interfaces-are-suppor.patch
+@@ -0,0 +1,111 @@
++From 11d0c8a1e39f1780b4a9e14b9a6a1c3260baeae2 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Tue, 18 Aug 2020 19:45:48 +0200
++Subject: [PATCH 8574/8586] net: phylink: let PHYs know what interfaces are
++ supported by host
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Some PHYs may want to configure how they talk to the host. For this they
++need to know which PHY interface modes the host MAC supports.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/phylink.c | 24 ++++++++++++++++++++++++
++ include/linux/phy.h       |  8 +++++++-
++ 2 files changed, 31 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 001149c189cc..7f1fff35c5a7 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -885,6 +885,9 @@ int phylink_connect_phy(struct phylink *pl, struct phy_device *phy)
++ 		pl->link_config.interface = pl->link_interface;
++ 	}
++ 
+++	/* Set the PHY's host supported interfaces */
+++	phy_interface_copy(phy->host_interfaces, pl->config->supported_interfaces);
+++
++ 	ret = phylink_attach_phy(pl, phy, pl->link_interface);
++ 	if (ret < 0)
++ 		return ret;
++@@ -940,6 +943,9 @@ int phylink_of_phy_connect(struct phylink *pl, struct device_node *dn,
++ 	if (!phy_dev)
++ 		return -ENODEV;
++ 
+++	/* Set the PHY's host supported interfaces */
+++	phy_interface_copy(phy_dev->host_interfaces, pl->config->supported_interfaces);
+++
++ 	ret = phy_attach_direct(pl->netdev, phy_dev, flags,
++ 				pl->link_interface);
++ 	if (ret)
++@@ -1788,6 +1794,8 @@ static void phylink_sfp_detach(void *upstream, struct sfp_bus *bus)
++ 	pl->netdev->sfp_bus = NULL;
++ }
++ 
+++static DECLARE_PHY_INTERFACE_MASK(phylink_sfp_interfaces);
+++
++ static const phy_interface_t phylink_sfp_interface_preference[] = {
++ 	PHY_INTERFACE_MODE_USXGMII,
++ 	PHY_INTERFACE_MODE_10GBASER,
++@@ -1797,6 +1805,18 @@ static const phy_interface_t phylink_sfp_interface_preference[] = {
++ 	PHY_INTERFACE_MODE_1000BASEX,
++ };
++ 
+++static int __init phylink_init(void)
+++{
+++	int i;
+++
+++	for (i = 0; i < ARRAY_SIZE(phylink_sfp_interface_preference); i++)
+++		set_bit(phylink_sfp_interface_preference[i],
+++			phylink_sfp_interfaces);
+++
+++	return 0;
+++}
+++module_init(phylink_init);
+++
++ static phy_interface_t phylink_select_interface(struct phylink *pl,
++ 						const unsigned long *intf,
++ 						const char *intf_name)
++@@ -2011,6 +2031,10 @@ static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
++ 	else
++ 		mode = MLO_AN_INBAND;
++ 
+++	/* Set the PHY's host supported interfaces */
+++	phy_interface_and(phy->host_interfaces, phylink_sfp_interfaces,
+++			  pl->config->supported_interfaces);
+++
++ 	if (!phy_interface_empty(phy->supported_interfaces) &&
++ 	    !phy_interface_empty(pl->config->supported_interfaces)) {
++ 		interface = phylink_select_interface(pl,
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index 2bf28a737521..d878e23dca16 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -127,6 +127,11 @@ static inline void phy_interface_and(unsigned long *dst, const unsigned long *a,
++ 	bitmap_and(dst, a, b, PHY_INTERFACE_MODE_MAX);
++ }
++ 
+++static inline void phy_interface_copy(unsigned long *dst, const unsigned long *src)
+++{
+++	bitmap_copy(dst, src, PHY_INTERFACE_MODE_MAX);
+++}
+++
++ /**
++  * phy_supported_speeds - return all speeds currently supported by a phy device
++  * @phy: The phy device to return supported speeds of.
++@@ -432,8 +437,9 @@ struct phy_device {
++ 	/* used with phy_speed_down */
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(adv_old);
++ 
++-	/* bitmap of supported interfaces */
+++	/* bitmap of supported interfaces and host supported interfaces */
++ 	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
+++	DECLARE_PHY_INTERFACE_MASK(host_interfaces);
++ 
++ 	/* Energy efficient ethernet modes which should be prohibited */
++ 	u32 eee_broken_modes;
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8575-net-phy-marvell10g-read-copper-results-from-CSSR1.patch b/target/linux/mvebu/patches-5.4/8575-net-phy-marvell10g-read-copper-results-from-CSSR1.patch
+new file mode 100644
+index 0000000..6ba134e
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8575-net-phy-marvell10g-read-copper-results-from-CSSR1.patch
+@@ -0,0 +1,208 @@
++From afbf39b173a128d0097c34c182c99670ba6b2135 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Thu, 27 Feb 2020 09:46:36 +0000
++Subject: [PATCH 8575/8586] net: phy: marvell10g: read copper results from
++ CSSR1
++
++Read the copper autonegotiation results from the copper specific
++status register, rather than decoding the advertisements. Reading
++what the link is actually doing will allow us to support downshift
++modes.
++
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 141 ++++++++++++++++++++++-------------
++ 1 file changed, 89 insertions(+), 52 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 1c805b2bcb69..4edca5cce027 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -38,10 +38,19 @@ enum {
++ 	MV_PCS_BASE_R		= 0x1000,
++ 	MV_PCS_1000BASEX	= 0x2000,
++ 
++-	MV_PCS_PAIRSWAP		= 0x8182,
++-	MV_PCS_PAIRSWAP_MASK	= 0x0003,
++-	MV_PCS_PAIRSWAP_AB	= 0x0002,
++-	MV_PCS_PAIRSWAP_NONE	= 0x0003,
+++	MV_PCS_CSSR1		= 0x8008,
+++	MV_PCS_CSSR1_SPD1_MASK	= 0xc000,
+++	MV_PCS_CSSR1_SPD1_SPD2	= 0xc000,
+++	MV_PCS_CSSR1_SPD1_1000	= 0x8000,
+++	MV_PCS_CSSR1_SPD1_100	= 0x4000,
+++	MV_PCS_CSSR1_SPD1_10	= 0x0000,
+++	MV_PCS_CSSR1_DUPLEX_FULL= BIT(13),
+++	MV_PCS_CSSR1_RESOLVED	= BIT(11),
+++	MV_PCS_CSSR1_MDIX	= BIT(6),
+++	MV_PCS_CSSR1_SPD2_MASK	= 0x000c,
+++	MV_PCS_CSSR1_SPD2_5000	= 0x0008,
+++	MV_PCS_CSSR1_SPD2_2500	= 0x0004,
+++	MV_PCS_CSSR1_SPD2_10000	= 0x0000,
++ 
++ 	/* These registers appear at 0x800X and 0xa00X - the 0xa00X control
++ 	 * registers appear to set themselves to the 0x800X when AN is
++@@ -394,35 +403,18 @@ static void mv3310_update_interface(struct phy_device *phydev)
++ }
++ 
++ /* 10GBASE-ER,LR,LRM,SR do not support autonegotiation. */
++-static int mv3310_read_10gbr_status(struct phy_device *phydev)
+++static int mv3310_read_status_10gbaser(struct phy_device *phydev)
++ {
++ 	phydev->link = 1;
++ 	phydev->speed = SPEED_10000;
++ 	phydev->duplex = DUPLEX_FULL;
++ 
++-	mv3310_update_interface(phydev);
++-
++ 	return 0;
++ }
++ 
++-static int mv3310_read_status(struct phy_device *phydev)
+++static int mv3310_read_status_copper(struct phy_device *phydev)
++ {
++-	int val;
++-
++-	phydev->speed = SPEED_UNKNOWN;
++-	phydev->duplex = DUPLEX_UNKNOWN;
++-	linkmode_zero(phydev->lp_advertising);
++-	phydev->link = 0;
++-	phydev->pause = 0;
++-	phydev->asym_pause = 0;
++-	phydev->mdix = 0;
++-
++-	val = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_BASE_R + MDIO_STAT1);
++-	if (val < 0)
++-		return val;
++-
++-	if (val & MDIO_STAT1_LSTATUS)
++-		return mv3310_read_10gbr_status(phydev);
+++	int cssr1, speed, val;
++ 
++ 	val = genphy_c45_read_link(phydev);
++ 	if (val < 0)
++@@ -432,6 +424,52 @@ static int mv3310_read_status(struct phy_device *phydev)
++ 	if (val < 0)
++ 		return val;
++ 
+++	cssr1 = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_CSSR1);
+++	if (cssr1 < 0)
+++		return val;
+++
+++	/* If the link settings are not resolved, mark the link down */
+++	if (!(cssr1 & MV_PCS_CSSR1_RESOLVED)) {
+++		phydev->link = 0;
+++		return 0;
+++	}
+++
+++	/* Read the copper link settings */
+++	speed = cssr1 & MV_PCS_CSSR1_SPD1_MASK;
+++	if (speed == MV_PCS_CSSR1_SPD1_SPD2)
+++		speed |= cssr1 & MV_PCS_CSSR1_SPD2_MASK;
+++
+++	switch (speed) {
+++	case MV_PCS_CSSR1_SPD1_SPD2 | MV_PCS_CSSR1_SPD2_10000:
+++		phydev->speed = SPEED_10000;
+++		break;
+++
+++	case MV_PCS_CSSR1_SPD1_SPD2 | MV_PCS_CSSR1_SPD2_5000:
+++		phydev->speed = SPEED_5000;
+++		break;
+++
+++	case MV_PCS_CSSR1_SPD1_SPD2 | MV_PCS_CSSR1_SPD2_2500:
+++		phydev->speed = SPEED_2500;
+++		break;
+++
+++	case MV_PCS_CSSR1_SPD1_1000:
+++		phydev->speed = SPEED_1000;
+++		break;
+++
+++	case MV_PCS_CSSR1_SPD1_100:
+++		phydev->speed = SPEED_100;
+++		break;
+++
+++	case MV_PCS_CSSR1_SPD1_10:
+++		phydev->speed = SPEED_10;
+++		break;
+++	}
+++
+++	phydev->duplex = cssr1 & MV_PCS_CSSR1_DUPLEX_FULL ?
+++			 DUPLEX_FULL : DUPLEX_HALF;
+++	phydev->mdix = cssr1 & MV_PCS_CSSR1_MDIX ?
+++		       ETH_TP_MDI_X : ETH_TP_MDI;
+++
++ 	if (val & MDIO_AN_STAT1_COMPLETE) {
++ 		val = genphy_c45_read_lpa(phydev);
++ 		if (val < 0)
++@@ -444,39 +482,38 @@ static int mv3310_read_status(struct phy_device *phydev)
++ 
++ 		mii_stat1000_mod_linkmode_lpa_t(phydev->lp_advertising, val);
++ 
++-		if (phydev->autoneg == AUTONEG_ENABLE)
++-			phy_resolve_aneg_linkmode(phydev);
+++		/* Update the pause status */
+++		phy_resolve_aneg_pause(phydev);
++ 	}
++ 
++-	if (phydev->autoneg != AUTONEG_ENABLE) {
++-		val = genphy_c45_read_pma(phydev);
++-		if (val < 0)
++-			return val;
++-	}
+++	return 0;
+++}
++ 
++-	if (phydev->speed == SPEED_10000) {
++-		val = genphy_c45_read_mdix(phydev);
++-		if (val < 0)
++-			return val;
++-	} else {
++-		val = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_PAIRSWAP);
++-		if (val < 0)
++-			return val;
+++static int mv3310_read_status(struct phy_device *phydev)
+++{
+++	int err, val;
++ 
++-		switch (val & MV_PCS_PAIRSWAP_MASK) {
++-		case MV_PCS_PAIRSWAP_AB:
++-			phydev->mdix = ETH_TP_MDI_X;
++-			break;
++-		case MV_PCS_PAIRSWAP_NONE:
++-			phydev->mdix = ETH_TP_MDI;
++-			break;
++-		default:
++-			phydev->mdix = ETH_TP_MDI_INVALID;
++-			break;
++-		}
++-	}
+++	phydev->speed = SPEED_UNKNOWN;
+++	phydev->duplex = DUPLEX_UNKNOWN;
+++	linkmode_zero(phydev->lp_advertising);
+++	phydev->link = 0;
+++	phydev->pause = 0;
+++	phydev->asym_pause = 0;
+++	phydev->mdix = ETH_TP_MDI_INVALID;
++ 
++-	mv3310_update_interface(phydev);
+++	val = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_BASE_R + MDIO_STAT1);
+++	if (val < 0)
+++		return val;
+++
+++	if (val & MDIO_STAT1_LSTATUS)
+++		err = mv3310_read_status_10gbaser(phydev);
+++	else
+++		err = mv3310_read_status_copper(phydev);
+++	if (err < 0)
+++		return err;
+++
+++	if (phydev->link)
+++		mv3310_update_interface(phydev);
++ 
++ 	return 0;
++ }
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8576-net-phy-marvell10g-add-mdix-control.patch b/target/linux/mvebu/patches-5.4/8576-net-phy-marvell10g-add-mdix-control.patch
+new file mode 100644
+index 0000000..f014322
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8576-net-phy-marvell10g-add-mdix-control.patch
+@@ -0,0 +1,123 @@
++From 0127e27f3649d4d7471e38eeaec7d41cf67b8417 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 18:08:34 +0000
++Subject: [PATCH 8576/8586] net: phy: marvell10g: add mdix control
++
++Add support for controlling the MDI-X state of the PHY.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 61 ++++++++++++++++++++++++++++++++++--
++ 1 file changed, 59 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 4edca5cce027..b137671e188e 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -23,6 +23,7 @@
++  * link takes priority and the other port is completely locked out.
++  */
++ #include <linux/ctype.h>
+++#include <linux/delay.h>
++ #include <linux/hwmon.h>
++ #include <linux/marvell_phy.h>
++ #include <linux/phy.h>
++@@ -38,6 +39,12 @@ enum {
++ 	MV_PCS_BASE_R		= 0x1000,
++ 	MV_PCS_1000BASEX	= 0x2000,
++ 
+++	MV_PCS_CSCR1		= 0x8000,
+++	MV_PCS_CSCR1_MDIX_MASK	= 0x0060,
+++	MV_PCS_CSCR1_MDIX_MDI	= 0x0000,
+++	MV_PCS_CSCR1_MDIX_MDIX	= 0x0020,
+++	MV_PCS_CSCR1_MDIX_AUTO	= 0x0060,
+++
++ 	MV_PCS_CSSR1		= 0x8008,
++ 	MV_PCS_CSSR1_SPD1_MASK	= 0xc000,
++ 	MV_PCS_CSSR1_SPD1_SPD2	= 0xc000,
++@@ -215,6 +222,26 @@ static int mv3310_hwmon_probe(struct phy_device *phydev)
++ }
++ #endif
++ 
+++static int mv3310_reset(struct phy_device *phydev, u32 unit)
+++{
+++	int retries, val, err;
+++
+++	err = phy_modify_mmd(phydev, MDIO_MMD_PCS, unit + MDIO_CTRL1,
+++			     MDIO_CTRL1_RESET, MDIO_CTRL1_RESET);
+++	if (err < 0)
+++		return err;
+++
+++	retries = 20;
+++	do {
+++		msleep(5);
+++		val = phy_read_mmd(phydev, MDIO_MMD_PCS, unit + MDIO_CTRL1);
+++		if (val < 0)
+++			return val;
+++	} while (val & MDIO_CTRL1_RESET && --retries);
+++
+++	return val & MDIO_CTRL1_RESET ? -ETIMEDOUT : 0;
+++}
+++
++ static int mv3310_probe(struct phy_device *phydev)
++ {
++ 	struct mv3310_priv *priv;
++@@ -297,6 +324,8 @@ static int mv3310_config_init(struct phy_device *phydev)
++ 	    phydev->interface != PHY_INTERFACE_MODE_10GBASER)
++ 		return -ENODEV;
++ 
+++	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
+++
++ 	return 0;
++ }
++ 
++@@ -326,14 +355,42 @@ static int mv3310_get_features(struct phy_device *phydev)
++ 	return 0;
++ }
++ 
+++static int mv3310_config_mdix(struct phy_device *phydev)
+++{
+++	u16 val;
+++	int err;
+++
+++	switch (phydev->mdix_ctrl) {
+++	case ETH_TP_MDI_AUTO:
+++		val = MV_PCS_CSCR1_MDIX_AUTO;
+++		break;
+++	case ETH_TP_MDI_X:
+++		val = MV_PCS_CSCR1_MDIX_MDIX;
+++		break;
+++	case ETH_TP_MDI:
+++		val = MV_PCS_CSCR1_MDIX_MDI;
+++		break;
+++	default:
+++		return -EINVAL;
+++	}
+++
+++	err = phy_modify_mmd_changed(phydev, MDIO_MMD_PCS, MV_PCS_CSCR1,
+++				     MV_PCS_CSCR1_MDIX_MASK, val);
+++	if (err > 0)
+++		err = mv3310_reset(phydev, MV_PCS_BASE_T);
+++
+++	return err;
+++}
+++
++ static int mv3310_config_aneg(struct phy_device *phydev)
++ {
++ 	bool changed = false;
++ 	u16 reg;
++ 	int ret;
++ 
++-	/* We don't support manual MDI control */
++-	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
+++	ret = mv3310_config_mdix(phydev);
+++	if (ret < 0)
+++		return ret;
++ 
++ 	if (phydev->autoneg == AUTONEG_DISABLE)
++ 		return genphy_c45_pma_setup_forced(phydev);
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8577-net-phy-marvell10g-add-energy-detect-power-down-tuna.patch b/target/linux/mvebu/patches-5.4/8577-net-phy-marvell10g-add-energy-detect-power-down-tuna.patch
+new file mode 100644
+index 0000000..d95bda5
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8577-net-phy-marvell10g-add-energy-detect-power-down-tuna.patch
+@@ -0,0 +1,152 @@
++From 0978946e2256fa362a318487c601bc0b283617d8 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 18:08:40 +0000
++Subject: [PATCH 8577/8586] net: phy: marvell10g: add energy detect power down
++ tunable
++
++Add support for the energy detect power down tunable, which saves
++around 600mW when the link is down. The 88x3310 supports off, rx-only
++and NLP every second. Enable EDPD by default for 88x3310.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 86 +++++++++++++++++++++++++++++++++++-
++ 1 file changed, 85 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index b137671e188e..2111a2064305 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -40,6 +40,10 @@ enum {
++ 	MV_PCS_1000BASEX	= 0x2000,
++ 
++ 	MV_PCS_CSCR1		= 0x8000,
+++	MV_PCS_CSCR1_ED_MASK	= 0x0300,
+++	MV_PCS_CSCR1_ED_OFF	= 0x0000,
+++	MV_PCS_CSCR1_ED_RX	= 0x0200,
+++	MV_PCS_CSCR1_ED_NLP	= 0x0300,
++ 	MV_PCS_CSCR1_MDIX_MASK	= 0x0060,
++ 	MV_PCS_CSCR1_MDIX_MDI	= 0x0000,
++ 	MV_PCS_CSCR1_MDIX_MDIX	= 0x0020,
++@@ -242,6 +246,59 @@ static int mv3310_reset(struct phy_device *phydev, u32 unit)
++ 	return val & MDIO_CTRL1_RESET ? -ETIMEDOUT : 0;
++ }
++ 
+++static int mv3310_get_edpd(struct phy_device *phydev, u16 *edpd)
+++{
+++	int val;
+++
+++	val = phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_CSCR1);
+++	if (val < 0)
+++		return val;
+++
+++	switch (val & MV_PCS_CSCR1_ED_MASK) {
+++	case MV_PCS_CSCR1_ED_NLP:
+++		*edpd = 1000;
+++		break;
+++	case MV_PCS_CSCR1_ED_RX:
+++		*edpd = ETHTOOL_PHY_EDPD_NO_TX;
+++		break;
+++	default:
+++		*edpd = ETHTOOL_PHY_EDPD_DISABLE;
+++		break;
+++	}
+++	return 0;
+++}
+++
+++static int mv3310_set_edpd(struct phy_device *phydev, u16 edpd)
+++{
+++	u16 val;
+++	int err;
+++
+++	switch (edpd) {
+++	case 1000:
+++	case ETHTOOL_PHY_EDPD_DFLT_TX_MSECS:
+++		val = MV_PCS_CSCR1_ED_NLP;
+++		break;
+++
+++	case ETHTOOL_PHY_EDPD_NO_TX:
+++		val = MV_PCS_CSCR1_ED_RX;
+++		break;
+++
+++	case ETHTOOL_PHY_EDPD_DISABLE:
+++		val = MV_PCS_CSCR1_ED_OFF;
+++		break;
+++
+++	default:
+++		return -EINVAL;
+++	}
+++
+++	err = phy_modify_mmd_changed(phydev, MDIO_MMD_PCS, MV_PCS_CSCR1,
+++				     MV_PCS_CSCR1_ED_MASK, val);
+++	if (err > 0)
+++		err = mv3310_reset(phydev, MV_PCS_BASE_T);
+++
+++	return err;
+++}
+++
++ static int mv3310_probe(struct phy_device *phydev)
++ {
++ 	struct mv3310_priv *priv;
++@@ -326,7 +383,8 @@ static int mv3310_config_init(struct phy_device *phydev)
++ 
++ 	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
++ 
++-	return 0;
+++	/* Enable EDPD mode - saving 600mW */
+++	return mv3310_set_edpd(phydev, ETHTOOL_PHY_EDPD_DFLT_TX_MSECS);
++ }
++ 
++ static int mv3310_get_features(struct phy_device *phydev)
++@@ -575,6 +633,28 @@ static int mv3310_read_status(struct phy_device *phydev)
++ 	return 0;
++ }
++ 
+++static int mv3310_get_tunable(struct phy_device *phydev,
+++			      struct ethtool_tunable *tuna, void *data)
+++{
+++	switch (tuna->id) {
+++	case ETHTOOL_PHY_EDPD:
+++		return mv3310_get_edpd(phydev, data);
+++	default:
+++		return -EOPNOTSUPP;
+++	}
+++}
+++
+++static int mv3310_set_tunable(struct phy_device *phydev,
+++			      struct ethtool_tunable *tuna, const void *data)
+++{
+++	switch (tuna->id) {
+++	case ETHTOOL_PHY_EDPD:
+++		return mv3310_set_edpd(phydev, *(u16 *)data);
+++	default:
+++		return -EOPNOTSUPP;
+++	}
+++}
+++
++ static struct phy_driver mv3310_drivers[] = {
++ 	{
++ 		.phy_id		= MARVELL_PHY_ID_88X3310,
++@@ -589,6 +669,8 @@ static struct phy_driver mv3310_drivers[] = {
++ 		.config_aneg	= mv3310_config_aneg,
++ 		.aneg_done	= mv3310_aneg_done,
++ 		.read_status	= mv3310_read_status,
+++		.get_tunable	= mv3310_get_tunable,
+++		.set_tunable	= mv3310_set_tunable,
++ 	},
++ 	{
++ 		.phy_id		= MARVELL_PHY_ID_88E2110,
++@@ -602,6 +684,8 @@ static struct phy_driver mv3310_drivers[] = {
++ 		.config_aneg	= mv3310_config_aneg,
++ 		.aneg_done	= mv3310_aneg_done,
++ 		.read_status	= mv3310_read_status,
+++		.get_tunable	= mv3310_get_tunable,
+++		.set_tunable	= mv3310_set_tunable,
++ 	},
++ };
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8578-net-phy-marvell10g-place-in-powersave-mode-at-probe.patch b/target/linux/mvebu/patches-5.4/8578-net-phy-marvell10g-place-in-powersave-mode-at-probe.patch
+new file mode 100644
+index 0000000..f9fbc6f
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8578-net-phy-marvell10g-place-in-powersave-mode-at-probe.patch
+@@ -0,0 +1,95 @@
++From ebecbedf883d7bcc344490608e82df9083fb8424 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 3 Mar 2020 18:08:45 +0000
++Subject: [PATCH 8578/8586] net: phy: marvell10g: place in powersave mode at
++ probe
++
++Place the 88x3310 into powersaving mode when probing, which saves 600mW
++per PHY. For both PHYs on the Macchiatobin double-shot, this saves
++about 10% of the board idle power.
++
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 30 ++++++++++++++++++++++++++----
++ 1 file changed, 26 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 2111a2064305..deede0507ab7 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -226,6 +226,18 @@ static int mv3310_hwmon_probe(struct phy_device *phydev)
++ }
++ #endif
++ 
+++static int mv3310_power_down(struct phy_device *phydev)
+++{
+++	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+++				MV_V2_PORT_CTRL_PWRDOWN);
+++}
+++
+++static int mv3310_power_up(struct phy_device *phydev)
+++{
+++	return phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+++				  MV_V2_PORT_CTRL_PWRDOWN);
+++}
+++
++ static int mv3310_reset(struct phy_device *phydev, u32 unit)
++ {
++ 	int retries, val, err;
++@@ -329,6 +341,11 @@ static int mv3310_probe(struct phy_device *phydev)
++ 
++ 	dev_set_drvdata(&phydev->mdio.dev, priv);
++ 
+++	/* Powering down the port when not in use saves about 600mW */
+++	ret = mv3310_power_down(phydev);
+++	if (ret)
+++		return ret;
+++
++ 	ret = mv3310_hwmon_probe(phydev);
++ 	if (ret)
++ 		return ret;
++@@ -338,16 +355,14 @@ static int mv3310_probe(struct phy_device *phydev)
++ 
++ static int mv3310_suspend(struct phy_device *phydev)
++ {
++-	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
++-				MV_V2_PORT_CTRL_PWRDOWN);
+++	return mv3310_power_down(phydev);
++ }
++ 
++ static int mv3310_resume(struct phy_device *phydev)
++ {
++ 	int ret;
++ 
++-	ret = phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
++-				 MV_V2_PORT_CTRL_PWRDOWN);
+++	ret = mv3310_power_up(phydev);
++ 	if (ret)
++ 		return ret;
++ 
++@@ -373,6 +388,8 @@ static bool mv3310_has_pma_ngbaset_quirk(struct phy_device *phydev)
++ 
++ static int mv3310_config_init(struct phy_device *phydev)
++ {
+++	int err;
+++
++ 	/* Check that the PHY interface type is compatible */
++ 	if (phydev->interface != PHY_INTERFACE_MODE_SGMII &&
++ 	    phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
++@@ -383,6 +400,11 @@ static int mv3310_config_init(struct phy_device *phydev)
++ 
++ 	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
++ 
+++	/* Power up so reset works */
+++	err = mv3310_power_up(phydev);
+++	if (err)
+++		return err;
+++
++ 	/* Enable EDPD mode - saving 600mW */
++ 	return mv3310_set_edpd(phydev, ETHTOOL_PHY_EDPD_DFLT_TX_MSECS);
++ }
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8579-iopoll-introduce-read_poll_timeout-macro.patch b/target/linux/mvebu/patches-5.4/8579-iopoll-introduce-read_poll_timeout-macro.patch
+new file mode 100644
+index 0000000..42ca6f1
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8579-iopoll-introduce-read_poll_timeout-macro.patch
+@@ -0,0 +1,77 @@
++From 17fae5c64ed6f00c328c5f6a48c402c27dd8888c Mon Sep 17 00:00:00 2001
++From: Dejin Zheng <zhengdejin5@gmail.com>
++Date: Mon, 23 Mar 2020 23:05:51 +0800
++Subject: [PATCH 8579/8586] iopoll: introduce read_poll_timeout macro
++
++this macro is an extension of readx_poll_timeout macro. the accessor
++function op just supports only one parameter in the readx_poll_timeout
++macro, but this macro can supports multiple variable parameters for
++it. so functions like phy_read(struct phy_device *phydev, u32 regnum)
++and phy_read_mmd(struct phy_device *phydev, int devad, u32 regnum) can
++also use this poll timeout core. and also expand it can sleep some time
++before read operation.
++
++Signed-off-by: Dejin Zheng <zhengdejin5@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/linux/iopoll.h | 44 ++++++++++++++++++++++++++++++++++++++++++
++ 1 file changed, 44 insertions(+)
++
++diff --git a/include/linux/iopoll.h b/include/linux/iopoll.h
++index 35e15dfd4155..70f89b389648 100644
++--- a/include/linux/iopoll.h
+++++ b/include/linux/iopoll.h
++@@ -13,6 +13,50 @@
++ #include <linux/errno.h>
++ #include <linux/io.h>
++ 
+++/**
+++ * read_poll_timeout - Periodically poll an address until a condition is
+++ *			met or a timeout occurs
+++ * @op: accessor function (takes @args as its arguments)
+++ * @val: Variable to read the value into
+++ * @cond: Break condition (usually involving @val)
+++ * @sleep_us: Maximum time to sleep between reads in us (0
+++ *            tight-loops).  Should be less than ~20ms since usleep_range
+++ *            is used (see Documentation/timers/timers-howto.rst).
+++ * @timeout_us: Timeout in us, 0 means never timeout
+++ * @sleep_before_read: if it is true, sleep @sleep_us before read.
+++ * @args: arguments for @op poll
+++ *
+++ * Returns 0 on success and -ETIMEDOUT upon a timeout. In either
+++ * case, the last read value at @args is stored in @val. Must not
+++ * be called from atomic context if sleep_us or timeout_us are used.
+++ *
+++ * When available, you'll probably want to use one of the specialized
+++ * macros defined below rather than this macro directly.
+++ */
+++#define read_poll_timeout(op, val, cond, sleep_us, timeout_us, \
+++				sleep_before_read, args...) \
+++({ \
+++	u64 __timeout_us = (timeout_us); \
+++	unsigned long __sleep_us = (sleep_us); \
+++	ktime_t __timeout = ktime_add_us(ktime_get(), __timeout_us); \
+++	might_sleep_if((__sleep_us) != 0); \
+++	if (sleep_before_read && __sleep_us) \
+++		usleep_range((__sleep_us >> 2) + 1, __sleep_us); \
+++	for (;;) { \
+++		(val) = op(args); \
+++		if (cond) \
+++			break; \
+++		if (__timeout_us && \
+++		    ktime_compare(ktime_get(), __timeout) > 0) { \
+++			(val) = op(args); \
+++			break; \
+++		} \
+++		if (__sleep_us) \
+++			usleep_range((__sleep_us >> 2) + 1, __sleep_us); \
+++	} \
+++	(cond) ? 0 : -ETIMEDOUT; \
+++})
+++
++ /**
++  * readx_poll_timeout - Periodically poll an address until a condition is met or a timeout occurs
++  * @op: accessor function (takes @addr as its only argument)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8580-net-phy-introduce-phy_read_mmd_poll_timeout-macro.patch b/target/linux/mvebu/patches-5.4/8580-net-phy-introduce-phy_read_mmd_poll_timeout-macro.patch
+new file mode 100644
+index 0000000..e666886
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8580-net-phy-introduce-phy_read_mmd_poll_timeout-macro.patch
+@@ -0,0 +1,53 @@
++From e3a8c73ccdd2cf4e5a7199562cfab9b05ace4df2 Mon Sep 17 00:00:00 2001
++From: Dejin Zheng <zhengdejin5@gmail.com>
++Date: Mon, 23 Mar 2020 23:05:53 +0800
++Subject: [PATCH 8580/8586] net: phy: introduce phy_read_mmd_poll_timeout macro
++
++it is sometimes necessary to poll a phy register by phy_read_mmd()
++function until its value satisfies some condition. introduce
++phy_read_mmd_poll_timeout() macros that do this.
++
++Suggested-by: Andrew Lunn <andrew@lunn.ch>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: Dejin Zheng <zhengdejin5@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/linux/phy.h | 14 ++++++++++++++
++ 1 file changed, 14 insertions(+)
++
++diff --git a/include/linux/phy.h b/include/linux/phy.h
++index d878e23dca16..4f1cfd80d56d 100644
++--- a/include/linux/phy.h
+++++ b/include/linux/phy.h
++@@ -21,6 +21,7 @@
++ #include <linux/timer.h>
++ #include <linux/workqueue.h>
++ #include <linux/mod_devicetable.h>
+++#include <linux/iopoll.h>
++ 
++ #include <linux/atomic.h>
++ 
++@@ -783,6 +784,19 @@ static inline int __phy_write(struct phy_device *phydev, u32 regnum, u16 val)
++  */
++ int phy_read_mmd(struct phy_device *phydev, int devad, u32 regnum);
++ 
+++#define phy_read_mmd_poll_timeout(phydev, devaddr, regnum, val, cond, \
+++				  sleep_us, timeout_us, sleep_before_read) \
+++({ \
+++	int __ret = read_poll_timeout(phy_read_mmd, val, (cond) || val < 0, \
+++				  sleep_us, timeout_us, sleep_before_read, \
+++				  phydev, devaddr, regnum); \
+++	if (val <  0) \
+++		__ret = val; \
+++	if (__ret) \
+++		phydev_err(phydev, "%s failed: %d\n", __func__, __ret); \
+++	__ret; \
+++})
+++
++ /**
++  * __phy_read_mmd - Convenience function for reading a register
++  * from an MMD on a given PHY.
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8581-net-phy-marvell10g-use-phy_read_mmd_poll_timeout-to-.patch b/target/linux/mvebu/patches-5.4/8581-net-phy-marvell10g-use-phy_read_mmd_poll_timeout-to-.patch
+new file mode 100644
+index 0000000..926577c
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8581-net-phy-marvell10g-use-phy_read_mmd_poll_timeout-to-.patch
+@@ -0,0 +1,51 @@
++From 7b373473fc31eb932846768f4f692d3499ca0b79 Mon Sep 17 00:00:00 2001
++From: Dejin Zheng <zhengdejin5@gmail.com>
++Date: Mon, 23 Mar 2020 23:05:56 +0800
++Subject: [PATCH 8581/8586] net: phy: marvell10g: use
++ phy_read_mmd_poll_timeout() to simplify the code
++
++use phy_read_mmd_poll_timeout() to replace the poll codes for
++simplify mv3310_reset() function.
++
++Suggested-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Dejin Zheng <zhengdejin5@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 15 +++++----------
++ 1 file changed, 5 insertions(+), 10 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index deede0507ab7..4785fa7003e1 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -240,22 +240,17 @@ static int mv3310_power_up(struct phy_device *phydev)
++ 
++ static int mv3310_reset(struct phy_device *phydev, u32 unit)
++ {
++-	int retries, val, err;
+++	int val, err;
++ 
++ 	err = phy_modify_mmd(phydev, MDIO_MMD_PCS, unit + MDIO_CTRL1,
++ 			     MDIO_CTRL1_RESET, MDIO_CTRL1_RESET);
++ 	if (err < 0)
++ 		return err;
++ 
++-	retries = 20;
++-	do {
++-		msleep(5);
++-		val = phy_read_mmd(phydev, MDIO_MMD_PCS, unit + MDIO_CTRL1);
++-		if (val < 0)
++-			return val;
++-	} while (val & MDIO_CTRL1_RESET && --retries);
++-
++-	return val & MDIO_CTRL1_RESET ? -ETIMEDOUT : 0;
+++	return phy_read_mmd_poll_timeout(phydev, MDIO_MMD_PCS,
+++					 unit + MDIO_CTRL1, val,
+++					 !(val & MDIO_CTRL1_RESET),
+++					 5000, 100000, true);
++ }
++ 
++ static int mv3310_get_edpd(struct phy_device *phydev, u16 *edpd)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8582-net-marvell10g-report-firmware-version.patch b/target/linux/mvebu/patches-5.4/8582-net-marvell10g-report-firmware-version.patch
+new file mode 100644
+index 0000000..134bd5e
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8582-net-marvell10g-report-firmware-version.patch
+@@ -0,0 +1,65 @@
++From 145ca93248894da67808416732bfabddcc135aba Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 14 Apr 2020 20:49:03 +0100
++Subject: [PATCH 8582/8586] net: marvell10g: report firmware version
++
++Report the firmware version when probing the PHY to allow issues
++attributable to firmware to be diagnosed.
++
++Tested-by: Matteo Croce <mcroce@redhat.com>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 20 ++++++++++++++++++++
++ 1 file changed, 20 insertions(+)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 4785fa7003e1..7c7c94665ab7 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -32,6 +32,8 @@
++ #define MV_PHY_ALASKA_NBT_QUIRK_REV	(MARVELL_PHY_ID_88X3310 | 0xa)
++ 
++ enum {
+++	MV_PMA_FW_VER0		= 0xc011,
+++	MV_PMA_FW_VER1		= 0xc012,
++ 	MV_PMA_BOOT		= 0xc050,
++ 	MV_PMA_BOOT_FATAL	= BIT(0),
++ 
++@@ -82,6 +84,8 @@ enum {
++ };
++ 
++ struct mv3310_priv {
+++	u32 firmware_ver;
+++
++ 	struct device *hwmon_dev;
++ 	char *hwmon_name;
++ };
++@@ -336,6 +340,22 @@ static int mv3310_probe(struct phy_device *phydev)
++ 
++ 	dev_set_drvdata(&phydev->mdio.dev, priv);
++ 
+++	ret = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MV_PMA_FW_VER0);
+++	if (ret < 0)
+++		return ret;
+++
+++	priv->firmware_ver = ret << 16;
+++
+++	ret = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MV_PMA_FW_VER1);
+++	if (ret < 0)
+++		return ret;
+++
+++	priv->firmware_ver |= ret;
+++
+++	phydev_info(phydev, "Firmware version %u.%u.%u.%u\n",
+++		    priv->firmware_ver >> 24, (priv->firmware_ver >> 16) & 255,
+++		    (priv->firmware_ver >> 8) & 255, priv->firmware_ver & 255);
+++
++ 	/* Powering down the port when not in use saves about 600mW */
++ 	ret = mv3310_power_down(phydev);
++ 	if (ret)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8583-net-marvell10g-soft-reset-the-PHY-when-coming-out-of.patch b/target/linux/mvebu/patches-5.4/8583-net-marvell10g-soft-reset-the-PHY-when-coming-out-of.patch
+new file mode 100644
+index 0000000..a252b02
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8583-net-marvell10g-soft-reset-the-PHY-when-coming-out-of.patch
+@@ -0,0 +1,59 @@
++From 59fb46929fd6dd3e7a70b4874ae2eadebee9767d Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 14 Apr 2020 20:49:08 +0100
++Subject: [PATCH 8583/8586] net: marvell10g: soft-reset the PHY when coming out
++ of low power
++
++Soft-reset the PHY when coming out of low power mode, which seems to
++be necessary with firmware versions 0.3.3.0 and 0.3.10.0.
++
++This depends on ("net: marvell10g: report firmware version")
++
++Fixes: c9cc1c815d36 ("net: phy: marvell10g: place in powersave mode at probe")
++Reported-by: Matteo Croce <mcroce@redhat.com>
++Tested-by: Matteo Croce <mcroce@redhat.com>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 16 +++++++++++++---
++ 1 file changed, 13 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 7c7c94665ab7..ae0c18bfe29f 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -74,7 +74,8 @@ enum {
++ 
++ 	/* Vendor2 MMD registers */
++ 	MV_V2_PORT_CTRL		= 0xf001,
++-	MV_V2_PORT_CTRL_PWRDOWN = 0x0800,
+++	MV_V2_PORT_CTRL_SWRST	= BIT(15),
+++	MV_V2_PORT_CTRL_PWRDOWN = BIT(11),
++ 	MV_V2_TEMP_CTRL		= 0xf08a,
++ 	MV_V2_TEMP_CTRL_MASK	= 0xc000,
++ 	MV_V2_TEMP_CTRL_SAMPLE	= 0x0000,
++@@ -238,8 +239,17 @@ static int mv3310_power_down(struct phy_device *phydev)
++ 
++ static int mv3310_power_up(struct phy_device *phydev)
++ {
++-	return phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
++-				  MV_V2_PORT_CTRL_PWRDOWN);
+++	struct mv3310_priv *priv = dev_get_drvdata(&phydev->mdio.dev);
+++	int ret;
+++
+++	ret = phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+++				 MV_V2_PORT_CTRL_PWRDOWN);
+++
+++	if (priv->firmware_ver < 0x00030000)
+++		return ret;
+++
+++	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+++				MV_V2_PORT_CTRL_SWRST);
++ }
++ 
++ static int mv3310_reset(struct phy_device *phydev, u32 unit)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8584-net-phy-marvell10g-limit-soft-reset-to-88x3310.patch b/target/linux/mvebu/patches-5.4/8584-net-phy-marvell10g-limit-soft-reset-to-88x3310.patch
+new file mode 100644
+index 0000000..b383fce
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8584-net-phy-marvell10g-limit-soft-reset-to-88x3310.patch
+@@ -0,0 +1,33 @@
++From 19031de56bd0333fab4c5a8bb2f2cb8b640ae07d Mon Sep 17 00:00:00 2001
++From: Baruch Siach <baruch@tkos.co.il>
++Date: Tue, 21 Apr 2020 12:04:46 +0300
++Subject: [PATCH 8584/8586] net: phy: marvell10g: limit soft reset to 88x3310
++
++The MV_V2_PORT_CTRL_SWRST bit in MV_V2_PORT_CTRL is reserved on 88E2110.
++Setting SWRST on 88E2110 breaks packets transfer after interface down/up
++cycle.
++
++Fixes: 8f48c2ac85ed ("net: marvell10g: soft-reset the PHY when coming out of low power")
++Signed-off-by: Baruch Siach <baruch@tkos.co.il>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index ae0c18bfe29f..76a89ffe7e21 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -245,7 +245,8 @@ static int mv3310_power_up(struct phy_device *phydev)
++ 	ret = phy_clear_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
++ 				 MV_V2_PORT_CTRL_PWRDOWN);
++ 
++-	if (priv->firmware_ver < 0x00030000)
+++	if (phydev->drv->phy_id != MARVELL_PHY_ID_88X3310 ||
+++	    priv->firmware_ver < 0x00030000)
++ 		return ret;
++ 
++ 	return phy_set_bits_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8585-net-phy-marvell10g-fix-temperature-sensor-on-2110.patch b/target/linux/mvebu/patches-5.4/8585-net-phy-marvell10g-fix-temperature-sensor-on-2110.patch
+new file mode 100644
+index 0000000..544a181
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8585-net-phy-marvell10g-fix-temperature-sensor-on-2110.patch
+@@ -0,0 +1,89 @@
++From f5f6950e088941d3aac809cf4156a2854229bf44 Mon Sep 17 00:00:00 2001
++From: Baruch Siach <baruch@tkos.co.il>
++Date: Sun, 26 Apr 2020 09:22:06 +0300
++Subject: [PATCH 8585/8586] net: phy: marvell10g: fix temperature sensor on
++ 2110
++
++Read the temperature sensor register from the correct location for the
++88E2110 PHY. There is no enable/disable bit on 2110, so make
++mv3310_hwmon_config() run on 88X3310 only.
++
++Fixes: 62d01535474b61 ("net: phy: marvell10g: add support for the 88x2110 PHY")
++Cc: Maxime Chevallier <maxime.chevallier@bootlin.com>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Baruch Siach <baruch@tkos.co.il>
++Reviewed-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 27 ++++++++++++++++++++++++++-
++ 1 file changed, 26 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 76a89ffe7e21..78807bae2117 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -65,6 +65,9 @@ enum {
++ 	MV_PCS_CSSR1_SPD2_2500	= 0x0004,
++ 	MV_PCS_CSSR1_SPD2_10000	= 0x0000,
++ 
+++	/* Temperature read register (88E2110 only) */
+++	MV_PCS_TEMP		= 0x8042,
+++
++ 	/* These registers appear at 0x800X and 0xa00X - the 0xa00X control
++ 	 * registers appear to set themselves to the 0x800X when AN is
++ 	 * restarted, but status registers appear readable from either.
++@@ -76,6 +79,7 @@ enum {
++ 	MV_V2_PORT_CTRL		= 0xf001,
++ 	MV_V2_PORT_CTRL_SWRST	= BIT(15),
++ 	MV_V2_PORT_CTRL_PWRDOWN = BIT(11),
+++	/* Temperature control/read registers (88X3310 only) */
++ 	MV_V2_TEMP_CTRL		= 0xf08a,
++ 	MV_V2_TEMP_CTRL_MASK	= 0xc000,
++ 	MV_V2_TEMP_CTRL_SAMPLE	= 0x0000,
++@@ -103,6 +107,24 @@ static umode_t mv3310_hwmon_is_visible(const void *data,
++ 	return 0;
++ }
++ 
+++static int mv3310_hwmon_read_temp_reg(struct phy_device *phydev)
+++{
+++	return phy_read_mmd(phydev, MDIO_MMD_VEND2, MV_V2_TEMP);
+++}
+++
+++static int mv2110_hwmon_read_temp_reg(struct phy_device *phydev)
+++{
+++	return phy_read_mmd(phydev, MDIO_MMD_PCS, MV_PCS_TEMP);
+++}
+++
+++static int mv10g_hwmon_read_temp_reg(struct phy_device *phydev)
+++{
+++	if (phydev->drv->phy_id == MARVELL_PHY_ID_88X3310)
+++		return mv3310_hwmon_read_temp_reg(phydev);
+++	else /* MARVELL_PHY_ID_88E2110 */
+++		return mv2110_hwmon_read_temp_reg(phydev);
+++}
+++
++ static int mv3310_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
++ 			     u32 attr, int channel, long *value)
++ {
++@@ -115,7 +137,7 @@ static int mv3310_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
++ 	}
++ 
++ 	if (type == hwmon_temp && attr == hwmon_temp_input) {
++-		temp = phy_read_mmd(phydev, MDIO_MMD_VEND2, MV_V2_TEMP);
+++		temp = mv10g_hwmon_read_temp_reg(phydev);
++ 		if (temp < 0)
++ 			return temp;
++ 
++@@ -168,6 +190,9 @@ static int mv3310_hwmon_config(struct phy_device *phydev, bool enable)
++ 	u16 val;
++ 	int ret;
++ 
+++	if (phydev->drv->phy_id != MARVELL_PHY_ID_88X3310)
+++		return 0;
+++
++ 	ret = phy_write_mmd(phydev, MDIO_MMD_VEND2, MV_V2_TEMP,
++ 			    MV_V2_TEMP_UNKNOWN);
++ 	if (ret < 0)
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8586-net-phy-marvell10g-change-MACTYPE-according-to-host-.patch b/target/linux/mvebu/patches-5.4/8586-net-phy-marvell10g-change-MACTYPE-according-to-host-.patch
+new file mode 100644
+index 0000000..49cf29f
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8586-net-phy-marvell10g-change-MACTYPE-according-to-host-.patch
+@@ -0,0 +1,216 @@
++From 6360d5e3f3ea7ce23064aed391ce9b055b380b66 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Wed, 19 Aug 2020 15:46:36 +0200
++Subject: [PATCH 8586/8586] net: phy: marvell10g: change MACTYPE according to
++ host supported interface modes
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Use phydev->host_interfaces to determine and set MACTYPE accordingly.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/phy/marvell10g.c | 132 ++++++++++++++++++++++++++++++-----
++ 1 file changed, 113 insertions(+), 19 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 78807bae2117..7f6ac6b1630e 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -79,6 +79,7 @@ enum {
++ 	MV_V2_PORT_CTRL		= 0xf001,
++ 	MV_V2_PORT_CTRL_SWRST	= BIT(15),
++ 	MV_V2_PORT_CTRL_PWRDOWN = BIT(11),
+++	MV_V2_PORT_MAC_TYPE_MASK = 0x7,
++ 	/* Temperature control/read registers (88X3310 only) */
++ 	MV_V2_TEMP_CTRL		= 0xf08a,
++ 	MV_V2_TEMP_CTRL_MASK	= 0xc000,
++@@ -90,6 +91,7 @@ enum {
++ 
++ struct mv3310_priv {
++ 	u32 firmware_ver;
+++	int mac_type;
++ 
++ 	struct device *hwmon_dev;
++ 	char *hwmon_name;
++@@ -357,8 +359,14 @@ static int mv3310_probe(struct phy_device *phydev)
++ 		return -ENODEV;
++ 
++ 	__set_bit(PHY_INTERFACE_MODE_SGMII, phydev->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_1000BASEX, phydev->supported_interfaces);
++ 	__set_bit(PHY_INTERFACE_MODE_2500BASEX, phydev->supported_interfaces);
++-	__set_bit(PHY_INTERFACE_MODE_10GBASER, phydev->supported_interfaces);
+++
+++	if (phydev->drv->phy_id == MARVELL_PHY_ID_88X3310) {
+++		__set_bit(PHY_INTERFACE_MODE_XAUI, phydev->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_RXAUI, phydev->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_10GBASER, phydev->supported_interfaces);
+++	}
++ 
++ 	ret = phy_read_mmd(phydev, MDIO_MMD_PMAPMD, MV_PMA_BOOT);
++ 	if (ret < 0)
++@@ -437,17 +445,81 @@ static bool mv3310_has_pma_ngbaset_quirk(struct phy_device *phydev)
++ 		MV_PHY_ALASKA_NBT_QUIRK_MASK) == MV_PHY_ALASKA_NBT_QUIRK_REV;
++ }
++ 
+++static int mv3310_select_mactype(struct phy_device *phydev,
+++				 unsigned long *host_interfaces)
+++{
+++	bool h_sgmii, h_1000, h_10g, h_xaui, h_rxaui;
+++
+++	h_sgmii = test_bit(PHY_INTERFACE_MODE_SGMII, host_interfaces);
+++	h_1000 = test_bit(PHY_INTERFACE_MODE_1000BASEX, host_interfaces);
+++	h_10g = test_bit(PHY_INTERFACE_MODE_10GBASER, host_interfaces);
+++	h_xaui = test_bit(PHY_INTERFACE_MODE_XAUI, host_interfaces);
+++	h_rxaui = test_bit(PHY_INTERFACE_MODE_RXAUI, host_interfaces);
+++
+++	/* 88E2110 only supports 5gbase-r/2500base-x/SGMII/1000base-x */
+++	if (phydev->drv->phy_id == MARVELL_PHY_ID_88E2110)
+++		h_10g = h_xaui = h_rxaui = false;
+++
+++	if (h_sgmii && h_10g)
+++		return 4;
+++	else if (h_sgmii && h_rxaui)
+++		return 0;
+++	else if (h_sgmii && h_xaui)
+++		return 3;
+++	else if (h_10g)
+++		return 6;
+++	else if (h_rxaui)
+++		return 2;
+++	else if (h_xaui)
+++		return 1;
+++	else if (h_sgmii)
+++		return 4;
+++	else if (h_1000)
+++		return 5;
+++	else
+++		return -1;
+++}
+++
+++static int mv3310_set_mactype(struct phy_device *phydev, int mac_type)
+++{
+++	struct mv3310_priv *priv = dev_get_drvdata(&phydev->mdio.dev);
+++	int ret;
+++
+++	if (mac_type == -1 || phydev->drv->phy_id != MARVELL_PHY_ID_88X3310) {
+++		ret = phy_read_mmd(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL);
+++		if (ret < 0)
+++			return ret;
+++
+++		priv->mac_type = ret & MV_V2_PORT_MAC_TYPE_MASK;
+++	} else {
+++		ret = phy_modify_mmd_changed(phydev, MDIO_MMD_VEND2, MV_V2_PORT_CTRL,
+++					     MV_V2_PORT_CTRL_SWRST | MV_V2_PORT_MAC_TYPE_MASK,
+++					     MV_V2_PORT_CTRL_SWRST | mac_type);
+++		if (ret < 0)
+++			return ret;
+++
+++		priv->mac_type = mac_type;
+++	}
+++
+++	return 0;
+++}
+++
++ static int mv3310_config_init(struct phy_device *phydev)
++ {
++-	int err;
+++	int err, mac_type = -1;
++ 
++ 	/* Check that the PHY interface type is compatible */
++-	if (phydev->interface != PHY_INTERFACE_MODE_SGMII &&
++-	    phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
++-	    phydev->interface != PHY_INTERFACE_MODE_XAUI &&
++-	    phydev->interface != PHY_INTERFACE_MODE_RXAUI &&
++-	    phydev->interface != PHY_INTERFACE_MODE_10GBASER)
+++	if (!phy_interface_empty(phydev->host_interfaces)) {
+++		mac_type = mv3310_select_mactype(phydev, phydev->host_interfaces);
+++		phydev_info(phydev, "selected MAC type: %d\n", mac_type);
+++	} else if (phydev->interface != PHY_INTERFACE_MODE_SGMII &&
+++		   phydev->interface != PHY_INTERFACE_MODE_1000BASEX &&
+++		   phydev->interface != PHY_INTERFACE_MODE_2500BASEX &&
+++		   phydev->interface != PHY_INTERFACE_MODE_XAUI &&
+++		   phydev->interface != PHY_INTERFACE_MODE_RXAUI &&
+++		   phydev->interface != PHY_INTERFACE_MODE_10GBASER) {
++ 		return -ENODEV;
+++	}
++ 
++ 	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
++ 
++@@ -456,6 +528,10 @@ static int mv3310_config_init(struct phy_device *phydev)
++ 	if (err)
++ 		return err;
++ 
+++	err = mv3310_set_mactype(phydev, mac_type);
+++	if (err)
+++		return err;
+++
++ 	/* Enable EDPD mode - saving 600mW */
++ 	return mv3310_set_edpd(phydev, ETHTOOL_PHY_EDPD_DFLT_TX_MSECS);
++ }
++@@ -562,31 +638,49 @@ static int mv3310_aneg_done(struct phy_device *phydev)
++ 
++ static void mv3310_update_interface(struct phy_device *phydev)
++ {
++-	if ((phydev->interface == PHY_INTERFACE_MODE_SGMII ||
++-	     phydev->interface == PHY_INTERFACE_MODE_2500BASEX ||
++-	     phydev->interface == PHY_INTERFACE_MODE_10GBASER) &&
++-	    phydev->link) {
++-		/* The PHY automatically switches its serdes interface (and
++-		 * active PHYXS instance) between Cisco SGMII, 10GBase-R and
++-		 * 2500BaseX modes according to the speed.  Florian suggests
++-		 * setting phydev->interface to communicate this to the MAC.
++-		 * Only do this if we are already in one of the above modes.
++-		 */
+++	struct mv3310_priv *priv = dev_get_drvdata(&phydev->mdio.dev);
+++
+++	switch (priv->mac_type) {
+++	case 1:
+++		phydev->interface = PHY_INTERFACE_MODE_XAUI;
+++		break;
+++	case 2:
+++		phydev->interface = PHY_INTERFACE_MODE_RXAUI;
+++		break;
+++	case 6:
+++		phydev->interface = PHY_INTERFACE_MODE_10GBASER;
+++		break;
+++	case 0:
+++	case 3:
+++	case 4:
+++	case 5:
++ 		switch (phydev->speed) {
++ 		case SPEED_10000:
++-			phydev->interface = PHY_INTERFACE_MODE_10GBASER;
+++			if (priv->mac_type == 0)
+++				phydev->interface = PHY_INTERFACE_MODE_RXAUI;
+++			else if (priv->mac_type == 3)
+++				phydev->interface = PHY_INTERFACE_MODE_XAUI;
+++			else
+++				phydev->interface = PHY_INTERFACE_MODE_10GBASER;
++ 			break;
++ 		case SPEED_2500:
++ 			phydev->interface = PHY_INTERFACE_MODE_2500BASEX;
++ 			break;
++ 		case SPEED_1000:
+++			if (priv->mac_type == 5)
+++				phydev->interface = PHY_INTERFACE_MODE_1000BASEX;
+++			else
+++				phydev->interface = PHY_INTERFACE_MODE_SGMII;
+++			break;
++ 		case SPEED_100:
++ 		case SPEED_10:
++ 			phydev->interface = PHY_INTERFACE_MODE_SGMII;
++-			break;
++ 		default:
++ 			break;
++ 		}
+++		break;
+++	default:
+++		break;
++ 	}
++ }
++ 
++-- 
++2.26.2
++
+diff --git a/target/linux/mvebu/patches-5.4/8587-net-phy-marvell10g-fix-null-pointer-dereference.patch b/target/linux/mvebu/patches-5.4/8587-net-phy-marvell10g-fix-null-pointer-dereference.patch
+new file mode 100644
+index 0000000..a5b5d19
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/8587-net-phy-marvell10g-fix-null-pointer-dereference.patch
+@@ -0,0 +1,88 @@
++From b533b8ca88f564d3bd7f239d3f4de889ab19ec78 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Mon, 10 Aug 2020 17:01:58 +0200
++Subject: [PATCH 8587/8587] net: phy: marvell10g: fix null pointer dereference
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Commit c3e302edca24 ("net: phy: marvell10g: fix temperature sensor on 2110")
++added a check for PHY ID via phydev->drv->phy_id in a function which is
++called by devres at a time when phydev->drv is already set to null by
++phy_remove function.
++
++This null pointer dereference can be triggered via SFP subsystem with a
++SFP module containing this Marvell PHY. When the SFP interface is put
++down, the SFP subsystem removes the PHY.
++
++Fixes: c3e302edca24 ("net: phy: marvell10g: fix temperature sensor on 2110")
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Cc: Maxime Chevallier <maxime.chevallier@bootlin.com>
++Cc: Andrew Lunn <andrew@lunn.ch>
++Cc: Baruch Siach <baruch@tkos.co.il>
++Cc: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/marvell10g.c | 18 +++++++-----------
++ 1 file changed, 7 insertions(+), 11 deletions(-)
++
++diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
++index 7f6ac6b1630e..ba5453c85651 100644
++--- a/drivers/net/phy/marvell10g.c
+++++ b/drivers/net/phy/marvell10g.c
++@@ -206,13 +206,6 @@ static int mv3310_hwmon_config(struct phy_device *phydev, bool enable)
++ 			      MV_V2_TEMP_CTRL_MASK, val);
++ }
++ 
++-static void mv3310_hwmon_disable(void *data)
++-{
++-	struct phy_device *phydev = data;
++-
++-	mv3310_hwmon_config(phydev, false);
++-}
++-
++ static int mv3310_hwmon_probe(struct phy_device *phydev)
++ {
++ 	struct device *dev = &phydev->mdio.dev;
++@@ -236,10 +229,6 @@ static int mv3310_hwmon_probe(struct phy_device *phydev)
++ 	if (ret)
++ 		return ret;
++ 
++-	ret = devm_add_action_or_reset(dev, mv3310_hwmon_disable, phydev);
++-	if (ret)
++-		return ret;
++-
++ 	priv->hwmon_dev = devm_hwmon_device_register_with_info(dev,
++ 				priv->hwmon_name, phydev,
++ 				&mv3310_hwmon_chip_info, NULL);
++@@ -412,6 +401,11 @@ static int mv3310_probe(struct phy_device *phydev)
++ 	return 0;
++ }
++ 
+++static void mv3310_remove(struct phy_device *phydev)
+++{
+++	mv3310_hwmon_config(phydev, false);
+++}
+++
++ static int mv3310_suspend(struct phy_device *phydev)
++ {
++ 	return mv3310_power_down(phydev);
++@@ -838,6 +832,7 @@ static struct phy_driver mv3310_drivers[] = {
++ 		.read_status	= mv3310_read_status,
++ 		.get_tunable	= mv3310_get_tunable,
++ 		.set_tunable	= mv3310_set_tunable,
+++		.remove		= mv3310_remove,
++ 	},
++ 	{
++ 		.phy_id		= MARVELL_PHY_ID_88E2110,
++@@ -853,6 +848,7 @@ static struct phy_driver mv3310_drivers[] = {
++ 		.read_status	= mv3310_read_status,
++ 		.get_tunable	= mv3310_get_tunable,
++ 		.set_tunable	= mv3310_set_tunable,
+++		.remove		= mv3310_remove,
++ 	},
++ };
++ 
++-- 
++2.26.2
++
+-- 
+2.26.2
+
