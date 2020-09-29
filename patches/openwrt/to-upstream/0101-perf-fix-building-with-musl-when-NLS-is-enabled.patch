@@ -1,0 +1,44 @@
+From 9f2b59fe362607d4bf08759608d3068a1a0f7462 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@blackhole.sk>
+Date: Sat, 26 Sep 2020 21:42:52 +0000
+Subject: [PATCH 1/2] perf: fix building with musl when NLS is enabled
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This package fails with a strange error when building with musl when NLS
+is enabled. The configuration thinks that libelf is not present, even
+though DEPENDS contains +libelf, because when NLS is enabled, libelf.so
+depends on libintl, and the correct LDFLAGS are missing for
+libintl-full. This then causes the configuration script to check for
+glibc, but this fails because we are using musl.
+
+Signed-off-by: Marek Behún <kabel@blackhole.sk>
+---
+ package/devel/perf/Makefile | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/package/devel/perf/Makefile b/package/devel/perf/Makefile
+index 3bb4039..e611d5e 100644
+--- a/package/devel/perf/Makefile
++++ b/package/devel/perf/Makefile
+@@ -22,6 +22,7 @@ PKG_FLAGS:=nonshared
+ PKG_BUILD_DIR:=$(LINUX_DIR)/tools/perf-$(TARGET_DIR_NAME)
+ 
+ include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/nls.mk
+ 
+ define Package/perf
+   SECTION:=devel
+@@ -38,6 +39,8 @@ endef
+ 
+ HOST_CFLAGS += -I$(LINUX_DIR)/tools/include
+ 
++TARGET_LDFLAGS += $(INTL_LDFLAGS)
++
+ MAKE_FLAGS = \
+ 	ARCH="$(LINUX_KARCH)" \
+ 	NO_LIBPERL=1 \
+-- 
+2.20.1
+
