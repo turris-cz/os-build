@@ -2,59 +2,58 @@ include(utils.m4)dnl
 _FEATURE_GUARD_
 
 local foris_plugins = {
-	"data_collect",
-	"diagnostics",
-	"netmetr",
-	"openvpn",
-	"pakon",
-	"plugins-distutils",
-	"ssbackups",
-	"storage",
-	"subordinates",
+	["diagnostics"] = "turris-diagnostics",
+	["netmetr"] = "netmetr",
+	["openvpn"] = "openvpn",
+	["pakon"] = "pakon",
+	["storage"] = false,
+	["subordinates"] = "turris-netboot-tools",
 }
 
 local reforis_plugins = {
-	"data-collection",
-	"diagnostics",
-	"netboot",
-	"netmetr",
-	"openvpn",
-	"remote-access",
-	"remote-devices",
-	"remote-wifi-settings",
-	"snapshots",
+	["data-collection"] = Or("sentinel-proxy", "haas-proxy"),
+	["diagnostics"] = "turris-diagnostics",
+	["netboot"] = "turris-netboot-tools",
+	["netmetr"] = "netmetr",
+	["openvpn"] = "openvpn",
+	["remote-access"] = false,
+	["remote-devices"] = false,
+	["remote-wifi-settings"] = false,
+	["snapshots"] = "schnapps",
 }
-
--- Conditional install requests for language packages
-if for_l10n and features.request_condition then
-	for _, lang in pairs(l10n or {}) do
-		for _, plugin in pairs(foris_plugins) do
-			local fplugin = "foris-" .. plugin .. "-plugin"
-			Install(fplugin .. "-l10n-" .. lang, {
-				priority = 10,
-				optional = true,
-				condition = fplugin
-			})
-		end
-		for _, plugin in pairs(reforis_plugins) do
-			local refplugin = "reforis-" .. plugin .. "-plugin"
-			Install(refplugin .. "-l10n-" .. lang, {
-				priority = 10,
-				optional = true,
-				condition = refplugin
-			})
-		end
-	end
-end
 
 ----------------------------------------------------------------------------------
 
-Install("foris", { priority = 40 })
-Install("foris-diagnostics-plugin", "foris-storage-plugin", { priority = 40 })
-
+Install("foris", "foris-storage-plugin", { priority = 40 })
 Install("reforis", { priority = 40 })
-Install("reforis-diagnostics-plugin", { priority = 40 })
-Install("reforis-snapshots-plugin", { priority = 40 })
+
+for plugin, condition in pairs(foris_plugins) do
+	local fplugin = "foris-" .. plugin .. "-plugin"
+	if condition ~= false then
+		Install(fplugin, { priority = 40, condition = condition })
+	end
+	for _, lang in pairs(l10n or {}) do
+		Install(fplugin .. "-l10n-" .. lang, {
+			priority = 10,
+			optional = true,
+			condition = fplugin
+		})
+	end
+end
+
+for plugin, condition in pairs(reforis_plugins) do
+	local refplugin = "reforis-" .. plugin .. "-plugin"
+	if condition ~= false then
+		Install(refplugin, { priority = 40, condition = condition or nil })
+	end
+	for _, lang in pairs(l10n or {}) do
+		Install(refplugin .. "-l10n-" .. lang, {
+			priority = 10,
+			optional = true,
+			condition = refplugin
+		})
+	end
+end
 
 if for_l10n then
 	for_l10n("foris-l10n-")

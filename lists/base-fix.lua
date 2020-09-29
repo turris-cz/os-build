@@ -1,10 +1,5 @@
 -- Fixes and hacks to migrate from older setups
 
--- Install replacement link for python when python-base is not installed and python3-base is
-if features.request_condition then
-	Install("python3-python", { condition = {Not("python-base"), "python3-base"}, priority = 40 })
-end
-
 -- ABI changed in libubus with version 2019-12-27
 if not version_match or not installed or
 		(installed["libubus"] and version_match(installed["libubus"].version, "<2019-12-27")) then
