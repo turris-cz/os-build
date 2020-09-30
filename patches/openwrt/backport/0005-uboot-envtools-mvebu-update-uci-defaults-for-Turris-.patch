@@ -1,0 +1,52 @@
+From bc2755ef9e31094f8e6036e4d23e143ada5ef855 Mon Sep 17 00:00:00 2001
+From: Klaus Kudielka <klaus.kudielka@gmail.com>
+Date: Fri, 27 Dec 2019 19:15:31 +0100
+Subject: [PATCH] uboot-envtools: mvebu: update uci defaults for Turris Omnia
+
+On the Turris Omnia 2019, u-boot environment is located at 0xF0000, instead
+of 0xC0000. The switch happened with u-boot-omnia package version 2019-04-2
+(May 10, 2019).
+
+Check the installed u-boot release, and set the default accordingly.
+
+Signed-off-by: Klaus Kudielka <klaus.kudielka@gmail.com>
+[bump PKG_RELEASE, use lower case for hex offset]
+Signed-off-by: Adrian Schmutzler <freifunk@adrianschmutzler.de>
+---
+ package/boot/uboot-envtools/Makefile    | 2 +-
+ package/boot/uboot-envtools/files/mvebu | 6 +++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-envtools/Makefile
+index 15579e9..49428a5 100644
+--- a/package/boot/uboot-envtools/Makefile
++++ b/package/boot/uboot-envtools/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=uboot-envtools
+ PKG_DISTNAME:=u-boot
+ PKG_VERSION:=2018.03
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE:=$(PKG_DISTNAME)-$(PKG_VERSION).tar.xz
+diff --git a/package/boot/uboot-envtools/files/mvebu b/package/boot/uboot-envtools/files/mvebu
+index c2e746d..89fef9e 100644
+--- a/package/boot/uboot-envtools/files/mvebu
++++ b/package/boot/uboot-envtools/files/mvebu
+@@ -15,7 +15,11 @@ board=$(board_name)
+ 
+ case "$board" in
+ cznic,turris-omnia)
+-	ubootenv_add_uci_config "/dev/mtd0" "0xC0000" "0x10000" "0x40000"
++	if grep -q 'U-Boot 2015.10-rc2' /dev/mtd0; then
++		ubootenv_add_uci_config "/dev/mtd0" "0xc0000" "0x10000" "0x40000"
++	else
++		ubootenv_add_uci_config "/dev/mtd0" "0xf0000" "0x10000" "0x10000"
++	fi
+ 	;;
+ globalscale,espressobin|\
+ globalscale,espressobin-emmc|\
+-- 
+2.28.0
+
