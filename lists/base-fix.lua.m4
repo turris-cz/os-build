@@ -75,3 +75,12 @@ if root_dir == "/" and version_match(os_release.VERSION, "<=5.1.2") then
 	Install("fix-contracts-handling-in-rescue")
 	Package("fix-contracts-handling-in-rescue", { replan = "finished", reboot = "delayed" })
 end
+
+-- Default configuration on Turris Shield was invalid in factory (Turris OS 5.0).
+-- Only three LAN ports were correctly assigned. Fourth port was unassigned. This
+-- uses shield-support package to detect old version of Shield and fix it.
+if version_match and installed and installed["shield-support"] and
+		version_match(installed["shield-support"].version, "<2.2.0") then
+	Install("fix-all-lan-ports-in-lan")
+	Package("fix-all-lan-ports-in-lan", { replan = finished })
+end
