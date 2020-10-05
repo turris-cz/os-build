@@ -64,3 +64,14 @@ if root_dir == "/" and version_match(os_release.VERSION, "<5.1.1") then
 	Install("fix-config-foris-restore")
 	Package("fix-config-foris-restore", { replan = "finished" })
 end
+
+-- Contracted routers have in boot environment set contract variable that is used
+-- in boot arguments. This variable should be preserved but due to bug in rescue
+-- could have been corrupted on factory reset. This fix should recover it.
+-- We apply it in 5.1.2 but because that version is already in RC we have to keep
+-- it installed for that version in system.
+-- We request reboot as contract is applied only after reboot.
+if root_dir == "/" and version_match(os_release.VERSION, "<=5.1.2") then
+	Install("fix-contracts-handling-in-rescue")
+	Package("fix-contracts-handling-in-rescue", { replan = "finished", reboot = "delayed" })
+end
