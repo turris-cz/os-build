@@ -11,6 +11,18 @@ if not version_match or not installed or
 	Package("libubus", { abi_change = true })
 end
 
+
+--[[
+Fix packages triggers.
+Following code installs in various cases special fix packages. Those packages are
+provided primarily as a way to run script during update process.
+Fix packages should be installed and then with replan removed. This means that
+trigger that install them should be in general applicable only before fix is
+applied. This means reading configuration but current updater languages allows us
+only limited access so in general we rely on update of packages that are included
+in appropriate release or on Turris OS release version.
+]]
+
 -- Migrate from Samba3 to Samba4
 if installed and installed["samba36-server"] and not installed["samba4-server"] then
 	-- This effectively detects that users has Samba3 installed and is installing Samba4
@@ -69,4 +81,24 @@ end
 if root_dir == "/" and version_match(os_release.VERSION, "<5.1.1") then
 	Install("fix-config-foris-restore")
 	Package("fix-config-foris-restore", { replan = "finished" })
+end
+
+-- Contracted routers have in boot environment set contract variable that is used
+-- in boot arguments. This variable should be preserved but due to bug in rescue
+-- could have been corrupted on factory reset. This fix should recover it.
+-- We apply it in 5.1.2 but because that version is already in RC we have to keep
+-- it installed for that version in system.
+-- We request reboot as contract is applied only after reboot.
+if root_dir == "/" and version_match(os_release.VERSION, "<=5.1.2") then
+	Install("fix-contracts-handling-in-rescue")
+	Package("fix-contracts-handling-in-rescue", { replan = "finished", reboot = "delayed" })
+end
+
+-- Default configuration on Turris Shield was invalid in factory (Turris OS 5.0).
+-- Only three LAN ports were correctly assigned. Fourth port was unassigned. This
+-- uses shield-support package to detect old version of Shield and fix it.
+if version_match and installed and installed["shield-support"] and
+		version_match(installed["shield-support"].version, "<2.2.0") then
+	Install("fix-all-lan-ports-in-lan")
+	Package("fix-all-lan-ports-in-lan", { replan = finished })
 end
