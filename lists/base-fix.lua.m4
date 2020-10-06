@@ -11,6 +11,18 @@ if not version_match or not installed or
 	Package("libubus", { abi_change = true })
 end
 
+
+--[[
+Fix packages triggers.
+Following code installs in various cases special fix packages. Those packages are
+provided primarily as a way to run script during update process.
+Fix packages should be installed and then with replan removed. This means that
+trigger that install them should be in general applicable only before fix is
+applied. This means reading configuration but current updater languages allows us
+only limited access so in general we rely on update of packages that are included
+in appropriate release or on Turris OS release version.
+]]
+
 -- Migrate from Samba3 to Samba4
 if installed and installed["samba36-server"] and not installed["samba4-server"] then
 	-- This effectively detects that users has Samba3 installed and is installing Samba4
