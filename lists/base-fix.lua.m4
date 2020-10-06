@@ -90,8 +90,8 @@ end
 -- it installed for that version in system.
 -- We request reboot as contract is applied only after reboot.
 if root_dir == "/" and version_match(os_release.VERSION, "<=5.1.2") then
-	Install("fix-contracts-handling-in-rescue")
-	Package("fix-contracts-handling-in-rescue", { replan = "finished", reboot = "delayed" })
+	Install("fix-corrupted-contract-by-rescue")
+	Package("fix-corrupted-contract-by-rescue", { replan = "finished", reboot = "delayed" })
 end
 
 -- Default configuration on Turris Shield was invalid in factory (Turris OS 5.0).
