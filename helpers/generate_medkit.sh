@@ -137,9 +137,9 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -n "$BOARD" ] || die "You have to specify target Turris router."
+[ -n "$BOOTSTRAP_BOARD" ] || die "You have to specify target Turris router."
 [ -n "$OUTPUT" ] || \
-	OUTPUT="$BOARD-medkit$default_output_ext.tar.gz"
+	OUTPUT="$BOOTSTRAP_BOARD-medkit$default_output_ext.tar.gz"
 OUTPUT="$(readlink -f "$OUTPUT")"
 
 updater_ng_repodetect "$BRANCH" "$BOOTSTRAP_BOARD"
