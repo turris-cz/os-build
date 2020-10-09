@@ -99,7 +99,7 @@ for _, lang in pairs({"en", unpack(l10n or {})}) do
 end
 
 
-Install("luci", "luci-base", "luci-lighttpd", { priority = 40 })
+Install("luci", "luci-base", { priority = 40 })
 if for_l10n then
 	Install("luci-i18n-base-en", { optional = true, priority = 10 })
 	for_l10n("luci-i18n-base-")
