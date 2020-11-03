@@ -102,3 +102,13 @@ if version_match and installed and installed["shield-support"] and
 	Install("fix-all-lan-ports-in-lan")
 	Package("fix-all-lan-ports-in-lan", { replan = finished })
 end
+
+-- Transmission previously implemented multiple variants but that was later
+-- abandoned in favor of single SSL variant. This covers previously defined
+-- variants of packages and simply marks them as virtual and request installation
+-- of package instead.
+for _, ssl in pairs({"openssl", "mbedtls"}) do
+	for _, pkg in pairs({"transmission-daemon", "transmission-cli", "transmission-remote"}) do
+		Package(pkg .. "-" .. ssl, { virtual = true, deps = pkg })
+	end
+end
