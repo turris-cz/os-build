@@ -107,3 +107,11 @@ for _, ssl in pairs({"openssl", "mbedtls"}) do
 		Package(pkg .. "-" .. ssl, { virtual = true, deps = pkg })
 	end
 end
+
+-- With Turris OS 5.2.0 we removed long time obsolete package cznic-cacert-bundle.
+-- This package was storing its certificates to backup storage. We have to remove
+-- them from there.
+if version_match and installed and installed["cznic-cacert-bundle"] then
+	Install("fix-cleanup-cert-backup/")
+	Package("fix-cleanup-cert-backup/", { replan = finished })
+end
