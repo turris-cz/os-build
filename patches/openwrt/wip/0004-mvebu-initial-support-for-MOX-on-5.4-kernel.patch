@@ -15,13 +15,11 @@ Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
  ...10-PCI-aardvark-Issue-PERST-via-GPIO.patch | 114 ++++++++++
  .../9911-PCI-aardvark-Add-PHY-support.patch   | 152 +++++++++++++
  ...x-implement-phylink-AN-restart-on-Se.patch | 137 ++++++++++++
- ...m64-restart-Armada-3700-restart-code.patch |  44 ++++
- 12 files changed, 973 insertions(+)
+ 11 files changed, 929 insertions(+)
  create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
- create mode 100644 target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
 
 diff --git a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
 index 0a2a2b1..315d7d3 100755
@@ -508,56 +506,6 @@ index 0000000..47a9739
 + unsigned int mv88e6352_serdes_irq_mapping(struct mv88e6xxx_chip *chip,
 + 					  int port);
 + unsigned int mv88e6390_serdes_irq_mapping(struct mv88e6xxx_chip *chip,
-+-- 
-+2.24.1
-+
-diff --git a/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch b/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
-new file mode 100644
-index 0000000..21c4c3c
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.4/9999-arm64-restart-Armada-3700-restart-code.patch
-@@ -0,0 +1,44 @@
-+From 2540a6ba05712695b7528cafc6e5f744835fd980 Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Mon, 14 Jan 2019 17:00:04 +0100
-+Subject: [PATCH] arm64: restart: Armada 3700 restart code
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+This is a bugfix for Turris Mox, do not send to mainline.
-+
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ arch/arm64/kernel/process.c | 15 +++++++++++----
-+ 1 file changed, 11 insertions(+), 4 deletions(-)
-+
-+diff --git a/arch/arm64/kernel/process.c b/arch/arm64/kernel/process.c
-+index fab013c5ee8c..5749b8ebda2b 100644
-+--- a/arch/arm64/kernel/process.c
-++++ b/arch/arm64/kernel/process.c
-+@@ -197,10 +197,17 @@ void machine_restart(char *cmd)
-+ 		efi_reboot(reboot_mode, NULL);
-+ 
-+ 	/* Now call the architecture specific reboot code. */
-+-	if (arm_pm_restart)
-+-		arm_pm_restart(reboot_mode, cmd);
-+-	else
-+-		do_kernel_restart(cmd);
-++	if (0) {
-++		if (arm_pm_restart)
-++			arm_pm_restart(reboot_mode, cmd);
-++		else
-++			do_kernel_restart(cmd);
-++	} else {
-++		void __iomem *r = ioremap(0xd0013000, 0x1000);
-++		writel(0x1d1e, r + 0x840);
-++		iounmap(r);
-++		mdelay(1000);
-++	}
-+ 
-+ 	/*
-+ 	 * Whoops - the architecture was unable to reboot.
 +-- 
 +2.24.1
 +
