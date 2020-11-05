@@ -56,6 +56,14 @@ if not version_match or not installed or
 	Package("fix-dns-forward-quad9-split", { replan = "finished" })
 end
 
+-- Migrate ends buffer size value in resolver config.
+-- It was changed because of DNS flag day 2020.
+if not version_match or not installed or
+		(installed["resolver-conf"] and version_match(installed["resolver-conf"].version, "<0.0.2-8")) then
+	Install("fix-edns-buffer-size")
+	Package("fix-edns-buffer-size", { replan = "finished" })
+end
+
 -- Migrate original pkglists to separate config with options in place
 if not version_match or not installed or
 		(installed["pkglists"] and version_match(installed["pkglists"].version, "<1.3")) then
