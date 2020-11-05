@@ -117,6 +117,6 @@ end
 -- This package was storing its certificates to backup storage. We have to remove
 -- them from there.
 if version_match and installed and installed["cznic-cacert-bundle"] then
-	Install("fix-cleanup-cert-backup/")
-	Package("fix-cleanup-cert-backup/", { replan = finished })
+	Install("fix-cleanup-cert-backup")
+	Package("fix-cleanup-cert-backup", { replan = finished })
 end
