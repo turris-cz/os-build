@@ -207,7 +207,7 @@ release() {
 	_release_git commit -m "Turris OS $tversion" --date="$RELEASE_DATE" -m "$(./helpers/turris-version.sh news)"
 	_release_git tag -s -m "Turris OS $tversion release" -m "$(./helpers/turris-version.sh news)" "v$tversion"
 
-	info "Tag $tag was created. Review changes and push it with: git push --tags origin"
+	info "Tag $tag was created. Review changes and push it with: git push origin $tag"
 }
 
 ##################################################################################
