@@ -47,7 +47,7 @@ end
 
 -- Transmission --
 if options and options.transmission then
-	Install("transmission-daemon-openssl", { priority = 40 })
+	Install("transmission-daemon", { priority = 40 })
 	Install("luci-app-transmission", { priority = 40 })
 end
 
