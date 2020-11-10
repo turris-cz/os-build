@@ -102,7 +102,7 @@ end
 if version_match and installed and installed["shield-support"] and
 		version_match(installed["shield-support"].version, "<2.2.0") then
 	Install("fix-all-lan-ports-in-lan")
-	Package("fix-all-lan-ports-in-lan", { replan = finished })
+	Package("fix-all-lan-ports-in-lan", { replan = "finished" })
 end
 
 -- Transmission previously implemented multiple variants but that was later
