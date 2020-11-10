@@ -126,5 +126,5 @@ end
 -- them from there.
 if version_match and installed and installed["cznic-cacert-bundle"] then
 	Install("fix-cleanup-cert-backup")
-	Package("fix-cleanup-cert-backup", { replan = finished })
+	Package("fix-cleanup-cert-backup", { replan = "finished" })
 end
