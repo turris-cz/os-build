@@ -1,4 +1,5 @@
 -- Packages extensions and integrations with other with indirect dependencies
+include(utils.m4)dnl
 
 _FEATURE_GUARD_
 

@@ -39,7 +39,7 @@ if not board then
 		board = "mox"
 	elseif model:match("[Oo]mnia") then
 		board = "omnia"
-	elseif model:match("^[Tt]urris$") or model:match("[Tt]urris ?1\.?x") then
+	elseif model:match("^[Tt]urris$") or model:match("[Tt]urris ?1%.?x") then
 		board = "turris1x"
 	else
 		DIE("Unsupported Turris model: " .. tostring(model))
