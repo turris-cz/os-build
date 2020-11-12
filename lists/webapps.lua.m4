@@ -2,10 +2,11 @@ include(utils.m4)dnl
 _FEATURE_GUARD_
 
 local webapps = {
+	["luci"] = "luci-base",
 	["netdata"] = "netdata",
+	["nextcloud"] = "nextcloud",
 	["transmission"] = "transmission",
 	["tvheadend"] = "tvheadend",
-	["nextcloud"] = "nextcloud",
 }
 
 Install("turris-webapps", { priority = 40 })
