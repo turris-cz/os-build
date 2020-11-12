@@ -2,13 +2,12 @@ include(utils.m4)dnl
 include(repository.m4)dnl
 
 list_script('base-fix.lua')
+list_script('base-conditional.lua')
 
 -- Updater itself
 Install('updater-ng', 'updater-supervisor', { critical = true })
 Package('updater-ng', { replan = 'finished' })
 
--- Critical minimum
-Install("base-files", "busybox", "dns-resolver", { critical = true })
 -- Kernel
 Package("kernel", { reboot = "delayed" })
 Package("kmod-mac80211", { reboot = "delayed" })
@@ -16,7 +15,7 @@ forInstallCritical(kmod,file2args(kmod.list))
 if board == "mox" then
 	forInstallCritical(kmod,file2args(kmod-mox.list))
 	Install("mox-support", { critical = true })
-	Install("kmod-ath10k-ct", "zram-swap", { priority = 40 })
+	Install("zram-swap", { priority = 40 })
 elseif board == "omnia" then
 	forInstallCritical(kmod,file2args(kmod-omnia.list))
 	Install("omnia-support", { critical = true })
@@ -26,28 +25,32 @@ elseif board == "turris1x" then
 end
 Install("fstools", { critical = true })
 
--- OpenWRT minimum
-Install("procd", "ubus", "uci", "netifd", "firewall", { critical = true})
-Install("ebtables", "odhcpd", "odhcp6c", "rpcd", { priority = 40 })
+-- Critical minimum
+Install("base-files", "busybox", "procd", "ubus", "uci", { critical = true })
+Install("netifd", "firewall", "dns-resolver", { critical = true})
+
+-- OpenWrt minimum
+Install("ebtables", "dnsmasq-full", "odhcpd", "odhcp6c", { priority = 40 })
 Install("opkg", "libustream-openssl", { priority = 40 })
 Uninstall("wget-nossl", { priority = 40 }) -- opkg required SSL variant only
 
 -- Turris minimum
-Install("cronie", "syslog-ng", { priority = 40 })
-Install("logrotate", { priority = 40 })
-Install("dnsmasq-full", { priority = 40 })
+Install("cronie", { priority = 40 })
+Install("syslog-ng", "logrotate", { priority = 40 })
 if board == "turris1x" then
 	Install("unbound", "unbound-anchor", { priority = 40 })
 	Install("turris1x-btrfs", { priority = 40 }) -- Currently only SD card root is supported
 else
 	Install("knot-resolver", { priority = 40 })
 end
-Install("ppp", "ppp-mod-pppoe", { priority = 40 })
 
 -- Certificates
 Install("dnssec-rootkey", "cznic-repo-keys", { critical = true })
 -- Note: We don't ensure safety of these CAs
 Install("ca-certificates", { priority = 40 })
+
+-- Network protocols
+Install("ppp", "ppp-mod-pppoe", { priority = 40 })
 
 _FEATURE_GUARD_
 
@@ -60,17 +63,19 @@ Package('updater-opkg-wrapper', { replan = 'finished' })
 Package('localrepo', { replan = 'finished' })
 Package('switch-branch', { replan = 'finished' })
 
--- Utility
+-- Network tools
 Install("ip-full", "tc", "genl", "ip-bridge", "ss", "nstat", "devlink", "rdma", { priority = 40 })
 Install("iputils-ping", "iputils-tracepath", { priority = 40 })
 Install("iptables", "ip6tables", "conntrack", { priority = 40 })
-Install("shadow", "shadow-utils", "uboot-envtools", "i2c-tools", { priority = 40 })
-Install("openssh-client", "openssh-client-utils", "openssh-moduli", "openssh-server", "openssh-sftp-client", "openssh-sftp-server", "openssl-util", { priority = 40 })
-Uninstall("dropbear", { priority = 40 })
 Install("bind-client", "bind-dig", { priority = 40 })
+Install("umdns", { priority = 40 })
+
+-- Admin utilities
+Install("shadow", "shadow-utils", "uboot-envtools", "i2c-tools", { priority = 40 })
+Install("openssh-server", "openssh-sftp-server", "openssh-moduli", { priority = 40 })
+Uninstall("dropbear", { priority = 40 })
 Install("pciutils", "usbutils", "lsof", "btrfs-progs", { priority = 40 })
 Install("lm-sensors", { priority = 40 })
-Install("umdns", { priority = 40 })
 if board == "turris1x" or board == "omnia" then
 	Install("haveged", { priority = 40 })
 end
@@ -78,6 +83,7 @@ end
 -- Turris utility
 Install("turris-version", "start-indicator", { priority = 40 })
 Install("turris-utils", "user-notify", "watchdog_adjust", { priority = 40 })
+Install("turris-diagnostics", { priority = 40 })
 if for_l10n then
 	for_l10n("user-notify-l10n-")
 end
@@ -98,6 +104,7 @@ end
 -- Wifi
 Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
 if board == "mox" then
+	Install("kmod-ath10k-ct", { priority = 40 })
 	Install("mwifiex-sdio-firmware", "ath10k-firmware-qca988x-ct", { priority = 40 })
 else
 	Install("ath10k-firmware-qca988x", { priority = 40 })

@@ -2,7 +2,7 @@ include(utils.m4)dnl
 _FEATURE_GUARD_
 
 if options and options.netmetr then
-	Install("reforis-netmetr-plugin", { priority = 40 })
+	Install("netmetr", { priority = 40 })
 end
 
 if options and options.dev_detect then
