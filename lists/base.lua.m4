@@ -12,7 +12,7 @@ list_script('webapps.lua')
 
 
 -- Install various timezone information so local time would work
-zoneinfo = {"core", "atlantic", "asia", "africa", "australia-nz", "europe", "northamerica", "india", "pacific", "poles", "simple", "southamerica"}
+local zoneinfo = {"core", "atlantic", "asia", "africa", "australia-nz", "europe", "northamerica", "india", "pacific", "poles", "simple", "southamerica"}
 for _, zone in pairs(zoneinfo) do
 	Install("zoneinfo-" .. zone, { priority = 40 })
 end
