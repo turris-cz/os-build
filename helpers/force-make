@@ -16,6 +16,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -eu
 
+src_dir="$(dirname "$(readlink -f "${0%/*}")")"
+source "$src_dir/helpers/common.sh"
+
+report() {
+	_color_echo 'FORCE-MAKE' '1;35' "$*"
+}
+
 usage() {
 	echo "Usage: ${0##*/} [OPTION].. [-- [ARGUMENTS]..]" >&2
 }
@@ -81,14 +88,18 @@ done
 shift $((OPTIND - 1))
 
 
-while [ "$jobs_count" -gt 1 ]; do
-	while [ "$retry_count" -gt 0 ]; do
+while true; do
+	for ((i=retry_count-1 ; i > 0 ; i--)); do
 		if make -j "$jobs_count" "$@"; then
 			exit 0
 		fi
-		retry_count="$((retry_count - 1))"
+		report "Build failed for $jobs_count parallel jobs" \
+			"(remaining retries before decrease: $i)"
 	done
 	jobs_count="$((jobs_count / jobs_divider))"
+	[ "$jobs_count" -gt 1 ] || break
+	report "Decreasing jobs count to: $jobs_count"
 done
 
+report "Running single job fallback"
 make "$@" "${fallback[@]}"
