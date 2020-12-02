@@ -149,3 +149,11 @@ if not version_match or not installed or
 		Package("uboot-tools", { deps = "mox-support" })
 	end
 end
+
+-- Package dhparam was removed and replaced by turris-cagen ability to generate
+-- dhparam instead. These files are expected to be in different locations so we
+-- have to fix paths in existing server configurations. This does exactly that.
+if installed and installed["dhparam"] then
+	Install("fix-dhparam-to-cagen")
+	Package("fix-dhparam-to-cagen", { replan = "finished" })
+end
