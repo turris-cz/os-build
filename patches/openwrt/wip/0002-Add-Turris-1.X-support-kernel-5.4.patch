@@ -1,4 +1,4 @@
-From b0d588962653fc99d1de995f27d718c4c612bceb Mon Sep 17 00:00:00 2001
+From 02ac262ff22bf7e8945ec828a35e3a8caeb3a823 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 5.4)
@@ -9,14 +9,43 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
+ package/boot/uboot-tools/Makefile             |   2 +-
+ package/boot/uboot-tools/files/mpc85xx        |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-5.4               |  56 +++-
  .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
- target/linux/mpc85xx/image/Makefile           |  10 +
+ target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 ++
- 5 files changed, 859 insertions(+), 4 deletions(-)
+ 7 files changed, 392 insertions(+), 5 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
+diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
+index 66885b8..b7888c9 100644
+--- a/package/boot/uboot-tools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=uboot-tools
+ PKG_DISTNAME:=u-boot
+ PKG_VERSION:=2020.04
+-PKG_RELEASE:=8
++PKG_RELEASE:=9
+ 
+ PKG_SOURCE:=$(PKG_DISTNAME)-$(PKG_VERSION).tar.bz2
+ PKG_SOURCE_URL:= \
+diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
+index d219b57..932a46a 100644
+--- a/package/boot/uboot-tools/files/mpc85xx
++++ b/package/boot/uboot-tools/files/mpc85xx
+@@ -10,6 +10,9 @@ touch /etc/config/ubootenv
+ board=$(board_name)
+ 
+ case "$board" in
++fsl,P2020RDB)
++	ubootenv_add_uci_config "/dev/mtd5" "0x20000" "0x2000" "0x20000"
++	;;
+ ocedo,panda)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000"
+ 	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x20000" "0x20000"
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 index aa33a4a..b24bcb6 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
@@ -33,7 +62,7 @@ index aa33a4a..b24bcb6 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.4 b/target/linux/mpc85xx/config-5.4
-index 65ee414..10cfce1 100644
+index 8e01def..ee61ce7 100644
 --- a/target/linux/mpc85xx/config-5.4
 +++ b/target/linux/mpc85xx/config-5.4
 @@ -42,6 +42,15 @@ CONFIG_BOUNCE=y
@@ -60,7 +89,7 @@ index 65ee414..10cfce1 100644
  CONFIG_CRYPTO_MANAGER=y
  CONFIG_CRYPTO_MANAGER2=y
  # CONFIG_CRYPTO_MD5_PPC is not set
-@@ -170,7 +180,12 @@ CONFIG_IRQ_DOMAIN=y
+@@ -166,7 +176,12 @@ CONFIG_IRQ_DOMAIN=y
  CONFIG_IRQ_FORCED_THREADING=y
  CONFIG_IRQ_WORK=y
  CONFIG_ISA_DMA_API=y
@@ -73,7 +102,7 @@ index 65ee414..10cfce1 100644
  CONFIG_KERNEL_START=0xc0000000
  # CONFIG_KSI8560 is not set
  CONFIG_LEGACY_PTYS=y
-@@ -181,6 +196,13 @@ CONFIG_LOWMEM_CAM_NUM=3
+@@ -177,6 +192,13 @@ CONFIG_LOWMEM_CAM_NUM=3
  CONFIG_LOWMEM_SIZE=0x30000000
  CONFIG_LXT_PHY=y
  # CONFIG_MATH_EMULATION is not set
@@ -87,7 +116,7 @@ index 65ee414..10cfce1 100644
  CONFIG_MDIO_BUS=y
  CONFIG_MDIO_DEVICE=y
  CONFIG_MEMFD_CREATE=y
-@@ -189,18 +211,29 @@ CONFIG_MODULES_USE_ELF_RELA=y
+@@ -185,18 +207,29 @@ CONFIG_MODULES_USE_ELF_RELA=y
  # CONFIG_MPC8536_DS is not set
  # CONFIG_MPC8540_ADS is not set
  # CONFIG_MPC8560_ADS is not set
@@ -120,7 +149,7 @@ index 65ee414..10cfce1 100644
  # CONFIG_MVME2500 is not set
  CONFIG_NEED_PER_CPU_KM=y
  CONFIG_NEED_SG_DMA_LENGTH=y
-@@ -216,10 +249,11 @@ CONFIG_OF_GPIO=y
+@@ -212,10 +245,11 @@ CONFIG_OF_GPIO=y
  CONFIG_OF_IRQ=y
  CONFIG_OF_KOBJ=y
  CONFIG_OF_MDIO=y
@@ -133,7 +162,7 @@ index 65ee414..10cfce1 100644
  # CONFIG_P1022_DS is not set
  # CONFIG_P1022_RDK is not set
  # CONFIG_P1023_RDB is not set
-@@ -241,6 +275,8 @@ CONFIG_PHYSICAL_ALIGN=0x04000000
+@@ -237,6 +271,8 @@ CONFIG_PHYSICAL_ALIGN=0x04000000
  CONFIG_PHYSICAL_START=0x00000000
  # CONFIG_PHYS_64BIT is not set
  # CONFIG_PPA8548 is not set
@@ -142,7 +171,7 @@ index 65ee414..10cfce1 100644
  CONFIG_PPC=y
  CONFIG_PPC32=y
  # CONFIG_PPC64 is not set
-@@ -259,7 +295,9 @@ CONFIG_PPC_DOORBELL=y
+@@ -255,7 +291,9 @@ CONFIG_PPC_DOORBELL=y
  # CONFIG_PPC_E500MC is not set
  # CONFIG_PPC_EARLY_DEBUG is not set
  CONFIG_PPC_FSL_BOOK3E=y
@@ -152,7 +181,7 @@ index 65ee414..10cfce1 100644
  # CONFIG_PPC_IRQ_SOFT_MASK_DEBUG is not set
  CONFIG_PPC_MMU_NOHASH=y
  CONFIG_PPC_PCI_CHOICE=y
-@@ -295,6 +333,7 @@ CONFIG_SPE=y
+@@ -291,6 +329,7 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -160,7 +189,7 @@ index 65ee414..10cfce1 100644
  CONFIG_SPI_MASTER=y
  CONFIG_SPI_MEM=y
  CONFIG_SRCU=y
-@@ -318,6 +357,13 @@ CONFIG_UCC=y
+@@ -314,6 +353,13 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -174,7 +203,7 @@ index 65ee414..10cfce1 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -328,3 +374,5 @@ CONFIG_WATCHDOG_CORE=y
+@@ -324,3 +370,5 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XPS_USB_HCD_XILINX is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -182,7 +211,7 @@ index 65ee414..10cfce1 100644
 +# CONFIG_VGA_CONSOLE is not set
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000..b5128a3
+index 0000000..5ba550f
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 @@ -0,0 +1,296 @@
@@ -483,7 +512,7 @@ index 0000000..b5128a3
 +
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/image/p2020.mk b/target/linux/mpc85xx/image/p2020.mk
-index 79b5fa660c..ae68f0a55c 100644
+index 79b5fa6..ae68f0a 100644
 --- a/target/linux/mpc85xx/image/p2020.mk
 +++ b/target/linux/mpc85xx/image/p2020.mk
 @@ -13,3 +13,12 @@ define Device/freescale_p2020rdb
@@ -552,6 +581,6 @@ index be75f36..80726ad 100644
  CONFIG_XPS=y
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
-+
---
-2.26.0
+-- 
+2.29.2
+

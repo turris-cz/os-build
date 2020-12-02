@@ -136,3 +136,16 @@ if installed and installed["luci-lighttpd"] and not installed["turris-webapps-lu
 	-- interfere with install priorities.
 	Install("luci-base", { reinstall = true, condition = "luci-base" })
 end
+
+-- With uboot-tools version 2018.03-4 environment configuration was fixed. Problem
+-- is that it is not applied in default as script checks for existence of
+-- /etc/config/ubootenv file and does nothing.
+-- In case of Mox we also move fw_env.config from mox-support package. Because of
+-- that we have to update mox-support first so we would not remove generated file.
+if not version_match or not installed or
+		(installed["uboot-tools"] and version_match(installed["uboot-tools"].version, "<2018.03-4")) then
+	Package("uboot-tools", { deps = "fix-uboot-env-reset" })
+	if board ~= "mox" then
+		Package("uboot-tools", { deps = "mox-support" })
+	end
+end

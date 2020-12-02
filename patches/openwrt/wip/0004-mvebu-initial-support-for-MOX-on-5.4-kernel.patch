@@ -1,28 +1,39 @@
-From 90390d782d8e2e2f4f705c48e4f160ae52b559dd Mon Sep 17 00:00:00 2001
+From 7640e10033908509be02d2a39c6e293f095b35d3 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Thu, 30 Apr 2020 00:18:17 +0200
 Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
 
 ---
+ package/boot/uboot-tools/files/mvebu          |   3 +
  .../base-files/etc/board.d/02_network         |   3 +
  target/linux/mvebu/cortexa53/config-5.4       |  13 ++
- target/linux/mvebu/image/cortexa53.mk         |  12 +
- ...is-mox-rwtm-support-ECDSA-signatures.patch | 159 +++++++++++++
- ...da-3720-turris-mox-add-firmware-node.patch |  38 ++++
- ...in-link-immediately-after-enabling-t.patch |  61 +++++
- ...Zero-max-link-speed-value-is-invalid.patch |  32 +++
- ...9-PCI-aardvark-Improve-link-training.patch | 208 ++++++++++++++++++
- ...10-PCI-aardvark-Issue-PERST-via-GPIO.patch | 114 ++++++++++
- .../9911-PCI-aardvark-Add-PHY-support.patch   | 152 +++++++++++++
- ...x-implement-phylink-AN-restart-on-Se.patch | 137 ++++++++++++
- 11 files changed, 929 insertions(+)
+ target/linux/mvebu/image/cortexa53.mk         |  12 ++
+ ...is-mox-rwtm-support-ECDSA-signatures.patch | 159 ++++++++++++++++++
+ ...da-3720-turris-mox-add-firmware-node.patch |  38 +++++
+ ...Zero-max-link-speed-value-is-invalid.patch |  32 ++++
+ ...x-implement-phylink-AN-restart-on-Se.patch | 137 +++++++++++++++
+ 8 files changed, 397 insertions(+)
  create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
 
+diff --git a/package/boot/uboot-tools/files/mvebu b/package/boot/uboot-tools/files/mvebu
+index afa058a..63aa620 100644
+--- a/package/boot/uboot-tools/files/mvebu
++++ b/package/boot/uboot-tools/files/mvebu
+@@ -21,6 +21,9 @@ cznic,turris-omnia)
+ 		ubootenv_add_uci_config "/dev/mtd0" "0xf0000" "0x10000" "0x10000"
+ 	fi
+ 	;;
++cznic,mox)
++	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x00010000"
++	;;
+ glinet,gl-mv1000)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x8000" "0x8000" "1"
+ 	;;
 diff --git a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
-index 0a2a2b1..315d7d3 100755
+index c945251..f82ca44 100755
 --- a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
 +++ b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
 @@ -11,6 +11,9 @@ board_config_update
@@ -99,7 +110,7 @@ index 40253e5..68e2445 100644
  CONFIG_UNMAP_KERNEL_AT_EL0=y
  CONFIG_VMAP_STACK=y
 diff --git a/target/linux/mvebu/image/cortexa53.mk b/target/linux/mvebu/image/cortexa53.mk
-index ff8f2c0..5371a48 100644
+index 6a3a568..ab694ab 100644
 --- a/target/linux/mvebu/image/cortexa53.mk
 +++ b/target/linux/mvebu/image/cortexa53.mk
 @@ -1,3 +1,15 @@
@@ -327,7 +338,6 @@ index 0000000..8adaa26
 +-- 
 +2.24.1
 +
-+
 diff --git a/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch b/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
 new file mode 100644
 index 0000000..c0e1d31
@@ -510,5 +520,5 @@ index 0000000..47a9739
 +2.24.1
 +
 -- 
-2.28.0
+2.29.2
 
