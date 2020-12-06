@@ -11,26 +11,47 @@ with ccache the configure script may cause problems.
 
 Signed-off-by: Marek Behún <kabel@blackhole.sk>
 ---
- lang/ruby/patches/101-diag-disable.patch | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+ lang/ruby/patches/101-diag-disable.patch | 31 ++++++++++++++++++++++++
+ 1 file changed, 31 insertions(+)
  create mode 100644 lang/ruby/patches/101-diag-disable.patch
 
 diff --git a/lang/ruby/patches/101-diag-disable.patch b/lang/ruby/patches/101-diag-disable.patch
 new file mode 100644
-index 0000000..31311fd
+index 000000000..3227ccd8d
 --- /dev/null
 +++ b/lang/ruby/patches/101-diag-disable.patch
-@@ -0,0 +1,10 @@
---- a/configure.ac
-+++ b/configure.ac
-@@ -530,7 +530,6 @@ AS_CASE(["$GCC:${warnflags+set}:${extra_warnflags:+set}:"],
-                 -Wsuggest-attribute=format \
-                 -Wsuggest-attribute=noreturn \
-                 -Wunused-variable \
--                -diag-disable=175,188,1684,2259,2312 \
-                 $extra_warnflags \
-                 ; do
-        AS_IF([test "$particular_werror_flags" != yes], [
+@@ -0,0 +1,31 @@
++From 1a420f7e4adfcbd31ac1c1b07634d5f034a85c77 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@blackhole.sk>
++Date: Sat, 26 Sep 2020 04:28:57 +0000
++Subject: [PATCH] ruby: do not check for -diag-disable compiler flag
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Without this compilation of ruby fails with strange warning on some setups.
++The configure script checks whether -diag-disable is a valid compiler flag, for some ccache reason the check suceeds, so the configure script then uses this flag, but many other configure checks using the compiler fail, resulting in weird state of macro definitions in config.h (for example the PRI_LL_PREFIX macro is not defined, and thereafter compilation fails).
++
++Signed-off-by: Marek Behún <kabel@blackhole.sk>
++---
++ configure.ac | 1 -
++ 1 file changed, 1 deletion(-)
++
++diff --git a/configure.ac b/configure.ac
++index 6766df26f4..f662c7c825 100644
++--- a/configure.ac
+++++ b/configure.ac
++@@ -530,7 +530,6 @@ AS_CASE(["$GCC:${warnflags+set}:${extra_warnflags:+set}:"],
++ 		 -Wsuggest-attribute=format \
++ 		 -Wsuggest-attribute=noreturn \
++ 		 -Wunused-variable \
++-		 -diag-disable=175,188,1684,2259,2312 \
++ 		 $extra_warnflags \
++ 		 ; do
++ 	AS_IF([test "$particular_werror_flags" != yes], [
++-- 
++2.25.1
++
 -- 
 2.25.1
 
