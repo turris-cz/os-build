@@ -1,0 +1,54 @@
+From 96ead49616fe2d25185083100028373e5829072c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Fri, 13 Nov 2020 08:07:02 +0100
+Subject: [PATCH] include/subdir: on build failure always print error
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It is impossible to locate package that failed the build just from log
+once more build is run in parallel (that is more than one make job). The
+only way is to scout log files for failed package going back trough log.
+
+This change makes it so error is printed for package that failed every
+time.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+---
+ include/subdir.mk | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/include/subdir.mk b/include/subdir.mk
+index 6512e24c2e..f01cd55f30 100644
+--- a/include/subdir.mk
++++ b/include/subdir.mk
+@@ -23,7 +23,7 @@ define subtarget
+ endef
+ 
+ define ERROR
+-	($(call MESSAGE, $(2)); $(if $(BUILD_LOG), echo "$(2)" >> $(BUILD_LOG_DIR)/$(1)/error.txt))
++	($(call MESSAGE, $(2)); $(if $(BUILD_LOG), echo "$(2)" >> $(BUILD_LOG_DIR)/$(1)/error.txt;) $(if $(3),, exit 1;))
+ endef
+ 
+ lastdir=$(word $(words $(subst /, ,$(1))),$(subst /, ,$(1)))
+@@ -66,7 +66,7 @@ define subdir
+       $(foreach btype,$(buildtypes-$(bd)),
+         $(call warn_eval,$(1)/$(bd),t,T,$(1)/$(bd)/$(btype)/$(target): $(if $(NO_DEPS)$(QUILT),,$($(1)/$(bd)/$(btype)/$(target)) $(call $(1)//$(btype)/$(target),$(1)/$(bd)/$(btype))))
+ 		  $(call log_make,$(1)/$(bd),$(target),$(btype),$(filter-out __default,$(variant))) \
+-			$(if $(findstring $(bd),$($(1)/builddirs-ignore-$(btype)-$(target))), || $(call ERROR,$(1),   ERROR: $(1)/$(bd) [$(btype)] failed to build.))
++			|| $(call ERROR,$(2),   ERROR: $(1)/$(bd) [$(btype)] failed to build.,$(findstring $(bd),$($(1)/builddirs-ignore-$(btype)-$(target))))
+         $(if $(call diralias,$(bd)),$(call warn_eval,$(1)/$(bd),l,T,$(1)/$(call diralias,$(bd))/$(btype)/$(target): $(1)/$(bd)/$(btype)/$(target)))
+       )
+       $(call warn_eval,$(1)/$(bd),t,T,$(1)/$(bd)/$(target): $(if $(NO_DEPS)$(QUILT),,$($(1)/$(bd)/$(target)) $(call $(1)//$(target),$(1)/$(bd))))
+@@ -74,7 +74,7 @@ define subdir
+ 			$(if $(BUILD_LOG),@mkdir -p $(BUILD_LOG_DIR)/$(1)/$(bd)/$(filter-out __default,$(variant)))
+ 			$(if $($(1)/autoremove),$(call rebuild_check,$(1)/$(bd),$(target),,$(filter-out __default,$(variant))))
+ 			$(call log_make,$(1)/$(bd),$(target),,$(filter-out __default,$(variant))) \
+-				$(if $(findstring $(bd),$($(1)/builddirs-ignore-$(target))), || $(call ERROR,$(1),   ERROR: $(1)/$(bd) failed to build$(if $(filter-out __default,$(variant)), (build variant: $(variant))).))
++				|| $(call ERROR,$(1),   ERROR: $(1)/$(bd) failed to build$(if $(filter-out __default,$(variant)), (build variant: $(variant))).,$(findstring $(bd),$($(1)/builddirs-ignore-$(target)))) 
+         )
+       $(if $(PREREQ_ONLY)$(DUMP_TARGET_DB),,
+         # aliases
+-- 
+2.25.1
+
