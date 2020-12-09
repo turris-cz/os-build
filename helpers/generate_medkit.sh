@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
+set -eu
 
 src_dir="$(dirname "$(readlink -f "${0%/*}")")"
 . "$src_dir/helpers/common.sh"
@@ -26,6 +26,7 @@ export BRANCH="$PUBLISH_BRANCH"
 export BOOTSTRAP_UPDATER_BRANCH=
 export BOOTSTRAP_L10N=cs,de
 export BOOTSTRAP_PKGLISTS=
+export BOOTSTRAP_DRIVERS=
 export BOOTSTRAP_CONTRACT=
 export UPDATER_SCRIPT=
 export OVERLAY=
@@ -74,6 +75,12 @@ while [ $# -gt 0 ]; do
 			echo "    means that they will be removed with first update. To"
 			echo "    prevent this you have to include our own"
 			echo "    /etc/config/pkglists in overlay."
+			echo "  --drivers, -d DRIVER,.."
+			echo "    What additional drivers should be included in medkit. Format"
+			echo "    is CLASS:FLAG where CLASS is either 'pci' or 'usb'. Multiple"
+			echo "    drivers can be specified by separating them by commas. This"
+			echo "    affects only medkit. Unnecessary drivers are removed with"
+			echo "    first system update."
 			echo "  --contract CONTRACT"
 			echo "    Build medkit for router under CONTRACT."
 			echo "  --updater-script FILE"
@@ -110,6 +117,10 @@ while [ $# -gt 0 ]; do
 		--lists|-p)
 			shift
 			BOOTSTRAP_PKGLISTS="$1"
+			;;
+		--drivers|-d)
+			shift
+			DRIVERS_DRIVERS="$1"
 			;;
 		--contract)
 			[ -z "$CONTRACT" ] || die "--contract can be specified only once"
