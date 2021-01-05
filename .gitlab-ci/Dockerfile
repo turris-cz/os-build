@@ -8,6 +8,7 @@ RUN \
     gawk unzip file \
     ca-certificates wget curl rsync \
     python python3 \
+    lua5.1 m4 \
     build-essential zlib1g-dev libssl-dev libncurses-dev gcc-multilib \
     && \
   apt-get clean
