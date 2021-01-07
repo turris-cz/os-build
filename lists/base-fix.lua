@@ -157,3 +157,11 @@ if installed and installed["dhparam"] then
 	Install("fix-dhparam-to-cagen")
 	Package("fix-dhparam-to-cagen", { replan = "finished" })
 end
+
+-- pkglists package 1.6.0 moved content of hardening package list to separate
+-- options. This fix just enables those option, that are not in default enabled,
+-- to users with hardening enabled.
+if not version_math or not installed or
+		(installed["pkglists"] and version_match(installed["pkglists"].version, "<1.6.0")) then
+	Install("fix-pkglists-hardening-options")
+end
