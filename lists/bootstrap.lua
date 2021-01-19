@@ -79,10 +79,10 @@ if env_devices then
 	end
 	devices = usb_devices
 	Export('devices')
-	Script('devices/usb.lua')
+	Script('drivers/usb.lua')
 	devices = pci_devices
-	Script('devices/pci.lua')
-	Unexport('devices')
+	Script('drivers/pci.lua')
+	Unexport('drivers')
 end
 
 -- Include contract if specified
