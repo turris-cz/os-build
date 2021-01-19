@@ -22,6 +22,15 @@ if root_dir == "/" then
 	DIE("Bootstrap is not allowed on root.")
 end
 
+
+-- Get target board
+model = os.getenv('BOOTSTRAP_BOARD')
+if not model or model == "" then
+	DIE("Target model has to be provided by BOOTSTRAP_BOARD environment variable.")
+end
+Export('model')
+
+
 -- Load requested localizations
 l10n = {}
 local env_l10n = os.getenv('BOOTSTRAP_L10N')

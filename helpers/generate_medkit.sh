@@ -162,10 +162,21 @@ mkdir -p root/tmp/lock
 mkdir -p root/usr/lib/opkg/info
 touch root/usr/lib/opkg/status
 
-## Run updater it self
-"\$PKGUPDATE" \
-	-R "$(pwd)"/root --out-of-root --batch \
-	"file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua"
+## Run updater itself
+"\$PKGUPDATE" -R "$(pwd)/root" --out-of-root --batch "file:///dev/stdin" <<"EEOF"
+	Script("https://repo.turris.cz/$BRANCH/$BOOTSTRAP_BOARD/lists/bootstrap.lua", {
+		pubkey = {
+			-- Turris release key
+			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyByZWxlYXNlIGtleSBnZW4gMQpSV1Rjc2c1VFhHTGRXOWdObEdITi9vZmRzTTBLQWZRSVJCbzVPVlpJWWxWVGZ5STZGR1ZFT0svZQo=",
+			-- Turris development key
+			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyBPUyBkZXZlbCBrZXkKUldTMEZBMU51bjdKRHQwTDhTalJzRFJKR0R2VUNkRGRmczIxZmVpVytxcEdITk1oVlo5MzBoa3kK",
+		}
+	})
+	user_script = os.getenv("UPDATER_SCRIPT")
+	if user_script and user_script ~= '' then
+		Script('file://' .. user_script)
+	end
+EEOF
 
 ## Overlay user's files
 if [ -n "\$OVERLAY" ]; then
