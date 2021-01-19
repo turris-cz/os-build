@@ -87,19 +87,34 @@ generate() {
 	local args=("$@")
 	local args+=("--target" "$board" "--branch" "$branch")
 	[ -z "$updater_branch" ] || args+=("--updater-branch" "$updater_branch")
-	[ -z "$sign_key" ] || args+=("--sign" "$sign_key")
-
 	local output_file="$board-medkit$extension-$timestamp.tar.gz"
+	local latest_file="$board-medkit$extension-latest.tar.gz"
+
 	report "Generating medkit with extension '$extension'"
 	"$src_dir/helpers/generate_medkit.sh" "${args[@]}" \
 		"$output_path/$output_file"
-	for ext in "" ".md5" ".sha256" ".sig"; do
-		[ ! -f "$output_path/$output_file$ext" ] || \
-			ln -sf "$output_file$ext" "$output_path/$board-medkit$extension-latest.tar.gz$ext"
+	ln -sf "$output_file" "$output_path/$latest_file"
+
+	(
+	cd "$output_path"
+	# Hash files contains exact name of file so creating just links is not correct
+	# as it would contain invalid name of file. We have to generate dedicated hash
+	# file for every file variant we generated even when hash is the same.
+	for medkit in "$output_file" "$latest_file"; do
+		md5sum "$medkit" > "$medkit.md5"
+		sha256sum "$medkit" > "$medkit.sha256"
 	done
+	)
+
+	if [ -n "$sign_key" ]; then
+		"$USIGN" -S -m "$output_path/$output_file" -s "$sign_key"
+		ln -sf "$output_file.sig" "$output_path/$latest_file.sig"
+	fi
 }
 
 ##################################################################################
+
+get_usign
 
 generate ""
 generate "-min" --lists "" --localization ""

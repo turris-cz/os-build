@@ -30,7 +30,6 @@ export BOOTSTRAP_DRIVERS=
 export BOOTSTRAP_CONTRACT=
 export UPDATER_SCRIPT=
 export OVERLAY=
-export SIGN_KEY=
 export OUTPUT=
 export BOOTSTRAP_TESTKEY=
 
@@ -91,8 +90,6 @@ while [ $# -gt 0 ]; do
 			echo "    PATH is expected to be directory and whole content is copied"
 			echo "    to newly generated root. This is handy if you want to change"
 			echo "    some default settings for example."
-			echo "  --sign KEY"
-			echo "    Sign medkit with given KEY and usign utility"
 			echo "  --help, -h"
 			echo "    Print this text and exit."
 			exit 0
@@ -136,10 +133,6 @@ while [ $# -gt 0 ]; do
 			shift
 			OVERLAY="$1"
 			;;
-		--sign)
-			shift
-			SIGN_KEY="$1"
-			;;
 		*)
 			[ -z "$OUTPUT" ] || die "Unknown option: $1"
 			OUTPUT="$1"
@@ -154,7 +147,6 @@ done
 OUTPUT="$(readlink -f "$OUTPUT")"
 
 updater_ng_repodetect "$BRANCH" "$BOOTSTRAP_BOARD"
-get_usign
 get_updater_ng
 
 ## Generate root ##
@@ -192,9 +184,6 @@ cd root
 # Create archive
 tar -czf "\$OUTPUT" .
 )
-md5sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.md5"
-sha256sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.sha256"
-[ -z "\$SIGN_KEY" ] || "\$USIGN" -S -m "\$OUTPUT" -s "\$SIGN_KEY"
 
 ## Cleanup
 rm -rf root
