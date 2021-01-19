@@ -2,7 +2,8 @@ include(utils.m4)dnl
 _FEATURE_GUARD_
 
 local reforis_plugins = {
-	["data-collection"] = Or("sentinel-proxy", "haas-proxy"),
+	["data-collection"] = "sentinel-proxy",
+	["haas"] = "haas-proxy",
 	["diagnostics"] = "turris-diagnostics",
 	["netboot"] = "turris-netboot-tools",
 	["netmetr"] = "netmetr",
@@ -15,9 +16,7 @@ local reforis_plugins = {
 
 ----------------------------------------------------------------------------------
 
-Install("reforis", { priority = 40 })
-Install("reforis-diagnostics-plugin", { priority = 40 })
-Install("reforis-snapshots-plugin", { priority = 40 })
+Install("reforis", "reforis-storage-plugin", { priority = 40 })
 
 for plugin, condition in pairs(reforis_plugins) do
 	local refplugin = "reforis-" .. plugin .. "-plugin"
