@@ -12,8 +12,8 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  ...rt-changing-to-from-2500base-x-on-Tu.patch |  200 ++
  ...-support-changing-to-2500base-x-mode.patch |   28 +
  ...-support-changing-to-2500base-x-mode.patch |   28 +
- ...3-net-phy-add-support-for-Turris-SFP.patch | 1914 +++++++++++++++++
- 5 files changed, 2171 insertions(+)
+ ...3-net-phy-add-support-for-Turris-SFP.patch | 1925 +++++++++++++++++
+ 5 files changed, 2182 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-to-2500base-x-mode.patch
@@ -307,10 +307,10 @@ index 0000000..62cda67
 +
 diff --git a/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch b/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
 new file mode 100644
-index 0000000..e9bd219
+index 0000000..4b14b19
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
-@@ -0,0 +1,1914 @@
+@@ -0,0 +1,1925 @@
 +From 19882b60713ac0adeaed9a9a1c52b4fbdd0968b9 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Oct 2020 22:44:32 +0100
@@ -325,13 +325,13 @@ index 0000000..e9bd219
 + drivers/net/phy/mdio-i2c.c   | 177 +++++++++++++++-
 + drivers/net/phy/mdio-i2c.h   |   6 +
 + drivers/net/phy/phylink.c    | 399 ++++++++++++++++++++++++++---------
-+ drivers/net/phy/sfp-bus.c    | 170 +++++++++++----
++ drivers/net/phy/sfp-bus.c    | 178 ++++++++++++----
 + drivers/net/phy/sfp.c        | 239 ++++++++++++++++-----
 + drivers/net/phy/sfp.h        |   2 +
 + include/linux/phy.h          |  22 ++
 + include/linux/phylink.h      |   5 +-
 + include/linux/sfp.h          |  44 +++-
-+ 10 files changed, 997 insertions(+), 223 deletions(-)
++ 10 files changed, 1001 insertions(+), 227 deletions(-)
 +
 +diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
 +index 103dfc148175..c2b169458b8f 100644
@@ -1437,10 +1437,10 @@ index 0000000..e9bd219
 + 	.link_down = phylink_sfp_link_down,
 + 	.connect_phy = phylink_sfp_connect_phy,
 +diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
-+index 902d64f86f63..12997666486a 100644
++index 902d64f86f63..c8c021721ed1 100644
 +--- a/drivers/net/phy/sfp-bus.c
 ++++ b/drivers/net/phy/sfp-bus.c
-+@@ -78,47 +78,29 @@ int sfp_parse_port(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++@@ -78,54 +78,32 @@ int sfp_parse_port(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + }
 + EXPORT_SYMBOL_GPL(sfp_parse_port);
 + 
@@ -1505,7 +1505,14 @@ index 0000000..e9bd219
 + {
 + 	unsigned int br_min, br_nom, br_max;
 + 
-+@@ -151,17 +133,37 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++-	phylink_set(support, Autoneg);
++-	phylink_set(support, Pause);
++-	phylink_set(support, Asym_Pause);
++-
++ 	/* Decode the bitrate information to MBd */
++ 	br_min = br_nom = br_max = 0;
++ 	if (id->base.br_nominal) {
++@@ -151,17 +129,37 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 		phylink_set(support, 10000baseER_Full);
 + 	if (id->base.e1000_base_sx ||
 + 	    id->base.e1000_base_lx ||
@@ -1545,7 +1552,7 @@ index 0000000..e9bd219
 + 
 + 	switch (id->base.extended_cc) {
 + 	case 0x00: /* Unspecified */
-+@@ -180,6 +182,14 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++@@ -180,6 +178,14 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 		phylink_set(support, 100000baseCR4_Full);
 + 		phylink_set(support, 25000baseCR_Full);
 + 		break;
@@ -1560,7 +1567,7 @@ index 0000000..e9bd219
 + 	default:
 + 		dev_warn(bus->sfp_dev,
 + 			 "Unknown/unsupported extended compliance code: 0x%02x\n",
-+@@ -191,14 +201,75 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++@@ -191,14 +197,79 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 	if (id->base.fc_speed_100 ||
 + 	    id->base.fc_speed_200 ||
 + 	    id->base.fc_speed_400) {
@@ -1574,7 +1581,7 @@ index 0000000..e9bd219
 + 			phylink_set(support, 1000baseX_Full);
 ++			__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
 ++		}
-++	}
++ 	}
 ++
 ++	/* If we haven't discovered any modes that this module supports, try
 ++	 * the bitrate to determine supported modes. Some BiDi modules (eg,
@@ -1594,7 +1601,11 @@ index 0000000..e9bd219
 ++			phylink_set(support, 2500baseX_Full);
 ++			__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
 ++		}
-+ 	}
+++	}
+++
+++	phylink_set(support, Autoneg);
+++	phylink_set(support, Pause);
+++	phylink_set(support, Asym_Pause);
 + }
 + EXPORT_SYMBOL_GPL(sfp_parse_support);
 + 
