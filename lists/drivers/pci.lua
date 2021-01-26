@@ -21,6 +21,11 @@ local db = {
 		device = 0x003c,
 		packages = {"ath10k_pci"}
 	},
+	{ -- MEDIATEK Corp. Device 7612
+		vendor = 0x14c3,
+		device = 0x7612,
+		packages = {"mt76"}
+	},
 }
 
 ----------------------------------------------------------------------------------
