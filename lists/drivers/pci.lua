@@ -11,10 +11,20 @@ local db = {
 		device = 0x002e,
 		packages = {"ath9k"}
 	},
+	{ -- Qualcomm Atheros AR93xx Wireless Network Adapter (rev 01)
+		vendor = 0x168c,
+		device = 0x0030,
+		packages = {"ath9k"}
+	},
 	{ -- Qualcomm Atheros QCA986x/988x 802.11ac Wireless Network Adapter
 		vendor = 0x168c,
 		device = 0x003c,
 		packages = {"ath10k_pci"}
+	},
+	{ -- MEDIATEK Corp. Device 7612
+		vendor = 0x14c3,
+		device = 0x7612,
+		packages = {"mt76"}
 	},
 }
 
