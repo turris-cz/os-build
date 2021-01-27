@@ -4,23 +4,54 @@ stages:
   - build
   - verify
 
-Applying patches for Omnia:
+## Package build prepare #########################################################
+.prepare:
   stage: build
   script:
-    - './compile_pkgs prepare -t omnia'
+    - './compile_pkgs -t "$BOARD" prepare'
 
-Applying patches for Turris MOX:
+
+prepare_mox:
+  extends: .prepare
+  variables:
+    BOARD: mox
+
+prepare_omnia:
+  extends: .prepare
+  variables:
+    BOARD: omnia
+
+prepare_turris1x:
+  extends: .prepare
+  variables:
+    BOARD: turris1x
+
+## Medkit ########################################################################
+.medkit:
   stage: build
   script:
-    - './compile_pkgs prepare -t mox'
+    - './generate_medkits -t "$BOARD"'
+    - '[ -f "generated_medkits/$BOARD-medkit-latest.tar.gz" ]'
+    - '[ -f "generated_medkits/$BOARD-medkit-min-latest.tar.gz" ]'
 
-Medkit for Turris Omnia:
-  stage: build
-  script:
-    - './generate_medkits.sh -t omnia'
-    - 'find omnia-medkit.tar.gz* && echo "Omnia medkit was found!"'
 
-Generate pkglists:
+medkit_mox:
+  extends: .medkit
+  variables:
+    BOARD: mox
+
+medkit_omnia:
+  extends: .medkit
+  variables:
+    BOARD: omnia
+
+medkit_turris1x:
+  extends: .medkit
+  variables:
+    BOARD: turris1x
+
+## Update lists ##################################################################
+lists_generate:
   stage: build
   script:
     - './generate_lists --debug'
@@ -29,8 +60,8 @@ Generate pkglists:
       paths:
           - generated_lists/*
 
-Check for generated pkglists:
+lists_verify:
   stage: verify
-  needs: ["Generate pkglists"]
+  needs: [lists_generate]
   script:
     - find generated_lists -type f -name '*.lua' -printf '-- %P --\n' -exec luac5.1 -p '{}' \;
