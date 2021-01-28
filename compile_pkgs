@@ -18,7 +18,7 @@ set -e
 shopt -s nullglob
 
 # Step list that is run when no commands are specified
-DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "pkgsrepo" "stats" "gen_junit" )
+DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_junit" )
 
 # Paths to OpenWRT build and turris-build sources
 src_dir="$(readlink -f "${0%/*}")"
@@ -162,15 +162,20 @@ available_commands+=( ["stats"]="	Prints statistics regarding number of built pa
 stats() {
 	mkdir -p logs
 	report "Reporting statistics"
-	{
-		echo "Statistics of the build:"
-		echo
-		echo " * $(find bin/packages -name '*.ipk' | wc -l) binary packages built"
-		[ -f "logs/package/error.txt" ] && \
-			echo -n " * $(wc -l <logs/package/error.txt)" || \
-			echo -n " * 0"
-		echo "/$(find logs/package/ -name 'compile.txt' | wc -l) source packages failed"
-	} | tee logs/stats
+	local binpackages=0 failed=0 packages=0
+	if [ -d "bin" ]; then
+		binpackages="$(find bin -name '*.ipk' | wc -l)"
+	fi
+	if [ -f "logs/package/error.txt" ]; then
+		failed="$(wc -l < logs/package/error.txt)"
+		packages="$(find logs/package -name 'compile.txt' | wc -l)"
+	fi
+	tee logs/stats <<-EOF
+		Statistics of the build:
+
+		 * $binpackages binary packages built"
+		 * $failed/$packages source packages failed"
+	EOF
 }
 
 available_commands+=( ["configure"]="Recreates configuration for target boards" )
