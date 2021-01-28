@@ -1,6 +1,9 @@
 include(utils.m4)dnl
 _FEATURE_GUARD_
 
+-- Turris message of the day
+Install("turris-motd", { priority = 40 })
+
 -- Core shell and utils
 Install("bash", "terminfo", "vim-full", { priority = 40 })
 Install("coreutils", "diffutils", { priority = 40 })
