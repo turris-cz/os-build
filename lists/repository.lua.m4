@@ -13,13 +13,14 @@ for _, feed in ipairs(feeds) do
 	-- Standard Turris OS package repository
 	Repository(feed, rroot .. "/packages/" .. feed)
 dnl Note: to test just package lists you can replace preceding line with:
-dnl	Repository(feed, "https://repo.turris.cz/hbs/packages/" .. feed, {
+dnl	Repository(feed, "https://repo.turris.cz/hbs/" .. board .. "/packages/" .. feed, {
 dnl		pubkey = {
-dnl			"file:///etc/updater/keys/release.pub",
-dnl			"file:///etc/updater/keys/standby.pub",
-dnl			"file:///etc/updater/keys/test.pub"
+dnl			-- Turris release key
+dnl			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyByZWxlYXNlIGtleSBnZW4gMQpSV1Rjc2c1VFhHTGRXOWdObEdITi9vZmRzTTBLQWZRSVJCbzVPVlpJWWxWVGZ5STZGR1ZFT0svZQo=",
+dnl			-- Turris development key
+dnl			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyBPUyBkZXZlbCBrZXkKUldTMEZBMU51bjdKRHQwTDhTalJzRFJKR0R2VUNkRGRmczIxZmVpVytxcEdITk1oVlo5MzBoa3kK",
 dnl		}
-dnl	}
+dnl	})
 end
 
 INFO("Target Turris OS: _TURRIS_OS_VERSION_")
