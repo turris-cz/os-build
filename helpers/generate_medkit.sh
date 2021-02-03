@@ -120,7 +120,7 @@ while [ $# -gt 0 ]; do
 			DRIVERS_DRIVERS="$1"
 			;;
 		--contract)
-			[ -z "$CONTRACT" ] || die "--contract can be specified only once"
+			[ -n "$BOOTSTRAP_CONTRACT:+x" ] || die "--contract can be specified only once"
 			shift
 			BOOTSTRAP_CONTRACT="$1"
 			default_output_ext="-contract-$1"
