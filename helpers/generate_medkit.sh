@@ -24,6 +24,7 @@ src_dir="$(dirname "$(readlink -f "${0%/*}")")"
 export BOOTSTRAP_BOARD=
 export BRANCH="$PUBLISH_BRANCH"
 export BOOTSTRAP_UPDATER_BRANCH=
+export BOOTSTRAP_BASE=
 export BOOTSTRAP_L10N=cs,de
 export BOOTSTRAP_PKGLISTS=
 export BOOTSTRAP_DRIVERS=
@@ -58,6 +59,9 @@ while [ $# -gt 0 ]; do
 			echo "    this medkit. If this option is not set then '$PUBLISH_BRANCH' is used."
 			echo "    Note that this does not sets that branch to updater-ng"
 			echo "    configuration. You have to use --updater-branch for that."
+			echo "  --base BASE"
+			echo "    Allows specification of base script. In default 'base' is"
+			echo "    used and thus base.lua script."
 			echo "  --updater-branch BRANCH"
 			echo "    Set target branch inside medkit for updater-ng."
 			# TODO maybe add version specification for future out of build use.
@@ -101,6 +105,10 @@ while [ $# -gt 0 ]; do
 		--branch|-b)
 			shift
 			BRANCH="$1"
+			;;
+		--base)
+			shift
+			BOOTSTRAP_BASE="$1"
 			;;
 		--updater-branch)
 			shift
