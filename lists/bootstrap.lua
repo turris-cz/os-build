@@ -3,6 +3,7 @@ Root script for updater-ng configuration used for bootstrapping new root.
 
 This script expects following variables to be possibly defined in environment:
   BOOTSTRAP_BOARD: board name (Mox|Omnia|Turris)
+  BOOTSTRAP_BASE: optional specification of base script. 'base' is used in default.
   BOOTSTRAP_L10N: commas separated list of languages to be installed in root.
   BOOTSTRAP_PKGLISTS: commas separated list of package lists to be included in
     root. To specify options you can optionally add parentheses at the end of
@@ -42,8 +43,12 @@ end
 Export('l10n')
 
 
--- Aways include base script
-Script('base.lua')
+-- Always include base script
+local base = os.getenv('BOOTSTRAP_BASE')
+if not base or base == "" then
+	base = "base"
+end
+Script(base .. '.lua')
 
 -- Include any additional lists
 local env_pkglists = os.getenv('BOOTSTRAP_PKGLISTS')
