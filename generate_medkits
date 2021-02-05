@@ -82,15 +82,15 @@ mkdir -p "$output_path"
 timestamp="$(date +%Y%m%d%H%M)"
 
 generate() {
-	local extension="$1"
+	local type="$1"
 	shift
 	local args=("$@")
 	local args+=("--target" "$board" "--branch" "$branch")
 	[ -z "$updater_branch" ] || args+=("--updater-branch" "$updater_branch")
-	local output_file="$board-medkit$extension-$timestamp.tar.gz"
-	local latest_file="$board-medkit$extension-latest.tar.gz"
+	local output_file="$board-$type-$timestamp.tar.gz"
+	local latest_file="$board-$type-latest.tar.gz"
 
-	report "Generating medkit with extension '$extension'"
+	report "Generating medkit '$type'"
 	"$src_dir/helpers/generate_medkit.sh" "${args[@]}" \
 		"$output_path/$output_file"
 	ln -sf "$output_file" "$output_path/$latest_file"
@@ -116,17 +116,17 @@ generate() {
 
 get_usign
 
-generate ""
-generate "-min" --lists "" --localization ""
+generate "medkit"
+generate "medkit-min" --lists "" --localization ""
 
 case "$board" in
 	omnia)
-		generate "-contract-cti" --contract "cti"
+		generate "medkit-contract-cti" --contract "cti"
 		;;
 	mox)
-		generate "-contract-shield" --contract "shield"
+		generate "medkit-contract-shield" --contract "shield"
 		;;
 esac
 if [ "$board" != "turris1x" ]; then
-	generate "-contract-cznic" --contract "cznic"
+	generate "medkit-contract-cznic" --contract "cznic"
 fi
