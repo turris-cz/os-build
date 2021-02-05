@@ -1,0 +1,101 @@
+#!/bin/bash
+
+branch_name="$1"
+branch_base="$2"
+branch_desig="$3"
+
+valid_base() {
+	[[ "$1" == "hbk" || "$1" == "hbl" || "$1" == "hbd" ]]
+}
+
+valid_desig() {
+	local base="$1"
+	local desig="$2"
+	case "$base" in
+		hbk)
+			[[ "$desig" = "hotfix" ]]
+			return
+			;;
+		hbl)
+			[[ "$desig" =~ ^(bugfix|feature|refactor|hack)$ ]]
+			return
+			;;
+		hbd)
+			[[ "$desig" =~ ^(fix|majorfeature|majorrefactor|majorhack)$ ]]
+			return
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
+while [[ -z "$branch_name" ]]; do
+	read -r -p "Branch name: " branch_name
+done
+
+while ! valid_base "$branch_base"; do
+	read -r -p "Branch base (hb[k]/hb[l]/hb[d]): " branch_base
+	case "$branch_base" in
+		k)
+			branch_base="hbk"
+			;;
+		l)
+			branch_base="hbl"
+			;;
+		d)
+			branch_base="hbd"
+			;;
+	esac
+done
+
+while ! valid_desig "$branch_base" "$branch_desig"; do
+	case "$branch_base" in
+		hbk)
+			branch_desig="hotfix"
+			continue
+			;;
+		hbl)
+			read -r -p "Branch designation (bugfix/feature/refactor/hack): " \
+				branch_desig
+			case "$branch_desig" in
+				b|bug|fix)
+					branch_desig="bugfix"
+					;;
+				f)
+					branch_desig="feature"
+					;;
+				r|ref)
+					branch_desig="refactor"
+					;;
+				h)
+					branch_desig="hack"
+					;;
+			esac
+			;;
+		hbd)
+			read -r -p "Branch designation (fix/majorfeature/majorrefactor/majorhack): " \
+				branch_desig
+			case "$branch_desig" in
+				b|bug|bugfix)
+					branch_desig="fix"
+					;;
+				f|feature)
+					branch_desig="majorfeature"
+					;;
+				r|ref|refactor)
+					branch_desig="majorrefactor"
+					;;
+				h|hack)
+					branch_desig="majorhack"
+					;;
+			esac
+			;;
+	esac
+done
+
+branch="$branch_desig/$branch_name"
+echo "Creating branch: $branch"
+
+git branch "$branch" "$branch_base"
+git switch "$branch"
