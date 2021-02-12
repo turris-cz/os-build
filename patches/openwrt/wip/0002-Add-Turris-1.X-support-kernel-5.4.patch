@@ -1,4 +1,4 @@
-From 02ac262ff22bf7e8945ec828a35e3a8caeb3a823 Mon Sep 17 00:00:00 2001
+From aee69325c048c44ef522e56efa531d39f5b6881b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 5.4)
@@ -11,11 +11,11 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  package/boot/uboot-tools/files/mpc85xx        |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.4               |  56 +++-
+ target/linux/mpc85xx/config-5.4               |  55 +++-
  .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 ++
- 7 files changed, 392 insertions(+), 5 deletions(-)
+ 6 files changed, 390 insertions(+), 4 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
@@ -48,10 +48,10 @@ index aa33a4a..b24bcb6 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.4 b/target/linux/mpc85xx/config-5.4
-index 8e01def..ee61ce7 100644
+index babd921..573ac69 100644
 --- a/target/linux/mpc85xx/config-5.4
 +++ b/target/linux/mpc85xx/config-5.4
-@@ -42,6 +42,15 @@ CONFIG_BOUNCE=y
+@@ -25,6 +25,15 @@ CONFIG_BOOKE_WDT=y
  # CONFIG_BSC9131_RDB is not set
  # CONFIG_BSC9132_QDS is not set
  # CONFIG_C293_PCIE is not set
@@ -67,7 +67,7 @@ index 8e01def..ee61ce7 100644
  CONFIG_CLONE_BACKWARDS=y
  CONFIG_CLZ_TAB=y
  CONFIG_CMDLINE="console=ttyS0,115200"
-@@ -59,6 +68,7 @@ CONFIG_CRYPTO_AUTHENC=y
+@@ -43,6 +52,7 @@ CONFIG_CRYPTO_AUTHENC=y
  CONFIG_CRYPTO_HASH=y
  CONFIG_CRYPTO_HASH2=y
  CONFIG_CRYPTO_HW=y
@@ -75,7 +75,7 @@ index 8e01def..ee61ce7 100644
  CONFIG_CRYPTO_MANAGER=y
  CONFIG_CRYPTO_MANAGER2=y
  # CONFIG_CRYPTO_MD5_PPC is not set
-@@ -166,7 +176,12 @@ CONFIG_IRQ_DOMAIN=y
+@@ -118,6 +128,10 @@ CONFIG_IRQ_DOMAIN=y
  CONFIG_IRQ_FORCED_THREADING=y
  CONFIG_IRQ_WORK=y
  CONFIG_ISA_DMA_API=y
@@ -83,12 +83,10 @@ index 8e01def..ee61ce7 100644
 +CONFIG_JFFS2_LZO=y
 +CONFIG_JFFS2_RUBIN=y
 +CONFIG_JFFS2_ZLIB=y
- CONFIG_KERNEL_GZIP=y
-+# CONFIG_KERNEL_XZ is not set
  CONFIG_KERNEL_START=0xc0000000
  # CONFIG_KSI8560 is not set
  CONFIG_LEGACY_PTYS=y
-@@ -177,6 +192,13 @@ CONFIG_LOWMEM_CAM_NUM=3
+@@ -128,6 +142,13 @@ CONFIG_LOWMEM_CAM_NUM=3
  CONFIG_LOWMEM_SIZE=0x30000000
  CONFIG_LXT_PHY=y
  # CONFIG_MATH_EMULATION is not set
@@ -102,12 +100,12 @@ index 8e01def..ee61ce7 100644
  CONFIG_MDIO_BUS=y
  CONFIG_MDIO_DEVICE=y
  CONFIG_MEMFD_CREATE=y
-@@ -185,18 +207,29 @@ CONFIG_MODULES_USE_ELF_RELA=y
+@@ -136,19 +157,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
  # CONFIG_MPC8536_DS is not set
  # CONFIG_MPC8540_ADS is not set
  # CONFIG_MPC8560_ADS is not set
 -# CONFIG_MPC85xx_CDS is not set
-++CONFIG_MPC85xx_CDS=y
++CONFIG_MPC85xx_CDS=y
  # CONFIG_MPC85xx_DS is not set
 -# CONFIG_MPC85xx_MDS is not set
 -# CONFIG_MPC85xx_RDB is not set
@@ -120,7 +118,8 @@ index 8e01def..ee61ce7 100644
  # CONFIG_MTD_CFI is not set
 +CONFIG_MTD_CFI_STAA=y
 +CONFIG_MTD_JEDECPROBE=y
- CONFIG_MTD_M25P80=y
+ CONFIG_MTD_NAND_CORE=y
+ CONFIG_MTD_NAND_ECC_SW_HAMMING=y
  CONFIG_MTD_RAW_NAND=y
  CONFIG_MTD_SPI_NOR=y
 +CONFIG_MTD_RAM=y
@@ -135,7 +134,7 @@ index 8e01def..ee61ce7 100644
  # CONFIG_MVME2500 is not set
  CONFIG_NEED_PER_CPU_KM=y
  CONFIG_NEED_SG_DMA_LENGTH=y
-@@ -212,10 +245,11 @@ CONFIG_OF_GPIO=y
+@@ -164,10 +196,11 @@ CONFIG_OF_GPIO=y
  CONFIG_OF_IRQ=y
  CONFIG_OF_KOBJ=y
  CONFIG_OF_MDIO=y
@@ -148,7 +147,7 @@ index 8e01def..ee61ce7 100644
  # CONFIG_P1022_DS is not set
  # CONFIG_P1022_RDK is not set
  # CONFIG_P1023_RDB is not set
-@@ -237,6 +271,8 @@ CONFIG_PHYSICAL_ALIGN=0x04000000
+@@ -189,6 +222,8 @@ CONFIG_PHYSICAL_ALIGN=0x04000000
  CONFIG_PHYSICAL_START=0x00000000
  # CONFIG_PHYS_64BIT is not set
  # CONFIG_PPA8548 is not set
@@ -157,7 +156,7 @@ index 8e01def..ee61ce7 100644
  CONFIG_PPC=y
  CONFIG_PPC32=y
  # CONFIG_PPC64 is not set
-@@ -255,7 +291,9 @@ CONFIG_PPC_DOORBELL=y
+@@ -206,7 +241,9 @@ CONFIG_PPC_DOORBELL=y
  # CONFIG_PPC_E500MC is not set
  # CONFIG_PPC_EARLY_DEBUG is not set
  CONFIG_PPC_FSL_BOOK3E=y
@@ -166,8 +165,8 @@ index 8e01def..ee61ce7 100644
 +CONFIG_PPC_LIB_RHEAP=y
  # CONFIG_PPC_IRQ_SOFT_MASK_DEBUG is not set
  CONFIG_PPC_MMU_NOHASH=y
- CONFIG_PPC_PCI_CHOICE=y
-@@ -291,6 +329,7 @@ CONFIG_SPE=y
+ CONFIG_PPC_MMU_NOHASH_32=y
+@@ -239,6 +276,7 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -175,7 +174,7 @@ index 8e01def..ee61ce7 100644
  CONFIG_SPI_MASTER=y
  CONFIG_SPI_MEM=y
  CONFIG_SRCU=y
-@@ -314,6 +353,13 @@ CONFIG_UCC=y
+@@ -263,6 +301,13 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -189,8 +188,8 @@ index 8e01def..ee61ce7 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -324,3 +370,5 @@ CONFIG_WATCHDOG_CORE=y
- # CONFIG_XPS_USB_HCD_XILINX is not set
+@@ -272,3 +317,5 @@ CONFIG_WATCHDOG_CORE=y
+ # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
 +# CONFIG_FB_FSL_DIU is not set
@@ -568,5 +567,5 @@ index be75f36..80726ad 100644
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
 -- 
-2.29.2
+2.30.0
 
