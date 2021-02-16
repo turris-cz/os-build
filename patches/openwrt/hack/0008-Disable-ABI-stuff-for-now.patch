@@ -1,33 +1,39 @@
-From 5af85a2af762c03ece85621a87666963ff11e9bf Mon Sep 17 00:00:00 2001
+From 95be4fd0438cdb098bf04787d7daa8047c1a93cf Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 23 Jan 2019 22:31:51 +0100
 Subject: [PATCH] Disable ABI stuff for now
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
+
 ---
- include/package-ipkg.mk | 10 ++++------
- 1 file changed, 4 insertions(+), 6 deletions(-)
+ include/package-ipkg.mk | 15 ++++-----------
+ 1 file changed, 4 insertions(+), 11 deletions(-)
 
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index 9ca4879bfa..5d6dddb43e 100644
+index a8210f8e31..ba2e6c03bb 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
-@@ -93,9 +93,8 @@ _endef=endef
+@@ -99,9 +99,8 @@ _endef=endef
  
  ifeq ($(DUMP),)
    define BuildTarget/ipkg
--    ABIV_$(1):=$(call GetABISuffix,$(1))
+-    ABIV_$(1):=$(if $(filter-out kmod-%,$(1)),$(ABI_VERSION))
      PDIR_$(1):=$(call FeedPackageDir,$(1))
 -    IPKG_$(1):=$$(PDIR_$(1))/$(1)$$(ABIV_$(1))_$(VERSION)_$(PKGARCH).ipk
 +    IPKG_$(1):=$$(PDIR_$(1))/$(1)_$(VERSION)_$(PKGARCH).ipk
      IDIR_$(1):=$(PKG_BUILD_DIR)/ipkg-$(PKGARCH)/$(1)
      KEEP_$(1):=$(strip $(call Package/$(1)/conffiles))
  
-@@ -148,21 +147,20 @@ ifeq ($(DUMP),)
+@@ -156,26 +155,20 @@ ifeq ($(DUMP),)
  
      $(STAGING_DIR_ROOT)/stamp/.$(1)_installed: $(PKG_BUILD_DIR)/.pkgdir/$(1).installed
  	mkdir -p $(STAGING_DIR_ROOT)/stamp
--	$(if $(ABI_VERSION),echo '$(ABI_VERSION)' | cmp -s - $(PKG_INFO_DIR)/$(1).version || echo '$(ABI_VERSION)' > $(PKG_INFO_DIR)/$(1).version)
+-	$(if $(ABI_VERSION),echo '$(ABI_VERSION)' | cmp -s - $(PKG_INFO_DIR)/$(1).version || { \
+-		echo '$(ABI_VERSION)' > $(PKG_INFO_DIR)/$(1).version; \
+-		$(foreach pkg,$(filter-out $(1),$(PROVIDES)), \
+-			cp $(PKG_INFO_DIR)/$(1).version $(PKG_INFO_DIR)/$(pkg).version; \
+-		) \
+-	} )
  	$(call locked,$(CP) $(PKG_BUILD_DIR)/.pkgdir/$(1)/. $(STAGING_DIR_ROOT)/,root-copy)
  	touch $$@
  
@@ -49,5 +55,5 @@ index 9ca4879bfa..5d6dddb43e 100644
  )$$(call addfield,Source,$(SOURCE)
  )$$(call addfield,SourceName,$(1)
 -- 
-2.20.1
+2.25.1
 
