@@ -1,0 +1,38 @@
+From fdaec362fea3f1520a81e6ca1f124714a2bbf158 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Wed, 27 May 2020 11:37:13 +0200
+Subject: [PATCH] hostapd: restart network on wpad install
+
+When wpad binary is installed it triggers some kind of network reload
+that ends with broken WiFi. The problem is probably somewhere else but
+it makes sense to reload network when wpad is updated to load new
+version. That also fixes problem with broken WiFi on that reload.
+---
+ package/network/services/hostapd/Makefile | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/package/network/services/hostapd/Makefile b/package/network/services/hostapd/Makefile
+index 35ce85b..3998a47 100644
+--- a/package/network/services/hostapd/Makefile
++++ b/package/network/services/hostapd/Makefile
+@@ -591,6 +591,17 @@ ifeq ($(BUILD_VARIANT),supplicant-full-wolfssl)
+   endef
+ endif
+ 
++define Package/wpad/postinst
++#!/bin/sh
++[ -n "$$IPKG_INSTROOT" ] || /etc/init.d/network restart
++endef
++Package/wpad-basic/postinst = $(Package/wpad/postinst)
++Package/wpad-mini/postinst = $(Package/wpad/postinst)
++Package/wpad-openssl/postinst = $(Package/wpad/postinst)
++Package/wpad-wolfssl/postinst = $(Package/wpad/postinst)
++Package/wpad-mesh-openssl/postinst = $(Package/wpad/postinst)
++Package/wpad-mesh-wolfssl/postinst = $(Package/wpad/postinst)
++
+ $(eval $(call BuildPackage,hostapd))
+ $(eval $(call BuildPackage,hostapd-basic))
+ $(eval $(call BuildPackage,hostapd-mini))
+-- 
+2.26.2
+
