@@ -1,0 +1,105 @@
+#!/bin/bash
+set -eu
+server="gitlab.nic.cz"
+server_old="gitlab.labs.nic.cz"
+
+zero_sha1="0000000000000000000000000000000000000000"
+
+
+compare_ancestors() {
+	local local_hash="$1"
+	[[ "$local_hash" != "$zero_sha1" ]] || return 0 # ignore removals
+	local correct_base invalid_base_a invalid_base_b
+	correct_base="$(git merge-base "$local_hash" "$2")"
+	invalid_base_a="$(git merge-base "$local_hash" "$3")"
+	invalid_base_b="$(git merge-base "$local_hash" "$4")"
+	git merge-base --is-ancestor "$correct_base" "$invalid_base_a" \
+		&& git merge-base --is-ancestor "$correct_base" "$invalid_base_b"
+}
+
+
+remote_name="$1"
+remote_url="$2"
+
+
+if [[ "$remote_url" != *$server* && "$remote_url" != *$server_old* ]]; then
+	# We are interested only in pushes to our server
+	exit 0
+fi
+
+push_hbk=
+push_hbl=
+push_hbd=
+
+while read -r local_ref local_sha1 remote_ref remote_sha1; do
+	if [[ "$local_sha1" = "$zero_sha1" ]]; then
+		# Always allow removal of branches
+		continue
+	fi
+
+	remote_ref="${remote_ref#refs/heads/}"
+	case "$remote_ref" in
+		hbk)
+			push_hbk="$local_sha1"
+			;;
+		hbl)
+			push_hbl="$local_sha1"
+			;;
+		hbd)
+			push_hbd="$local_sha1"
+			;;
+		hotfix/*)
+			if compare_ancestors "$local_sha1" hbk hbl hbd; then
+				echo "Reference has invalid ancestor, please base it on top of hbk: $local_ref" >&2
+				exit 1
+			fi
+			;;
+		feature/*|bugfix/*|refactor/*|hack/*)
+			if compare_ancestors "$local_sha1" hbl hbk hbd; then
+				echo "Reference has invalid ancestor, please base it on top of hbl: $local_ref" >&2
+				exit 1
+			fi
+			;;
+		majorfeature/*|fix/*|majorrefactor/*|majorhack/*)
+			if compare_ancestors "$local_sha1" hbd hbk hbl; then
+				echo "Reference has invalid ancestor, please base it on top of hbd: $local_ref" >&2
+				exit 1
+			fi
+			;;
+		*)
+			# We terminate push only if this tries to create new branch of invalid
+			# name. This allows push to existing branches.
+			if [[ "$remote_sha1" = "$zero_sha1" ]]; then
+				echo "Creation of new branch of this name is not allowed: $remote_ref" >&2
+				exit 1
+			fi
+			;;
+	esac
+done
+
+if [[ -n "$push_hbk" || -n "$push_hbl" ]]; then
+	if [[ -z "$push_hbd" ]]; then
+		if [[ -n "$push_hbk" ]]; then
+			echo "HBL and HBD branches have to be always updated with HBK branch." >&2
+		else
+			echo "HBD branch has to be always updated with HBL branch." >&2
+		fi
+		echo "Push all of them at the same time with: git push origin hbk hbl hbd" >&2
+		exit 1
+	fi
+	if [[ -n "$push_hbk" ]]; then
+		if ! git merge-base --is-ancestor "$push_hbk" "$push_hbl"; then
+			echo "Tip commit of HBK is not merged to HBL branch." >&2
+			exit 1
+		fi
+		if ! git merge-base --is-ancestor "$push_hbk" "$push_hbd"; then
+			echo "Tip commit of HBK is not merged to HBD branch." >&2
+			exit 1
+		fi
+	else
+		if ! git merge-base --is-ancestor "$push_hbl" "$push_hbd"; then
+			echo "Tip commit of HBL is not merged to HBD branch." >&2
+			exit 1
+		fi
+	fi
+fi
