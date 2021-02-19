@@ -1,21 +1,67 @@
-default:
-  image: registry.labs.nic.cz/turris/turris-build
+image: registry.labs.nic.cz/turris/turris-build
 
 stages:
   - build
+  - verify
 
-Applying patches for Omnia:
+## Package build prepare #########################################################
+.prepare:
   stage: build
   script:
-    - './compile_pkgs prepare -t omnia'
+    - './compile_pkgs -t "$BOARD" prepare'
 
-Generate pkglists:
+
+prepare_mox:
+  extends: .prepare
+  variables:
+    BOARD: mox
+
+prepare_omnia:
+  extends: .prepare
+  variables:
+    BOARD: omnia
+
+prepare_turris1x:
+  extends: .prepare
+  variables:
+    BOARD: turris1x
+
+## Medkit ########################################################################
+.medkit:
+  stage: build
+  script:
+    - './generate_medkits -t "$BOARD"'
+    - '[ -f "generated_medkits/$BOARD-medkit-latest.tar.gz" ]'
+    - '[ -f "generated_medkits/$BOARD-medkit-min-latest.tar.gz" ]'
+
+
+medkit_mox:
+  extends: .medkit
+  variables:
+    BOARD: mox
+
+medkit_omnia:
+  extends: .medkit
+  variables:
+    BOARD: omnia
+
+medkit_turris1x:
+  extends: .medkit
+  variables:
+    BOARD: turris1x
+
+## Update lists ##################################################################
+lists_generate:
   stage: build
   script:
     - './generate_lists --debug'
+  artifacts:
+      name: "Generated package lists"
+      paths:
+          - generated_lists/*
 
-Check generated pkglists:
-  stage: build
+lists_verify:
+  stage: verify
+  needs: [lists_generate]
   script:
-    - './generate_lists'
     - find generated_lists -type f -name '*.lua' -printf '-- %P --\n' -exec luac5.1 -p '{}' \;
