@@ -1,0 +1,222 @@
+From 5efb7091c7e5fc5963ea43dbe6dd327985880900 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <josef.schlehofer@nic.cz>
+Date: Sun, 27 Dec 2020 16:31:34 +0100
+Subject: [PATCH 1/2] fosquitto: fix deprecated options bind_address and port
+
+- The 'port' option is now deprecated and will be removed in a future version. Please use 'listener' instead.
+- The 'bind_address' option is now deprecated and will be removed in a future version. The behaviour will default to true.
+---
+ web/foris-controller/fosquitto/Makefile             | 2 +-
+ web/foris-controller/fosquitto/files/fosquitto.init | 4 ++--
+ web/foris-controller/fosquitto/files/fosquitto.uci  | 4 ++--
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/web/foris-controller/fosquitto/Makefile b/web/foris-controller/fosquitto/Makefile
+index 7195a912c..8179b75a9 100644
+--- a/web/foris-controller/fosquitto/Makefile
++++ b/web/foris-controller/fosquitto/Makefile
+@@ -8,7 +8,7 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=fosquitto
+-PKG_VERSION:=21
++PKG_VERSION:=22
+ PKG_RELEASE:=1
+ 
+ PKG_MAINTAINER:=CZ.NIC <packaging@turris.cz>
+diff --git a/web/foris-controller/fosquitto/files/fosquitto.init b/web/foris-controller/fosquitto/files/fosquitto.init
+index ffaf800cf..287731524 100644
+--- a/web/foris-controller/fosquitto/files/fosquitto.init
++++ b/web/foris-controller/fosquitto/files/fosquitto.init
+@@ -47,8 +47,8 @@ generate_global() {
+ 
+ generate_local() {
+ 	config_get port local port 11883
+-	echo "port $port"
+-	echo "bind_address localhost"
++	echo "listener port $port"
++	echo "listener bind_address localhost"
+ 	echo
+ }
+ 
+diff --git a/web/foris-controller/fosquitto/files/fosquitto.uci b/web/foris-controller/fosquitto/files/fosquitto.uci
+index 8afad03fa..50f46efd5 100644
+--- a/web/foris-controller/fosquitto/files/fosquitto.uci
++++ b/web/foris-controller/fosquitto/files/fosquitto.uci
+@@ -2,7 +2,7 @@ config global global
+ 	option debug '0'
+ 
+ config local local
+-	option port 11883
++	listener port 11883
+ 
+ config remote remote
+ 	option enabled '0'
+@@ -10,7 +10,7 @@ config remote remote
+ #config subordinate '<id>'
+ #	enabled '0'
+ #	option address '192.168.1.8'
+-#	option port '11884'
++#	listener port '11884'
+ #	option custom_name '<name>'
+ 
+ #config subsubordinate '<id>'
+-- 
+GitLab
+
+
+From bcba011b3fff0a29bb90e12c9aa4c01e712b9e5c Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <josef.schlehofer@nic.cz>
+Date: Sun, 27 Dec 2020 16:35:33 +0100
+Subject: [PATCH 2/2] treewide: move /var/run/ubus.sock to
+ /var/run/ubus/ubus.sock
+
+In upstream, there is a idea to run ubusd as non-root user.
+Because of that, they moved /var/run/ubus.sock to
+/var/run/ubus/ubus.sock
+---
+ utils/turris-maintain/files/lighttpd-restart.py                 | 2 +-
+ utils/turris-maintain/files/network-restart.py                  | 2 +-
+ utils/turris-maintain/files/reboot.py                           | 2 +-
+ .../foris-controller/files/foris-controller.conf                | 2 +-
+ .../foris-controller/files/foris-controller.init                | 2 +-
+ web/foris-controller/foris-ws/files/foris-ws.init               | 2 +-
+ web/foris/foris/files/foris-config-cgi                          | 2 +-
+ web/foris/foris/files/lighttpd-dynamic-conf                     | 2 +-
+ web/reforis/reforis-shield/files/reforis-lighttpd-dynamic.sh    | 2 +-
+ web/reforis/reforis/files/reforis-lighttpd-dynamic.sh           | 2 +-
+ 10 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/utils/turris-maintain/files/lighttpd-restart.py b/utils/turris-maintain/files/lighttpd-restart.py
+index d0d6c99db..3ecb31606 100644
+--- a/utils/turris-maintain/files/lighttpd-restart.py
++++ b/utils/turris-maintain/files/lighttpd-restart.py
+@@ -25,7 +25,7 @@ bus = uci_get("foris-controller", "main", "bus", "ubus")
+ controller_id = None
+ 
+ if bus == "ubus":
+-    path = uci_get("foris-controller", "ubus", "notification_path", "/var/run/ubus.sock")
++    path = uci_get("foris-controller", "ubus", "notification_path", "/var/run/ubus/ubus.sock")
+     from foris_controller.buses.ubus import UbusNotificationSender
+     sender = UbusNotificationSender(path)
+ elif bus == "unix":
+diff --git a/utils/turris-maintain/files/network-restart.py b/utils/turris-maintain/files/network-restart.py
+index 2b2ce3c18..56749c11a 100644
+--- a/utils/turris-maintain/files/network-restart.py
++++ b/utils/turris-maintain/files/network-restart.py
+@@ -26,7 +26,7 @@ bus = uci_get("foris-controller", "main", "bus", "ubus")
+ controller_id = None
+ 
+ if bus == "ubus":
+-    path = uci_get("foris-controller", "ubus", "notification_path", "/var/run/ubus.sock")
++    path = uci_get("foris-controller", "ubus", "notification_path", "/var/run/ubus/ubus.sock")
+     from foris_controller.buses.ubus import UbusNotificationSender
+     sender = UbusNotificationSender(path)
+ elif bus == "unix":
+diff --git a/utils/turris-maintain/files/reboot.py b/utils/turris-maintain/files/reboot.py
+index b49f9f017..9583da318 100644
+--- a/utils/turris-maintain/files/reboot.py
++++ b/utils/turris-maintain/files/reboot.py
+@@ -18,7 +18,7 @@ with euci.EUci() as uci:
+     if bus == "ubus":
+         path = uci.get(
+             "foris-controller", "ubus", "notification_path",
+-            default="/var/run/ubus.sock"
++            default="/var/run/ubus/ubus.sock"
+         )
+         from foris_controller.buses.ubus import UbusNotificationSender
+         sender = UbusNotificationSender(path)
+diff --git a/web/foris-controller/foris-controller/files/foris-controller.conf b/web/foris-controller/foris-controller/files/foris-controller.conf
+index 7a174176a..bdf2cbf9d 100644
+--- a/web/foris-controller/foris-controller/files/foris-controller.conf
++++ b/web/foris-controller/foris-controller/files/foris-controller.conf
+@@ -8,7 +8,7 @@ config foris-controller 'main'
+ 	option client_socket '/var/run/foris-controller-client.sock'
+ 
+ config ubus 'ubus'
+-	option path /var/run/ubus.sock
++	option path /var/run/ubus/ubus.sock
+ 	#option single true
+ 
+ config unix 'unix'
+diff --git a/web/foris-controller/foris-controller/files/foris-controller.init b/web/foris-controller/foris-controller/files/foris-controller.init
+index 98e88801d..c3ca2b0c9 100755
+--- a/web/foris-controller/foris-controller/files/foris-controller.init
++++ b/web/foris-controller/foris-controller/files/foris-controller.init
+@@ -37,7 +37,7 @@ start_service() {
+ 
+ 	procd_open_instance
+ 	if [ "$bus" == "ubus" ]; then
+-		config_get path ubus path "/var/run/ubus.sock"
++		config_get path ubus path "/var/run/ubus/ubus.sock"
+ 		config_get_bool single ubus single 0
+ 		if [ "$single" == "1" ]; then
+ 			single_arg="--single"
+diff --git a/web/foris-controller/foris-ws/files/foris-ws.init b/web/foris-controller/foris-ws/files/foris-ws.init
+index 33340bedc..a2f344d13 100755
+--- a/web/foris-controller/foris-ws/files/foris-ws.init
++++ b/web/foris-controller/foris-ws/files/foris-ws.init
+@@ -37,7 +37,7 @@ start_service() {
+ 
+ 	procd_open_instance
+ 	if [ "$bus" == "ubus" ]; then
+-		config_get path ubus path "/var/run/ubus.sock"
++		config_get path ubus path "/var/run/ubus/ubus.sock"
+ 		procd_set_param command "$PROG" ${debug_arg:-} -a ubus filesystem --host "127.0.0.1" --port "$port" ubus --path "$path"
+ 	elif [ "$bus" == "unix" ]; then
+ 		config_get path unix notification_path "/var/run/foris-controller-notifications.sock"
+diff --git a/web/foris/foris/files/foris-config-cgi b/web/foris/foris/files/foris-config-cgi
+index 0b438de3d..e88f5d5bd 100755
+--- a/web/foris/foris/files/foris-config-cgi
++++ b/web/foris/foris/files/foris-config-cgi
+@@ -26,7 +26,7 @@ config_load foris-controller
+ config_get BUS main bus "mqtt"
+ case "$BUS" in
+ 	ubus)
+-		config_get BUS_PATH ubus path "/var/run/ubus.sock"
++		config_get BUS_PATH ubus path "/var/run/ubus/ubus.sock"
+ 		exec /usr/bin/foris -s cgi $EXTRA_FLAGS -b "$BUS" --bus-socket "$BUS_PATH" -a config
+ 		;;
+ 	unix)
+diff --git a/web/foris/foris/files/lighttpd-dynamic-conf b/web/foris/foris/files/lighttpd-dynamic-conf
+index ec58597e2..1bf5413cb 100644
+--- a/web/foris/foris/files/lighttpd-dynamic-conf
++++ b/web/foris/foris/files/lighttpd-dynamic-conf
+@@ -34,7 +34,7 @@ config_load foris-controller
+ config_get BUS main bus "mqtt"
+ case "$BUS" in
+ 	ubus)
+-		config_get BUS_PATH ubus path "/var/run/ubus.sock"
++		config_get BUS_PATH ubus path "/var/run/ubus/ubus.sock"
+ 		;;
+ 	unix)
+ 		config_get BUS_PATH unix path "/var/run/foris-controller.sock"
+diff --git a/web/reforis/reforis-shield/files/reforis-lighttpd-dynamic.sh b/web/reforis/reforis-shield/files/reforis-lighttpd-dynamic.sh
+index 9064148af..edc0a9e15 100644
+--- a/web/reforis/reforis-shield/files/reforis-lighttpd-dynamic.sh
++++ b/web/reforis/reforis-shield/files/reforis-lighttpd-dynamic.sh
+@@ -20,7 +20,7 @@ config_load foris-controller
+ config_get BUS main bus "mqtt"
+ case "$BUS" in
+ 	ubus)
+-		config_get BUS_PATH ubus path "/var/run/ubus.sock"
++		config_get BUS_PATH ubus path "/var/run/ubus/ubus.sock"
+ 		;;
+ 	mqtt)
+ 		config_get BUS_HOST mqtt host "localhost"
+diff --git a/web/reforis/reforis/files/reforis-lighttpd-dynamic.sh b/web/reforis/reforis/files/reforis-lighttpd-dynamic.sh
+index cb212ec66..e04575311 100644
+--- a/web/reforis/reforis/files/reforis-lighttpd-dynamic.sh
++++ b/web/reforis/reforis/files/reforis-lighttpd-dynamic.sh
+@@ -20,7 +20,7 @@ config_load foris-controller
+ config_get BUS main bus "mqtt"
+ case "$BUS" in
+ 	ubus)
+-		config_get BUS_PATH ubus path "/var/run/ubus.sock"
++		config_get BUS_PATH ubus path "/var/run/ubus/ubus.sock"
+ 		;;
+ 	mqtt)
+ 		config_get BUS_HOST mqtt host "localhost"
+-- 
+GitLab
+
