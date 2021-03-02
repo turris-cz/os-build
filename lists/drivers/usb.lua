@@ -37,7 +37,7 @@ local db = {
 	{ -- Computer & Entertainment, Inc. Astrometa DVB-T/T2/C FM & DAB receiver [RTL2832P]
 		vendor = 0x15f4,
 		product = 0x0131,
-		packages = {"kmod-dvb-cxd2841er", "kmod-dvb-usb-rtl28xxu", "kmod-media-tuner-r820t"},
+		packages = {"kmod-dvb-usb", "kmod-dvb-cxd2841er", "kmod-dvb-mn88473", "kmod-dvb-rtl2832", "kmod-dvb-usb-rtl28xxu", "kmod-media-tuner-r820t", "kmod-media-tuner-r820t"},
 		class = {"dvb"}
 	},
 	{ -- Microsoft Corporation Xbox One Digital TV Tuner
