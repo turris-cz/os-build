@@ -23,7 +23,7 @@ define(`forInstallCritical',`Install(foreach_join(PKGPART,`"$1-PKGPART"',`, ',sh
 # Feature guard
 # Some packages might not be installable without some features. Skipping every
 # additional packages ensures that at least updater is updated.
-define(`_FEATURE_GUARD_', `if true then -- Advanced dependencies guard')
+define(`_FEATURE_GUARD_', `if features.request_condition then -- Advanced dependencies guard')
 define(`_END_FEATURE_GUARD_', `end')
 # This is empty for now because minimal version check is enought for now but is left there for future reuse.
 
@@ -39,7 +39,7 @@ if not board then
 		board = "mox"
 	elseif model:match("[Oo]mnia") then
 		board = "omnia"
-	elseif model:match("^[Tt]urris$") or model:match("[Tt]urris ?1\.?x") then
+	elseif model:match("^[Tt]urris$") or model:match("[Tt]urris ?1%.?x") then
 		board = "turris1x"
 	else
 		DIE("Unsupported Turris model: " .. tostring(model))

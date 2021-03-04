@@ -1,0 +1,105 @@
+#!/bin/bash
+# Make wrapper with ability to decrease paralelism and try again.
+# (C) 2018-2020 CZ.NIC, z.s.p.o.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+set -eu
+
+src_dir="$(dirname "$(readlink -f "${0%/*}")")"
+source "$src_dir/helpers/common.sh"
+
+report() {
+	_color_echo 'FORCE-MAKE' '1;35' "$*"
+}
+
+usage() {
+	echo "Usage: ${0##*/} [OPTION].. [-- [ARGUMENTS]..]" >&2
+}
+
+usage_fail() {
+	echo "${0##*/}:" "$@"
+	usage
+	exit 1
+}
+
+help() {
+	usage
+	cat >&2 <<EOF
+This is make wrapper that tries to run build really hard. It runs build multiple
+times while it decreases paralelism. You can set amount of retries done given
+number of parallel jobs. You can also specify speed how fast number of parallel
+jobs are going to decay using -d option. There is last additional run on top of it
+all that appends all arguments to make call passed to -f option.
+
+Options:
+  -j NUM   Number of parallel jobs, modified and passed to make (in default 1)
+  -d OP    Divider used to decrease number of parallel jobs (in default 2)
+  -c NUM   Number of retries before paralelism is decreased (in default set to 1)
+  -f ARGS  Additional argument to be used for last single job attempt (can be
+           passed multiple times)
+EOF
+}
+
+jobs_count="1"
+jobs_divider="2"
+retry_count="1"
+fallback=()
+while getopts "j:d:c:f:h" opt; do
+	case "$opt" in
+		j)
+			[[ "$OPTARG" =~ ^[0-9]+$ ]] \
+				|| usage_fail "Number of parallel jobs have to be valid positive number"
+			jobs_count="$OPTARG"
+			;;
+		d)
+			[[ "$OPTARG" =~ ^[0-9]+$ ]] \
+				|| usage_fail "Divider has to be valid positive number"
+			jobs_divider="$OPTARG"
+			;;
+		c)
+			[[ "$OPTARG" =~ ^[0-9]+$ ]] \
+				|| usage_fail "Number of retries has to be valid positive number"
+			retry_count="$OPTARG"
+			;;
+		f)
+			fallback+=("$OPTARG")
+			;;
+		h)
+			help
+			exit 0
+			;;
+		*)
+			usage
+			exit 1
+			;;
+	esac
+done
+shift $((OPTIND - 1))
+
+
+while true; do
+	for ((i=retry_count-1 ; i >= 0 ; i--)); do
+		if make -j "$jobs_count" "$@"; then
+			exit 0
+		fi
+		report "Build failed for $jobs_count parallel jobs" \
+			"(remaining retries before decrease: $i)"
+	done
+	jobs_count="$((jobs_count / jobs_divider))"
+	[ "$jobs_count" -gt 1 ] || break
+	report "Decreasing jobs count to: $jobs_count"
+done
+
+report "Running single job fallback"
+make "$@" "${fallback[@]}"

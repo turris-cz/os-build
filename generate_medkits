@@ -1,0 +1,134 @@
+#!/bin/bash
+# Turris medkits generator script
+# (C) 2020 CZ.NIC, z.s.p.o.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+set -eu
+
+src_dir="$(readlink -f "${0%/*}")"
+. "$src_dir/helpers/common.sh"
+. "$src_dir/helpers/generate_common.sh"
+. "$src_dir/defaults.sh"
+
+output_path=
+board="omnia"
+branch="$PUBLISH_BRANCH"
+updater_branch=
+[ "$PUBLISH_BRANCH" != "hbs" ] && updater_branch="$PUBLISH_BRANCH"
+sign_key=
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h|--help)
+			echo "Usage: $0 [OPTION].. [OUTPUT_PATH]"
+			echo "This script generates Turris medkits."
+			echo
+			echo "Options:"
+			echo "  --target, -t BOARD"
+			echo "    Set given board as target for generated medkit. In default"
+			echo "    if this options is not specified omnia is used. Allowed"
+			echo "    values are: turris1x, omnia, mox"
+			echo "  --branch, -b BRANCH"
+			echo "    Set given branch as source for packages used to generate "
+			echo "    this medkit. If this option is not set then '$PUBLISH_BRANCH' is used."
+			echo "    Note that this does not set that branch to updater-ng"
+			echo "    configuration. You have to use --updater-branch for that."
+			echo "  --updater-branch BRANCH"
+			echo "    Set target branch inside medkit for updater-ng."
+			echo "  --sign, -s KEY"
+			echo "    Sign medkits with given KEY and usign utility"
+			echo "  --help, -h"
+			echo "    Print this text and exit."
+			exit 0
+			;;
+		--target|-t)
+			shift
+			board="$1"
+			;;
+		--branch|-b)
+			shift
+			branch="$1"
+			;;
+		--updater-branch)
+			shift
+			updater_branch="$1"
+			;;
+		--sign|-s)
+			shift
+			sign_key="$1"
+			;;
+		*)
+			[ -z "$output_path" ] || die "Unknown option: $1"
+			output_path="$1"
+			;;
+	esac
+	shift
+done
+
+[ -n "$output_path" ] || output_path="generated_medkits"
+
+rm -rf "$output_path"
+mkdir -p "$output_path"
+
+timestamp="$(date +%Y%m%d%H%M)"
+
+generate() {
+	local type="$1"
+	shift
+	local args=("$@")
+	local args+=("--target" "$board" "--branch" "$branch")
+	[ -z "$updater_branch" ] || args+=("--updater-branch" "$updater_branch")
+	local output_file="$board-$type-$timestamp.tar.gz"
+	local latest_file="$board-$type-latest.tar.gz"
+
+	report "Generating medkit '$type'"
+	"$src_dir/helpers/generate_medkit.sh" "${args[@]}" \
+		"$output_path/$output_file"
+	ln -sf "$output_file" "$output_path/$latest_file"
+
+	(
+	cd "$output_path"
+	# Hash files contains exact name of file so creating just links is not correct
+	# as it would contain invalid name of file. We have to generate dedicated hash
+	# file for every file variant we generated even when hash is the same.
+	for medkit in "$output_file" "$latest_file"; do
+		md5sum "$medkit" > "$medkit.md5"
+		sha256sum "$medkit" > "$medkit.sha256"
+	done
+	)
+
+	if [ -n "$sign_key" ]; then
+		"$USIGN" -S -m "$output_path/$output_file" -s "$sign_key"
+		ln -sf "$output_file.sig" "$output_path/$latest_file.sig"
+	fi
+}
+
+##################################################################################
+
+get_usign
+
+generate "medkit"
+generate "medkit-min" --base "base-min" --lists "" --localization ""
+
+case "$board" in
+	omnia)
+		generate "medkit-contract-cti" --contract "cti"
+		;;
+	mox)
+		generate "netboot" --base "base-netboot"
+		generate "medkit-contract-shield" --contract "shield"
+		;;
+esac
+if [ "$board" != "turris1x" ]; then
+	generate "medkit-contract-cznic" --contract "cznic"
+fi

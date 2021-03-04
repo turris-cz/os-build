@@ -5,7 +5,7 @@ _FEATURE_GUARD_
 Uninstall("foris", "luci", "luci-base", "turris-webapps", { priority = 45 })
 
 -- Alternative versions of packages
-Install("shield-support", "reforis-shield", { priority = 45 })
+Install("shield-support", { priority = 45 })
 
 -- Extra usability packages
 Install("ip_autoselector", "firewall-redirect-192-168-1-1", { priority = 45 })

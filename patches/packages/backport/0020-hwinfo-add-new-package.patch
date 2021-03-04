@@ -1,0 +1,510 @@
+From 22cb2c97ace0dcaf1d81b4e866180e48d4a8c147 Mon Sep 17 00:00:00 2001
+From: Alberto Bursi <bobafetthotmail@gmail.com>
+Date: Mon, 1 Jun 2020 19:35:42 +0200
+Subject: [PATCH 1/3] hwinfo: add new package
+
+add hwinfo package, it is a complete
+system hardware detection tool,
+similar to lshw but is written in C
+and has minimal dependencies.
+It is part of core SUSE Linux
+applications like Yast installer
+and system configurator tool so
+it's regularly maintained.
+
+Signed-off-by: Alberto Bursi <bobafetthotmail@gmail.com>
+(cherry picked from commit 509b9d52a08fa7df457180180d2934d4ba6f9a41)
+---
+ utils/hwinfo/Makefile                         |  89 ++++++++
+ utils/hwinfo/patches/0-hardcoding-version     |  19 ++
+ .../patches/1-remove_libx8emu_dependency      |  68 ++++++
+ ...-disable-generation-of-tiny-hwinfo-headers |  75 +++++++
+ .../patches/3-assorted-Makefile-butchery      | 197 ++++++++++++++++++
+ 5 files changed, 448 insertions(+)
+ create mode 100644 utils/hwinfo/Makefile
+ create mode 100644 utils/hwinfo/patches/0-hardcoding-version
+ create mode 100644 utils/hwinfo/patches/1-remove_libx8emu_dependency
+ create mode 100644 utils/hwinfo/patches/2-enable-hw-ids-and-disable-generation-of-tiny-hwinfo-headers
+ create mode 100644 utils/hwinfo/patches/3-assorted-Makefile-butchery
+
+diff --git a/utils/hwinfo/Makefile b/utils/hwinfo/Makefile
+new file mode 100644
+index 000000000..d99a05368
+--- /dev/null
++++ b/utils/hwinfo/Makefile
+@@ -0,0 +1,89 @@
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=hwinfo
++PKG_VERSION:=21.70
++PKG_RELEASE:=1
++
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_SOURCE_URL:=https://codeload.github.com/openSUSE/hwinfo/tar.gz/$(PKG_VERSION)?
++PKG_HASH:=bc3c4a4498e4abc32a54497ced715bbae5dfd19dd999da294bca6d69fea2db52
++
++PKG_LICENSE:=GPL-2.0-or-later
++PKG_MAINTAINER:=Alberto Bursi <bobafetthotmail@gmail.com>
++
++PKG_BUILD_DEPENDS:= hwinfo/host
++
++include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/host-build.mk
++
++# Execute in host build directory
++HOST_MAKE_FLAGS += -C $(HOST_BUILD_DIR)
++
++define Host/Configure
++	# copy uuid.h to another location in host build dir as that's where this package expects it
++	$(INSTALL_DIR) $(STAGING_DIR_HOST)/include/uuid/
++	$(CP) $(STAGING_DIR_HOST)/include/e2fsprogs/uuid/uuid.h $(STAGING_DIR_HOST)/include/uuid/uuid.h
++endef
++
++define Host/Compile
++	# Build using host compiler and let it generate the files we need
++	# CFLAGS, CPPFLAGS & LDFLAGS need to be passed with CC because they are being ingored
++	CC="$(HOSTCC) $(HOST_CFLAGS) $(HOST_CPPFLAGS) $(HOST_LDFLAGS)" $(MAKE) $(HOST_MAKE_FLAGS)
++endef
++
++define Host/Install
++	$(INSTALL_DIR) $(STAGING_DIR_HOST)/share/hwinfo
++	$(CP) $(HOST_BUILD_DIR)/src/isdn/cdb/isdn_cdb $(STAGING_DIR_HOST)/share/hwinfo/
++	$(CP) $(HOST_BUILD_DIR)/src/isdn/cdb/mk_isdnhwdb $(STAGING_DIR_HOST)/share/hwinfo/
++		
++	$(CP) $(HOST_BUILD_DIR)/src/ids/check_hd $(STAGING_DIR_HOST)/share/hwinfo/
++endef
++
++define Build/Configure
++	# Fetch prebuilt files from host build dir
++	$(INSTALL_DIR) $(PKG_BUILD_DIR)/src/isdn/cdb/
++	$(CP) $(STAGING_DIR_HOST)/share/hwinfo/isdn_cdb $(PKG_BUILD_DIR)/src/isdn/cdb/
++	$(CP) $(STAGING_DIR_HOST)/share/hwinfo/mk_isdnhwdb $(PKG_BUILD_DIR)/src/isdn/cdb/
++		
++	$(INSTALL_DIR) $(PKG_BUILD_DIR)/src/ids/
++	$(CP) $(STAGING_DIR_HOST)/share/hwinfo/check_hd $(PKG_BUILD_DIR)/src/ids/
++
++
++	# Set copied files modtime to one day in the future
++	# to prevent rebuilding them
++	perl -e 'utime(time() + 86400, time() + 86400, $$$$ARGV[0])' \
++		$(PKG_BUILD_DIR)/src/isdn/cdb/isdn_cdb
++	perl -e 'utime(time() + 86400, time() + 86400, $$$$ARGV[0])' \
++		$(PKG_BUILD_DIR)/src/isdn/cdb/mk_isdnhwdb
++	perl -e 'utime(time() + 86400, time() + 86400, $$$$ARGV[0])' \
++		$(PKG_BUILD_DIR)/src/ids/check_hd
++endef
++
++
++define Package/hwinfo
++  SECTION:=utils
++  CATEGORY:=Utilities
++  TITLE:=probe the hardware present in the system
++  URL:=https://github.com/openSUSE/hwinfo
++  DEPENDS:= +libuuid
++endef
++
++define Package/hwinfo/description
++ hwinfo/libhd are used to probe for the hardware present in the system.
++ It can be used to generate a system overview log which can be later 
++ used for support.
++ This project provides a hardware probing library libhd.so and a 
++ command line tool hwinfo using it. A major project using this library
++ is YaST, the SUSE installation tool.
++endef
++
++
++define Package/hwinfo/install
++	$(INSTALL_DIR) $(1)/usr/bin
++	$(CP) $(PKG_BUILD_DIR)/hwinfo $(1)/usr/bin/
++	$(INSTALL_DIR) $(1)/usr/lib
++	$(CP) $(PKG_BUILD_DIR)/src/libhd.so* $(1)/usr/lib/
++endef
++
++$(eval $(call BuildPackage,hwinfo))
++$(eval $(call HostBuild))
+diff --git a/utils/hwinfo/patches/0-hardcoding-version b/utils/hwinfo/patches/0-hardcoding-version
+new file mode 100644
+index 000000000..cf98939f9
+--- /dev/null
++++ b/utils/hwinfo/patches/0-hardcoding-version
+@@ -0,0 +1,19 @@
++hardcode version of hwinfo, this must be changed in sync 
++with hwinfo version changes when updating the package
++--- a/Makefile	
+++++ b/Makefile	
++@@ -12,12 +12,8 @@
++ 
++ GIT2LOG := $(shell if [ -x ./git2log ] ; then echo ./git2log --update ; else echo true ; fi)
++ GITDEPS := $(shell [ -d .git ] && echo .git/HEAD .git/refs/heads .git/refs/tags)
++-BRANCH  := $(shell [ -d .git ] && git branch | perl -ne 'print $$_ if s/^\*\s*//')
++-ifdef HWINFO_VERSION
++-VERSION := $(shell echo ${HWINFO_VERSION} > VERSION; cat VERSION)
++-else
++-VERSION := $(shell $(GIT2LOG) --version VERSION ; cat VERSION)
++-endif
+++BRANCH  := master
+++VERSION := $(shell echo 21.7 > VERSION; cat VERSION)
++ PREFIX  := hwinfo-$(VERSION)
++ 
++ include Makefile.common
+diff --git a/utils/hwinfo/patches/1-remove_libx8emu_dependency b/utils/hwinfo/patches/1-remove_libx8emu_dependency
+new file mode 100644
+index 000000000..b7c4eb4bc
+--- /dev/null
++++ b/utils/hwinfo/patches/1-remove_libx8emu_dependency
+@@ -0,0 +1,68 @@
++the library libx86emu is used only for manipulating VBIOS
++firmware to get some information from it.
++Since it's not crucial for OpenWrt usecase and it's a pain
++to compile this package with this dependency in OpenWrt due to
++host builds and whatnot, we simply remove it and disable this 
++functionality in hwinfo.
++This also saves some space.
++--- a/Makefile	
+++++ b/Makefile	
++@@ -25,13 +25,14 @@
++ endif
++ ULIBDIR		= $(LIBDIR)
++ 
+++# this library has been removed from the code, disabling it here too
++ # ia64
++-ifneq ($(filter i386 x86_64, $(ARCH)),)
++-SLIBS		+= -lx86emu
++-TLIBS		+= -lx86emu
++-SO_LIBS		+= -lx86emu
++-TSO_LIBS	+= -lx86emu
++-endif
+++#ifneq ($(filter i386 x86_64, $(ARCH)),)
+++#SLIBS		+= -lx86emu
+++#TLIBS		+= -lx86emu
+++#SO_LIBS		+= -lx86emu
+++#TSO_LIBS	+= -lx86emu
+++#endif
++ 
++ SHARED_FLAGS	=
++ OBJS_NO_TINY	= names.o parallel.o modem.o
++
++--- a/src/hd/bios.c
+++++ b/src/hd/bios.c
++@@ -447,9 +447,10 @@
++       }
++     }
++ 
++-#if defined(__i386__) || defined (__x86_64__)
++-    get_vbe_info(hd_data, vbe);
++-#endif
+++//disabled as we removed the library needed for this function
+++//#if defined(__i386__) || defined (__x86_64__)
+++//    get_vbe_info(hd_data, vbe);
+++//#endif
++ 
++     if(vbe->ok) {
++       bt->vbe_ver = vbe->version;
++
++--- a/src/hd/bios.h
+++++ b/src/hd/bios.h
++@@ -5,4 +5,5 @@
++ #define BIOS_RAM_SIZE   0x100
++ 
++ void hd_scan_bios(hd_data_t *hd_data);
++-void get_vbe_info(hd_data_t *hd_data, vbe_info_t *vbe);
+++//disabled as we removed the lib needed by this function
+++//void get_vbe_info(hd_data_t *hd_data, vbe_info_t *vbe);
++
++--- a/src/hd/mdt.c
+++++ b/src/hd/mdt.c
++@@ -1,4 +1,6 @@
++-#if defined(__i386__) || defined (__x86_64__)
+++//disabling this whole thing as it's using the lib we have removed
+++//#if defined(__i386__) || defined (__x86_64__)
+++#if defined(__disabled__) || defined (__disabled__)
++ 
++ #define _GNU_SOURCE
++ 
+diff --git a/utils/hwinfo/patches/2-enable-hw-ids-and-disable-generation-of-tiny-hwinfo-headers b/utils/hwinfo/patches/2-enable-hw-ids-and-disable-generation-of-tiny-hwinfo-headers
+new file mode 100644
+index 000000000..3eb8df952
+--- /dev/null
++++ b/utils/hwinfo/patches/2-enable-hw-ids-and-disable-generation-of-tiny-hwinfo-headers
+@@ -0,0 +1,75 @@
++>>enable all IDs for hwinfo
++>>changes to make it respect compile flags
++>>disable the generation of "tiny hwinfo ID tables" because it is a long
++process and has no purpose, it seems I cannot even build the "tiny" version of hwinfo
++on my OpenSUSE system, so I guess that it is just legacy stuff that bitrotted.
++
++--- a/src/ids/Makefile
+++++ b/src/ids/Makefile
++@@ -17,47 +17,47 @@
++ 	  src/usb src/usb2 src/isapnp src/monitor src/camera src/tv2 src/tv src/dvb2 src/dvb \
++ 	  src/chipcard src/modem src/pcmcia src/s390 src/sdio
++ 
++-ifeq "$(ARCH)" "i386"
+++#ifeq "$(ARCH)" "i386"
++ IDFILES += src/x11.i386 src/modem.i386
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "ppc"
+++#ifeq "$(ARCH)" "ppc"
++ IDFILES += src/x11.ppc src/x11.ppc.special
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "alpha"
+++#ifeq "$(ARCH)" "alpha"
++ IDFILES += src/x11.axp
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "sparc"
+++#ifeq "$(ARCH)" "sparc"
++ IDFILES += src/x11.sparc
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "sparc64"
+++#ifeq "$(ARCH)" "sparc64"
++ IDFILES += src/x11.sparc
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "ia64"
+++#ifeq "$(ARCH)" "ia64"
++ IDFILES += src/x11.ia64
++-endif
+++#endif
++ 
++-ifeq "$(ARCH)" "x86_64"
+++#ifeq "$(ARCH)" "x86_64"
++ IDFILES += src/x11.amd64
++-endif
+++#endif
++ 
++ IDFILES += src/pci src/storage src/sound src/mouse src/braille
++ 
++ $(LIBHD_D): hd_ids.o
++-	ar r $(LIBHD) $?
+++	$(AR) r $(LIBHD) $?
++ 
++ check_hd: check_hd.c
++-	$(CC) $(CFLAGS) $< -o $@
+++	$(CC) $(LDFLAGS) $(CFLAGS) $< -o $@
++ 
++-hd_ids.c: hd_ids.h hd_ids_tiny.h
+++hd_ids.c: hd_ids.h 
++ 
++ hd_ids.h hd.ids: check_hd $(IDFILES)
++ 	./check_hd --check --sort --cfile hd_ids.h $(IDFILES)
++ 
++-hd_ids_tiny.h: check_hd hd.ids
++-	./check_hd --mini --cfile hd_ids_tiny.h --log=hd_tiny.log --out=hd_tiny.ids hd.ids
+++#hd_ids_tiny.h: check_hd hd.ids
+++#	./check_hd --mini --cfile hd_ids_tiny.h --log=hd_tiny.log --out=hd_tiny.ids hd.ids
++ 
+diff --git a/utils/hwinfo/patches/3-assorted-Makefile-butchery b/utils/hwinfo/patches/3-assorted-Makefile-butchery
+new file mode 100644
+index 000000000..711c40bed
+--- /dev/null
++++ b/utils/hwinfo/patches/3-assorted-Makefile-butchery
+@@ -0,0 +1,197 @@
++Some makefile modifications to:
++>>disable the logic that detects and sets architecture (it screws up cross-compiling)
++>>disable some secondary build functions like creating changelogs or report files for other tools
++>>disable the install functionality as we take the files we need with OpenWrt build system
++>>changes to all makefiles to respect the compile flags
++
++--- a/Makefile	
+++++ b/Makefile	
++@@ -1,6 +1,6 @@
++ TOPDIR		= $(CURDIR)
++ SUBDIRS		= src
++-TARGETS		= hwinfo hwinfo.pc changelog
+++TARGETS		= hwinfo
++ CLEANFILES	= hwinfo hwinfo.pc hwinfo.static hwscan hwscan.static hwscand hwscanqueue doc/libhd doc/*~
++ LIBS		= -lhd
++ SLIBS		= -lhd -luuid
++@@ -18,11 +18,11 @@
++ 
++ include Makefile.common
++ 
++-ifeq "$(ARCH)" "x86_64"
++-LIBDIR		?= /usr/lib64
++-else
+++#ifeq "$(ARCH)" "x86_64"
+++#LIBDIR		?= /usr/lib64
+++#else
++ LIBDIR		?= /usr/lib
++-endif
+++#endif
++ ULIBDIR		= $(LIBDIR)
++ 
++ # this library has been removed from the code, disabling it here too
++@@ -39,13 +39,13 @@
++ 
++ .PHONY:	fullstatic static shared tiny doc diet tinydiet uc tinyuc
++ 
++-ifdef HWINFO_VERSION
+++#ifdef HWINFO_VERSION
++ changelog:
++ 	@true
++-else
++-changelog: $(GITDEPS)
++-	$(GIT2LOG) --changelog changelog
++-endif
+++#else
+++#changelog: $(GITDEPS)
+++#	$(GIT2LOG) --changelog changelog
+++#endif
++ 
++ hwscan: hwscan.o $(LIBHD)
++ 	$(CC) hwscan.o $(LDFLAGS) $(CFLAGS) $(LIBS) -o $@
++@@ -99,28 +99,29 @@
++ 	@cd doc ; doxygen libhd.doxy
++ 
++ install:
++-	install -d -m 755 $(DESTDIR)/sbin $(DESTDIR)/usr/sbin $(DESTDIR)$(ULIBDIR) \
++-		$(DESTDIR)$(ULIBDIR)/pkgconfig $(DESTDIR)/usr/include
++-	install -m 755 hwinfo $(DESTDIR)/usr/sbin
++-	install -m 755 src/ids/check_hd $(DESTDIR)/usr/sbin
++-	install -m 755 src/ids/convert_hd $(DESTDIR)/usr/sbin
++-	if [ -f $(LIBHD_SO) ] ; then \
++-		install $(LIBHD_SO) $(DESTDIR)$(ULIBDIR) ; \
++-		ln -snf $(LIBHD_NAME) $(DESTDIR)$(ULIBDIR)/$(LIBHD_SONAME) ; \
++-		ln -snf $(LIBHD_SONAME) $(DESTDIR)$(ULIBDIR)/$(LIBHD_BASE).so ; \
++-	else \
++-		install -m 644 $(LIBHD) $(DESTDIR)$(ULIBDIR) ; \
++-	fi
++-	install -m 644 hwinfo.pc $(DESTDIR)$(ULIBDIR)/pkgconfig
++-	install -m 644 src/hd/hd.h $(DESTDIR)/usr/include
++-	perl -pi -e "s/define\s+HD_VERSION\b.*/define HD_VERSION\t\t$(LIBHD_MAJOR_VERSION)/" $(DESTDIR)/usr/include/hd.h
++-	perl -pi -e "s/define\s+HD_MINOR_VERSION\b.*/define HD_MINOR_VERSION\t$(LIBHD_MINOR_VERSION)/" $(DESTDIR)/usr/include/hd.h
++-	install -m 755 getsysinfo $(DESTDIR)/usr/sbin
++-	install -m 755 src/isdn/cdb/mk_isdnhwdb $(DESTDIR)/usr/sbin
++-	install -d -m 755 $(DESTDIR)/usr/share/hwinfo
++-	install -d -m 755 $(DESTDIR)/var/lib/hardware/udi
++-	install -m 644 src/isdn/cdb/ISDN.CDB.txt $(DESTDIR)/usr/share/hwinfo
++-	install -m 644 src/isdn/cdb/ISDN.CDB.hwdb $(DESTDIR)/usr/share/hwinfo
+++#	install -d -m 755 $(DESTDIR)/sbin $(DESTDIR)/usr/sbin $(DESTDIR)$(ULIBDIR) \
+++#		$(DESTDIR)$(ULIBDIR)/pkgconfig $(DESTDIR)/usr/include
+++#	install -m 755 hwinfo $(DESTDIR)/usr/sbin
+++#	install -m 755 src/ids/check_hd $(DESTDIR)/usr/sbin
+++#	install -m 755 src/ids/convert_hd $(DESTDIR)/usr/sbin
+++#	if [ -f $(LIBHD_SO) ] ; then \
+++#		install $(LIBHD_SO) $(DESTDIR)$(ULIBDIR) ; \
+++#		ln -snf $(LIBHD_NAME) $(DESTDIR)$(ULIBDIR)/$(LIBHD_SONAME) ; \
+++#		ln -snf $(LIBHD_SONAME) $(DESTDIR)$(ULIBDIR)/$(LIBHD_BASE).so ; \
+++#	else \
+++#		install -m 644 $(LIBHD) $(DESTDIR)$(ULIBDIR) ; \
+++#	fi
+++#	install -m 644 hwinfo.pc $(DESTDIR)$(ULIBDIR)/pkgconfig
+++#	install -m 644 src/hd/hd.h $(DESTDIR)/usr/include
+++#	perl -pi -e "s/define\s+HD_VERSION\b.*/define HD_VERSION\t\t$(LIBHD_MAJOR_VERSION)/" $(DESTDIR)/usr/include/hd.h
+++#	perl -pi -e "s/define\s+HD_MINOR_VERSION\b.*/define HD_MINOR_VERSION\t$(LIBHD_MINOR_VERSION)/" $(DESTDIR)/usr/include/hd.h
+++#	install -m 755 getsysinfo $(DESTDIR)/usr/sbin
+++#	install -m 755 src/isdn/cdb/mk_isdnhwdb $(DESTDIR)/usr/sbin
+++#	install -d -m 755 $(DESTDIR)/usr/share/hwinfo
+++#	install -d -m 755 $(DESTDIR)/var/lib/hardware/udi
+++#	install -m 644 src/isdn/cdb/ISDN.CDB.txt $(DESTDIR)/usr/share/hwinfo
+++#	install -m 644 src/isdn/cdb/ISDN.CDB.hwdb $(DESTDIR)/usr/share/hwinfo
+++	@true
++ 
++ archive: changelog
++ 	@if [ ! -d .git ] ; then echo no git repo ; false ; fi
++
++--- a/Makefile.common
+++++ b/Makefile.common
++@@ -1,28 +1,26 @@
++ # libhd/Makefile.common
++ 
++-ARCH	:= $(shell uname -m)
++-ifeq "$(ARCH)" "i486"
++-ARCH	:= i386
++-endif
++-ifeq "$(ARCH)" "i586"
++-ARCH	:= i386
++-endif
++-ifeq "$(ARCH)" "i686"
++-ARCH	:= i386
++-endif
++-ifeq "$(ARCH)" "parisc"
++-EXTRA_FLAGS := -fPIC $(EXTRA_FLAGS)
++-endif
+++#ARCH	:= $(shell uname -m)
+++#ifeq "$(ARCH)" "i486"
+++#ARCH	:= i386
+++#endif
+++#ifeq "$(ARCH)" "i586"
+++#ARCH	:= i386
+++#endif
+++#ifeq "$(ARCH)" "i686"
+++#ARCH	:= i386
+++#endif
+++#ifeq "$(ARCH)" "parisc"
+++#EXTRA_FLAGS := -fPIC $(EXTRA_FLAGS)
+++#endif
++ 
++ LIBHD_VERSION		:= $(shell cat $(TOPDIR)/VERSION)
++ LIBHD_MINOR_VERSION	:= $(shell cut -d . -f 2 $(TOPDIR)/VERSION)
++ LIBHD_MAJOR_VERSION	:= $(shell cut -d . -f 1 $(TOPDIR)/VERSION)
++ 
++-RPM_OPT_FLAGS	?= -O2
++-
++ CC	?= gcc
++ LD	= ld
++-CFLAGS += $(RPM_OPT_FLAGS) -Wall -Wno-pointer-sign -pipe -g $(SHARED_FLAGS) $(EXTRA_FLAGS) -I$(TOPDIR)/src/hd
+++CFLAGS += -Wall -Wno-pointer-sign $(SHARED_FLAGS) $(EXTRA_FLAGS) -I$(TOPDIR)/src/hd
++ SHARED_FLAGS	= -fPIC
++ 
++ LDFLAGS	+= -Lsrc
++@@ -36,7 +34,7 @@
++ LIBHD_SO	= $(TOPDIR)/src/$(LIBHD_NAME)
++ LIBHD_D		= $(TOPDIR)/src/.lib
++ 
++-export CC TOPDIR CFLAGS LIBHD ARCH
+++export CC TOPDIR CFLAGS LIBHD 
++ 
++ .PHONY: all distclean clean install subdirs
++ 
++
++--- a/src/Makefile
+++++ b/src/Makefile
++@@ -12,7 +12,7 @@
++ #endif
++ 
++ $(LIBHD): $(OBJS)
++-	ar r $@ $?
+++	$(AR) r $@ $?
++ 	@rm -f $(LIBHD_D)
++ 
++ ifdef SHARED_FLAGS
++--- a/src/hd/Makefile
+++++ b/src/hd/Makefile
++@@ -12,4 +12,4 @@
++ 	@perl -pi -e "s/define\s+HD_MINOR_VERSION\s+\d+/define HD_MINOR_VERSION\t$(LIBHD_MINOR_VERSION)/" $@
++ 
++ $(LIBHD_D): $(OBJS)
++-	ar r $(LIBHD) $?
+++	$(AR) r $(LIBHD) $?
++ 
++--- a/src/isdn/Makefile
+++++ b/src/isdn/Makefile
++@@ -5,5 +5,5 @@
++ include $(TOPDIR)/Makefile.common
++ 
++ $(LIBHD_D): $(OBJS)
++-	ar r $(LIBHD) $?
+++	$(AR) r $(LIBHD) $?
++ 
++--- a/src/smp/Makefile
+++++ b/src/smp/Makefile
++@@ -4,4 +4,4 @@
++ include $(TOPDIR)/Makefile.common
++ 
++ $(LIBHD_D): $(OBJS)
++-	ar r $(LIBHD) $?
+++	$(AR) r $(LIBHD) $?
++
+-- 
+2.25.1
+

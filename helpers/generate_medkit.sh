@@ -14,24 +14,25 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
+set -eu
 
-src_dir="$(dirname "$(readlink -f "$0")")"
+src_dir="$(dirname "$(readlink -f "${0%/*}")")"
 . "$src_dir/helpers/common.sh"
 . "$src_dir/helpers/generate_common.sh"
 
 . "$src_dir/defaults.sh"
-export BOARD=
+export BOOTSTRAP_BOARD=
 export BRANCH="$PUBLISH_BRANCH"
-export UPDATER_BRANCH=
-export L10N=cs,de
-export PKGLISTS=
-export CONTRACT=
+export BOOTSTRAP_UPDATER_BRANCH=
+export BOOTSTRAP_BASE=
+export BOOTSTRAP_L10N=cs,de
+export BOOTSTRAP_PKGLISTS=
+export BOOTSTRAP_DRIVERS=
+export BOOTSTRAP_CONTRACT=
 export UPDATER_SCRIPT=
 export OVERLAY=
-export SIGN_KEY=
 export OUTPUT=
-export TESTKEY=
+export BOOTSTRAP_TESTKEY=
 
 export TURRIS_BUILD_DIR="$src_dir"
 
@@ -55,9 +56,12 @@ while [ $# -gt 0 ]; do
 			echo "    values are: turris1x, omnia, mox"
 			echo "  --branch, -b BRANCH"
 			echo "    Set given branch as source for packages used to generate "
-			echo "    this medkit. If this option is not set then 'hbl' is used."
+			echo "    this medkit. If this option is not set then '$PUBLISH_BRANCH' is used."
 			echo "    Note that this does not sets that branch to updater-ng"
 			echo "    configuration. You have to use --updater-branch for that."
+			echo "  --base BASE"
+			echo "    Allows specification of base script. In default 'base' is"
+			echo "    used and thus base.lua script."
 			echo "  --updater-branch BRANCH"
 			echo "    Set target branch inside medkit for updater-ng."
 			# TODO maybe add version specification for future out of build use.
@@ -74,6 +78,12 @@ while [ $# -gt 0 ]; do
 			echo "    means that they will be removed with first update. To"
 			echo "    prevent this you have to include our own"
 			echo "    /etc/config/pkglists in overlay."
+			echo "  --drivers, -d DRIVER,.."
+			echo "    What additional drivers should be included in medkit. Format"
+			echo "    is CLASS:FLAG where CLASS is either 'pci' or 'usb'. Multiple"
+			echo "    drivers can be specified by separating them by commas. This"
+			echo "    affects only medkit. Unnecessary drivers are removed with"
+			echo "    first system update."
 			echo "  --contract CONTRACT"
 			echo "    Build medkit for router under CONTRACT."
 			echo "  --updater-script FILE"
@@ -84,37 +94,43 @@ while [ $# -gt 0 ]; do
 			echo "    PATH is expected to be directory and whole content is copied"
 			echo "    to newly generated root. This is handy if you want to change"
 			echo "    some default settings for example."
-			echo "  --sign KEY"
-			echo "    Sign medkit with given KEY and usign utility"
 			echo "  --help, -h"
 			echo "    Print this text and exit."
 			exit 0
 			;;
 		--target|-t)
 			shift
-			BOARD="$1"
+			BOOTSTRAP_BOARD="$1"
 			;;
 		--branch|-b)
 			shift
 			BRANCH="$1"
 			;;
+		--base)
+			shift
+			BOOTSTRAP_BASE="$1"
+			;;
 		--updater-branch)
 			shift
-			UPDATER_BRANCH="$1"
-			TESTKEY=y
+			BOOTSTRAP_UPDATER_BRANCH="$1"
+			BOOTSTRAP_TESTKEY=y
 			;;
 		--localization|-l)
 			shift
-			L10N="$1"
+			BOOTSTRAP_L10N="$1"
 			;;
 		--lists|-p)
 			shift
-			PKGLISTS="$1"
+			BOOTSTRAP_PKGLISTS="$1"
+			;;
+		--drivers|-d)
+			shift
+			DRIVERS_DRIVERS="$1"
 			;;
 		--contract)
-			[ -z "$CONTRACT" ] || die "--contract can be specified only once"
+			[ -n "$BOOTSTRAP_CONTRACT:+x" ] || die "--contract can be specified only once"
 			shift
-			CONTRACT="$1"
+			BOOTSTRAP_CONTRACT="$1"
 			default_output_ext="-contract-$1"
 			;;
 		--updater-script)
@@ -125,10 +141,6 @@ while [ $# -gt 0 ]; do
 			shift
 			OVERLAY="$1"
 			;;
-		--sign)
-			shift
-			SIGN_KEY="$1"
-			;;
 		*)
 			[ -z "$OUTPUT" ] || die "Unknown option: $1"
 			OUTPUT="$1"
@@ -137,13 +149,12 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-[ -n "$BOARD" ] || die "You have to specify target Turris router."
+[ -n "$BOOTSTRAP_BOARD" ] || die "You have to specify target Turris router."
 [ -n "$OUTPUT" ] || \
-	OUTPUT="$BOARD-medkit$default_output_ext.tar.gz"
+	OUTPUT="$BOOTSTRAP_BOARD-medkit$default_output_ext.tar.gz"
 OUTPUT="$(readlink -f "$OUTPUT")"
 
-updater_ng_repodetect "$BRANCH" "$BOARD"
-get_usign
+updater_ng_repodetect "$BRANCH" "$BOOTSTRAP_BOARD"
 get_updater_ng
 
 ## Generate root ##
@@ -159,16 +170,21 @@ mkdir -p root/tmp/lock
 mkdir -p root/usr/lib/opkg/info
 touch root/usr/lib/opkg/status
 
-## Run updater it self
-"\$PKGUPDATE" \
-	-R "$(pwd)"/root --out-of-root --batch \
-	"file://\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng.lua"
-
-## Generate /etc/config/updater
-m4args=()
-[ -z "\$UPDATER_BRANCH" ] || m4args+=("-D_BRANCH_='\$UPDATER_BRANCH'")
-[ -z "\$L10N" ] || m4args+=("-D_LANGS_=\$L10N")
-m4 "\${m4args[@]}" "\$TURRIS_BUILD_DIR/helpers/medkit-updater-ng-config.m4" > root/etc/config/updater
+## Run updater itself
+"\$PKGUPDATE" -R "$(pwd)/root" --out-of-root --batch "file:///dev/stdin" <<"EEOF"
+	Script("https://repo.turris.cz/$BRANCH/$BOOTSTRAP_BOARD/lists/bootstrap.lua", {
+		pubkey = {
+			-- Turris release key
+			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyByZWxlYXNlIGtleSBnZW4gMQpSV1Rjc2c1VFhHTGRXOWdObEdITi9vZmRzTTBLQWZRSVJCbzVPVlpJWWxWVGZ5STZGR1ZFT0svZQo=",
+			-- Turris development key
+			"data:base64,dW50cnVzdGVkIGNvbW1lbnQ6IFR1cnJpcyBPUyBkZXZlbCBrZXkKUldTMEZBMU51bjdKRHQwTDhTalJzRFJKR0R2VUNkRGRmczIxZmVpVytxcEdITk1oVlo5MzBoa3kK",
+		}
+	})
+	user_script = os.getenv("UPDATER_SCRIPT")
+	if user_script and user_script ~= '' then
+		Script('file://' .. user_script)
+	end
+EEOF
 
 ## Overlay user's files
 if [ -n "\$OVERLAY" ]; then
@@ -187,9 +203,6 @@ cd root
 # Create archive
 tar -czf "\$OUTPUT" .
 )
-md5sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.md5"
-sha256sum "\$OUTPUT" | sed 's| /.*/| |' > "\$OUTPUT.sha256"
-[ -z "\$SIGN_KEY" ] || "\$USIGN" -S -m "\$OUTPUT" -s "\$SIGN_KEY"
 
 ## Cleanup
 rm -rf root

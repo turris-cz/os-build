@@ -21,7 +21,7 @@ shopt -s nullglob
 DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_junit" )
 
 # Paths to OpenWRT build and turris-build sources
-src_dir="$(dirname "$(readlink -f "$0")")"
+src_dir="$(readlink -f "${0%/*}")"
 build_dir="$(readlink -f "$(pwd)")"
 if [ "$build_dir" == "$src_dir" ]; then
 	# Protect against turris-build repository wipe
@@ -92,11 +92,7 @@ openwrt_feed
 # Technical variables
 declare -A available_commands # Set of all commands defined in this script
 mirror_updated="" # Variable signaling that mirrors were update in this run already
-# Variables set by _enable_debug function
-perl_debug=""
-sh_debug=""
-make_debug=""
-owrt_debug=""
+debug="" # set when debug on executed scripts should be enabled
 
 # OpenWRT directory for temporally data
 export TMPDIR="${build_dir}/tmp"
@@ -112,31 +108,29 @@ _git() {
 }
 
 _sh() {
-	sh $sh_debug "$@"
+	sh ${debug:+-x} "$@"
 }
 
 _perl() {
-	perl $perl_debug "$@"
+	perl ${debug:+-d:Trace} "$@"
 }
 
 _make() {
-	make $make_debug "$@"
+	make ${debug:+-d} "$@"
 }
 
 # Make for OpenWRT
 _openwrt_make() {
-	local args=( "IGNORE_ERRORS=m" "BUILD_LOG=1" )
-	[ -z "$owrt_debug" ] || args+=( "$owrt_debug" )
-	[ "${#BUILD_ARGS[@]}" -eq 0 ] || args+=( "${BUILD_ARGS[@]}" )
-	_make "${args[@]}" "$@"
-}
+	local mk
+	if [ -z "$FORCE" ]; then
+		mk=("make" -j "$BUILD_JOBS")
+	else
+		mk=("$src_dir/helpers/force-make" "-j" "$BUILD_JOBS" "-c" "$FORCE" "-f" "V=s" "--")
+	fi
 
-_enable_debug() {
-	set -x
-	perl_debug="-d:Trace"
-	make_debug="-d"
-	sh_debug="-x"
-	owrt_debug="V=s"
+	"${mk[@]}" ${debug:+-d} \
+		"IGNORE_ERRORS=m" "BUILD_LOG=1" ${debug:+V=s} "${BUILD_ARGS[@]}" \
+		"$@"
 }
 
 # Definition of avaliable commands ###############################################
@@ -236,8 +230,12 @@ EOF
 	mirror_updated="yes"
 }
 
-_checkout_init() {
-	report "Checking out clean OpenWRT repository"
+available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
+checkout() {
+	local target="${OPENWRT_BRANCH#\#}"
+	report "Starting out: $target"
+
+	report "Checking out OpenWRT repository"
 	update_mirror
 	if [ -n "$GIT_MIRROR" ]; then
 		mkdir -p "$GIT_MIRROR"
@@ -248,61 +246,30 @@ _checkout_init() {
 	rm -rf .git
 	git init
 	git remote add origin "$OPENWRT_URL"
-}
+	if [ -z "$GIT_MIRROR" -a "${OPENWRT_BRANCH:0:1}" = "#" ]; then
+		# If we are downloading directly from server we can't fetch specific
+		# commit so fetch everything
+		git fetch origin
+		git checkout -f "$target"
+	else
+		git fetch ${CLONE_DEEP+--depth 1} origin "$target"
+		git checkout -f FETCH_HEAD
+	fi
 
-_checkout_clean() {
-	BUILD_SETTINGS="$(cat turris-build.conf 2> /dev/null || true)"
-	git clean -dff
+	git clean -dff -e '/turris-build.conf'
 	find . -name '*.rej' -delete
-	[ -z "$BUILD_SETTINGS" ] || echo "$BUILD_SETTINGS" > turris-build.conf
+
 	git rev-parse --short HEAD > version
 	echo "/turris-build.conf" >> ./.gitignore
 	echo "/version" >> ./.gitignore
 	_git commit -m 'gitignore: Ignore some more files' ./.gitignore
+
+	cp "$src_dir"/feeds.conf .
+
 	if [ -n "$DL_MIRROR" ]; then
 		mkdir -p "$DL_MIRROR"
 		rm -rf dl && ln -s "$DL_MIRROR" dl
 	fi
-}
-
-available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
-checkout() {
-	report "Starting out fresh!"
-	_checkout_init
-	local githash
-	githash="$(echo "$OPENWRT_BRANCH" | sed -n 's|^#||p')"
-	if [ -n "$githash" ]; then
-		git fetch origin
-		git checkout -f "$githash"
-	else
-		git fetch ${CLONE_DEEP+--depth 1} origin "$OPENWRT_BRANCH"
-		git checkout -f "origin/$OPENWRT_BRANCH"
-	fi
-	_checkout_clean
-	cp "$src_dir"/feeds.conf .
-}
-
-available_commands+=( ["repo_checkout"]="Start everything from scratch relative to repository on repo.turris.cz - all changes deleted and copy of OpenWRT gets checked out with same hashes as repo.turris.cz" )
-repo_checkout() {
-	report "Starting out $TARGET_BOARD-$PUBLISH_BRANCH!"
-	curl "https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages/git-hash" | tail -n +2 | grep -v '^$' | sed 's/^ \* //;s/: /:/' > repo-git-hashes
-	_checkout_init
-	git fetch
-	git checkout -f "$(awk -F : '/^openwrt:/{print $2}' repo-git-hashes)"
-	GIT_HASHES="$(cat repo-git-hashes)"
-	_checkout_clean
-	echo "$GIT_HASHES" > repo-git-hashes
-	rm -f feeds.conf
-	local line githash
-	while read -r line; do
-		# TODO clean this awk
-		githash="$(awk -F : "/^feeds\/$(echo "$line" | awk '{print $2}')\:/{print \$2}" repo-git-hashes)"
-		if [ -z "$githash" ]; then
-			echo "$line" >> feeds.conf
-		else
-			echo "$line" | sed "s/[;^].*$//;s/$/\^$githash/" >> feeds.conf
-		fi
-	done < "$src_dir/feeds.conf"
 }
 
 available_commands+=( ["clean_ccache"]="Clean persistent ccache paths" )
@@ -421,7 +388,8 @@ repatch_feeds() {
 
 available_commands+=( ["prefetch"]="Runs make download" )
 prefetch() {
-	_openwrt_make -j"$BUILD_JOBS" download
+	# We do not want to use force here intentionally as we are not building here.
+	FORCE="" _openwrt_make download
 }
 
 available_commands+=( ["gen_junit"]="Generates junit output from build logs" )
@@ -440,51 +408,22 @@ pkgsrepo() {
 	mv bin/git-hash "$OUTPUT_DIR"
 }
 
-# Function calling make in OpenWRT tree that is designed to handle force option in
-# compact way.
-_compile() {
-	if [ -z "$FORCE" ]; then
-		_openwrt_make -j"$BUILD_JOBS" "$@"
-	else
-		local success=""
-		local force_jobs="$BUILD_JOBS"
-		while [ "$force_jobs" -gt 0 ] && [ -z "$success" ]; do
-			local countdown="$FORCE"
-			while [ $countdown -gt 0 ] && [ -z "$success" ]; do
-				if _openwrt_make -j"$force_jobs" "$@"; then
-					success="YES!!!"
-				else
-					countdown="$((countdown - 1))"
-					report "Build job with -j$force_jobs failed (trying $((FORCE - countdown))/$FORCE)..."
-				fi
-			done
-			if [ -z "$success" ]; then
-				report "Build job with -j$force_jobs failed, decreasing parallelism..."
-				force_jobs="$((force_jobs / 2))"
-			fi
-		done
-		if [ "$force_jobs" -le 1 ] && [ -z "$success" ]; then
-			_openwrt_make -j1 V=s "$@"
-		fi
-	fi
-}
-
 available_commands+=( ["compile_tools"]="Compile host tools" )
 compile_tools() {
 	report "Compiling tools"
-	_compile tools/compile toolchain/compile
+	_openwrt_make tools/compile toolchain/compile
 }
 
 available_commands+=( ["compile_target"]="Compile target specific software (Linux kernel)" )
 compile_target() {
 	report "Compiling target"
-	_compile target/compile
+	_openwrt_make target/compile
 }
 
 available_commands+=( ["compile_packages"]="Compile packages" )
 compile_packages() {
 	report "Compiling packages"
-	_compile package/compile
+	_openwrt_make package/compile
 }
 
 available_commands+=( ["compile"]="	Compile tools, target and packages" )
@@ -496,7 +435,7 @@ compile() {
 
 available_commands+=( ["sign"]="	Generate packages index and sign it" )
 sign() {
-	_compile package/index BUILD_KEY="$SIGN_KEY"
+	_openwrt_make package/index BUILD_KEY="$SIGN_KEY"
 }
 
 available_commands+=( ["clean"]="	Clean current build directory" )
@@ -524,22 +463,11 @@ prepare_tools() {
 	compile_target
 }
 
-available_commands+=( ["repo_prepare"]="Same as prepare but instead of checkout uses repo_checkout" )
-repo_prepare() {
-	repo_checkout
-	clean
-	patch_openwrt
-	repatch_feeds
-	gen_version
-	configure
-	set_ccache
-}
-
 available_commands+=( ["autopkg"]="	Deploy autopkg scripts that can be used for rolling software development" )
 autopkg() {
 	report "Deploying autopkg scripts"
 	cp "$src_dir"/helpers/autopkg/* "$build_dir"/include/
-	git add include/autopkg-*.mk
+	_git add include/autopkg-*.mk
 	_git commit -m 'autopkg: Add autopkg scripts'
 }
 
@@ -559,7 +487,7 @@ print_help() {
 	echo "	-h, --help	Show this help text"
 	echo
 	echo "Advanced options:"
-	echo "	-p BRANCH	Name of the target build alias. This is used to set OPKG feeds and for repo_checkout. If not specified '$PUBLISH_BRANCH' is used."
+	echo "	-p BRANCH	Name of the target build alias. This is used to set OPKG feeds. If not specified '$PUBLISH_BRANCH' is used."
 	echo "	-l		Do not update local git mirrors. Use them as they are to fetch OpenWRT and its feeds."
 	echo "	-d		Do not use shallow checkouts"
 	echo "	-x		Enable debug mode"
@@ -614,7 +542,7 @@ while [ $# -gt 0 ]; do
 			CLONE_DEEP="y"
 			;;
 		-x)
-			_enable_debug
+			debug="y"
 			;;
 		-h|--help)
 			print_help

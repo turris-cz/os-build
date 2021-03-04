@@ -1,4 +1,4 @@
-From d720b5dd8a56ead79045689bceb32a62bb5e8e05 Mon Sep 17 00:00:00 2001
+From 7d395df58314b892075f33bffc69e98e439ee1fd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 4.14)
@@ -9,6 +9,8 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
+ package/boot/uboot-tools/Makefile             |   2 +-
+ package/boot/uboot-tools/files/mpc85xx        |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-4.14              |  61 +++-
  .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
@@ -16,13 +18,40 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  target/linux/mpc85xx/p2020/config-default     |  27 ++
  ...fsl_elbc_nand_add_ecc_mode_selection.patch | 227 ++++++++++++++
  ...a8k-extend-slave-bus-implementations.patch | 243 ++++++++++++++
- 7 files changed, 859 insertions(+), 7 deletions(-)
+ 9 files changed, 863 insertions(+), 8 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
  create mode 100644 target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
  create mode 100644 target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 
+diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
+index e9f13e6..8c75e60 100644
+--- a/package/boot/uboot-tools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=uboot-tools
+ PKG_DISTNAME:=u-boot
+ PKG_VERSION:=2018.03
+-PKG_RELEASE:=3.1
++PKG_RELEASE:=4
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE:=$(PKG_DISTNAME)-$(PKG_VERSION).tar.xz
+diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
+index d219b57..932a46a 100644
+--- a/package/boot/uboot-tools/files/mpc85xx
++++ b/package/boot/uboot-tools/files/mpc85xx
+@@ -10,6 +10,9 @@ touch /etc/config/ubootenv
+ board=$(board_name)
+ 
+ case "$board" in
++fsl,P2020RDB)
++	ubootenv_add_uci_config "/dev/mtd5" "0x20000" "0x2000" "0x20000"
++	;;
+ ocedo,panda)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000"
+ 	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x20000" "0x20000"
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index aa33a4af96..b24bcb68ae 100755
+index aa33a4a..b24bcb6 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -23,6 +23,10 @@ tplink,tl-wdr4900-v1)
@@ -203,7 +232,7 @@ index 77fd10f..e53829e 100644
 +# CONFIG_VGA_CONSOLE is not set
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000000..b5128a373d
+index 0000000..b5128a3
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 @@ -0,0 +1,296 @@
@@ -504,7 +533,7 @@ index 0000000000..b5128a373d
 +
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/image/Makefile b/target/linux/mpc85xx/image/Makefile
-index c0e3112741..14a005f996 100644
+index c0e3112..14a005f 100644
 --- a/target/linux/mpc85xx/image/Makefile
 +++ b/target/linux/mpc85xx/image/Makefile
 @@ -141,6 +141,14 @@ define Device/p2020rdb
@@ -523,7 +552,7 @@ index c0e3112741..14a005f996 100644
  
  $(eval $(call BuildImage))
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index e6526446b4..7913e003a4 100644
+index e652644..7913e00 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
 @@ -4,6 +4,10 @@ CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
@@ -577,7 +606,7 @@ index e6526446b4..7913e003a4 100644
 +CONFIG_NVMEM_SYSFS=y
 diff --git a/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 new file mode 100644
-index 0000000000..d6616263f3
+index 0000000..d661626
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-4.14/230-fsl_elbc_nand_add_ecc_mode_selection.patch
 @@ -0,0 +1,227 @@
@@ -810,7 +839,7 @@ index 0000000000..d6616263f3
 + 	mtd_device_parse_register(mtd, part_probe_types, NULL,
 diff --git a/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch b/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 new file mode 100644
-index 0000000000..9a24bee317
+index 0000000..9a24bee
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-4.14/400-net-dsa-qca8k-extend-slave-bus-implementations.patch
 @@ -0,0 +1,243 @@
@@ -1058,5 +1087,5 @@ index 0000000000..9a24bee317
 +2.21.0
 +
 -- 
-2.25.1
+2.28.0
 

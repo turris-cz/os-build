@@ -1,10 +1,5 @@
 -- Fixes and hacks to migrate from older setups
 
--- Install replacement link for python when python-base is not installed and python3-base is
-if features.request_condition then
-	Install("python3-python", { condition = {Not("python-base"), "python3-base"}, priority = 40 })
-end
-
 -- ABI changed in libubus with version 2019-12-27
 if not version_match or not installed or
 		(installed["libubus"] and version_match(installed["libubus"].version, "<2019-12-27")) then
@@ -76,6 +71,12 @@ if not version_match or not installed or
 	Package("fix-pkglists-options", { replan = "finished" })
 end
 
+-- Remove no longer generated task log from Updater
+if not version_match or not installed or
+		(installed["updater-supervisor"] and version_match(installed["updater-supervisor"].version, "<1.3.2")) then
+	Install("fix-updater-rm-log")
+end
+
 -- Restore previous non-empty version of /etc/config/foris
 -- With Turris OS 5.1.0 there was a bug, which removed content of /etc/config/foris and it slipped
 -- through testing. This fix just reverts older version of affected file from
@@ -113,4 +114,54 @@ for _, ssl in pairs({"openssl", "mbedtls"}) do
 	for _, pkg in pairs({"transmission-daemon", "transmission-cli", "transmission-remote"}) do
 		Package(pkg .. "-" .. ssl, { virtual = true, deps = pkg })
 	end
+end
+
+-- With Turris OS 5.2.0 we removed long time obsolete package cznic-cacert-bundle.
+-- This package was storing its certificates to backup storage. We have to remove
+-- them from there.
+if version_match and installed and installed["cznic-cacert-bundle"] then
+	Install("fix-cleanup-cert-backup")
+	Package("fix-cleanup-cert-backup", { replan = "finished" })
+end
+
+-- With Turris OS 5.2.0 packages luci-lighttpd and turris-webapps integration
+-- included in luci-base was merged to single dedicated package
+-- turris-webapps-luci. Problem is that luci-base was handled by patch that did
+-- caused no version change so we can end up potentially with conflict between
+-- previous luci-base and new turris-webapps-luci. This simply requests reinstall
+-- when luci-lighttpd is installed. It is not the cause but it should be removed
+-- at the same time as this error is being resolved.
+if installed and installed["luci-lighttpd"] and not installed["turris-webapps-luci"] then
+	-- Note: condition here makes this request prety much ignored and so we won't
+	-- interfere with install priorities.
+	Install("luci-base", { reinstall = true, condition = "luci-base" })
+end
+
+-- With uboot-tools version 2018.03-4 environment configuration was fixed. Problem
+-- is that it is not applied in default as script checks for existence of
+-- /etc/config/ubootenv file and does nothing.
+-- In case of Mox we also move fw_env.config from mox-support package. Because of
+-- that we have to update mox-support first so we would not remove generated file.
+if not version_match or not installed or
+		(installed["uboot-tools"] and version_match(installed["uboot-tools"].version, "<2018.03-4")) then
+	Package("uboot-tools", { deps = "fix-uboot-env-reset" })
+	if board ~= "mox" then
+		Package("uboot-tools", { deps = "mox-support" })
+	end
+end
+
+-- Package dhparam was removed and replaced by turris-cagen ability to generate
+-- dhparam instead. These files are expected to be in different locations so we
+-- have to fix paths in existing server configurations. This does exactly that.
+if installed and installed["dhparam"] then
+	Install("fix-dhparam-to-cagen")
+	Package("fix-dhparam-to-cagen", { replan = "finished" })
+end
+
+-- pkglists package 1.6.0 moved content of hardening package list to separate
+-- options. This fix just enables those option, that are not in default enabled,
+-- to users with hardening enabled.
+if not version_match or not installed or
+		(installed["pkglists"] and version_match(installed["pkglists"].version, "<1.6.0")) then
+	Install("fix-pkglists-hardening-options")
 end
