@@ -51,7 +51,7 @@ local db = {
 	{ -- Qualcomm, Inc. Acer Gobi 2000 Wireless Modem
 		vendor = 0x05c6,
 		product = 0x9215,
-		packages = {"usb-net-qmi-wwan", "usb-serial-qualcomm"},
+		packages = {"kmod-usb-net-qmi-wwan", "kmod-usb-serial-qualcomm"},
 		class = {"broadband"}
 	},
 	{ -- Huawei Technologies Co., Ltd. K5150 LTE modem
