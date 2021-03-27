@@ -92,6 +92,12 @@ local db = {
 		packages = {"kmod-usb-acm"},
 		class = {"serial"}
 	},
+	{ -- Future Technology Devices International, Ltd FT232 USB-Serial (UART) IC
+		vendor = 0x0403,
+		product = 0x6001,
+		packages = {"kmod-usb-serial-ftdi"},
+		class = {"serial"}
+	},
 	{ -- Sigma Designs, Inc. Aeotec Z-Stick Gen5 (ZW090) - UZB
 		vendor = 0x0658,
 		product = 0x0200,
