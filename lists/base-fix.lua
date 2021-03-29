@@ -145,7 +145,7 @@ end
 if not version_match or not installed or
 		(installed["uboot-envtools"] and version_match(installed["uboot-envtools"].version, "<2018.03-4")) then
 	Package("uboot-envtools", { deps = "fix-uboot-env-reset" })
-	if board ~= "mox" then
+	if board == "mox" then
 		Package("uboot-envtools", { deps = "mox-support" })
 	end
 end
