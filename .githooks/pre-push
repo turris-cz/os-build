@@ -13,8 +13,8 @@ compare_ancestors() {
 	correct_base="$(git merge-base "$local_hash" "$2")"
 	invalid_base_a="$(git merge-base "$local_hash" "$3")"
 	invalid_base_b="$(git merge-base "$local_hash" "$4")"
-	git merge-base --is-ancestor "$correct_base" "$invalid_base_a" \
-		&& git merge-base --is-ancestor "$correct_base" "$invalid_base_b"
+	git merge-base --is-ancestor "$invalid_base_a" "$correct_base" \
+		|| git merge-base --is-ancestor "$invalid_base_b" "$correct_base"
 }
 
 
@@ -49,19 +49,19 @@ while read -r local_ref local_sha1 remote_ref remote_sha1; do
 			push_hbd="$local_sha1"
 			;;
 		hotfix/*)
-			if compare_ancestors "$local_sha1" hbk hbl hbd; then
+			if ! compare_ancestors "$local_sha1" hbk hbl hbd; then
 				echo "Reference has invalid ancestor, please base it on top of hbk: $local_ref" >&2
 				exit 1
 			fi
 			;;
 		feature/*|bugfix/*|refactor/*|hack/*)
-			if compare_ancestors "$local_sha1" hbl hbk hbd; then
+			if ! compare_ancestors "$local_sha1" hbl hbk hbd; then
 				echo "Reference has invalid ancestor, please base it on top of hbl: $local_ref" >&2
 				exit 1
 			fi
 			;;
 		majorfeature/*|fix/*|majorrefactor/*|majorhack/*)
-			if compare_ancestors "$local_sha1" hbd hbk hbl; then
+			if ! compare_ancestors "$local_sha1" hbd hbk hbl; then
 				echo "Reference has invalid ancestor, please base it on top of hbd: $local_ref" >&2
 				exit 1
 			fi
