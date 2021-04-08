@@ -105,7 +105,7 @@ if env_testkey and env_testkey ~= "" then
 end
 
 
-local env_testkey = os.getenv('BOOTSTRAP_INITIAL_CONFIG')
-if env_testkey and env_testkey ~= "" then
+local env_initial_config = os.getenv('BOOTSTRAP_INITIAL_CONFIG')
+if env_initial_config and env_initial_config ~= "" then
 	Install('initial-config')
 end
