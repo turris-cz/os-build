@@ -1,0 +1,74 @@
+From 27ebce588da522653a8753ad2e456862b2206bf5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 7 Dec 2020 17:01:17 +0100
+Subject: [PATCH] rpcd-mod-*: improve postinst script
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Usage of killall is replaced with init script. This is cleaner solution
+as it does not consider some implementation detail but rather passes
+that on to init script implementation.
+
+IPKG_INSTROOT was added to prevent execution when not running in current
+root. It is invalid to request reload if install-root is not current
+root. In this case it can be considered harmless but it is invalid
+nonetheless.
+
+Last change is removal of `exit 0`. This caused skip of default
+postinst. Execution of default postinst does no harm and is more
+standard considering possible future expansion of it.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+(cherry picked from commit 2e0a445ed5bf1af00f8b453358fd544844c8fd73)
+---
+ libs/rpcd-mod-luci/Makefile     | 3 +--
+ libs/rpcd-mod-rad2-enc/Makefile | 3 +--
+ libs/rpcd-mod-rrdns/Makefile    | 3 +--
+ 3 files changed, 3 insertions(+), 6 deletions(-)
+
+diff --git a/libs/rpcd-mod-luci/Makefile b/libs/rpcd-mod-luci/Makefile
+index 8833bb45c..a39ec3b22 100644
+--- a/libs/rpcd-mod-luci/Makefile
++++ b/libs/rpcd-mod-luci/Makefile
+@@ -48,8 +48,7 @@ endef
+ 
+ define Package/rpcd-mod-luci/postinst
+ #!/bin/sh
+-killall -HUP rpcd 2>/dev/null
+-exit 0
++[ -n "$$IPKG_INSTROOT" ] || /etc/init.d/rpcd reload
+ endef
+ 
+ $(eval $(call BuildPackage,rpcd-mod-luci))
+diff --git a/libs/rpcd-mod-rad2-enc/Makefile b/libs/rpcd-mod-rad2-enc/Makefile
+index 4cffc01cd..02e601fd9 100644
+--- a/libs/rpcd-mod-rad2-enc/Makefile
++++ b/libs/rpcd-mod-rad2-enc/Makefile
+@@ -42,8 +42,7 @@ endef
+ 
+ define Package/rpcd-mod-rad2-enc/postinst
+ #!/bin/sh
+-killall -HUP rpcd 2>/dev/null
+-exit 0
++[ -n "$$IPKG_INSTROOT" ] || /etc/init.d/rpcd reload
+ endef
+ 
+ $(eval $(call BuildPackage,rpcd-mod-rad2-enc))
+diff --git a/libs/rpcd-mod-rrdns/Makefile b/libs/rpcd-mod-rrdns/Makefile
+index f0bf140a8..37f0e0446 100644
+--- a/libs/rpcd-mod-rrdns/Makefile
++++ b/libs/rpcd-mod-rrdns/Makefile
+@@ -40,8 +40,7 @@ endef
+ 
+ define Package/rpcd-mod-rrdns/postinst
+ #!/bin/sh
+-killall -HUP rpcd 2>/dev/null
+-exit 0
++[ -n "$$IPKG_INSTROOT" ] || /etc/init.d/rpcd reload
+ endef
+ 
+ $(eval $(call BuildPackage,rpcd-mod-rrdns))
+-- 
+2.25.1
+
