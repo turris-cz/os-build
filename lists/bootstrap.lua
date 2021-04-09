@@ -16,6 +16,8 @@ This script expects following variables to be possibly defined in environment:
     standard medkits
   BOOTSTRAP_TESTKEY: if defined non-empty then test kyes are included in
     installation
+  BOOTSTRAP_INITIAL_CONFIG: if defined non-empty then package initial-config is
+    included.
 ]]
 
 -- Sanity checks
@@ -100,4 +102,10 @@ end
 local env_testkey = os.getenv('BOOTSTRAP_TESTKEY')
 if env_testkey and env_testkey ~= "" then
 	Install('cznic-repo-keys-test')
+end
+
+
+local env_initial_config = os.getenv('BOOTSTRAP_INITIAL_CONFIG')
+if env_initial_config and env_initial_config ~= "" then
+	Install('initial-config')
 end

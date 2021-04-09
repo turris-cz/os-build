@@ -33,6 +33,7 @@ export UPDATER_SCRIPT=
 export OVERLAY=
 export OUTPUT=
 export BOOTSTRAP_TESTKEY=
+export BOOTSTRAP_INITIAL_CONFIG=
 
 export TURRIS_BUILD_DIR="$src_dir"
 
@@ -86,6 +87,10 @@ while [ $# -gt 0 ]; do
 			echo "    first system update."
 			echo "  --contract CONTRACT"
 			echo "    Build medkit for router under CONTRACT."
+			echo "  --initial-config"
+			echo "    Include package initial-config in to the medkit. This package"
+			echo "    can be used to configure Wi-Fi and system passwords with"
+			echo "    configuration file stored on drive connected to router."
 			echo "  --updater-script FILE"
 			echo "    Run file as updater's script. It is executed after primary"
 			echo "    entry script of this tool."
@@ -132,6 +137,9 @@ while [ $# -gt 0 ]; do
 			shift
 			BOOTSTRAP_CONTRACT="$1"
 			default_output_ext="-contract-$1"
+			;;
+		--initial-config)
+			BOOTSTRAP_INITIAL_CONFIG="y"
 			;;
 		--updater-script)
 			shift
