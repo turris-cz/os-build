@@ -48,7 +48,7 @@ index fe4899ead..000000000
 -include $(TOPDIR)/rules.mk
 -
 -PKG_NAME:=mariadb
--PKG_VERSION:=10.4.17
+-PKG_VERSION:=10.4.18
 -PKG_RELEASE:=1
 -
 -PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
@@ -58,7 +58,7 @@ index fe4899ead..000000000
 -	https://ftp.yz.yamagata-u.ac.jp/pub/dbms/mariadb/$(PKG_NAME)-$(PKG_VERSION)/source \
 -	https://downloads.mariadb.org/interstitial/$(PKG_NAME)-$(PKG_VERSION)/source
 -
--PKG_HASH:=a7b104e264311cd46524ae546ff0c5107978373e4a01cf7fd8a241454548d16e
+-PKG_HASH:=330d9e8273002fc92f0f3f3f9b08157a3cab1265a0f114adeb6235e4283a0d3e
 -
 -PKG_MAINTAINER:=CZ.NIC <packaging@turris.cz>
 -PKG_LICENSE:=GPL-2.0-or-later
@@ -651,7 +651,7 @@ index b09486f85..000000000
 -# All interaction with mysqld must be made via Unix sockets or named pipes.
 -# Note that using this option without enabling named pipes on Windows
 -# (using the "enable-named-pipe" option) will render mysqld useless!
--# 
+-#
 -#skip-networking
 -server-id	= 1
 -
@@ -742,7 +742,7 @@ index c26a12227..000000000
 -	if [ \! -d "$datadir" ]; then
 -		mysql_install_db --user=mysql --skip-name-resolve --skip-test-db
 -		echo "$version" > "$datadir"/.version
--	fi	
+-	fi
 -
 -	for i in /var/lib/mysql "$tmpdir" "$(dirname "$pidfile")" "$(dirname "$socketfile")"; do
 -		if [ \! -d "$i" ]; then
@@ -794,12 +794,12 @@ index 0a64dc6f3..000000000
 ---- a/scripts/mysql_install_db.sh
 -+++ b/scripts/mysql_install_db.sh
 -@@ -418,7 +418,7 @@ fi
-- 
-- 
+-
+-
 - # Try to determine the hostname
 --hostname=`@HOSTNAME@`
 -+hostname=`cat /proc/sys/kernel/hostname`
-- 
+-
 - # Check if hostname is valid
 - if test "$cross_bootstrap" -eq 0 -a "$in_rpm" -eq 0 -a "$force" -eq 0
 diff --git a/utils/mariadb/patches/110-pcre.cmake.patch b/utils/mariadb/patches/110-pcre.cmake.patch
@@ -844,7 +844,7 @@ index 9912c0e28..000000000
 -@@ -139,6 +139,7 @@ class VALBLK : public BLOCK {
 -   int     Prec;             // Precision of float values
 -   }; // end of class VALBLK
-- 
+-
 -+
 - /***********************************************************************/
 - /*  Class TYPBLK: represents a block of typed values.                  */
@@ -875,7 +875,7 @@ index 9912c0e28..000000000
 -   virtual char  *GetCharString(char *p, int n);
 --  virtual void   Reset(int n) {Typp[n] = 0;}
 -+  virtual void   Reset(int n) {UnalignedWrite(n, 0);}
-- 
+-
 -   // Methods
 -   using VALBLK::SetValue;
 -   virtual void   SetValue(PCSZ sp, int n);
@@ -926,7 +926,7 @@ index 9912c0e28..000000000
 -+    memcpy(Typp + n, &value, sizeof(TYPE));
 -+  }
 -   }; // end of class TYPBLK
-- 
+-
 - /***********************************************************************/
 ---- a/storage/connect/valblk.cpp
 -+++ b/storage/connect/valblk.cpp
@@ -938,7 +938,7 @@ index 9912c0e28..000000000
 -+  sprintf(p, Fmt, UnalignedRead(n));
 -   return p;
 -   } // end of GetCharString
-- 
+-
 - template <>
 - char *TYPBLK<double>::GetCharString(char *p, int n)
 -   {
@@ -946,80 +946,80 @@ index 9912c0e28..000000000
 -+  sprintf(p, Fmt, Prec, UnalignedRead(n));
 -   return p;
 -   } // end of GetCharString
-- 
+-
 -@@ -291,7 +291,7 @@ void TYPBLK<TYPE>::SetValue(PVAL valp, i
 -   ChkTyp(valp);
-- 
+-
 -   if (!(b = valp->IsNull()))
 --    Typp[n] = GetTypedValue(valp);
 -+    UnalignedWrite(n, GetTypedValue(valp));
 -   else
 -     Reset(n);
-- 
+-
 -@@ -353,9 +353,9 @@ void TYPBLK<TYPE>::SetValue(PCSZ p, int
--   ulonglong val = CharToNumber(p, strlen(p), maxval, Unsigned, &minus); 
--     
+-   ulonglong val = CharToNumber(p, strlen(p), maxval, Unsigned, &minus);
+-
 -   if (minus && val < maxval)
 --    Typp[n] = (TYPE)(-(signed)val);
 -+    UnalignedWrite(n, (TYPE)(-(signed)val));
 -   else
 --    Typp[n] = (TYPE)val;
 -+    UnalignedWrite(n, (TYPE)val);
-- 
+-
 -   SetNull(n, false);
 -   } // end of SetValue
 -@@ -398,7 +398,7 @@ void TYPBLK<double>::SetValue(PCSZ p, in
 - 		throw Type;
 - 	} // endif Check
-- 
+-
 --  Typp[n] = atof(p);
 -+  UnalignedWrite(n, atof(p));
 -   SetNull(n, false);
 -   } // end of SetValue
-- 
+-
 -@@ -430,7 +430,7 @@ void TYPBLK<TYPE>::SetValue(PVBLK pv, in
 -   ChkTyp(pv);
-- 
+-
 -   if (!(b = pv->IsNull(n2) && Nullable))
 --    Typp[n1] = GetTypedValue(pv, n2);
 -+    UnalignedWrite(n1, GetTypedValue(pv, n2));
 -   else
 -     Reset(n1);
-- 
+-
 -@@ -481,10 +481,10 @@ void TYPBLK<TYPE>::SetMin(PVAL valp, int
 -   {
 -   CheckParms(valp, n)
 -   TYPE  tval = GetTypedValue(valp);
 --  TYPE& tmin = Typp[n];
 -+  TYPE  tmin = UnalignedRead(n);
-- 
+-
 -   if (tval < tmin)
 --    tmin = tval;
 -+    UnalignedWrite(n, tval);
-- 
+-
 -   } // end of SetMin
-- 
+-
 -@@ -496,10 +496,10 @@ void TYPBLK<TYPE>::SetMax(PVAL valp, int
 -   {
 -   CheckParms(valp, n)
 -   TYPE  tval = GetTypedValue(valp);
 --  TYPE& tmin = Typp[n];
 -+  TYPE  tmin = UnalignedRead(n);
-- 
+-
 -   if (tval > tmin)
 --    tmin = tval;
 -+    UnalignedWrite(n, tval);
-- 
+-
 -   } // end of SetMax
-- 
+-
 -@@ -513,8 +513,7 @@ void TYPBLK<TYPE>::SetValues(PVBLK pv, i
 -   CheckType(pv)
 -   TYPE *lp = ((TYPBLK*)pv)->Typp;
-- 
+-
 --  for (int i = k; i < n; i++)          // TODO
 --    Typp[i] = lp[i];
 -+  memcpy(Typp + k, lp + k, sizeof(TYPE) * n);
-- 
+-
 -   } // end of SetValues
 - #endif // 0
 -@@ -525,7 +524,7 @@ void TYPBLK<TYPE>::SetValues(PVBLK pv, i
@@ -1030,7 +1030,7 @@ index 9912c0e28..000000000
 -+  UnalignedWrite(j, UnalignedRead(i));
 -   MoveNull(i, j);
 -   } // end of Move
-- 
+-
 -@@ -539,7 +538,7 @@ int TYPBLK<TYPE>::CompVal(PVAL vp, int n
 -   ChkIndx(n);
 -   ChkTyp(vp);
@@ -1038,7 +1038,7 @@ index 9912c0e28..000000000
 --  TYPE mlv = Typp[n];
 -+  TYPE mlv = UnalignedRead(n);
 -   TYPE vlv = GetTypedValue(vp);
-- 
+-
 -   return (vlv > mlv) ? 1 : (vlv < mlv) ? (-1) : 0;
 -@@ -551,8 +550,8 @@ int TYPBLK<TYPE>::CompVal(PVAL vp, int n
 - template <class TYPE>
@@ -1048,30 +1048,30 @@ index 9912c0e28..000000000
 --  TYPE lv2 = Typp[i2];
 -+  TYPE lv1 = UnalignedRead(i1);
 -+  TYPE lv2 = UnalignedRead(i2);
-- 
+-
 -   return (lv1 > lv2) ? 1 : (lv1 < lv2) ? (-1) : 0;
 -   } // end of CompVal
 -@@ -589,7 +588,7 @@ int TYPBLK<TYPE>::Find(PVAL vp)
 -   TYPE n = GetTypedValue(vp);
-- 
+-
 -   for (i = 0; i < Nval; i++)
 --    if (n == Typp[i])
 -+    if (n == UnalignedRead(i))
 -       break;
-- 
+-
 -   return (i < Nval) ? i : (-1);
 -@@ -605,7 +604,7 @@ int TYPBLK<TYPE>::GetMaxLength(void)
 -   int i, n, m;
-- 
+-
 -   for (i = n = 0; i < Nval; i++) {
 --    m = sprintf(buf, Fmt, Typp[i]);
 -+    m = sprintf(buf, Fmt, UnalignedRead(i));
 -     n = MY_MAX(n, m);
 -     } // endfor i
-- 
+-
 -@@ -1335,7 +1334,7 @@ char *DATBLK::GetCharString(char *p, int
 -   char *vp;
-- 
+-
 -   if (Dvalp) {
 --    Dvalp->SetValue(Typp[n]);
 -+    Dvalp->SetValue(UnalignedRead(n));
@@ -1086,7 +1086,7 @@ index 9912c0e28..000000000
 -+    UnalignedWrite(n, Dvalp->GetIntValue());
 -   } else
 -     TYPBLK<int>::SetValue(p, n);
-- 
+-
 diff --git a/utils/mariadb/patches/160-mips-machine.patch b/utils/mariadb/patches/160-mips-machine.patch
 deleted file mode 100644
 index ecd34a0eb..000000000
@@ -1110,7 +1110,7 @@ index ecd34a0eb..000000000
 -@@ -34,6 +34,10 @@ IF(NOT VERSION)
 -       SET(DEFAULT_MACHINE "mips")
 -     ENDIF()
-- 
+-
 -+    IF(NOT 64BIT AND CMAKE_SYSTEM_PROCESSOR MATCHES "^mips64")
 -+      SET(DEFAULT_MACHINE "mips")
 -+    ENDIF()
@@ -1129,7 +1129,7 @@ index 378149bb3..000000000
 -@@ -56,7 +56,7 @@ int pam_sm_authenticate(pam_handle_t *pa
 -     if (strcmp(r1, "crash pam module") == 0 && atoi(r2) == 616)
 -       abort();
-- 
+-
 --    if (strlen(r1) == (size_t)atoi(r2) % 100)
 -+    if (strlen(r1) == (unsigned int)atoi(r2) % 100)
 -       retval = PAM_SUCCESS;
@@ -1176,7 +1176,7 @@ index 11c834d69..000000000
 -+  ENDIF()
 -+  SET(CMAKE_REQUIRED_LIBRARIES ${OLD_CMAKE_REQUIRED_LIBRARIES})
 -+ENDIF()
-- 
+-
 - IF(WITH_VALGRIND)
 -   SET(HAVE_valgrind 1)
 ---- a/mysys/CMakeLists.txt
@@ -1184,27 +1184,27 @@ index 11c834d69..000000000
 -@@ -78,6 +78,10 @@ TARGET_LINK_LIBRARIES(mysys dbug strings
 -  ${LIBNSL} ${LIBM} ${LIBRT} ${CMAKE_DL_LIBS} ${LIBSOCKET} ${LIBEXECINFO} ${CRC32_LIBRARY})
 - DTRACE_INSTRUMENT(mysys)
-- 
+-
 -+IF (HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
 -+  TARGET_LINK_LIBRARIES(mysys atomic)
 -+ENDIF()
 -+
 - IF(HAVE_BFD_H)
--   TARGET_LINK_LIBRARIES(mysys bfd)  
+-   TARGET_LINK_LIBRARIES(mysys bfd)
 - ENDIF(HAVE_BFD_H)
 ---- a/sql/CMakeLists.txt
 -+++ b/sql/CMakeLists.txt
 -@@ -191,6 +191,10 @@ ELSE()
 -   SET(MYSQLD_SOURCE main.cc ${DTRACE_PROBES_ALL})
 - ENDIF()
-- 
+-
 -+IF (HAVE_GCC_C11_ATOMICS_WITH_LIBATOMIC)
 -+  TARGET_LINK_LIBRARIES(sql atomic)
 -+ENDIF()
 -+
-- 
+-
 - IF(MSVC AND NOT WITHOUT_DYNAMIC_PLUGINS)
-- 
+-
 diff --git a/utils/mariadb/patches/expand-localhost.patch b/utils/mariadb/patches/expand-localhost.patch
 deleted file mode 100644
 index 6be4b83de..000000000
@@ -1215,7 +1215,7 @@ index 6be4b83de..000000000
 -+++ b/scripts/mysql_system_tables_fix.sql
 -@@ -814,3 +814,13 @@ IF 1 = (SELECT count(*) FROM information
 - END IF//
-- 
+-
 - DELIMITER ;
 -+
 -+-- Expand localhost to 127.0.0.1
@@ -1241,7 +1241,7 @@ index 1f412d0e4..000000000
 - SELECT '{"access":18446744073709551615}' INTO @all_privileges;
 --SELECT '{"access":18446744073709551615,"plugin":"mysql_native_password","authentication_string":"invalid","auth_or":[{},{"plugin":"unix_socket"}]}' into @all_with_auth;
 --
-- 
+-
 - -- Fill "global_priv" table with default users allowing root access
 - -- from local machine if "global_priv" table didn't exist before
 -@@ -38,16 +36,9 @@ INSERT INTO tmp_user_nopasswd VALUES ('l
@@ -1254,15 +1254,14 @@ index 1f412d0e4..000000000
 --IF @auth_root_socket is not null THEN
 --  IF not exists(select 1 from information_schema.plugins where plugin_name='unix_socket') THEN
 --     INSTALL SONAME 'auth_socket'; END IF; END IF;
-- 
+-
 --INSERT INTO global_priv SELECT * FROM tmp_user_nopasswd WHERE @had_user_table=0 AND @auth_root_socket IS NULL;
 --INSERT INTO global_priv SELECT * FROM tmp_user_socket WHERE @had_user_table=0 AND @auth_root_socket IS NOT NULL;
 --DROP TABLE tmp_user_nopasswd, tmp_user_socket;
 -+INSERT INTO global_priv SELECT * FROM tmp_user_nopasswd WHERE @had_user_table=0;
 -+DROP TABLE tmp_user_nopasswd;
-- 
+-
 - CREATE TEMPORARY TABLE tmp_proxies_priv LIKE proxies_priv;
 - INSERT INTO tmp_proxies_priv SELECT @current_hostname, 'root', '', '', TRUE, '', now() FROM DUAL WHERE @current_hostname != 'localhost';
--- 
+--
 2.25.1
-
