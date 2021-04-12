@@ -105,7 +105,7 @@ end
 
 
 -- Wifi
-Install("hostapd-common", "wireless-tools", "wpad", "iw", "iwinfo", { priority = 40 })
+Install("hostapd-common", "wireless-tools", "wpad-openssl", "iw", "iwinfo", { priority = 40 })
 if board == "mox" then
 	Install("kmod-ath10k-ct", { priority = 40 })
 	Install("mwifiex-sdio-firmware", "ath10k-firmware-qca988x-ct", { priority = 40 })
