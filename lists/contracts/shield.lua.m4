@@ -4,6 +4,9 @@ _FEATURE_GUARD_
 -- No more Foris and LuCI and data collect UI
 Uninstall("foris", "luci", "luci-base", "turris-webapps", { priority = 45 })
 
+-- Remove some more advanced reForis plugins
+Uninstall("reforis-storage-plugin", { priority = 45 })
+
 -- Alternative versions of packages
 Install("shield-support", { priority = 45 })
 
