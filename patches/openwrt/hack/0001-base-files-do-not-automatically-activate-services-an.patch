@@ -108,33 +108,33 @@ index 0000000..ba3fcbc
 +usbmode
 +zram
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
-index 323e057..8e12825 100755
+index d8604415cc..ff075b4315 100644
 --- a/package/base-files/files/lib/functions.sh
 +++ b/package/base-files/files/lib/functions.sh
 @@ -277,14 +277,16 @@ default_postinst() {
- 
-        local shell="$(command -v bash)"
-        for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
--               if [ -n "$root" ]; then
--                       ${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
--               else
--                       if [ "$PKG_UPGRADE" != "1" ]; then
--                               "$i" enable
--                       fi
--                       "$i" start
--               fi
-+               if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
-+                       if [ -n "$root" ]; then
-+                               ${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
-+                       else
-+                               [ "$PKG_UPGRADE" = "1" ] || "$i" enable
-+                       fi
-+               fi
-+               if [ -z "$root" ] && "$i" enabled; then
-+                       "$i" restart
-+               fi
-        done
- 
-        return $ret
+
+ 	local shell="$(command -v bash)"
+ 	for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
+-		if [ -n "$root" ]; then
+-			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
+-		else
+-			if [ "$PKG_UPGRADE" != "1" ]; then
+-				"$i" enable
+-			fi
+-			"$i" start
+-		fi
++		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
++			if [ -n "$root" ]; then
++				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
++			else
++				[ "$PKG_UPGRADE" = "1" ] || "$i" enable
++ 			fi
++ 		fi
++		if [ -z "$root" ] && "$i" enabled; then
++			"$i" restart
++ 		fi
+ 	done
+
+ 	return $ret
 --
 2.26.0
