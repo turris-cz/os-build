@@ -1,0 +1,357 @@
+From 8d0314b394c650a5285ec034e481905ca0541fb0 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Tue, 5 May 2020 20:54:33 +0200
+Subject: [PATCH] mvebu: initial support for Omnia on 5.10 kernel
+
+---
+ target/linux/mvebu/image/Config.in            |   4 +
+ ...mada-385-turris-omnia-separate-dts-f.patch | 232 ++++++++++++
+ ...leds-Add-LED-driver-for-Turris-Omnia.patch | 345 ++++++++++++++++++
+ ...net-dsa-allow-for-multiple-CPU-ports.patch | 219 +++++++++++
+ ...-ndo-for-setting-the-iflink-property.patch | 101 +++++
+ ...t-ndo_set_netlink-for-chaning-port-s.patch |  97 +++++
+ ...-dsa-mv88e6xxx-support-multi-CPU-DSA.patch | 116 ++++++
+ 10 files changed, 1578 insertions(+)
+ create mode 100644 target/linux/mvebu/image/Config.in
+ create mode 100644 target/linux/mvebu/patches-5.10/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+ create mode 100644 target/linux/mvebu/patches-5.10/9951-net-add-ndo-for-setting-the-iflink-property.patch
+
+diff --git a/target/linux/mvebu/image/Config.in b/target/linux/mvebu/image/Config.in
+new file mode 100644
+index 0000000..bf1c0de
+--- /dev/null
++++ b/target/linux/mvebu/image/Config.in
+@@ -0,0 +1,4 @@
++config CONFIG_LEDS_TURRIS_OMNIA
++	bool "Build Turris Omnia LEDS support to kernel"
++	default y if TARGET_mvebu_cortexa9_DEVICE_cznic_turris-omnia
++	default n
+diff --git a/target/linux/mvebu/patches-5.10/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch b/target/linux/mvebu/patches-5.10/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+new file mode 100644
+index 0000000..61756be
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.10/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+@@ -0,0 +1,232 @@
++From 4ec877a2516675c96573c3c6ddc71819595dec6c Mon Sep 17 00:00:00 2001
++From: Tomas Hlavacek <tmshlvck@gmail.com>
++Date: Tue, 5 May 2020 20:40:24 +0200
++Subject: [PATCH] ARM: dts: mvebu: armada-385-turris-omnia: separate dts for
++ SFP and PHY
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The Turris Omnia board contains dual-personality ethernet NIC eth2 with
++two operation modes: 1) SFP cage and 2) metalic 1000BASE-X PHY.
++The differential pair carrying SGMII/1000BASE-X of eth2 is wired through
++a multiplexor driven by the module-detect signal from the SFP cage.
++The pin status can be read through I2C GPIO expander chip in userspace
++when the sfp driver module is unloaded and / or in U-Boot prior to the
++start of the kernel and the proper DTS file can be selected for the
++(floolowing) boot.
++
++Split DTS for Turris Omnia (that does not have any support for SFP cage)
++into three files:
++  armada-385-turris-omnia.dtsi - common base
++  armada-385-turris-omnia-sfp.dts - DT with the SFP configuration and
++PHY disabled
++  armada-385-turris-omnia-phy.dts - DT with the PHY configuration and
++SFP disabled
++
++Current DSA driver does not allow multiple CPU ports and Turris Omnia
++has two RGMII iterfaces wired between CPU and DSA switch.
++Disable the second CPU port until there is a suitable driver to use it.
++
++Signed-off-by: Tomas Hlavacek <tmshlvck@gmail.com>
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ arch/arm/boot/dts/Makefile                    |  3 +-
++ .../boot/dts/armada-385-turris-omnia-phy.dts  | 22 ++++++++++++
++ .../boot/dts/armada-385-turris-omnia-sfp.dts  | 23 ++++++++++++
++ ...omnia.dts => armada-385-turris-omnia.dtsi} | 35 +++++++++++--------
++ 4 files changed, 68 insertions(+), 15 deletions(-)
++ create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
++ create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
++ rename arch/arm/boot/dts/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (94%)
++
++diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
++index ce66ffd5a1bb..e702896345e9 100644
++--- a/arch/arm/boot/dts/Makefile
+++++ b/arch/arm/boot/dts/Makefile
++@@ -1328,7 +1328,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++ 	armada-385-linksys-rango.dtb \
++ 	armada-385-linksys-shelby.dtb \
++ 	armada-385-synology-ds116.dtb \
++-	armada-385-turris-omnia.dtb \
+++	armada-385-turris-omnia-phy.dtb \
+++	armada-385-turris-omnia-sfp.dtb \
++ 	armada-388-clearfog.dtb \
++ 	armada-388-clearfog-base.dtb \
++ 	armada-388-clearfog-pro.dtb \
++diff --git a/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts b/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
++new file mode 100644
++index 000000000000..706f6a2f8065
++--- /dev/null
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
++@@ -0,0 +1,22 @@
+++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+++/*
+++ * Device Tree file for the Turris Omnia
+++ *
+++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
+++ *
+++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
+++ */
+++
+++/dts-v1/;
+++
+++#include "armada-385-turris-omnia.dtsi"
+++
+++&phy1 {
+++	status = "okay";
+++};
+++
+++&eth2 {
+++	phy-mode = "sgmii";
+++	phy = <&phy1>;
+++};
++diff --git a/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts b/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
++new file mode 100644
++index 000000000000..b9f2b88834be
++--- /dev/null
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
++@@ -0,0 +1,23 @@
+++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+++/*
+++ * Device Tree file for the Turris Omnia
+++ *
+++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
+++ *
+++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
+++ */
+++
+++/dts-v1/;
+++
+++#include "armada-385-turris-omnia.dtsi"
+++
+++&sfp {
+++	status = "okay";
+++};
+++
+++&eth2 {
+++	phy-mode = "sgmii";
+++	managed = "in-band-status";
+++	sfp = <&sfp>;
+++};
++diff --git a/arch/arm/boot/dts/armada-385-turris-omnia.dts b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++similarity index 94%
++rename from arch/arm/boot/dts/armada-385-turris-omnia.dts
++rename to arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++index 5bd6a66d2c2b..6bf7d3e184ab 100644
++--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++@@ -8,8 +8,6 @@
++  * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
++  */
++ 
++-/dts-v1/;
++-
++ #include <dt-bindings/gpio/gpio.h>
++ #include <dt-bindings/input/input.h>
++ #include <dt-bindings/leds/common.h>
++@@ -88,11 +86,11 @@ pcie@3,0 {
++ 	sfp: sfp {
++ 		compatible = "sff,sfp";
++ 		i2c-bus = <&sfp_i2c>;
++-		tx-fault-gpios = <&pcawan 0 GPIO_ACTIVE_HIGH>;
++-		tx-disable-gpios = <&pcawan 1 GPIO_ACTIVE_HIGH>;
++-		rate-select0-gpios = <&pcawan 2 GPIO_ACTIVE_HIGH>;
++-		los-gpios = <&pcawan 3 GPIO_ACTIVE_HIGH>;
++-		mod-def0-gpios = <&pcawan 4 GPIO_ACTIVE_LOW>;
+++		tx-fault-gpios = <&sfpgpio 0 GPIO_ACTIVE_HIGH>;
+++		tx-disable-gpios = <&sfpgpio 1 GPIO_ACTIVE_HIGH>;
+++		rate-select0-gpios = <&sfpgpio 2 GPIO_ACTIVE_HIGH>;
+++		los-gpios = <&sfpgpio 3 GPIO_ACTIVE_HIGH>;
+++		mod-def0-gpios = <&sfpgpio 4 GPIO_ACTIVE_LOW>;
++ 		maximum-power-milliwatt = <3000>;
++ 
++ 		/*
++@@ -144,7 +142,7 @@ fixed-link {
++ 	};
++ };
++ 
++-/* WAN port */
+++/* WAN dual-personality port */
++ &eth2 {
++ 	/*
++ 	 * eth2 is connected via a multiplexor to both the SFP cage and to
++@@ -155,9 +153,8 @@ &eth2 {
++ 	 * is present, U-Boot has to enable the sfp node above, remove phy
++ 	 * handle and add managed = "in-band-status" property.
++ 	 */
+++	phys = <&comphy5 2>;
++ 	status = "okay";
++-	phy-mode = "sgmii";
++-	phy-handle = <&phy1>;
++ 	phys = <&comphy5 2>;
++ 	sfp = <&sfp>;
++ 	buffer-manager = <&bm>;
++@@ -361,7 +358,7 @@ i2c@7 {
++ 			#size-cells = <0>;
++ 			reg = <7>;
++ 
++-			pcawan: gpio@71 {
+++			sfpgpio: gpio@71 {
++ 				/*
++ 				 * GPIO expander for SFP+ signals and
++ 				 * and phy irq
++@@ -370,7 +367,7 @@ pcawan: gpio@71 {
++ 				reg = <0x71>;
++ 
++ 				pinctrl-names = "default";
++-				pinctrl-0 = <&pcawan_pins>;
+++				pinctrl-0 = <&wanint_pins>;
++ 
++ 				interrupt-parent = <&gpio1>;
++ 				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
++@@ -450,13 +447,23 @@ fixed-link {
++ 				};
++ 			};
++ 
++-			/* port 6 is connected to eth0 */
+++			ports@6 {
+++				reg = <6>;
+++				label = "cpu";
+++				ethernet = <&eth0>;
+++				phy-mode = "rgmii-id";
+++
+++				fixed-link {
+++					speed = <1000>;
+++					full-duplex;
+++				};
+++			};
++ 		};
++ 	};
++ };
++ 
++ &pinctrl {
++-	pcawan_pins: pcawan-pins {
+++	wanint_pins: wanint-pins {
++ 		marvell,pins = "mpp46";
++ 		marvell,function = "gpio";
++ 	};
++-- 
++2.30.2
++
+diff --git a/target/linux/mvebu/patches-5.10/9951-net-add-ndo-for-setting-the-iflink-property.patch b/target/linux/mvebu/patches-5.10/9951-net-add-ndo-for-setting-the-iflink-property.patch
+new file mode 100644
+index 0000000..3b2482d
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.10/9951-net-add-ndo-for-setting-the-iflink-property.patch
+@@ -0,0 +1,101 @@
++From 846d8a31f9cc9048f58358770d20d3153918c93d Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Tue, 5 May 2020 19:28:53 +0200
++Subject: [PATCH] net: add ndo for setting the iflink property
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++In DSA the iflink value is used to report to which CPU port a given
++switch port is connected to. Since we want to support multi-CPU DSA, we
++want the user to be able to change this value.
++
++Add ndo_set_iflink method into the ndo strucutre to be a pair to
++ndo_get_iflink. Also create dev_set_iflink and call this from the
++netlink code, so that userspace can change the iflink value.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ include/linux/netdevice.h |  5 +++++
++ net/core/dev.c            | 16 ++++++++++++++++
++ net/core/rtnetlink.c      |  7 +++++++
++ 3 files changed, 28 insertions(+)
++
++diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
++index b580a35f50ea..1a951eca08da 100644
++--- a/include/linux/netdevice.h
+++++ b/include/linux/netdevice.h
++@@ -1209,6 +1209,8 @@ struct tlsdev_ops;
++  *	TX queue.
++  * int (*ndo_get_iflink)(const struct net_device *dev);
++  *	Called to get the iflink value of this device.
+++ * int (*ndo_set_iflink)(struct net_device *dev, int iflink);
+++ *	Called to set the iflink value of this device.
++  * void (*ndo_change_proto_down)(struct net_device *dev,
++  *				 bool proto_down);
++  *	This function is used to pass protocol port error state information
++@@ -1428,6 +1430,8 @@ struct net_device_ops {
++ 						      int queue_index,
++ 						      u32 maxrate);
++ 	int			(*ndo_get_iflink)(const struct net_device *dev);
+++	int			(*ndo_set_iflink)(struct net_device *dev,
+++						  int iflink);
++ 	int			(*ndo_change_proto_down)(struct net_device *dev,
++ 							 bool proto_down);
++ 	int			(*ndo_fill_metadata_dst)(struct net_device *dev,
++@@ -2617,6 +2621,7 @@ void dev_add_offload(struct packet_offload *po);
++ void dev_remove_offload(struct packet_offload *po);
++ 
++ int dev_get_iflink(const struct net_device *dev);
+++int dev_set_iflink(struct net_device *dev, int iflink);
++ int dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
++ struct net_device *__dev_get_by_flags(struct net *net, unsigned short flags,
++ 				      unsigned short mask);
++diff --git a/net/core/dev.c b/net/core/dev.c
++index 8ad1e8f00958..c0bba4ddec21 100644
++--- a/net/core/dev.c
+++++ b/net/core/dev.c
++@@ -611,6 +611,22 @@ int dev_get_iflink(const struct net_device *dev)
++ }
++ EXPORT_SYMBOL(dev_get_iflink);
++ 
+++/**
+++ *	dev_set_iflink - set 'iflink' value of an interface
+++ *	@dev: target interface
+++ *	@iflink: new value
+++ *
+++ *	Change the interface to which this interface is linked to.
+++ */
+++int dev_set_iflink(struct net_device *dev, int iflink)
+++{
+++	if (dev->netdev_ops && dev->netdev_ops->ndo_set_iflink)
+++		return dev->netdev_ops->ndo_set_iflink(dev, iflink);
+++
+++	return -EOPNOTSUPP;
+++}
+++EXPORT_SYMBOL(dev_set_iflink);
+++
++ /**
++  *	dev_fill_metadata_dst - Retrieve tunnel egress information.
++  *	@dev: targeted interface
++diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
++index 944acb1a9f29..b35fc82f032a 100644
++--- a/net/core/rtnetlink.c
+++++ b/net/core/rtnetlink.c
++@@ -2529,6 +2529,13 @@ static int do_setlink(const struct sk_buff *skb,
++ 		status |= DO_SETLINK_MODIFIED;
++ 	}
++ 
+++	if (tb[IFLA_LINK]) {
+++		err = dev_set_iflink(dev, nla_get_u32(tb[IFLA_LINK]));
+++		if (err)
+++			goto errout;
+++		status |= DO_SETLINK_MODIFIED;
+++	}
+++
++ 	if (tb[IFLA_CARRIER]) {
++ 		err = dev_change_carrier(dev, nla_get_u8(tb[IFLA_CARRIER]));
++ 		if (err)
++-- 
++2.24.1
++
+-- 
+2.26.2
+
