@@ -1,0 +1,90 @@
+From 0aaf9ce55cdf7fcd8fec0f512fbbe32526f9a047 Mon Sep 17 00:00:00 2001
+From: Stepan Henek <stepan.henek@nic.cz>
+Date: Sun, 25 Apr 2021 23:32:29 +0200
+Subject: [PATCH] wireguard-tools: enable/disable peer based on uci option
+
+It would be really useful if we could enable/disable wireguard peers
+using just a single option in uci. Currently If I want do disable
+wireguard peer I need to remove the entire config section.
+
+Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+---
+ package/network/utils/wireguard-tools/Makefile            | 2 +-
+ package/network/utils/wireguard-tools/files/wireguard.sh  | 7 +++++++
+ .../utils/wireguard-tools/files/wireguard_watchdog        | 8 ++++++++
+ 3 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/package/network/utils/wireguard-tools/Makefile b/package/network/utils/wireguard-tools/Makefile
+index 5f8da147c16b..bcf360329cb2 100644
+--- a/package/network/utils/wireguard-tools/Makefile
++++ b/package/network/utils/wireguard-tools/Makefile
+@@ -12,7 +12,7 @@ include $(INCLUDE_DIR)/kernel.mk
+ PKG_NAME:=wireguard-tools
+ 
+ PKG_VERSION:=1.0.20210223
+-PKG_RELEASE:=2
++PKG_RELEASE:=3
+ 
+ PKG_SOURCE:=wireguard-tools-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=https://git.zx2c4.com/wireguard-tools/snapshot/
+diff --git a/package/network/utils/wireguard-tools/files/wireguard.sh b/package/network/utils/wireguard-tools/files/wireguard.sh
+index 63261aea71da..8a3ddf180426 100644
+--- a/package/network/utils/wireguard-tools/files/wireguard.sh
++++ b/package/network/utils/wireguard-tools/files/wireguard.sh
+@@ -26,6 +26,7 @@ proto_wireguard_init_config() {
+ proto_wireguard_setup_peer() {
+ 	local peer_config="$1"
+ 
++	local enabled
+ 	local public_key
+ 	local preshared_key
+ 	local allowed_ips
+@@ -34,6 +35,7 @@ proto_wireguard_setup_peer() {
+ 	local endpoint_port
+ 	local persistent_keepalive
+ 
++	config_get_bool enabled "${peer_config}" "enabled" 1
+ 	config_get public_key "${peer_config}" "public_key"
+ 	config_get preshared_key "${peer_config}" "preshared_key"
+ 	config_get allowed_ips "${peer_config}" "allowed_ips"
+@@ -42,6 +44,11 @@ proto_wireguard_setup_peer() {
+ 	config_get endpoint_port "${peer_config}" "endpoint_port"
+ 	config_get persistent_keepalive "${peer_config}" "persistent_keepalive"
+ 
++	if [ "${enabled}" -eq 0 ]; then
++		# skip disabled peers
++		return
++	fi
++
+ 	if [ -z "$public_key" ]; then
+ 		echo "Skipping peer config $peer_config because public key is not defined."
+ 		return 0
+diff --git a/package/network/utils/wireguard-tools/files/wireguard_watchdog b/package/network/utils/wireguard-tools/files/wireguard_watchdog
+index c0a5a0aa33c3..1a85b79b3e3d 100644
+--- a/package/network/utils/wireguard-tools/files/wireguard_watchdog
++++ b/package/network/utils/wireguard-tools/files/wireguard_watchdog
+@@ -17,6 +17,7 @@
+ check_peer_activity() {
+   local cfg=$1
+   local iface=$2
++  local enabled
+   local public_key
+   local endpoint_host
+   local endpoint_port
+@@ -24,9 +25,16 @@ check_peer_activity() {
+   local last_handshake
+   local idle_seconds
+ 
++  config_get_bool enabled "${cfg}" "enabled" 1
+   config_get public_key "${cfg}" "public_key"
+   config_get endpoint_host "${cfg}" "endpoint_host"
+   config_get endpoint_port "${cfg}" "endpoint_port"
++
++  if [ "${enabled}" -eq 0 ]; then
++    # skip disabled peers
++    return
++  fi
++
+   persistent_keepalive=$(wg show ${iface} persistent-keepalive | grep ${public_key} | awk '{print $2}')
+ 
+   # only process peers with endpoints and keepalive set
