@@ -1,4 +1,4 @@
-From 8fe9940db66517679f09fa1d2f6f79229b6a8361 Mon Sep 17 00:00:00 2001
+From 828c06b1fe8473d15afa8a8af5a5066afecebf67 Mon Sep 17 00:00:00 2001
 From: Florian Eckert <fe@dev.tdt.de>
 Date: Fri, 30 Nov 2018 14:03:50 +0100
 Subject: [PATCH] openvpn: add generic hotplug mechanism
@@ -20,30 +20,21 @@ Signed-off-by: Florian Eckert <fe@dev.tdt.de>
 [reword commit message, move hotplug executable to /usr/libexec]
 Signed-off-by: Jo-Philipp Wich <jo@mein.io>
 ---
- package/network/services/openvpn/Makefile     | 20 ++++++++++--
+ package/network/services/openvpn/Makefile     | 18 ++++++++++-
  .../files/etc/hotplug.d/openvpn/01-user       | 32 +++++++++++++++++++
  .../services/openvpn/files/etc/openvpn.user   | 11 +++++++
  .../services/openvpn/files/openvpn.init       | 13 ++++++--
  .../services/openvpn/files/openvpn.options    |  3 --
  .../openvpn/files/usr/libexec/openvpn-hotplug | 10 ++++++
- 6 files changed, 81 insertions(+), 8 deletions(-)
+ 6 files changed, 80 insertions(+), 7 deletions(-)
  create mode 100644 package/network/services/openvpn/files/etc/hotplug.d/openvpn/01-user
  create mode 100644 package/network/services/openvpn/files/etc/openvpn.user
  create mode 100644 package/network/services/openvpn/files/usr/libexec/openvpn-hotplug
 
 diff --git a/package/network/services/openvpn/Makefile b/package/network/services/openvpn/Makefile
-index 5f102d967d9f..f1170bbd37dd 100644
+index 33da568..1a9cfed 100644
 --- a/package/network/services/openvpn/Makefile
 +++ b/package/network/services/openvpn/Makefile
-@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
- PKG_NAME:=openvpn
- 
- PKG_VERSION:=2.4.7
--PKG_RELEASE:=2
-+PKG_RELEASE:=3
- 
- PKG_SOURCE_URL:=\
- 	https://build.openvpn.net/downloads/releases/ \
 @@ -102,6 +102,7 @@ endef
  
  define Package/openvpn-$(BUILD_VARIANT)/conffiles
@@ -85,7 +76,7 @@ index 5f102d967d9f..f1170bbd37dd 100644
  		$(1)/usr/share/openvpn/openvpn.options
 diff --git a/package/network/services/openvpn/files/etc/hotplug.d/openvpn/01-user b/package/network/services/openvpn/files/etc/hotplug.d/openvpn/01-user
 new file mode 100644
-index 000000000000..6d45f0b7c690
+index 0000000..6d45f0b
 --- /dev/null
 +++ b/package/network/services/openvpn/files/etc/hotplug.d/openvpn/01-user
 @@ -0,0 +1,32 @@
@@ -123,7 +114,7 @@ index 000000000000..6d45f0b7c690
 +exit 0
 diff --git a/package/network/services/openvpn/files/etc/openvpn.user b/package/network/services/openvpn/files/etc/openvpn.user
 new file mode 100644
-index 000000000000..a77566556a9d
+index 0000000..a775665
 --- /dev/null
 +++ b/package/network/services/openvpn/files/etc/openvpn.user
 @@ -0,0 +1,11 @@
@@ -139,7 +130,7 @@ index 000000000000..a77566556a9d
 +# $INSTANCE  Name of the openvpn instance which went up or down
 +
 diff --git a/package/network/services/openvpn/files/openvpn.init b/package/network/services/openvpn/files/openvpn.init
-index a7d35d1a985e..a560b89ff243 100644
+index a7d35d1..a560b89 100644
 --- a/package/network/services/openvpn/files/openvpn.init
 +++ b/package/network/services/openvpn/files/openvpn.init
 @@ -73,13 +73,17 @@ openvpn_add_instance() {
@@ -187,7 +178,7 @@ index a7d35d1a985e..a560b89ff243 100644
  
  start_service() {
 diff --git a/package/network/services/openvpn/files/openvpn.options b/package/network/services/openvpn/files/openvpn.options
-index 2da563968c12..5d7a387cd3c2 100644
+index 2da5639..5d7a387 100644
 --- a/package/network/services/openvpn/files/openvpn.options
 +++ b/package/network/services/openvpn/files/openvpn.options
 @@ -25,7 +25,6 @@ dev
@@ -216,7 +207,7 @@ index 2da563968c12..5d7a387cd3c2 100644
  verify_client_cert
 diff --git a/package/network/services/openvpn/files/usr/libexec/openvpn-hotplug b/package/network/services/openvpn/files/usr/libexec/openvpn-hotplug
 new file mode 100644
-index 000000000000..9235fbacfe96
+index 0000000..9235fba
 --- /dev/null
 +++ b/package/network/services/openvpn/files/usr/libexec/openvpn-hotplug
 @@ -0,0 +1,10 @@
@@ -230,3 +221,6 @@ index 000000000000..9235fbacfe96
 +export ACTION=$ACTION
 +export INSTANCE=$INSTANCE
 +exec /sbin/hotplug-call openvpn "$@"
+-- 
+2.31.1
+
