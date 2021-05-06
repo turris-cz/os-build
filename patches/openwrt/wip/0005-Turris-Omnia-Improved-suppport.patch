@@ -1,16 +1,16 @@
-From df290c23478e80e17fff07902f22943cbac14b3c Mon Sep 17 00:00:00 2001
+From 1839e05ac6481dd1b4b6c26ee33b73db6da95561 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Fri, 22 Feb 2019 08:30:39 +0100
 Subject: [PATCH] Turris Omnia: Improved suppport
 
 ---
  target/linux/mvebu/image/Config.in            |   5 +
- ...nia-Add-separate-DTS-for-SFP-support.patch | 903 ++++++++++++++++++
+ ...nia-Add-separate-DTS-for-SFP-support.patch | 915 ++++++++++++++++++
  ...Omnia-second-ethernet-connection-to-.patch |  39 +
  .../8890-turris-omnia-led-driver.patch        | 323 +++++++
- ...91-turris-omnia-custom-led-functions.patch | 269 ++++++
+ ...91-turris-omnia-custom-led-functions.patch | 269 +++++
  ...8892-turris-omnia-enable-leds-in-dts.patch | 102 ++
- 6 files changed, 1641 insertions(+)
+ 6 files changed, 1653 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
  create mode 100644 target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch
  create mode 100644 target/linux/mvebu/patches-4.14/8890-turris-omnia-led-driver.patch
@@ -18,7 +18,7 @@ Subject: [PATCH] Turris Omnia: Improved suppport
  create mode 100644 target/linux/mvebu/patches-4.14/8892-turris-omnia-enable-leds-in-dts.patch
 
 diff --git a/target/linux/mvebu/image/Config.in b/target/linux/mvebu/image/Config.in
-index 24c0042a6a..cb6af85ebf 100644
+index 24c0042..cb6af85 100644
 --- a/target/linux/mvebu/image/Config.in
 +++ b/target/linux/mvebu/image/Config.in
 @@ -1,5 +1,10 @@
@@ -34,10 +34,10 @@ index 24c0042a6a..cb6af85ebf 100644
  	prompt "Turris MOX kernel extensions"
 diff --git a/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch b/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
 new file mode 100644
-index 0000000000..5b55b55c8f
+index 0000000..4dd1e2c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8888-Turris-Omnia-Add-separate-DTS-for-SFP-support.patch
-@@ -0,0 +1,903 @@
+@@ -0,0 +1,915 @@
 +From bfc96ed32855077d2959f617aa285d1ec9fbb07d Mon Sep 17 00:00:00 2001
 +From: Tomas Hlavacek <tmshlvck@gmail.com>
 +Date: Sat, 11 Aug 2018 21:21:50 +0200
@@ -72,11 +72,13 @@ index 0000000000..5b55b55c8f
 + create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
 + rename arch/arm/boot/dts/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (91%)
 +
-+--- a/arch/arm/boot/dts/Makefile
-++++ b/arch/arm/boot/dts/Makefile
-+@@ -1029,7 +1029,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++Index: linux-4.14.231/arch/arm/boot/dts/Makefile
++===================================================================
++--- linux-4.14.231.orig/arch/arm/boot/dts/Makefile
+++++ linux-4.14.231/arch/arm/boot/dts/Makefile
++@@ -1028,7 +1028,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++ 	armada-385-linksys-rango.dtb \
 + 	armada-385-linksys-shelby.dtb \
-+ 	armada-385-linksys-venom.dtb \
 + 	armada-385-synology-ds116.dtb \
 +-	armada-385-turris-omnia.dtb \
 ++	armada-385-turris-omnia-phy.dtb \
@@ -84,8 +86,10 @@ index 0000000000..5b55b55c8f
 + 	armada-388-clearfog.dtb \
 + 	armada-388-clearfog-base.dtb \
 + 	armada-388-clearfog-pro.dtb \
++Index: linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
++===================================================================
 +--- /dev/null
-++++ b/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
+++++ linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
 +@@ -0,0 +1,26 @@
 ++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
 ++/*
@@ -113,8 +117,10 @@ index 0000000000..5b55b55c8f
 ++        phy-mode = "sgmii";
 ++        phy = <&phy1>;
 ++};
++Index: linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
++===================================================================
 +--- /dev/null
-++++ b/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
+++++ linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
 +@@ -0,0 +1,27 @@
 ++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
 ++/*
@@ -143,9 +149,11 @@ index 0000000000..5b55b55c8f
 ++	managed = "in-band-status";
 ++	sfp = <&sfp>;
 ++};
-+--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
++Index: linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia.dts
++===================================================================
++--- linux-4.14.231.orig/arch/arm/boot/dts/armada-385-turris-omnia.dts
 ++++ /dev/null
-+@@ -1,392 +0,0 @@
++@@ -1,393 +0,0 @@
 +-/*
 +- * Device Tree file for the Turris Omnia
 +- *
@@ -417,6 +425,7 @@ index 0000000000..5b55b55c8f
 +-		status = "okay";
 +-		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
 +-		reg = <1>;
++-		marvell,reg-init = <3 18 0 0x4985>;
 +-
 +-		/* irq is connected to &pcawan pin 7 */
 +-	};
@@ -538,9 +547,11 @@ index 0000000000..5b55b55c8f
 +-	pinctrl-0 = <&uart1_pins>;
 +-	status = "okay";
 +-};
++Index: linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++===================================================================
 +--- /dev/null
-++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+@@ -0,0 +1,400 @@
+++++ linux-4.14.231/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++@@ -0,0 +1,401 @@
 ++/*
 ++ * Device Tree file for the Turris Omnia
 ++ *
@@ -820,6 +831,7 @@ index 0000000000..5b55b55c8f
 ++		status = "disabled";
 ++		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
 ++		reg = <1>;
+++		marvell,reg-init = <3 18 0 0x4985>;
 ++
 ++		/* irq is connected to &pcawan pin 7 */
 ++	};
@@ -943,7 +955,7 @@ index 0000000000..5b55b55c8f
 ++};
 diff --git a/target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch b/target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch
 new file mode 100644
-index 0000000000..fc7f13eafc
+index 0000000..fc7f13e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8889-Reenable-Turris-Omnia-second-ethernet-connection-to-.patch
 @@ -0,0 +1,39 @@
@@ -988,7 +1000,7 @@ index 0000000000..fc7f13eafc
 +
 diff --git a/target/linux/mvebu/patches-4.14/8890-turris-omnia-led-driver.patch b/target/linux/mvebu/patches-4.14/8890-turris-omnia-led-driver.patch
 new file mode 100644
-index 0000000000..477370d4b1
+index 0000000..477370d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8890-turris-omnia-led-driver.patch
 @@ -0,0 +1,323 @@
@@ -1317,7 +1329,7 @@ index 0000000000..477370d4b1
 ++
 diff --git a/target/linux/mvebu/patches-4.14/8891-turris-omnia-custom-led-functions.patch b/target/linux/mvebu/patches-4.14/8891-turris-omnia-custom-led-functions.patch
 new file mode 100644
-index 0000000000..739d30c027
+index 0000000..739d30c
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8891-turris-omnia-custom-led-functions.patch
 @@ -0,0 +1,269 @@
@@ -1592,7 +1604,7 @@ index 0000000000..739d30c027
 + 		/* Set AUTO for the LED */
 diff --git a/target/linux/mvebu/patches-4.14/8892-turris-omnia-enable-leds-in-dts.patch b/target/linux/mvebu/patches-4.14/8892-turris-omnia-enable-leds-in-dts.patch
 new file mode 100644
-index 0000000000..c162f2270b
+index 0000000..c162f22
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/8892-turris-omnia-enable-leds-in-dts.patch
 @@ -0,0 +1,102 @@
@@ -1699,5 +1711,5 @@ index 0000000000..c162f2270b
 + 
 + 		i2c@1 {
 -- 
-2.24.1
+2.31.1
 
