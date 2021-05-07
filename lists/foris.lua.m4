@@ -39,4 +39,8 @@ end
 
 Install("lighttpd-https-cert", { priority = 40 })
 
+-- Workaround how to install foris-controller-nextcloud-module
+-- because there is no nextcloud-plugin
+Install("foris-controller-nextcloud-module", { condition = {"nextcloud", "foris-controller-storage-module"} })
+
 _END_FEATURE_GUARD_
