@@ -165,3 +165,11 @@ if not version_match or not installed or
 		(installed["pkglists"] and version_match(installed["pkglists"].version, "<1.6.0")) then
 	Install("fix-pkglists-hardening-options")
 end
+
+-- Fix empty nextcloud config if it was created by nextcloud cron.
+-- If empty config is detected it will remove it.
+if not version_match or not installed or
+		(installed["nextcloud"] and version_match(installed["nextcloud"].version, "<19.0.3-3")) then
+	Install("fix-nextcloud-conf")
+	Package("fix-nextcloud-conf", { replan = "finished" })
+end
