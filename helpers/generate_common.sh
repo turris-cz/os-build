@@ -17,7 +17,7 @@ USIGN_VERSION=f1f65026a94137c91b5466b149ef3ea3f20091e9
 UPDATER_VERSION=master
 
 SRC_USIGN="https://git.openwrt.org/project/usign.git"
-SRC_UPDATER="https://gitlab.labs.nic.cz/turris/updater/updater.git"
+SRC_UPDATER="https://gitlab.nic.cz/turris/updater/updater.git"
 
 # Git puller helper function (git_pull output_path source_url target)
 git_get() {
