@@ -25,22 +25,30 @@ if not version_match or not self_version or version_match(self_version, "<64.0")
 		subdirs = { "base", "core", "packages", "turrispackages"}
 	})
 
-	Install('updater-ng', 'tos3to4-early', { critical = true })
-
-	Package('tos3to4-early', {
+	Install('updater-ng', { critical = true })
+	Package('updater-ng', {
 		replan = 'immediate',
-		deps = { 'libgcc', 'busybox', 'updater-ng' }
+		deps = { 'libgcc', 'busybox' }
 	})
 	--[[
 	Updater package does not depend on libgcc but it requires it and dependency
 	breaks otherwise.
-
-	We added additional dependency in form of package tos3to4-early which contains
-	script to migrate updater configuration. That means that when new updater is
-	being installed the configuration is also migrated at the same time.
 	]]
 
 else
+
+	if version_match(installed["tos3to4"].version, "<2.0.0") then
+		--[[
+		The first phase is to install new version of updater-ng. This is a second
+		phase where we install tos3to4-early that migrates updater's configuration
+		before we perform full system update.
+		The tos3to4-early is downloaded from HBS no matter what branch user has
+		configured as migration itself is performed by it later on and in case of
+		no settings HBS is the default.
+		]]
+		Install('tos3to4-early', { critical = true })
+		Package('tos3to4-early', { replan = 'immediate' })
+	end
 
 	--[[
 	The process of update is that we first update only updater and minimal system
@@ -58,6 +66,15 @@ else
 	solver later when migration is completed. User have to modify its requests.
 	]]
 	Mode("optional_installs")
+
+	--[[
+	We install newer version of tos3to4 that migrates switch configuration. The
+	migration creates situation where we are running on kernel without DSA support
+	and without switch-config tools and thus we can't configure LAN in any way.
+	The solution is to just unconditionally reboot router after migration is
+	finished.
+	]]
+	Package("tos3to4", { reboot = "finished" })
 
 end
 
