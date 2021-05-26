@@ -45,9 +45,20 @@ else
 		The tos3to4-early is downloaded from HBS no matter what branch user has
 		configured as migration itself is performed by it later on and in case of
 		no settings HBS is the default.
+		With Turris OS 5.2.0 the package lists were migrated to separate file. The
+		fixup scripts were created to migrate it but trigger for them won't work
+		for us here as we install latest version of pkglists as part of this
+		immediate replan.
 		]]
-		Install('tos3to4-early', { critical = true })
+		Install('tos3to4-early', 'fix-pkglists-hardening-options', { critical = true })
 		Package('tos3to4-early', { replan = 'immediate' })
+		Package('fix-pkglists-hardening-options', {
+			replan = 'immediate',
+			deps = 'fix-pkglists-options'
+		})
+		Pacakge("fix-pkglists-options", {
+			deps = 'tos3to4-early'
+		})
 	end
 
 	--[[
@@ -63,7 +74,7 @@ else
 	going to proceed and that result is working system.
 
 	This does not solve problem ultimately. It instead moves problem for user to
-	solver later when migration is completed. User have to modify its requests.
+	solve later when migration is completed. User have to modify its requests.
 	]]
 	Mode("optional_installs")
 
