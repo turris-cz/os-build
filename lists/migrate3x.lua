@@ -50,7 +50,7 @@ else
 		for us here as we install latest version of pkglists as part of this
 		immediate replan.
 		]]
-		Install('tos3to4-early', 'fix-pkglists-hardening-options', { critical = true })
+		Install('tos3to4-early', 'fix-pkglists-hardening-options', { critical = true, priority = 100 })
 		Package('tos3to4-early', { replan = 'immediate' })
 		Package('fix-pkglists-hardening-options', {
 			replan = 'immediate',
@@ -59,6 +59,18 @@ else
 		Package("fix-pkglists-options", {
 			deps = 'tos3to4-early'
 		})
+
+		--[[
+		tos3to4-early requires switch-branch but that depends on
+		updater-supervisor and that pulls in load of dependencies including
+		cronie. The issue is that cronie collides with vixe-cron. By making
+		updater-supervisor virtual we skip it for now and thus we prevent the
+		collision.
+		It has to be virtual till we install package we are doing replan on here.
+		]]
+		if not installed["fix-pkglists-hardening-options"] then
+			Package("updater-supervisor", { virtual = true })
+		end
 	end
 
 	--[[
