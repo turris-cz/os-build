@@ -56,7 +56,7 @@ else
 			replan = 'immediate',
 			deps = 'fix-pkglists-options'
 		})
-		Pacakge("fix-pkglists-options", {
+		Package("fix-pkglists-options", {
 			deps = 'tos3to4-early'
 		})
 	end
