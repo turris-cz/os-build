@@ -153,7 +153,10 @@ end
 -- Package dhparam was removed and replaced by turris-cagen ability to generate
 -- dhparam instead. These files are expected to be in different locations so we
 -- have to fix paths in existing server configurations. This does exactly that.
-if installed and installed["dhparam"] then
+-- With Turris OS 5.2.0 this fix was released and it turns out that it was way
+-- cautious. We removed some unnecessary checks and we reapply it with 5.2.1
+-- version again.
+if installed and os_release and (installed["foris-controller-openvpn-module"] and version_match(os_release['VERSION'], "<5.2.1")) then
 	Install("fix-dhparam-to-cagen")
 	Package("fix-dhparam-to-cagen", { replan = "finished" })
 end
