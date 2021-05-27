@@ -19,7 +19,7 @@ local db = {
 	{ -- Qualcomm Atheros QCA986x/988x 802.11ac Wireless Network Adapter
 		vendor = 0x168c,
 		device = 0x003c,
-		packages = {"kmod-ath10k"}
+		packages = {"kmod-ath10k", "ath10k-firmware-qca988x"}
 	},
 	{ -- MEDIATEK Corp. Device 7612
 		vendor = 0x14c3,
