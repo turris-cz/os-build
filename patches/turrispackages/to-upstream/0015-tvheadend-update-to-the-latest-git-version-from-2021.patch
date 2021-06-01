@@ -1,0 +1,353 @@
+From db269a8f7bf917a507d79ae86af2daeac725de6e Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 1 Jun 2021 17:43:20 +0200
+Subject: [PATCH] tvheadend: update to the latest git version from 2021-05-31
+
+Unfortunately, it seems that there will not be released a new version of
+TVHeadend anytime soon, even though there are many changes in master
+branch and the tvheadend project was given to another person, we can
+update it to the latest development version and remove patches.
+
+I think the advantages of the reason above could be that:
+- less bugs (of course), when 4.2.8 was released in January 2019
+- more features, more updates!
+- bugs can be reported to upstream and they can cooperate
+
+For now, I also added libdvbcsa as dependency otherwise compilation
+fails and disable libav.
+
+Fixes also:
+src/plumbing/transcoding.c:26:10: fatal error: libavresample/avresample.h: No such file or directory
+ #include <libavresample/avresample.h>
+          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+
+Compile tested for Turris MOX, OpenWrt 21.02.
+---
+ multimedia/tvheadend/Makefile                 |  15 +--
+ .../0001-Fix-compilation-for-OpenWrt.patch    |  36 ------
+ .../patches/0001-Load-OpenSSL-engines.patch   | 111 ------------------
+ ...-1.1-compilation-without-deprecated-.patch | 109 -----------------
+ 4 files changed, 8 insertions(+), 263 deletions(-)
+ delete mode 100644 multimedia/tvheadend/patches/0001-Fix-compilation-for-OpenWrt.patch
+ delete mode 100644 multimedia/tvheadend/patches/0001-Load-OpenSSL-engines.patch
+ delete mode 100644 multimedia/tvheadend/patches/0002-main-Fix-OpenSSL-1.1-compilation-without-deprecated-.patch
+
+diff --git a/multimedia/tvheadend/Makefile b/multimedia/tvheadend/Makefile
+index 54591d402..4dd905488 100644
+--- a/multimedia/tvheadend/Makefile
++++ b/multimedia/tvheadend/Makefile
+@@ -8,12 +8,13 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=tvheadend
+-PKG_VERSION:=4.2.8
+-PKG_RELEASE:=5
++PKG_RELEASE:=1
+ 
+-PKG_SOURCE_URL:=https://codeload.github.com/tvheadend/tvheadend/tar.gz/v$(PKG_VERSION)?
+-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_HASH=1aef889373d5fad2a7bd2f139156d4d5e34a64b6d38b87b868a2df415f01f7ad
++PKG_SOURCE_URL:=https://github.com/tvheadend/tvheadend.git
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_DATE:=2021-05-31
++PKG_SOURCE_VERSION:=9476680f88d3c2363f86bdb1d4ea93dd3c7d2c95
++PKG_MIRROR_HASH:=9c0ca4eb697d0c3810314014f4bf8e31d83e9990193d8f6f5e1354480838fab9
+ 
+ PKG_MAINTAINER:=CZ.NIC <packaging@turris.cz>
+ PKG_LICENSE:=GPL-3.0
+@@ -30,7 +31,7 @@ define Package/tvheadend
+   SECTION:=multimedia
+   CATEGORY:=Multimedia
+   TITLE:=TV streaming server and recorder
+-  DEPENDS:=+libopenssl +librt +zlib +TVHEADEND_AVAHI_SUPPORT:libavahi-client $(ICONV_DEPENDS) +libffmpeg +libx264 +libx265 +libpcre2
++  DEPENDS:=+libopenssl +librt +zlib +TVHEADEND_AVAHI_SUPPORT:libavahi-client $(ICONV_DEPENDS) +libffmpeg +libx264 +libx265 +libpcre2 +libdvbcsa
+   URL:=https://tvheadend.org
+ endef
+ 
+@@ -69,7 +70,7 @@ endif
+ CONFIGURE_ARGS += \
+ 	--arch=$(ARCH) \
+ 	--disable-dbus_1 \
+-	--enable-libav \
++	--disable-libav \
+ 	--disable-bundle \
+ 	--disable-uriparser \
+ 	--disable-ffmpeg_static
+diff --git a/multimedia/tvheadend/patches/0001-Fix-compilation-for-OpenWrt.patch b/multimedia/tvheadend/patches/0001-Fix-compilation-for-OpenWrt.patch
+deleted file mode 100644
+index a31473e94..000000000
+--- a/multimedia/tvheadend/patches/0001-Fix-compilation-for-OpenWrt.patch
++++ /dev/null
+@@ -1,36 +0,0 @@
+-From c8eb1a8326954c437ce32aa918d8d21662ff2344 Mon Sep 17 00:00:00 2001
+-From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+-Date: Mon, 25 Nov 2019 23:55:25 +0100
+-Subject: [PATCH] Fix compilation for OpenWrt
+-
+-Fixes
+-In file included from src/tvheadend.h:31:0,
+-                  from src/intlconv.c:2:
+-/build/staging_dir/toolchain-arm_cortex-a9+vfpv3_gcc-7.3.0_musl_eabi/include/fortify/string.h: In function 'mempcpy':
+-/build/staging_dir/toolchain-arm_cortex-a9+vfpv3_gcc-7.3.0_musl_eabi/include/fortify/string.h:149:9: error: called object '__orig_mempcpy' is not a function or function pointer
+-return __orig_mempcpy(__d, __s, __n);
+----
+- src/tvheadend.h | 5 -----
+- 1 file changed, 5 deletions(-)
+-
+---- a/src/tvheadend.h
+-+++ b/src/tvheadend.h
+-@@ -20,8 +20,6 @@
+- 
+- #include "build.h"
+- 
+--#define _GNU_SOURCE
+--#include <pthread.h>
+- #include <stdlib.h>
+- #include <stdio.h>
+- #include <errno.h>
+-@@ -32,9 +30,6 @@
+- #include <assert.h>
+- #include <unistd.h>
+- #include <limits.h>
+--#if ENABLE_LOCKOWNER || ENABLE_ANDROID
+--#include <sys/syscall.h>
+--#endif
+- #include "queue.h"
+- #include "tvh_string.h"
+- #include "hts_strtab.h"
+diff --git a/multimedia/tvheadend/patches/0001-Load-OpenSSL-engines.patch b/multimedia/tvheadend/patches/0001-Load-OpenSSL-engines.patch
+deleted file mode 100644
+index 690cd8170..000000000
+--- a/multimedia/tvheadend/patches/0001-Load-OpenSSL-engines.patch
++++ /dev/null
+@@ -1,111 +0,0 @@
+-From 7772e01bba614215430b0907b0f572683fd2558f Mon Sep 17 00:00:00 2001
+-From: Josef Schlehofer <josef.schlehofer@nic.cz>
+-Date: Sun, 10 Mar 2019 10:26:11 +0100
+-Subject: [PATCH] Load OpenSSL engines
+-
+----
+- src/main.c | 26 ++++++++++++++++----------
+- 1 file changed, 16 insertions(+), 10 deletions(-)
+-
+---- a/src/main.c
+-+++ b/src/main.c
+-@@ -98,7 +98,7 @@ typedef struct {
+-   enum {
+-     OPT_STR,
+-     OPT_INT,
+--    OPT_BOOL, 
+-+    OPT_BOOL,
+-     OPT_STR_LIST,
+-   }          type;
+-   void       *param;
+-@@ -526,7 +526,7 @@ show_usage
+-       free(desc);
+-     }
+-   }
+--  printf("%s", 
+-+  printf("%s",
+-          _("\n"
+-            "For more information please visit the Tvheadend website:\n"
+-            "https://tvheadend.org\n"));
+-@@ -615,7 +615,7 @@ mtimer_thread(void *aux)
+-     next = now + sec2mono(3600);
+- 
+-     while((mti = LIST_FIRST(&mtimers)) != NULL) {
+--      
+-+
+-       if (mti->mti_expire > now) {
+-         next = mti->mti_expire;
+-         break;
+-@@ -648,7 +648,7 @@ mtimer_thread(void *aux)
+-     tvh_cond_timedwait(&mtimer_cond, &global_lock, next);
+-     pthread_mutex_unlock(&global_lock);
+-   }
+--  
+-+
+-   return NULL;
+- }
+- 
+-@@ -678,7 +678,7 @@ mainloop(void)
+- 
+-     // TODO: there is a risk that if timers re-insert themselves to
+-     //       the top of the list with a 0 offset we could loop indefinitely
+--    
+-+
+- #if 0
+-     tvhdebug(LS_GTIMER, "now %"PRItime_t, ts.tv_sec);
+-     LIST_FOREACH(gti, &gtimers, gti_link)
+-@@ -686,7 +686,7 @@ mainloop(void)
+- #endif
+- 
+-     while((gti = LIST_FIRST(&gtimers)) != NULL) {
+--      
+-+
+-       if (gti->gti_expire > now) {
+-         ts.tv_sec = gti->gti_expire;
+-         break;
+-@@ -1033,12 +1033,12 @@ main(int argc, char **argv)
+-   }
+-   if (opt_log_debug)
+-     log_debug  = opt_log_debug;
+--    
+-+
+-   tvhlog_init(log_level, log_options, opt_logpath);
+-   tvhlog_set_debug(log_debug);
+-   tvhlog_set_trace(log_trace);
+-   tvhinfo(LS_MAIN, "Log started");
+-- 
+-+
+-   signal(SIGPIPE, handle_sigpipe); // will be redundant later
+-   signal(SIGILL, handle_sigill);   // see handler..
+- 
+-@@ -1144,7 +1144,7 @@ main(int argc, char **argv)
+-     tvhlog_options &= ~TVHLOG_OPT_STDERR;
+-   if (!isatty(2))
+-     tvhlog_options &= ~TVHLOG_OPT_DECORATE;
+--  
+-+
+-   /* Initialise clock */
+-   pthread_mutex_lock(&global_lock);
+-   __mdispatch_clock = getmonoclock();
+-@@ -1159,6 +1159,12 @@ main(int argc, char **argv)
+-   OPENSSL_config(NULL);
+-   SSL_load_error_strings();
+-   SSL_library_init();
+-+
+-+  #ifndef OPENSSL_NO_ENGINE
+-+    /* ENGINE init */
+-+    ENGINE_load_builtin_engines();
+-+  #endif
+-+
+-   /* Rand seed */
+-   randseed.thread_id = (void *)main_tid;
+-   gettimeofday(&randseed.tv, NULL);
+-@@ -1345,7 +1351,7 @@ main(int argc, char **argv)
+- 
+-   if(opt_fork)
+-     unlink(opt_pidpath);
+--    
+-+
+-   /* OpenSSL - welcome to the "cleanup" hell */
+-   ENGINE_cleanup();
+-   RAND_cleanup();
+diff --git a/multimedia/tvheadend/patches/0002-main-Fix-OpenSSL-1.1-compilation-without-deprecated-.patch b/multimedia/tvheadend/patches/0002-main-Fix-OpenSSL-1.1-compilation-without-deprecated-.patch
+deleted file mode 100644
+index 20197cb97..000000000
+--- a/multimedia/tvheadend/patches/0002-main-Fix-OpenSSL-1.1-compilation-without-deprecated-.patch
++++ /dev/null
+@@ -1,109 +0,0 @@
+-From b4b93a2844e79c0394d130b02541a5cfd363fa81 Mon Sep 17 00:00:00 2001
+-From: Josef Schlehofer <josef.schlehofer@nic.cz>
+-Date: Sun, 10 Mar 2019 10:33:14 +0100
+-Subject: [PATCH] main: Fix OpenSSL 1.1 compilation without deprecated APIs
+-
+----
+- src/httpc.c | 12 ++++++++----
+- src/main.c  | 16 ++++++++++++----
+- 2 files changed, 20 insertions(+), 8 deletions(-)
+-
+---- a/src/httpc.c
+-+++ b/src/httpc.c
+-@@ -56,7 +56,7 @@ struct http_client_ssl {
+-   char    *rbio_buf;
+-   size_t   rbio_size;
+-   size_t   rbio_pos;
+--  
+-+
+-   BIO     *wbio;
+-   char    *wbio_buf;
+-   size_t   wbio_size;
+-@@ -890,7 +890,7 @@ http_client_data_received( http_client_t
+-     if (!hdr && hc->hc_rpos >= hc->hc_csize)
+-       return 1;
+-     return 0;
+--  }  
+-+  }
+- 
+-   csize = hc->hc_csize == (size_t)-1 ? 0 : hc->hc_csize;
+-   l = len;
+-@@ -1505,7 +1505,11 @@ http_client_reconnect
+-   if (strcasecmp(scheme, "https") == 0 || strcasecmp(scheme, "rtsps") == 0) {
+-     ssl = calloc(1, sizeof(*ssl));
+-     hc->hc_ssl = ssl;
+-+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+-     ssl->ctx   = SSL_CTX_new(SSLv23_client_method());
+-+#else
+-+    ssl->ctx   = SSL_CTX_new(TLS_client_method());
+-+#endif
+-     if (ssl->ctx == NULL) {
+-       tvherror(LS_HTTPC, "%04X: Unable to get SSL_CTX", shortid(hc));
+-       goto err1;
+-@@ -1552,7 +1556,7 @@ errnval:
+- }
+- 
+- http_client_t *
+--http_client_connect 
+-+http_client_connect
+-   ( void *aux, http_ver_t ver, const char *scheme,
+-     const char *host, int port, const char *bindaddr )
+- {
+-@@ -1593,7 +1597,7 @@ http_client_register( http_client_t *hc
+- {
+-   assert(hc->hc_data_received || hc->hc_conn_closed || hc->hc_data_complete);
+-   assert(hc->hc_efd == NULL);
+--  
+-+
+-   pthread_mutex_lock(&http_lock);
+- 
+-   TAILQ_INSERT_TAIL(&http_clients, hc, hc_link);
+---- a/src/main.c
+-+++ b/src/main.c
+-@@ -83,7 +83,9 @@
+- #include <openssl/conf.h>
+- #include <openssl/err.h>
+- #include <openssl/rand.h>
+-+#ifndef OPENSSL_NO_ENGINE
+- #include <openssl/engine.h>
+-+#endif
+- 
+- pthread_t main_tid;
+- 
+-@@ -1155,10 +1157,12 @@ main(int argc, char **argv)
+-   sigprocmask(SIG_BLOCK, &set, NULL);
+-   trap_init(argv[0]);
+- 
+--  /* SSL library init */
+--  OPENSSL_config(NULL);
+--  SSL_load_error_strings();
+--  SSL_library_init();
+-+  #if OPENSSL_VERSION_NUMBER < 0x10100000L
+-+    /* SSL library init */
+-+    OPENSSL_config(NULL);
+-+    SSL_load_error_strings();
+-+    SSL_library_init();
+-+  #endif
+- 
+-   #ifndef OPENSSL_NO_ENGINE
+-     /* ENGINE init */
+-@@ -1352,8 +1356,11 @@ main(int argc, char **argv)
+-   if(opt_fork)
+-     unlink(opt_pidpath);
+- 
+-+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+-   /* OpenSSL - welcome to the "cleanup" hell */
+-+  #ifndef OPENSSL_NO_ENGINE
+-   ENGINE_cleanup();
+-+  #endif
+-   RAND_cleanup();
+-   CRYPTO_cleanup_all_ex_data();
+-   EVP_cleanup();
+-@@ -1367,6 +1374,7 @@ main(int argc, char **argv)
+-   sk_SSL_COMP_free(SSL_COMP_get_compression_methods());
+- #endif
+-   /* end of OpenSSL cleanup code */
+-+#endif
+- 
+- #if ENABLE_DBUS_1
+-   extern void dbus_shutdown(void);
+-- 
+2.25.1
+
