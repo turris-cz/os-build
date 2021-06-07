@@ -77,9 +77,9 @@ if env_devices then
 	for device in env_devices:gmatch('[^,]+') do
 		local tp, class = device:match('([^:]+):(.*)')
 		if tp == "usb" then
-			table.insert(usb_device, class)
+			table.insert(usb_devices, class)
 		elseif tp == "pci" then
-			table.insert(pci_device, class)
+			table.insert(pci_devices, class)
 		else
 			WARN("Invalid device type, ignoring: " .. device)
 		end
