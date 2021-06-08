@@ -1,0 +1,41 @@
+From a625241e2235045972186997e45cf53a3a0a9557 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
+Date: Mon, 7 Jun 2021 19:25:06 +0200
+Subject: [PATCH] base-files: fix enabled for services with only STOP
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There are services that have only STOP value set. They are executed only
+on shutdown and it is common to use them for system cleanup. There is
+one such service shipped directly with base-files, it is 'umount'. Those
+work the same way as those with START but enabled does not report them
+as enabled although it should have as they can be enabled and disabled
+as any other service.
+
+Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+---
+ package/base-files/files/etc/rc.common | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/package/base-files/files/etc/rc.common b/package/base-files/files/etc/rc.common
+index 75dbeedf34..4e0ad39e2e 100755
+--- a/package/base-files/files/etc/rc.common
++++ b/package/base-files/files/etc/rc.common
+@@ -55,7 +55,12 @@ enable() {
+ 
+ enabled() {
+ 	name="$(basename "${initscript}")"
+-	[ -x "$IPKG_INSTROOT/etc/rc.d/S${START}${name##S[0-9][0-9]}" ]
++	name="${name##[SK][0-9][0-9]}"
++	{
++		[ -z "${START:-}" ] || [ -x "$IPKG_INSTROOT/etc/rc.d/S${START}$name" ]
++	} && {
++		[ -z "${STOP:-}" ] || [ -x "$IPKG_INSTROOT/etc/rc.d/K${STOP}$name" ]
++	}
+ }
+ 
+ depends() {
+-- 
+2.31.1
+
