@@ -67,12 +67,6 @@ local db = {
 		class = {"broadband"}
 	},
 	-- WiFi dongles --------------------------------------------------------------
-	{ -- Realtek Semiconductor Corp. RTL8812AU 802.11a/b/g/n/ac 2T2R DB WLAN Adapter
-		vendor = 0x0bda,
-		product = 0x8812,
-		packages = {"kmod-rtl8812au-ct"},
-		class = {"wifi"}
-	},
 	{ -- Ralink Technology, Corp. RT2870/RT3070 Wireless Adapter
 		vendor = 0x148f,
 		product = 0x3070,
