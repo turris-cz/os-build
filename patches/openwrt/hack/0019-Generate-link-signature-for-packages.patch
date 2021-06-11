@@ -1,4 +1,4 @@
-From 69e54105161b74714b537ab3b80b0894bfa90fcf Mon Sep 17 00:00:00 2001
+From 4002bcfdb2474cc57746ec505735eeed92c77295 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
 Date: Mon, 15 Jun 2020 21:38:58 +0200
 Subject: [PATCH] Generate link signature for packages
@@ -14,12 +14,12 @@ packages that are installed with same version from older snapshot can
 break this dependency.
 ---
  include/package-ipkg.mk       |  8 ++++++++
- scripts/gen-link-signature.sh | 23 +++++++++++++++++++++++
- 2 files changed, 31 insertions(+)
+ scripts/gen-link-signature.sh | 22 ++++++++++++++++++++++
+ 2 files changed, 30 insertions(+)
  create mode 100755 scripts/gen-link-signature.sh
 
 diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
-index 03c0383..7d5adcc 100644
+index 03c0383..866de94 100644
 --- a/include/package-ipkg.mk
 +++ b/include/package-ipkg.mk
 @@ -95,6 +95,12 @@ ifneq ($(PKG_NAME),toolchain)
@@ -30,7 +30,7 @@ index 03c0383..7d5adcc 100644
 +	LINK_SIGNATURE="$$$$( \
 +		export READELF=$(TARGET_CROSS)readelf; \
 +		$(SCRIPT_DIR)/gen-link-signature.sh "$$(IDIR_$(1))"; \
-+	)";
++	)"
 +  endef
  endif
  
@@ -48,33 +48,32 @@ index 03c0383..7d5adcc 100644
  		chmod 644 control; \
 diff --git a/scripts/gen-link-signature.sh b/scripts/gen-link-signature.sh
 new file mode 100755
-index 0000000..e54e712
+index 0000000..c46efdc
 --- /dev/null
 +++ b/scripts/gen-link-signature.sh
-@@ -0,0 +1,23 @@
+@@ -0,0 +1,22 @@
 +#!/usr/bin/env bash
 +SELF=${0##*/}
 +
 +READELF="${READELF:-readelf}"
-+TARGETS=$*
 +
-+[ -z "$TARGETS" ] && {
-+  echo "$SELF: no directories / files specified" >&2
-+  echo "usage: $SELF [PATH...]d" >&2
-+  exit 1
++[ -z "$*" ] && {
++	echo "$SELF: no directories / files specified" >&2
++	echo "usage: $SELF [PATH...]" >&2
++	exit 1
 +}
 +
-+find $TARGETS -type f -a -exec file {} \; | \
-+	sed -n -e 's/^\(.*\):.*ELF.*\(executable\|shared object\).*,.*/\1/p' | \
-+	while read -r TARGET; do
-+		# Libraries
-+		"$READELF" -d "$TARGET" | awk '$2 == "(NEEDED)" { print $NF }'
-+		# Dynamic Symbols (undefined that means provided by libraries)
-+		"$READELF" --dyn-syms "$TARGET" | awk '$7 == "UND" && $8 { print $8 }'
-+	done | \
-+	sort -u | \
-+	md5sum | \
-+	cut -d' ' -f1
++find "$@" -type f -a -exec file {} \; | \
++	sed -n -e 's/^\(.*\):.*ELF.*\(executable\|shared object\).*,.*/\1/p' \
++		| while read -r TARGET; do
++			# Libraries
++			"$READELF" -d "$TARGET" | awk '$2 == "(NEEDED)" { print $NF }'
++			# Dynamic Symbols (undefined that means provided by libraries)
++			"$READELF" --dyn-syms "$TARGET" | awk '$7 == "UND" && $8 { print $8 }'
++		done \
++		| sort -u \
++		| md5sum \
++		| cut -d' ' -f1
 -- 
-2.27.0
+2.32.0
 
