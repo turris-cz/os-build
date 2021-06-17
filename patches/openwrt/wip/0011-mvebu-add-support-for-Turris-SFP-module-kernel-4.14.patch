@@ -1,4 +1,4 @@
-From 75668be25f1ca503b597438609bfd3397668f0cb Mon Sep 17 00:00:00 2001
+From 762e522497f403f8432fae77ce87a0a78132e9aa Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Mon, 26 Oct 2020 22:49:05 +0100
 Subject: [PATCH] mvebu: add support for Turris SFP module (kernel 4.14)
@@ -13,11 +13,15 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  ...-support-changing-to-2500base-x-mode.patch |   28 +
  ...upport-changing-between-1000base-x-a.patch |   33 +
  ...3-net-phy-add-support-for-Turris-SFP.patch | 1925 +++++++++++++++++
- 5 files changed, 2209 insertions(+)
+ ...x-update-code-operating-on-hidden-re.patch |  244 +++
+ ...6xxx-support-changing-cmode-on-Topaz.patch |  172 ++
+ 7 files changed, 2625 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
 index 7d23074..23a680a 100644
@@ -2262,6 +2266,434 @@ index 0000000..4b14b19
 + {
 +-- 
 +2.26.2
++
+diff --git a/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch b/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
+new file mode 100644
+index 0000000..e71643f
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
+@@ -0,0 +1,244 @@
++From 05a53fcc3d2d6ba930e858e1fd1c61f20108a010 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Thu, 17 Jun 2021 13:21:34 +0200
++Subject: [PATCH 1/2] net: dsa: mv88e6xxx: update code operating on hidden
++ registers
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++commit 609070133aff1f2b533561758aa97c947fa534c8 upstream.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++This patch moves the functions operating on the hidden debug registers
++into it's own file, port_hidden.c. The functions prefix is renamed from
++mv88e6390_hidden_ to mv88e6xxx_port_hidden_, to be consistent with the
++rest of this driver. The macros are prefixed with MV88E6XXX_ prefix, and
++are changed not to use the BIT() macro nor bit shifts, since the rest of
++the port.h file does not use it.
++
++We also add the support for setting the Block Address field when
++operating hidden registers. Marvell's mdio examples for SERDES settings
++on Topaz use Block Address 0x7 when reading/writing hidden registers,
++and although the specification says that block must be set to 0xf, those
++settings are reachable only with Block Address 0x7.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Tested-by: Vivien Didelot <vivien.didelot@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/Makefile      |  1 +
++ drivers/net/dsa/mv88e6xxx/chip.c        | 56 +-------------------
++ drivers/net/dsa/mv88e6xxx/port.h        | 22 +++++---
++ drivers/net/dsa/mv88e6xxx/port_hidden.c | 69 +++++++++++++++++++++++++
++ 4 files changed, 86 insertions(+), 62 deletions(-)
++ create mode 100644 drivers/net/dsa/mv88e6xxx/port_hidden.c
++
++diff --git a/drivers/net/dsa/mv88e6xxx/Makefile b/drivers/net/dsa/mv88e6xxx/Makefile
++index 58a4a0014e59..00f22edfa9d0 100644
++--- a/drivers/net/dsa/mv88e6xxx/Makefile
+++++ b/drivers/net/dsa/mv88e6xxx/Makefile
++@@ -7,4 +7,5 @@ mv88e6xxx-objs += global1_vtu.o
++ mv88e6xxx-$(CONFIG_NET_DSA_MV88E6XXX_GLOBAL2) += global2.o
++ mv88e6xxx-objs += phy.o
++ mv88e6xxx-objs += port.o
+++mv88e6xxx-objs += port_hidden.o
++ mv88e6xxx-objs += serdes.o
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 2e9d8cfb63b3..333e2cd60440 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -2252,58 +2252,6 @@ static int mv88e6xxx_g1_setup(struct mv88e6xxx_chip *chip)
++ 	return 0;
++ }
++ 
++-/* The mv88e6390 has some hidden registers used for debug and
++- * development. The errata also makes use of them.
++- */
++-static int mv88e6390_hidden_write(struct mv88e6xxx_chip *chip, int port,
++-				  int reg, u16 val)
++-{
++-	u16 ctrl;
++-	int err;
++-
++-	err = mv88e6xxx_port_write(chip, PORT_RESERVED_1A_DATA_PORT,
++-				   PORT_RESERVED_1A, val);
++-	if (err)
++-		return err;
++-
++-	ctrl = PORT_RESERVED_1A_BUSY | PORT_RESERVED_1A_WRITE |
++-	       PORT_RESERVED_1A_BLOCK | port << PORT_RESERVED_1A_PORT_SHIFT |
++-	       reg;
++-
++-	return mv88e6xxx_port_write(chip, PORT_RESERVED_1A_CTRL_PORT,
++-				    PORT_RESERVED_1A, ctrl);
++-}
++-
++-static int mv88e6390_hidden_wait(struct mv88e6xxx_chip *chip)
++-{
++-	return mv88e6xxx_wait(chip, PORT_RESERVED_1A_CTRL_PORT,
++-			      PORT_RESERVED_1A, PORT_RESERVED_1A_BUSY);
++-}
++-
++-
++-static int mv88e6390_hidden_read(struct mv88e6xxx_chip *chip, int port,
++-				  int reg, u16 *val)
++-{
++-	u16 ctrl;
++-	int err;
++-
++-	ctrl = PORT_RESERVED_1A_BUSY | PORT_RESERVED_1A_READ |
++-	       PORT_RESERVED_1A_BLOCK | port << PORT_RESERVED_1A_PORT_SHIFT |
++-	       reg;
++-
++-	err = mv88e6xxx_port_write(chip, PORT_RESERVED_1A_CTRL_PORT,
++-				   PORT_RESERVED_1A, ctrl);
++-	if (err)
++-		return err;
++-
++-	err = mv88e6390_hidden_wait(chip);
++-	if (err)
++-		return err;
++-
++-	return 	mv88e6xxx_port_read(chip, PORT_RESERVED_1A_DATA_PORT,
++-				    PORT_RESERVED_1A, val);
++-}
++-
++ /* Check if the errata has already been applied. */
++ static bool mv88e6390_setup_errata_applied(struct mv88e6xxx_chip *chip)
++ {
++@@ -2312,7 +2260,7 @@ static bool mv88e6390_setup_errata_applied(struct mv88e6xxx_chip *chip)
++ 	u16 val;
++ 
++ 	for (port = 0; port < mv88e6xxx_num_ports(chip); port++) {
++-		err = mv88e6390_hidden_read(chip, port, 0, &val);
+++		err = mv88e6xxx_port_hidden_read(chip, 0xf, port, 0, &val);
++ 		if (err) {
++ 			dev_err(chip->dev,
++ 				"Error reading hidden register: %d\n", err);
++@@ -2345,7 +2293,7 @@ static int mv88e6390_setup_errata(struct mv88e6xxx_chip *chip)
++ 	}
++ 
++ 	for (port = 0; port < mv88e6xxx_num_ports(chip); port++) {
++-		err = mv88e6390_hidden_write(chip, port, 0, 0x01c0);
+++		err = mv88e6xxx_port_hidden_write(chip, 0xf, port, 0, 0x01c0);
++ 		if (err)
++ 			return err;
++ 	}
++diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
++index 091aa0057f1f..bf0b3170d3b0 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.h
+++++ b/drivers/net/dsa/mv88e6xxx/port.h
++@@ -252,14 +252,14 @@
++ #define MV88E6095_PORT_IEEE_PRIO_REMAP_4567	0x19
++ 
++ /* Offset 0x1a: Magic undocumented errata register */
++-#define PORT_RESERVED_1A			0x1a
++-#define PORT_RESERVED_1A_BUSY			BIT(15)
++-#define PORT_RESERVED_1A_WRITE			BIT(14)
++-#define PORT_RESERVED_1A_READ			0
++-#define PORT_RESERVED_1A_PORT_SHIFT		5
++-#define PORT_RESERVED_1A_BLOCK			(0xf << 10)
++-#define PORT_RESERVED_1A_CTRL_PORT		4
++-#define PORT_RESERVED_1A_DATA_PORT		5
+++#define MV88E6XXX_PORT_RESERVED_1A		0x1a
+++#define MV88E6XXX_PORT_RESERVED_1A_BUSY		0x8000
+++#define MV88E6XXX_PORT_RESERVED_1A_WRITE	0x4000
+++#define MV88E6XXX_PORT_RESERVED_1A_READ		0x0000
+++#define MV88E6XXX_PORT_RESERVED_1A_PORT_SHIFT	5
+++#define MV88E6XXX_PORT_RESERVED_1A_BLOCK_SHIFT	10
+++#define MV88E6XXX_PORT_RESERVED_1A_CTRL_PORT	0x04
+++#define MV88E6XXX_PORT_RESERVED_1A_DATA_PORT	0x05
++ 
++ int mv88e6xxx_port_read(struct mv88e6xxx_chip *chip, int port, int reg,
++ 			u16 *val);
++@@ -335,4 +335,10 @@ int mv88e6095_port_set_upstream_port(struct mv88e6xxx_chip *chip, int port,
++ int mv88e6xxx_port_disable_learn_limit(struct mv88e6xxx_chip *chip, int port);
++ int mv88e6xxx_port_disable_pri_override(struct mv88e6xxx_chip *chip, int port);
++ 
+++int mv88e6xxx_port_hidden_write(struct mv88e6xxx_chip *chip, int block,
+++				int port, int reg, u16 val);
+++int mv88e6xxx_port_hidden_wait(struct mv88e6xxx_chip *chip);
+++int mv88e6xxx_port_hidden_read(struct mv88e6xxx_chip *chip, int block, int port,
+++			        int reg, u16 *val);
+++
++ #endif /* _MV88E6XXX_PORT_H */
++diff --git a/drivers/net/dsa/mv88e6xxx/port_hidden.c b/drivers/net/dsa/mv88e6xxx/port_hidden.c
++new file mode 100644
++index 000000000000..f5d982a1e5c3
++--- /dev/null
+++++ b/drivers/net/dsa/mv88e6xxx/port_hidden.c
++@@ -0,0 +1,69 @@
+++// SPDX-License-Identifier: GPL-2.0-or-later
+++/*
+++ * Marvell 88E6xxx Switch Hidden Registers support
+++ *
+++ * Copyright (c) 2008 Marvell Semiconductor
+++ *
+++ * Copyright (c) 2019 Andrew Lunn <andrew@lunn.ch>
+++ */
+++
+++#include <linux/bitfield.h>
+++
+++#include "chip.h"
+++#include "port.h"
+++
+++/* The mv88e6390 and mv88e6341 have some hidden registers used for debug and
+++ * development. The errata also makes use of them.
+++ */
+++int mv88e6xxx_port_hidden_write(struct mv88e6xxx_chip *chip, int block,
+++				int port, int reg, u16 val)
+++{
+++	u16 ctrl;
+++	int err;
+++
+++	err = mv88e6xxx_port_write(chip, MV88E6XXX_PORT_RESERVED_1A_DATA_PORT,
+++				   MV88E6XXX_PORT_RESERVED_1A, val);
+++	if (err)
+++		return err;
+++
+++	ctrl = MV88E6XXX_PORT_RESERVED_1A_BUSY |
+++	       MV88E6XXX_PORT_RESERVED_1A_WRITE |
+++	       block << MV88E6XXX_PORT_RESERVED_1A_BLOCK_SHIFT |
+++	       port << MV88E6XXX_PORT_RESERVED_1A_PORT_SHIFT |
+++	       reg;
+++
+++	return mv88e6xxx_port_write(chip, MV88E6XXX_PORT_RESERVED_1A_CTRL_PORT,
+++				    MV88E6XXX_PORT_RESERVED_1A, ctrl);
+++}
+++
+++int mv88e6xxx_port_hidden_wait(struct mv88e6xxx_chip *chip)
+++{
+++	return mv88e6xxx_wait(chip, MV88E6XXX_PORT_RESERVED_1A_CTRL_PORT,
+++			      MV88E6XXX_PORT_RESERVED_1A,
+++			      MV88E6XXX_PORT_RESERVED_1A_BUSY);
+++}
+++
+++int mv88e6xxx_port_hidden_read(struct mv88e6xxx_chip *chip, int block, int port,
+++			       int reg, u16 *val)
+++{
+++	u16 ctrl;
+++	int err;
+++
+++	ctrl = MV88E6XXX_PORT_RESERVED_1A_BUSY |
+++	       MV88E6XXX_PORT_RESERVED_1A_READ |
+++	       block << MV88E6XXX_PORT_RESERVED_1A_BLOCK_SHIFT |
+++	       port << MV88E6XXX_PORT_RESERVED_1A_PORT_SHIFT |
+++	       reg;
+++
+++	err = mv88e6xxx_port_write(chip, MV88E6XXX_PORT_RESERVED_1A_CTRL_PORT,
+++				   MV88E6XXX_PORT_RESERVED_1A, ctrl);
+++	if (err)
+++		return err;
+++
+++	err = mv88e6xxx_port_hidden_wait(chip);
+++	if (err)
+++		return err;
+++
+++	return mv88e6xxx_port_read(chip, MV88E6XXX_PORT_RESERVED_1A_DATA_PORT,
+++				   MV88E6XXX_PORT_RESERVED_1A, val);
+++}
++-- 
++2.31.1
++
+diff --git a/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch b/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
+new file mode 100644
+index 0000000..47bae69
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
+@@ -0,0 +1,172 @@
++From 021e49f389027f93af26a02c886b1c11053edea8 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Thu, 17 Jun 2021 14:46:58 +0200
++Subject: [PATCH 2/2] net: dsa: mv88e6xxx: support changing cmode on Topaz
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++This is taken from commit 7a3007d22e8dc7d0c14f711c5d370dc41226ac55
++upstream.
++
++Currently we support SERDES on the Topaz family in a limited way: the
++cmode is not writable, thus the mode is determined by strapping pins.
++
++Marvell's examples though show how to make cmode writable on port 5 and
++support SGMII autonegotiation. It is done by writing hidden registers,
++for which we already have code.
++
++This patch adds support for making the cmode for the SERDES port
++writable on the Topaz family.
++
++Tested on Turris Mox.
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c |  2 +
++ drivers/net/dsa/mv88e6xxx/port.c | 86 ++++++++++++++++++++++++++++++++
++ drivers/net/dsa/mv88e6xxx/port.h |  4 ++
++ 3 files changed, 92 insertions(+)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 333e2cd60440..abc3f050f4a9 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -2792,6 +2792,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
++ 	.port_link_state = mv88e6352_port_link_state,
++ 	.port_get_cmode = mv88e6352_port_get_cmode,
+++	.port_set_cmode = mv88e6341_port_set_cmode,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6320_stats_get_strings,
++@@ -3349,6 +3350,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++ 	.port_disable_pri_override = mv88e6xxx_port_disable_pri_override,
++ 	.port_link_state = mv88e6352_port_link_state,
++ 	.port_get_cmode = mv88e6352_port_get_cmode,
+++	.port_set_cmode = mv88e6341_port_set_cmode,
++ 	.stats_snapshot = mv88e6390_g1_stats_snapshot,
++ 	.stats_get_sset_count = mv88e6320_stats_get_sset_count,
++ 	.stats_get_strings = mv88e6320_stats_get_strings,
++diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
++index ead75477a6a3..64068ecfbaff 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.c
+++++ b/drivers/net/dsa/mv88e6xxx/port.c
++@@ -360,6 +360,92 @@ int mv88e6390x_port_set_speed(struct mv88e6xxx_chip *chip, int port, int speed)
++ 	return mv88e6xxx_port_set_speed(chip, port, speed, true, true);
++ }
++ 
+++static int mv88e6341_port_set_cmode_writable(struct mv88e6xxx_chip *chip,
+++					     int port)
+++{
+++	int err, addr;
+++	u16 reg, bits;
+++
+++	if (port != 5)
+++		return -EOPNOTSUPP;
+++
+++	addr = chip->info->port_base_addr + port;
+++
+++	err = mv88e6xxx_port_hidden_read(chip, 0x7, addr, 0, &reg);
+++	if (err)
+++		return err;
+++
+++	bits = MV88E6341_PORT_RESERVED_1A_FORCE_CMODE |
+++	       MV88E6341_PORT_RESERVED_1A_SGMII_AN;
+++
+++	if ((reg & bits) == bits)
+++		return 0;
+++
+++	reg |= bits;
+++	return mv88e6xxx_port_hidden_write(chip, 0x7, addr, 0, reg);
+++}
+++
+++int mv88e6341_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
+++			     phy_interface_t mode)
+++{
+++	u16 cmode;
+++	u16 reg;
+++	int err;
+++
+++	if (mode == PHY_INTERFACE_MODE_NA)
+++		return 0;
+++
+++	if (port != 5)
+++		return -EOPNOTSUPP;
+++
+++	switch (mode) {
+++	case PHY_INTERFACE_MODE_1000BASEX:
+++		cmode = MV88E6XXX_PORT_STS_CMODE_1000BASE_X;
+++		break;
+++	case PHY_INTERFACE_MODE_SGMII:
+++		cmode = MV88E6XXX_PORT_STS_CMODE_SGMII;
+++		break;
+++	case PHY_INTERFACE_MODE_2500BASEX:
+++		cmode = MV88E6XXX_PORT_STS_CMODE_2500BASEX;
+++		break;
+++	default:
+++		cmode = 0;
+++	}
+++
+++	err = mv88e6341_port_set_cmode_writable(chip, port);
+++	if (err)
+++		return err;
+++
+++	err = mv88e6341_serdes_power(chip, port, false);
+++	if (err)
+++		return err;
+++
+++	if (cmode) {
+++		err = mv88e6xxx_port_read(chip, port, MV88E6XXX_PORT_STS, &reg);
+++		if (err)
+++			return err;
+++
+++		reg &= ~MV88E6XXX_PORT_STS_CMODE_MASK;
+++		reg |= cmode;
+++
+++		err = mv88e6xxx_port_write(chip, port, MV88E6XXX_PORT_STS, reg);
+++		if (err)
+++			return err;
+++
+++		err = mv88e6xxx_port_read(chip, port, MV88E6XXX_PORT_STS, &reg);
+++		if (err)
+++			return err;
+++
+++		err = mv88e6341_serdes_power(chip, port, true);
+++		if (err)
+++			return err;
+++	}
+++
+++	chip->ports[port].cmode = cmode;
+++
+++	return 0;
+++}
+++
++ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
++ 			      phy_interface_t mode)
++ {
++diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
++index bf0b3170d3b0..c02973cf2f41 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.h
+++++ b/drivers/net/dsa/mv88e6xxx/port.h
++@@ -260,6 +260,8 @@
++ #define MV88E6XXX_PORT_RESERVED_1A_BLOCK_SHIFT	10
++ #define MV88E6XXX_PORT_RESERVED_1A_CTRL_PORT	0x04
++ #define MV88E6XXX_PORT_RESERVED_1A_DATA_PORT	0x05
+++#define MV88E6341_PORT_RESERVED_1A_FORCE_CMODE	0x8000
+++#define MV88E6341_PORT_RESERVED_1A_SGMII_AN	0x2000
++ 
++ int mv88e6xxx_port_read(struct mv88e6xxx_chip *chip, int port, int reg,
++ 			u16 *val);
++@@ -320,6 +322,8 @@ int mv88e6097_port_pause_limit(struct mv88e6xxx_chip *chip, int port, u8 in,
++ 			       u8 out);
++ int mv88e6390_port_pause_limit(struct mv88e6xxx_chip *chip, int port, u8 in,
++ 			       u8 out);
+++int mv88e6341_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
+++			     phy_interface_t mode);
++ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
++ 			      phy_interface_t mode);
++ int mv88e6185_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode);
++-- 
++2.31.1
 +
 -- 
 2.31.1
