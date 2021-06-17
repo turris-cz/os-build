@@ -1,4 +1,4 @@
-From cdd644f3b4cb09c39bf50ad63fb78c60bdd341ee Mon Sep 17 00:00:00 2001
+From 75668be25f1ca503b597438609bfd3397668f0cb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Mon, 26 Oct 2020 22:49:05 +0100
 Subject: [PATCH] mvebu: add support for Turris SFP module (kernel 4.14)
@@ -9,14 +9,14 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 ---
  target/linux/mvebu/config-4.14                |    1 +
- ...rt-changing-to-from-2500base-x-on-Tu.patch |  200 ++
+ ...rt-changing-to-from-2500base-x-on-Tu.patch |  222 ++
  ...-support-changing-to-2500base-x-mode.patch |   28 +
- ...-support-changing-to-2500base-x-mode.patch |   28 +
+ ...upport-changing-between-1000base-x-a.patch |   33 +
  ...3-net-phy-add-support-for-Turris-SFP.patch | 1925 +++++++++++++++++
- 5 files changed, 2182 insertions(+)
+ 5 files changed, 2209 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
- create mode 100644 target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-to-2500base-x-mode.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
@@ -33,11 +33,11 @@ index 7d23074..23a680a 100644
  CONFIG_MDIO_I2C=y
 diff --git a/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch b/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
 new file mode 100644
-index 0000000..22a60a4
+index 0000000..26f5b9e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
-@@ -0,0 +1,200 @@
-+From aad7425b4d4697e92f1740f7a9e9d0b71f16d080 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,222 @@
++From a1a3f88b5127770ee8dc5c2d4b352ae97443503e Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Mon, 26 Oct 2020 21:54:13 +0100
 +Subject: [PATCH 1/4] net: mvneta: support changing to/from 2500base-x on
@@ -48,11 +48,11 @@ index 0000000..22a60a4
 +
 +Signed-off-by: Marek Behún <marek.behun@nic.cz>
 +---
-+ drivers/net/ethernet/marvell/mvneta.c | 113 +++++++++++++++++++++++++-
-+ 1 file changed, 112 insertions(+), 1 deletion(-)
++ drivers/net/ethernet/marvell/mvneta.c | 123 +++++++++++++++++++++++++-
++ 1 file changed, 119 insertions(+), 4 deletions(-)
 +
 +diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
-+index 1c7d03a2d8b2..42d68fe305d3 100644
++index 1c7d03a2d8b2..87de62880162 100644
 +--- a/drivers/net/ethernet/marvell/mvneta.c
 ++++ b/drivers/net/ethernet/marvell/mvneta.c
 +@@ -18,6 +18,7 @@
@@ -72,7 +72,7 @@ index 0000000..22a60a4
 + #define MVNETA_MIB_COUNTERS_BASE                 0x3000
 + #define      MVNETA_MIB_LATE_COLLISION           0x7c
 + #define MVNETA_DA_FILT_SPEC_MCAST                0x3400
-+@@ -3018,6 +3021,93 @@ static int mvneta_setup_txqs(struct mvneta_port *pp)
++@@ -3018,10 +3021,99 @@ static int mvneta_setup_txqs(struct mvneta_port *pp)
 + 	return 0;
 + }
 + 
@@ -166,7 +166,13 @@ index 0000000..22a60a4
 + static void mvneta_start_dev(struct mvneta_port *pp)
 + {
 + 	int cpu;
-+@@ -3212,6 +3302,7 @@ static void mvneta_validate(struct net_device *ndev, unsigned long *supported,
++ 
+++	mvneta_config_interface(pp, pp->phy_interface);
+++
++ 	mvneta_max_rx_size_set(pp, pp->pkt_size);
++ 	mvneta_txq_max_tx_size_set(pp, pp->pkt_size);
++ 
++@@ -3212,6 +3304,7 @@ static void mvneta_validate(struct net_device *ndev, unsigned long *supported,
 + 			    struct phylink_link_state *state)
 + {
 + 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
@@ -174,19 +180,25 @@ index 0000000..22a60a4
 + 
 + 	/* We only support QSGMII, SGMII, 802.3z and RGMII modes */
 + 	if (state->interface != PHY_INTERFACE_MODE_NA &&
-+@@ -3233,6 +3324,11 @@ static void mvneta_validate(struct net_device *ndev, unsigned long *supported,
-+ 	phylink_set(mask, 1000baseT_Full);
-+ 	phylink_set(mask, 1000baseX_Full);
++@@ -3229,9 +3322,15 @@ static void mvneta_validate(struct net_device *ndev, unsigned long *supported,
 + 
-++	if (pp->id == 2) {
++ 	/* Asymmetric pause is unsupported */
++ 	phylink_set(mask, Pause);
+++
++ 	/* Half-duplex at speeds higher than 100Mbit is unsupported */
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
+++	if (state->interface != PHY_INTERFACE_MODE_2500BASEX) {
+++		phylink_set(mask, 1000baseT_Full);
+++		phylink_set(mask, 1000baseX_Full);
+++	} else {
 ++		phylink_set(mask, 2500baseT_Full);
 ++		phylink_set(mask, 2500baseX_Full);
 ++	}
-++
++ 
 + 	if (!phy_interface_mode_is_8023z(state->interface)) {
 + 		/* 10M and 100M are only supported in non-802.3z mode */
-+ 		phylink_set(mask, 10baseT_Half);
-+@@ -3256,7 +3352,9 @@ static int mvneta_mac_link_state(struct net_device *ndev,
++@@ -3256,7 +3355,9 @@ static int mvneta_mac_link_state(struct net_device *ndev,
 + 	gmac_stat = mvreg_read(pp, MVNETA_GMAC_STATUS);
 + 
 + 	if (gmac_stat & MVNETA_GMAC_SPEED_1000)
@@ -197,7 +209,7 @@ index 0000000..22a60a4
 + 	else if (gmac_stat & MVNETA_GMAC_SPEED_100)
 + 		state->speed = SPEED_100;
 + 	else
-+@@ -3292,12 +3390,14 @@ static void mvneta_mac_config(struct net_device *ndev, unsigned int mode,
++@@ -3292,12 +3393,14 @@ static void mvneta_mac_config(struct net_device *ndev, unsigned int mode,
 + 	struct mvneta_port *pp = netdev_priv(ndev);
 + 	u32 new_ctrl0, gmac_ctrl0 = mvreg_read(pp, MVNETA_GMAC_CTRL_0);
 + 	u32 new_ctrl2, gmac_ctrl2 = mvreg_read(pp, MVNETA_GMAC_CTRL_2);
@@ -212,7 +224,7 @@ index 0000000..22a60a4
 + 	new_clk = gmac_clk & ~MVNETA_GMAC_1MS_CLOCK_ENABLE;
 + 	new_an = gmac_an & ~(MVNETA_GMAC_INBAND_AN_ENABLE |
 + 			     MVNETA_GMAC_INBAND_RESTART_AN |
-+@@ -3369,10 +3469,21 @@ static void mvneta_mac_config(struct net_device *ndev, unsigned int mode,
++@@ -3369,10 +3472,21 @@ static void mvneta_mac_config(struct net_device *ndev, unsigned int mode,
 + 			    MVNETA_GMAC_FORCE_LINK_DOWN);
 + 	}
 + 
@@ -234,8 +246,18 @@ index 0000000..22a60a4
 + 	if (new_clk != gmac_clk)
 + 		mvreg_write(pp, MVNETA_GMAC_CLOCK_DIVIDER, new_clk);
 + 	if (new_an != gmac_an)
++@@ -4275,7 +4389,8 @@ static int mvneta_port_power_up(struct mvneta_port *pp, int phy_mode)
++ 	if (phy_mode == PHY_INTERFACE_MODE_QSGMII)
++ 		mvreg_write(pp, MVNETA_SERDES_CFG, MVNETA_QSGMII_SERDES_PROTO);
++ 	else if (phy_mode == PHY_INTERFACE_MODE_SGMII ||
++-		 phy_mode == PHY_INTERFACE_MODE_1000BASEX)
+++		 phy_mode == PHY_INTERFACE_MODE_1000BASEX ||
+++		 phy_mode == PHY_INTERFACE_MODE_2500BASEX)
++ 		mvreg_write(pp, MVNETA_SERDES_CFG, MVNETA_SGMII_SERDES_PROTO);
++ 	else if (!phy_interface_mode_is_rgmii(phy_mode))
++ 		return -EINVAL;
 +-- 
-+2.26.2
++2.31.1
 +
 diff --git a/target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch b/target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
 new file mode 100644
@@ -271,39 +293,44 @@ index 0000000..c1dad81
 +-- 
 +2.26.2
 +
-diff --git a/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-to-2500base-x-mode.patch b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-to-2500base-x-mode.patch
+diff --git a/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
 new file mode 100644
-index 0000000..62cda67
+index 0000000..3cd991c
 --- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-to-2500base-x-mode.patch
-@@ -0,0 +1,28 @@
-+From 7ca0dc602acc530d874ef6c32c74cce9a1c5a10b Mon Sep 17 00:00:00 2001
++++ b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
+@@ -0,0 +1,33 @@
++From fe78b8c160a3da6813b891fc9183facc2f0d740b Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Tue, 27 Oct 2020 01:57:47 +0100
-+Subject: [PATCH 3/4] dts: Turris MOX: support changing to 2500base-x mode
++Subject: [PATCH 3/4] dts: Turris MOX: support changing between 1000base-x
++ and 2500base-x modes
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
 +
++Default to 2500base-x as upstream does.
++
 +Signed-off-by: Marek Behún <marek.behun@nic.cz>
 +---
-+ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 1 +
-+ 1 file changed, 1 insertion(+)
++ arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
 +
 +diff --git a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+index f397be1c4244..09cfe313efd4 100644
++index f397be1c4244..c60cd02e6d8e 100644
 +--- a/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
 ++++ b/arch/arm64/boot/dts/marvell/armada-3720-turris-mox.dts
-+@@ -183,6 +183,7 @@
++@@ -183,7 +183,8 @@
 + };
 + 
 + &eth1 {
++-	phy-mode = "1000base-x";
 ++	reg = <0x40000 0x4000>, <0x18300 0x300>;
-+ 	phy-mode = "1000base-x";
+++	phy-mode = "2500base-x";
 + 	managed = "in-band-status";
 + };
++ 
 +-- 
-+2.26.2
++2.31.1
 +
 diff --git a/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch b/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
 new file mode 100644
@@ -2237,5 +2264,5 @@ index 0000000..4b14b19
 +2.26.2
 +
 -- 
-2.26.2
+2.31.1
 
