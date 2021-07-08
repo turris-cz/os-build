@@ -54,3 +54,16 @@ die() {
 	_color_echo 'ERROR' '0;31' "$*"
 	exit 1
 }
+
+
+# Check that first attribute appears in the rest
+# This is helper for checking for values in array.
+value_in() {
+	local value="$1"
+	shift
+	for x in "$@"; do
+		[[ "$value" == "$x" ]] \
+			&& return 0
+	done
+	return 1
+}

@@ -95,10 +95,14 @@ feed_ref_is_branch() {
 feed_url_replace() {
 	local old_url="$1"
 	local new="$2"
-	if feed_ref_is_branch "$old_url"; then
-		echo "$new;$(feed_ref "$old_url")"
+	if [[ "$old_url" =~ [\;^] ]]; then
+		if feed_ref_is_branch "$old_url"; then
+			echo "$new;$(feed_ref "$old_url")"
+		else
+			echo "$new^$(feed_ref "$old_url")"
+		fi
 	else
-		echo "$new^$(feed_ref "$old_url")"
+		echo "$new"
 	fi
 }
 
@@ -129,8 +133,23 @@ git_mirror_path() {
 	echo "$GIT_MIRROR/$1"
 }
 
+# Provides URL for mirror or the original depending on mirror configuration.
+# The first argument is mirror name
+# The second argument is original URL
+git_mirror_url() {
+	local name="$1"
+	local url="$2"
+	if use_git_mirror; then
+		feed_url_replace "$url" "file://$(git_mirror_path "$name")"
+	else
+		echo "$url"
+	fi
+}
+
 # Protect given command operating on mirrors using flock
 # This should be always when manipulating with local mirror
+# Warning: when mirror is configured this runs command in subshell and thus
+# argument should not be a function from this script.
 _git_mirror_lock() {
 	if use_git_mirror; then
 		flock --exclusive "$GIT_MIRROR" "$@"
@@ -147,20 +166,22 @@ declare -A _updated_mirrors
 # Second argument is URL to upstream repository (URL not feed's url)
 git_mirror_update() {
 	use_git_mirror || return 0
+	[[ -z "${_updated_mirrors_override}" ]] || return 0
 	local repo="$1"
 	local url="$2"
-	[[ -z "${_updated_mirrors[$repo]}" && -z "${_updated_mirrors_override}" ]] \
-		|| return 0
 	local mirror="$GIT_MIRROR/$repo"
-	if [ -d "$repo" ]; then
+	value_in "$repo" "${!_updated_mirrors[@]}" && return 0
+	mkdir -p "$GIT_MIRROR"
+	if [ -d "$mirror" ]; then
 		_git_mirror_lock "$SHELL" -eus "$mirror" "$url" <<-"EOF"
 			git -C "$1" remote set-url origin "$2"
 			git -C "$1" remote update --prune
 		EOF
 	else
 		_git_mirror_lock \
-			_git -C "$GIT_MIRROR" clone --mirror "$url"
+			git -C "$GIT_MIRROR" clone --mirror "$url" "$mirror"
 	fi
+	_updated_mirrors[$repo]="updated"
 }
 
 # Update all available mirrors
@@ -168,7 +189,7 @@ git_mirror_update_all() {
 	use_git_mirror || return 0
 	for mirror in "$GIT_MIRROR"/*; do
 		_git_mirror_lock \
-			_git -C "$mirror" remote update --prune
+			git -C "$mirror" remote update --prune
 	done
 }
 
@@ -177,7 +198,7 @@ set_git_mirrors_updated() {
 	_updated_mirrors_override="__override__"
 }
 
-# Git puller helper function (git_pull output_path source_url target)
+# Git puller helper function
 # First argument has to be unique name of repository.
 # Second argument is URL of feed (that is including optional reference)
 # Third argument is local repository directory (in default current one).
@@ -189,17 +210,19 @@ git_checkout() (
 	mkdir -p "$outdir"
 	cd "$outdir"
 
+	local remote_url
+	remote_url="$(feed_url "$(git_mirror_url "$name" "$url")")"
 	if [ -d .git ]; then
-		_git remote set-url origin "$(feed_url "$url")"
+		_git remote set-url origin "$remote_url"
 	else
 		_git init
-		_git remote add origin "$(feed_url "$url")"
+		_git remote add origin "$remote_url"
 	fi
 
 	if use_git_mirror || feed_ref_is_branch "$url"; then
 		git_mirror_update "$name" "$(feed_url "$url")"
 		_git_mirror_lock \
-			_git fetch ${CLONE_DEEP+--depth 1} origin "$(feed_ref "$url")"
+			git fetch ${CLONE_DEEP:+--depth 1} origin "$(feed_ref "$url")"
 	else
 		# If we are downloading directly from server we can't fetch specific
 		# commit so fetch everything

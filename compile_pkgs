@@ -151,7 +151,9 @@ checkout() {
 	url="$(get_feed "#" "openwrt")"
 	report "Starting out: $(feed_ref "$url")"
 	report "Checking out OpenWRT repository"
-	git_clean_checkout "openwrt" "$url" "." \
+	# Note: OpenWrt's script getver.sh expects full history so we do not do deep
+	# copy for OpenWrt repository no matter the configuration.
+	CLONE_DEEP="" git_clean_checkout "openwrt" "$url" "." \
 		"/turris-build.conf"
 
 	echo "/turris-build.conf" >> ./.gitignore
@@ -194,10 +196,10 @@ set_local_feeds() {
 	while read -r vcs name url rest; do
 		if [ "$vcs" = src-git ]; then
 			git_mirror_update  "$name" "$(feed_url "$url")"
-			url="$(feed_url_replace "$url" "file://$(git_mirror_path "$name")")"
+			url="$(git_mirror_url "$name" "$url")"
 		fi
-		echo "$vcs" "$name" "$url" "$rest"
-	done < feeds.conf > feeds.conf.new
+		echo "$vcs" "$name" "$url" "$rest" >&3
+	done < feeds.conf 3> feeds.conf.new
 	mv feeds.conf.new feeds.conf
 }
 
@@ -238,8 +240,8 @@ store_hash() {
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them" )
 repatch_feeds() {
-	report "Getting feeds"
 	set_local_feeds
+	report "Getting feeds"
 	_perl ./scripts/feeds clean -a
 	_perl ./scripts/feeds update -a
 
