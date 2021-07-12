@@ -35,7 +35,6 @@ Backport patch which fixes CVE-2019-5736
  delete mode 100644 utils/lxc/patches/003-compile.patch
  delete mode 100644 utils/lxc/patches/010-compile.patch
  delete mode 100644 utils/lxc/patches/030-prlimit.patch
- create mode 100644 utils/lxc/patches/030-turris-servers.patch
  rename utils/lxc/patches/{031-lxc-download-Switch-GPG-server.patch => 035-GPG-change.patch} (75%)
  create mode 100644 utils/lxc/patches/040-fix-CVE-2019-5736.patch
 
@@ -517,50 +516,6 @@ index 88f17aa2b..000000000
 - 	}
 - 	return 0;
 - }
-diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
-new file mode 100644
-index 000000000..0f351ea14
---- /dev/null
-+++ b/utils/lxc/patches/030-turris-servers.patch
-@@ -0,0 +1,38 @@
-+Index: lxc-2.1.1/config/etc/default.conf.unknown
-+===================================================================
-+--- lxc-2.1.1.orig/config/etc/default.conf.unknown
-++++ lxc-2.1.1/config/etc/default.conf.unknown
-+@@ -1 +1,9 @@
-+-lxc.net.0.type = empty
-++lxc.net.0.type = veth
-++lxc.net.0.link = br-lan
-++lxc.net.0.flags = up
-++lxc.net.0.name = eth0
-++# Some workarounds
-++lxc.include = /usr/share/lxc/config/common.conf
-++lxc.hook.start-host = /usr/share/lxc/hooks/systemd-workaround
-++# Template to generate fixed MAC address
-++lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
-+Index: lxc-2.1.1/templates/lxc-download.in
-+===================================================================
-+--- lxc-2.1.1.orig/templates/lxc-download.in
-++++ lxc-2.1.1/templates/lxc-download.in
-+@@ -30,15 +30,15 @@ DOWNLOAD_ARCH=
-+ DOWNLOAD_BUILD=
-+ DOWNLOAD_COMPAT_LEVEL=4
-+ DOWNLOAD_DIST=
-+-DOWNLOAD_FLUSH_CACHE="false"
-++DOWNLOAD_FLUSH_CACHE="true"
-+ DOWNLOAD_FORCE_CACHE="false"
-+ DOWNLOAD_INTERACTIVE="false"
-+-DOWNLOAD_KEYID="0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216"
-++DOWNLOAD_SERVER="$(uci get lxc.lxc.url 2> /dev/null || echo repo.turris.cz/lxc)"
-++DOWNLOAD_KEYID="$(if [ "$DOWNLOAD_SERVER" = repo.turris.cz/lxc ]; then echo 0x96542441B2EF343B; else echo 0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216; fi)"
-+ DOWNLOAD_LIST_IMAGES="false"
-+ DOWNLOAD_MODE="system"
-+ DOWNLOAD_READY_GPG="false"
-+ DOWNLOAD_RELEASE=
-+-DOWNLOAD_SERVER="images.linuxcontainers.org"
-+ DOWNLOAD_SHOW_GPG_WARNING="true"
-+ DOWNLOAD_SHOW_HTTP_WARNING="true"
-+ DOWNLOAD_TARGET="system"
 diff --git a/utils/lxc/patches/031-lxc-download-Switch-GPG-server.patch b/utils/lxc/patches/035-GPG-change.patch
 similarity index 75%
 rename from utils/lxc/patches/031-lxc-download-Switch-GPG-server.patch
