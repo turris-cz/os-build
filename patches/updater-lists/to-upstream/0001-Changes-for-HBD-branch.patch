@@ -1,0 +1,133 @@
+From a419953b6be9264e433c6793e4a5fb0a821c57d5 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sat, 21 Dec 2019 18:35:50 +0100
+Subject: [PATCH] Changes for HBD branch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This patch contains 4 commits from turris-build repository.
+
+----
+
+base-min.lua: IPv6 support in iputils has been merged in single package
+( 1f584b568791086b8a3dc41af26f04a21ee2e29e )
+
+Iputils package was moved from OpenWrt main repository to packages feed.
+It was updated and switched to use Github repository and being compiled
+by Meson. Devs decided to merged ping, ping6 into single ping command and same applies for the
+rest. However, there isnt traceroute package anymore.
+
+----
+
+base-conditional: drop package Python3-python
+( b329f3f1e0d05575df8371970b7a765a8e3f2bf9 )
+
+This is no longer needed in OpenWrt master.
+Fixes:
+DIE:
+[string "transaction"]:326: [string "transaction"]:151: Collisions:
+• /usr/bin/python: python3-python (existing-file), python3-base (new-file)
+Aborted
+
+Python3-python does this: `ln -s /usr/bin/python3 $(1)/usr/bin/python`
+python3-base does this: `$(LN) python$(PYTHON3_VERSION) $(1)/usr/bin/python`
+Both things does the same and we dont need to ship our package python3-python in HBD branch.
+
+---
+
+kmod-omnia: remove switch-mvs61xx
+
+( c8fb92ea16b7432afced5869e845df812793368d )
+
+There was removed SW config from OpenWrt as all targets were switched to
+upstream mv88e6xxx DSA driver.
+
+Right now, there is no kernel package for DSA because it is enabled in
+kernel config.
+
+CONFIG_NET_DSA_MV88E6XXX=y
+CONFIG_NET_DSA_MV88E6XXX_GLOBAL2=y
+
+---
+
+kmod-{omnia,mox}: remove dropped kmod-letrig-* packages
+( 7ea851aed01c93eef297a5f3aac5b705ae30f618 )
+
+Removes:
+* kmod-ledtrig-default-on
+* kmod-ledtrig-heartbeat
+* kmod-ledtrig-netdev
+* kmod-ledtrig-timer
+
+Based on upstream change https://github.com/openwrt/openwrt/commit/583e39e3d5149357c8070eb7cdd942e42ea44906
+Fixes: a16311e826ac1315b3f7a29b7034da5deda32cf6 ("essential_packages: drop package kmod-ledtrig-heartbeat")
+---
+ base-conditional.lua.m4 | 3 ---
+ base-min.lua.m4         | 2 +-
+ kmod-mox.list           | 1 -
+ kmod-omnia.list         | 5 -----
+ 4 files changed, 1 insertion(+), 10 deletions(-)
+
+diff --git a/base-conditional.lua.m4 b/base-conditional.lua.m4
+index 217f4bb..f199471 100644
+--- a/base-conditional.lua.m4
++++ b/base-conditional.lua.m4
+@@ -3,9 +3,6 @@ include(utils.m4)dnl
+ 
+ _FEATURE_GUARD_
+ 
+--- Install replacement link for python when python-base is not installed and python3-base is
+-Install("python3-python", { condition = {Not("python-base"), "python3-base"}, priority = 40 })
+-
+ -- Reload of OpenVPN on network restart to ensure fast reconnect
+ Install("openvpn-hotplug", { priority = 30, condition = "openvpn" })
+ 
+diff --git a/base-min.lua.m4 b/base-min.lua.m4
+index c527372..5dfc4a9 100644
+--- a/base-min.lua.m4
++++ b/base-min.lua.m4
+@@ -53,7 +53,7 @@ _FEATURE_GUARD_
+ 
+ -- Network tools
+ Install("ip-full", "tc", "genl", "ip-bridge", "ss", "nstat", "devlink", "rdma", { priority = 40 })
+-Install("iputils-ping", "iputils-ping6", "iputils-tracepath", "iputils-tracepath6", "iputils-traceroute6", { priority = 40 })
++Install("iputils-ping", "iputils-tracepath", { priority = 40 })
+ Install("iptables", "ip6tables", "conntrack", { priority = 40 })
+ Install("bind-client", "bind-dig", { priority = 40 })
+ Install("umdns", { priority = 40 })
+diff --git a/kmod-mox.list b/kmod-mox.list
+index 4cd6ecd..fe1381a 100644
+--- a/kmod-mox.list
++++ b/kmod-mox.list
+@@ -2,7 +2,6 @@
+ rtc-ds1307
+ # Button and led on A module
+ gpio-button-hotplug
+-ledtrig-heartbeat
+ 
+ # SDIO Wi-Fi and BT
+ mwlwifi
+diff --git a/kmod-omnia.list b/kmod-omnia.list
+index 5b80667..8ae58d1 100644
+--- a/kmod-omnia.list
++++ b/kmod-omnia.list
+@@ -1,15 +1,10 @@
+ # Turris Omnia specific drivers
+-switch-mvsw61xx
+ usb-serial-qualcomm
+ gpio-pca953x
+ i2c-mux-pca954x
+ eeprom-at24
+ 
+ # Various led triggers
+-ledtrig-default-on
+ ledtrig-gpio
+-ledtrig-heartbeat
+-ledtrig-netdev
+ ledtrig-oneshot
+-ledtrig-timer
+ ledtrig-transient
+-- 
+2.30.2
+
