@@ -11,6 +11,10 @@ three/four.
 - Changed website
 
 Backport patch which fixes CVE-2019-5736
+
+12/07/21 Changed:
+- Added fix for GPG change
+
 ---
  utils/lxc/Makefile                            |  90 +---
  utils/lxc/files/systemd-workaround            |   4 +
@@ -21,19 +25,22 @@ Backport patch which fixes CVE-2019-5736
  utils/lxc/patches/020-lxc-checkconfig.patch   |   4 +-
  .../025-remove-unsupported-option.patch       |  20 +-
  utils/lxc/patches/030-prlimit.patch           |  95 -----
- utils/lxc/patches/030-turris-servers.patch    |   6 +-
+ utils/lxc/patches/030-turris-servers.patch    |  38 ++
+ ...-GPG-server.patch => 035-GPG-change.patch} |  18 +-
  utils/lxc/patches/040-fix-CVE-2019-5736.patch | 398 ++++++++++++++++++
- 11 files changed, 438 insertions(+), 274 deletions(-)
+ 12 files changed, 482 insertions(+), 280 deletions(-)
  create mode 100644 utils/lxc/files/systemd-workaround
  delete mode 100644 utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
  delete mode 100644 utils/lxc/patches/002-compile.patch
  delete mode 100644 utils/lxc/patches/003-compile.patch
  delete mode 100644 utils/lxc/patches/010-compile.patch
  delete mode 100644 utils/lxc/patches/030-prlimit.patch
+ create mode 100644 utils/lxc/patches/030-turris-servers.patch
+ rename utils/lxc/patches/{031-lxc-download-Switch-GPG-server.patch => 035-GPG-change.patch} (75%)
  create mode 100644 utils/lxc/patches/040-fix-CVE-2019-5736.patch
 
 diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
-index a66d468..946476e 100644
+index 6970c5a67..8c1e2128e 100644
 --- a/utils/lxc/Makefile
 +++ b/utils/lxc/Makefile
 @@ -8,17 +8,16 @@
@@ -41,9 +48,9 @@ index a66d468..946476e 100644
  
  PKG_NAME:=lxc
 -PKG_VERSION:=2.1.1
--PKG_RELEASE:=4
+-PKG_RELEASE:=5
 +PKG_VERSION:=3.0.3
-+PKG_RELEASE:=1
++PKG_RELEASE:=2
  
  PKG_LICENSE:=LGPL-2.1-or-later BSD-2-Clause GPL-2.0
  PKG_MAINTAINER:=Marko Ratkaj <marko.ratkaj@sartura.hr>
@@ -230,7 +237,7 @@ index a66d468..946476e 100644
  $(eval $(call BuildPackage,lxc-unprivileged))
 diff --git a/utils/lxc/files/systemd-workaround b/utils/lxc/files/systemd-workaround
 new file mode 100644
-index 0000000..2e343dc
+index 000000000..2e343dc68
 --- /dev/null
 +++ b/utils/lxc/files/systemd-workaround
 @@ -0,0 +1,4 @@
@@ -240,7 +247,7 @@ index 0000000..2e343dc
 +}
 diff --git a/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch b/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
 deleted file mode 100644
-index 4c402a0..0000000
+index 4c402a060..000000000
 --- a/utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
 +++ /dev/null
 @@ -1,37 +0,0 @@
@@ -283,7 +290,7 @@ index 4c402a0..0000000
 - }
 diff --git a/utils/lxc/patches/002-compile.patch b/utils/lxc/patches/002-compile.patch
 deleted file mode 100644
-index 9a98777..0000000
+index 9a98777f7..000000000
 --- a/utils/lxc/patches/002-compile.patch
 +++ /dev/null
 @@ -1,10 +0,0 @@
@@ -299,7 +306,7 @@ index 9a98777..0000000
 - #include <stdint.h>
 diff --git a/utils/lxc/patches/003-compile.patch b/utils/lxc/patches/003-compile.patch
 deleted file mode 100644
-index b26b78d..0000000
+index b26b78d1f..000000000
 --- a/utils/lxc/patches/003-compile.patch
 +++ /dev/null
 @@ -1,11 +0,0 @@
@@ -316,7 +323,7 @@ index b26b78d..0000000
 - 	}
 diff --git a/utils/lxc/patches/010-compile.patch b/utils/lxc/patches/010-compile.patch
 deleted file mode 100644
-index 903e4cd..0000000
+index 903e4cd7b..000000000
 --- a/utils/lxc/patches/010-compile.patch
 +++ /dev/null
 @@ -1,37 +0,0 @@
@@ -358,7 +365,7 @@ index 903e4cd..0000000
 - 	with_distro="sparclinux"
 - fi
 diff --git a/utils/lxc/patches/020-lxc-checkconfig.patch b/utils/lxc/patches/020-lxc-checkconfig.patch
-index 0e644ea..79fb682 100644
+index 0e644ea47..79fb6821d 100644
 --- a/utils/lxc/patches/020-lxc-checkconfig.patch
 +++ b/utils/lxc/patches/020-lxc-checkconfig.patch
 @@ -1,5 +1,5 @@
@@ -370,7 +377,7 @@ index 0e644ea..79fb682 100644
   # Allow environment variables to override config
   : ${CONFIG:=/proc/config.gz}
 diff --git a/utils/lxc/patches/025-remove-unsupported-option.patch b/utils/lxc/patches/025-remove-unsupported-option.patch
-index b208708..4e7b584 100644
+index b20870890..4e7b58492 100644
 --- a/utils/lxc/patches/025-remove-unsupported-option.patch
 +++ b/utils/lxc/patches/025-remove-unsupported-option.patch
 @@ -1,15 +1,17 @@
@@ -411,7 +418,7 @@ index b208708..4e7b584 100644
 + 
 diff --git a/utils/lxc/patches/030-prlimit.patch b/utils/lxc/patches/030-prlimit.patch
 deleted file mode 100644
-index 88f17aa..0000000
+index 88f17aa2b..000000000
 --- a/utils/lxc/patches/030-prlimit.patch
 +++ /dev/null
 @@ -1,95 +0,0 @@
@@ -511,25 +518,90 @@ index 88f17aa..0000000
 - 	return 0;
 - }
 diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
-index a674b3f..0f351ea 100644
---- a/utils/lxc/patches/030-turris-servers.patch
+new file mode 100644
+index 000000000..0f351ea14
+--- /dev/null
 +++ b/utils/lxc/patches/030-turris-servers.patch
-@@ -8,9 +8,9 @@ Index: lxc-2.1.1/config/etc/default.conf.unknown
- +lxc.net.0.link = br-lan
- +lxc.net.0.flags = up
- +lxc.net.0.name = eth0
--+# Debian workaround
--+lxc.tty.max = 4
--+lxc.pty.max = 1024
+@@ -0,0 +1,38 @@
++Index: lxc-2.1.1/config/etc/default.conf.unknown
++===================================================================
++--- lxc-2.1.1.orig/config/etc/default.conf.unknown
+++++ lxc-2.1.1/config/etc/default.conf.unknown
++@@ -1 +1,9 @@
++-lxc.net.0.type = empty
+++lxc.net.0.type = veth
+++lxc.net.0.link = br-lan
+++lxc.net.0.flags = up
+++lxc.net.0.name = eth0
 ++# Some workarounds
 ++lxc.include = /usr/share/lxc/config/common.conf
 ++lxc.hook.start-host = /usr/share/lxc/hooks/systemd-workaround
- +# Template to generate fixed MAC address
- +lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
- Index: lxc-2.1.1/templates/lxc-download.in
+++# Template to generate fixed MAC address
+++lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
++Index: lxc-2.1.1/templates/lxc-download.in
++===================================================================
++--- lxc-2.1.1.orig/templates/lxc-download.in
+++++ lxc-2.1.1/templates/lxc-download.in
++@@ -30,15 +30,15 @@ DOWNLOAD_ARCH=
++ DOWNLOAD_BUILD=
++ DOWNLOAD_COMPAT_LEVEL=4
++ DOWNLOAD_DIST=
++-DOWNLOAD_FLUSH_CACHE="false"
+++DOWNLOAD_FLUSH_CACHE="true"
++ DOWNLOAD_FORCE_CACHE="false"
++ DOWNLOAD_INTERACTIVE="false"
++-DOWNLOAD_KEYID="0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216"
+++DOWNLOAD_SERVER="$(uci get lxc.lxc.url 2> /dev/null || echo repo.turris.cz/lxc)"
+++DOWNLOAD_KEYID="$(if [ "$DOWNLOAD_SERVER" = repo.turris.cz/lxc ]; then echo 0x96542441B2EF343B; else echo 0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216; fi)"
++ DOWNLOAD_LIST_IMAGES="false"
++ DOWNLOAD_MODE="system"
++ DOWNLOAD_READY_GPG="false"
++ DOWNLOAD_RELEASE=
++-DOWNLOAD_SERVER="images.linuxcontainers.org"
++ DOWNLOAD_SHOW_GPG_WARNING="true"
++ DOWNLOAD_SHOW_HTTP_WARNING="true"
++ DOWNLOAD_TARGET="system"
+diff --git a/utils/lxc/patches/031-lxc-download-Switch-GPG-server.patch b/utils/lxc/patches/035-GPG-change.patch
+similarity index 75%
+rename from utils/lxc/patches/031-lxc-download-Switch-GPG-server.patch
+rename to utils/lxc/patches/035-GPG-change.patch
+index cdf0b1db0..70bbe6b9c 100644
+--- a/utils/lxc/patches/031-lxc-download-Switch-GPG-server.patch
++++ b/utils/lxc/patches/035-GPG-change.patch
+@@ -25,21 +25,21 @@ Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+  1 file changed, 2 insertions(+), 2 deletions(-)
+ 
+ diff --git a/templates/lxc-download.in b/templates/lxc-download.in
+-index 490552138..d6761e0cd 100644
++index 51838e6..c59e84c 100644
+ --- a/templates/lxc-download.in
+ +++ b/templates/lxc-download.in
+-@@ -54,11 +54,11 @@ LXC_PATH=
++@@ -55,11 +55,11 @@ LXC_PATH=
+  LXC_ROOTFS=
+  
+  if [ -z "${DOWNLOAD_KEYSERVER:-}" ]; then
+--	DOWNLOAD_KEYSERVER="hkp://pool.sks-keyservers.net"
+-+	DOWNLOAD_KEYSERVER="hkp://keyserver.ubuntu.com"
++-  DOWNLOAD_KEYSERVER="hkp://pool.sks-keyservers.net"
+++  DOWNLOAD_KEYSERVER="hkp://keyserver.ubuntu.com"
+  
+- 	# Deal with GPG over http proxy
+- 	if [ -n "${http_proxy:-}" ]; then
+--	    DOWNLOAD_KEYSERVER="hkp://p80.pool.sks-keyservers.net:80"
+-+	    DOWNLOAD_KEYSERVER="hkp://keyserver.ubuntu.com:80"
+- 	fi
++   # Deal with GPG over http proxy
++   if [ -n "${http_proxy:-}" ]; then
++-    DOWNLOAD_KEYSERVER="hkp://p80.pool.sks-keyservers.net:80"
+++    DOWNLOAD_KEYSERVER="hkp://keyserver.ubuntu.com:80"
++   fi
+  fi
+  
+ -- 
 diff --git a/utils/lxc/patches/040-fix-CVE-2019-5736.patch b/utils/lxc/patches/040-fix-CVE-2019-5736.patch
 new file mode 100644
-index 0000000..d6cc71c
+index 000000000..d6cc71c42
 --- /dev/null
 +++ b/utils/lxc/patches/040-fix-CVE-2019-5736.patch
 @@ -0,0 +1,398 @@
@@ -932,5 +1004,5 @@ index 0000000..d6cc71c
 + static inline int memfd_create(const char *name, unsigned int flags) {
 + 	#ifndef __NR_memfd_create
 -- 
-2.24.0
+2.30.2
 
