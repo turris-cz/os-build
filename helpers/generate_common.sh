@@ -77,9 +77,9 @@ feed_url() {
 # It provides "master" instead if there was no reference in feed url.
 # Feed url has to be provided as first argument.
 feed_ref() {
-	local res="${1##*[;^]}"
-	if [[ -n "$res" ]]; then
-		echo "$res"
+	local url="$1"
+	if [[ "$url" =~ [\;^] ]]; then
+		echo "${url##*[;^]}"
 	else
 		echo "master"
 	fi
