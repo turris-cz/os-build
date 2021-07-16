@@ -76,12 +76,18 @@ feed_url() {
 # Removes url from feed url and that way provides only reference
 # It provides "master" instead if there was no reference in feed url.
 # Feed url has to be provided as first argument.
+# The second argument should be 'fetch' in case we want fetched reference.
 feed_ref() {
-	local res="${1##*[;^]}"
-	if [[ -n "$res" ]]; then
-		echo "$res"
+	local url="$1"
+	local fetch="${2:-}"
+	if [[ "$url" =~ [\;^] ]]; then
+		echo "${url##*[;^]}"
 	else
-		echo "master"
+		if [[ "$fetch" == "fetch" ]]; then
+			echo "FETCH_HEAD"
+		else
+			echo "HEAD"
+		fi
 	fi
 }
 
@@ -228,7 +234,7 @@ git_checkout() (
 		# commit so fetch everything
 		_git fetch origin
 	fi
-	_git checkout -f "$(feed_ref "$url")"
+	_git checkout -f "$(feed_ref "$url" fetch)"
 	_git submodule update --init --recursive
 )
 
