@@ -8,18 +8,17 @@ Notes:
 This is part of fixes which should fix CVE-2020-3702
 Backported from kernel commit a0761a301746ec2d92d7fcb82af69c0a6a4339aa
 ---
- ...ta-frames-without-key-on-encrypted-l.patch | 116 ++++++++++++++++++
- 1 file changed, 116 insertions(+)
+ ...ta-frames-without-key-on-encrypted-l.patch | 111 ++++++++++++++++++
+ 1 file changed, 111 insertions(+)
  create mode 100644 package/kernel/mac80211/patches/subsys/010-mac80211-drop-data-frames-without-key-on-encrypted-l.patch
 
 diff --git a/package/kernel/mac80211/patches/subsys/010-mac80211-drop-data-frames-without-key-on-encrypted-l.patch b/package/kernel/mac80211/patches/subsys/010-mac80211-drop-data-frames-without-key-on-encrypted-l.patch
 new file mode 100644
-index 0000000000..370cd6ee9e
+index 0000000000..bae9d5614b
 --- /dev/null
 +++ b/package/kernel/mac80211/patches/subsys/010-mac80211-drop-data-frames-without-key-on-encrypted-l.patch
-@@ -0,0 +1,116 @@
-+From 189da5743e28d0c5d211b70b4cb06ce3aff77d86 Mon Sep 17 00:00:00 2001
-+From: Johannes Berg <johannes.berg@intel.com>
+@@ -0,0 +1,111 @@
++From: Johannes Berg <johannes.berg@xxxxxxxxx>
 +Date: Thu, 26 Mar 2020 15:09:42 +0200
 +Subject: [PATCH] mac80211: drop data frames without key on encrypted links
 +MIME-Version: 1.0
@@ -51,6 +50,8 @@ index 0000000000..370cd6ee9e
 +Signed-off-by: Luca Coelho <luciano.coelho@intel.com>
 +Link: https://lore.kernel.org/r/iwlwifi.20200326150855.6865c7f28a14.I9fb1d911b064262d33e33dfba730cdeef83926ca@changeid
 +Signed-off-by: Johannes Berg <johannes.berg@intel.com>
++[pali: Backported to 4.19 and older versions]
++Signed-off-by: Pali Rohár <pali@kernel.org>
 +---
 + net/mac80211/debugfs_sta.c |  1 +
 + net/mac80211/key.c         |  7 +++++--
@@ -74,14 +75,14 @@ index 0000000000..370cd6ee9e
 +index f20bb39f492d..217db25a1afa 100644
 +--- a/net/mac80211/key.c
 ++++ b/net/mac80211/key.c
-@@ -341,6 +341,7 @@ static void ieee80211_key_replace(struct ieee80211_sub_if_data *sdata,
-        if (sta) {
-                if (pairwise) {
-                        rcu_assign_pointer(sta->ptk[idx], new);
-+                       set_sta_flag(sta, WLAN_STA_USES_ENCRYPTION);
-                        sta->ptk_idx = idx;
-                        ieee80211_check_fast_xmit(sta);
-                } else {
++@@ -341,6 +341,7 @@ static void ieee80211_key_replace(struct ieee80211_sub_if_data *sdata,
++ 	if (sta) {
++ 		if (pairwise) {
++ 			rcu_assign_pointer(sta->ptk[idx], new);
+++			set_sta_flag(sta, WLAN_STA_USES_ENCRYPTION);
++ 			sta->ptk_idx = idx;
++ 			ieee80211_check_fast_xmit(sta);
++ 		} else {
 +diff --git a/net/mac80211/sta_info.h b/net/mac80211/sta_info.h
 +index 9a04327d71d1..075609c4571d 100644
 +--- a/net/mac80211/sta_info.h
@@ -129,5 +130,5 @@ index 0000000000..370cd6ee9e
 +2.20.1
 +
 -- 
-2.17.1
+2.30.2
 
