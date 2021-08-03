@@ -1,0 +1,59 @@
+From 30af4b73a8c09340dfa196333742672594b8bad6 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 3 Aug 2021 15:21:58 +0200
+Subject: [PATCH] mvebu: PCI: aardvark: Implement workaround for PCIe
+ Completion Timeout
+
+Awaiting upstream merge:
+https://www.spinics.net/lists/linux-pci/msg110313.html
+---
+ .../patches-5.4/100-aardvark-workaround.patch | 37 +++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.4/100-aardvark-workaround.patch
+
+diff --git a/target/linux/mvebu/patches-5.4/100-aardvark-workaround.patch b/target/linux/mvebu/patches-5.4/100-aardvark-workaround.patch
+new file mode 100644
+index 0000000000..c5e2a91a2d
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/100-aardvark-workaround.patch
+@@ -0,0 +1,37 @@
++From 944d9a6ff6927134697d444fa0a06e56d8ac7d15 Mon Sep 17 00:00:00 2001
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Date: Tue, 3 Aug 2021 15:19:41 +0200
++Subject: [PATCH] aardvark workaround
++
++---
++ drivers/pci/controller/pci-aardvark.c | 7 +++++++
++ 1 file changed, 7 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 0a2902569f14..d58ca5226970 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -128,6 +128,8 @@
++ #define     LTSSM_L0				0x10
++ #define     RC_BAR_CONFIG			0x300
++ #define VENDOR_ID_REG				(LMI_BASE_ADDR + 0x44)
+++#define DEBUG_MUX_CTRL_REG                     (LMI_BASE_ADDR + 0x208)
+++#define     DIS_ORD_CHK                                BIT(30)
++ 
++ /* PCIe core controller registers */
++ #define CTRL_CORE_BASE_ADDR			0x18000
++@@ -299,6 +301,11 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 		PCIE_CORE_CTRL2_TD_ENABLE;
++ 	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
++ 
+++        /* Disable ordering checks, workaround for erratum 3.12 "PCIe completion timeout" */
+++        reg = advk_readl(pcie, DEBUG_MUX_CTRL_REG);
+++        reg |= DIS_ORD_CHK;
+++        advk_writel(pcie, reg, DEBUG_MUX_CTRL_REG);
+++
++ 	/* Set GEN2 */
++ 	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
++ 	reg &= ~PCIE_GEN_SEL_MSK;
++-- 
++2.30.2
++
+-- 
+2.30.2
+
