@@ -132,12 +132,11 @@ index 6a3a568..ab694ab 100644
 diff --git a/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
 new file mode 100644
 index 0000000..2675558
---- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
-@@ -0,0 +1,159 @@
+@@ -0,0 +1,158 @@
 +From 2cce7cc15a531c2e7c708040dc5aab269e8bb543 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Wed, 29 Apr 2020 19:11:48 +0200
++Date: Wed, 29 Apr 2020 19:11:48 0200
 +Subject: [PATCH] firmware: turris-mox-rwtm: support ECDSA signatures
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -149,14 +148,14 @@ index 0000000..2675558
 +
 +Signed-off-by: Marek Behún <marek.behun@nic.cz>
 +---
-+ drivers/firmware/turris-mox-rwtm.c | 108 ++++++++++++++++++++++++++---
-+ 1 file changed, 100 insertions(+), 8 deletions(-)
++ drivers/firmware/turris-mox-rwtm.c | 113 ++++++++++++++++++++++++++---
++ 1 file changed, 103 insertions(+), 10 deletions(-)
 +
 +diff --git a/drivers/firmware/turris-mox-rwtm.c b/drivers/firmware/turris-mox-rwtm.c
-+index 72be58960e54..d2bf8cd624ac 100644
++index 0779513ac8d4..5c66eadb5e67 100644
 +--- a/drivers/firmware/turris-mox-rwtm.c
 ++++ b/drivers/firmware/turris-mox-rwtm.c
-+@@ -69,6 +69,10 @@ struct mox_rwtm {
++@@ -69,6 +69,11 @@ struct mox_rwtm {
 + 	/* public key burned in eFuse */
 + 	int has_pubkey;
 + 	u8 pubkey[135];
@@ -164,24 +163,17 @@ index 0000000..2675558
 ++	/* signature process */
 ++	u32 last_sig[34];
 ++	int last_sig_done;
+++
 + };
 + 
 + struct mox_kobject {
-+@@ -132,17 +136,93 @@ MOX_ATTR_RO(mac_address1, "%pM\n", board_info);
++@@ -132,6 +137,104 @@ MOX_ATTR_RO(mac_address1, "%pM\n", board_info);
 + MOX_ATTR_RO(mac_address2, "%pM\n", board_info);
 + MOX_ATTR_RO(pubkey, "%s\n", pubkey);
 + 
-+-static int mox_get_status(enum mbox_cmd cmd, u32 retval)
 ++static ssize_t
 ++do_sign_show(struct kobject *kobj, struct kobj_attribute *a, char *buf)
-+ {
-+-	if (MBOX_STS_CMD(retval) != cmd ||
-+-	    MBOX_STS_ERROR(retval) != MBOX_STS_SUCCESS)
-+-		return -EIO;
-+-	else if (MBOX_STS_ERROR(retval) == MBOX_STS_FAIL)
-+-		return -(int)MBOX_STS_VALUE(retval);
-+-	else
-+-		return MBOX_STS_VALUE(retval);
+++{
 ++	struct mox_rwtm *rwtm = to_rwtm(kobj);
 ++
 ++	if (!rwtm->last_sig_done)
@@ -260,39 +252,45 @@ index 0000000..2675558
 ++unlock_mutex:
 ++	mutex_unlock(&rwtm->busy);
 ++	return ret;
-+ }
-+ 
+++}
+++
 ++/* only root should be able to sign */
 ++static struct kobj_attribute mox_attr_do_sign =
 ++	__ATTR(do_sign, 0600, do_sign_show, do_sign_store);
 ++
-+ static const struct attribute *mox_rwtm_attrs[] = {
-+ 	&mox_attr_serial_number.attr,
-+ 	&mox_attr_board_version.attr,
-+@@ -150,9 +230,21 @@ static const struct attribute *mox_rwtm_attrs[] = {
-+ 	&mox_attr_mac_address1.attr,
-+ 	&mox_attr_mac_address2.attr,
-+ 	&mox_attr_pubkey.attr,
+++static const struct attribute *mox_rwtm_attrs[] = {
+++	&mox_attr_serial_number.attr,
+++	&mox_attr_board_version.attr,
+++	&mox_attr_ram_size.attr,
+++	&mox_attr_mac_address1.attr,
+++	&mox_attr_mac_address2.attr,
+++	&mox_attr_pubkey.attr,
 ++	&mox_attr_do_sign.attr,
-+ 	NULL
-+ };
-+ 
-++static int mox_get_status(enum mbox_cmd cmd, u32 retval)
-++{
-++	if (MBOX_STS_CMD(retval) != cmd ||
-++	    MBOX_STS_ERROR(retval) != MBOX_STS_SUCCESS)
-++		return -EIO;
-++	else if (MBOX_STS_ERROR(retval) == MBOX_STS_FAIL)
-++		return -(int)MBOX_STS_VALUE(retval);
-++	else
-++		return MBOX_STS_VALUE(retval);
-++}
+++	NULL
+++};
 ++
++ static int mox_get_status(enum mbox_cmd cmd, u32 retval)
++ {
++ 	if (MBOX_STS_CMD(retval) != cmd)
++@@ -146,16 +249,6 @@ static int mox_get_status(enum mbox_cmd cmd, u32 retval)
++ 		return MBOX_STS_VALUE(retval);
++ }
++ 
++-static const struct attribute *mox_rwtm_attrs[] = {
++-	&mox_attr_serial_number.attr,
++-	&mox_attr_board_version.attr,
++-	&mox_attr_ram_size.attr,
++-	&mox_attr_mac_address1.attr,
++-	&mox_attr_mac_address2.attr,
++-	&mox_attr_pubkey.attr,
++-	NULL
++-};
++-
 + static void mox_rwtm_rx_callback(struct mbox_client *cl, void *data)
 + {
 + 	struct mox_rwtm *rwtm = dev_get_drvdata(cl->dev);
 +-- 
-+2.24.1
++2.30.2
 +
 diff --git a/target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch b/target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
 new file mode 100644
