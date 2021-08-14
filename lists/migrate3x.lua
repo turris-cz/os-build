@@ -115,6 +115,10 @@ if version_match and installed and installed["ubus"]  and
 		version_match(self_version, ">=63.0") and
 		version_match(installed["ubus"].version, "<2018") then
 	Package("ubus", { replan = 'immediate' })
+	-- updater-supervisor depends on cronie but we are replacing vixie-cron with
+	-- it. Updater is unable to remove package on immediate replan so we instead
+	-- just mark it as virtual and install it after replan.
+	Package("updater-supervisor", { virtual = true })
 end
 
 --[[
