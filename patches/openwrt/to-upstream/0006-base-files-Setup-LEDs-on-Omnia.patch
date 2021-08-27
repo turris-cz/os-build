@@ -1,0 +1,37 @@
+From b34096fb94b34b0ba4de18b113c15b0169279d16 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Fri, 27 Aug 2021 13:00:56 +0200
+Subject: [PATCH] base-files: Setup LEDs on Omnia
+
+This configures network LEDs triggers for Turris Omnia on first boot.
+
+It is not possible to simply autodetect PCIe cards and pair them with
+correct slot as configuration is generated early during the first boot
+when PCI devices are not yet fully initialized. Instead we set here only
+good enough assumption of PCIe slots mapping to wireless interfaces.
+
+Original author: Michal Hrusecky <Michal@Hrusecky.net>
+---
+ target/linux/mvebu/cortexa9/base-files/etc/board.d/01_leds | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/target/linux/mvebu/cortexa9/base-files/etc/board.d/01_leds b/target/linux/mvebu/cortexa9/base-files/etc/board.d/01_leds
+index 5a2ca3fa85..b8d392c1dc 100755
+--- a/target/linux/mvebu/cortexa9/base-files/etc/board.d/01_leds
++++ b/target/linux/mvebu/cortexa9/base-files/etc/board.d/01_leds
+@@ -12,6 +12,12 @@ board=$(board_name)
+ boardname="${board##*,}"
+ 
+ case "$board" in
++cznic,turris-omnia)
++	ucidef_set_led_netdev "wan" "wan" "omnia-led:wan" "eth2"
++	for i in $(seq 3); do
++		ucidef_set_led_netdev "pci$i" "pci$i" "omnia-led:pci$i" "wlan$i"
++	done
++	;;
+ kobol,helios4)
+ 	ucidef_set_led_usbport "USB" "USB" "helios4:green:usb" "usb1-port1" "usb2-port1" "usb3-port1" "usb4-port1" "usb5-port1"
+ 	;;
+-- 
+2.33.0
+

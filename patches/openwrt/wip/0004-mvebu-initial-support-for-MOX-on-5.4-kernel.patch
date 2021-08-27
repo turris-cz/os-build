@@ -1,28 +1,26 @@
-From 4d9344604bb874ca181ac66795fc7a40872144c9 Mon Sep 17 00:00:00 2001
+From 7780e4a914e8d2942a4a9d3590177eaaff0cdcdb Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Thu, 30 Apr 2020 00:18:17 +0200
 Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
 
 ---
  package/boot/uboot-tools/files/mvebu          |   3 +
- .../base-files/etc/board.d/02_network         |   3 +
+ .../base-files/etc/board.d/02_network         |   7 +
  target/linux/mvebu/cortexa53/config-5.4       |  13 ++
  target/linux/mvebu/image/cortexa53.mk         |  12 ++
- ...is-mox-rwtm-support-ECDSA-signatures.patch | 159 ++++++++++++++++++
- ...da-3720-turris-mox-add-firmware-node.patch |  38 +++++
+ ...is-mox-rwtm-support-ECDSA-signatures.patch | 158 ++++++++++++++++++
  ...Zero-max-link-speed-value-is-invalid.patch |  32 ++++
  ...x-implement-phylink-AN-restart-on-Se.patch | 137 +++++++++++++++
- 8 files changed, 397 insertions(+)
+ 7 files changed, 362 insertions(+)
  create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
- create mode 100644 target/linux/mvebu/patches-5.4/9904-arm64-dts-armada-3720-turris-mox-add-firmware-node.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
 
 diff --git a/package/boot/uboot-tools/files/mvebu b/package/boot/uboot-tools/files/mvebu
-index afa058a..0036fcd 100644
+index 92b144330f..c298dfc63a 100644
 --- a/package/boot/uboot-tools/files/mvebu
 +++ b/package/boot/uboot-tools/files/mvebu
-@@ -21,6 +21,9 @@ cznic,turris-omnia)
+@@ -24,6 +24,9 @@ cznic,turris-omnia)
  		ubootenv_add_uci_config "/dev/mtd0" "0xf0000" "0x10000" "0x10000"
  	fi
  	;;
@@ -33,21 +31,25 @@ index afa058a..0036fcd 100644
  	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x8000" "0x8000" "1"
  	;;
 diff --git a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
-index c945251..f82ca44 100755
+index c945251e4e..69cc8662ae 100755
 --- a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
 +++ b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
-@@ -11,6 +11,9 @@ board_config_update
+@@ -11,6 +11,13 @@ board_config_update
  board=$(board_name)
  
  case "$board" in
 +cznic,turris-mox)
-+	ucidef_set_interface_lan_wan "$(cd /sys/class/net/; echo lan*)" "eth0"
++	for net in /sys/class/net/lan*; do
++		[ -e "$net" ] || continue
++		ucidef_set_interface_lan "${net##*/}"
++	done
++	ucidef_set_interface_wan "eth0"
 +	;;
  glinet,gl-mv1000|\
  globalscale,espressobin|\
  globalscale,espressobin-emmc|\
 diff --git a/target/linux/mvebu/cortexa53/config-5.4 b/target/linux/mvebu/cortexa53/config-5.4
-index 40253e5..68e2445 100644
+index 9baff52b72..b8bbd8657a 100644
 --- a/target/linux/mvebu/cortexa53/config-5.4
 +++ b/target/linux/mvebu/cortexa53/config-5.4
 @@ -87,6 +87,8 @@ CONFIG_ARM64_VA_BITS_39=y
@@ -59,7 +61,7 @@ index 40253e5..68e2445 100644
  CONFIG_ARMADA_AP806_SYSCON=y
  CONFIG_ARMADA_AP_CP_HELPER=y
  CONFIG_ARMADA_CP110_SYSCON=y
-@@ -134,6 +136,7 @@ CONFIG_GENERIC_CSUM=y
+@@ -133,6 +135,7 @@ CONFIG_GENERIC_CSUM=y
  CONFIG_GENERIC_GETTIMEOFDAY=y
  CONFIG_GENERIC_PINCONF=y
  CONFIG_GENERIC_TIME_VSYSCALL=y
@@ -67,7 +69,7 @@ index 40253e5..68e2445 100644
  CONFIG_HAVE_ALIGNED_STRUCT_PAGE=y
  CONFIG_HAVE_ARCH_HUGE_VMAP=y
  CONFIG_HAVE_ARCH_JUMP_LABEL_RELATIVE=y
-@@ -156,6 +159,8 @@ CONFIG_HAVE_PATA_PLATFORM=y
+@@ -155,6 +158,8 @@ CONFIG_HAVE_PATA_PLATFORM=y
  CONFIG_HAVE_RCU_TABLE_FREE=y
  CONFIG_HOLES_IN_ZONE=y
  # CONFIG_HUGETLBFS is not set
@@ -76,7 +78,7 @@ index 40253e5..68e2445 100644
  CONFIG_ILLEGAL_POINTER_VALUE=0xdead000000000000
  CONFIG_INLINE_READ_LOCK=y
  CONFIG_INLINE_READ_LOCK_BH=y
-@@ -178,10 +183,16 @@ CONFIG_INLINE_WRITE_LOCK_IRQSAVE=y
+@@ -177,10 +182,16 @@ CONFIG_INLINE_WRITE_LOCK_IRQSAVE=y
  CONFIG_INLINE_WRITE_UNLOCK_BH=y
  CONFIG_INLINE_WRITE_UNLOCK_IRQRESTORE=y
  CONFIG_KASAN_STACK=1
@@ -93,7 +95,7 @@ index 40253e5..68e2445 100644
  CONFIG_MVEBU_GICP=y
  CONFIG_MVEBU_ICU=y
  CONFIG_MVEBU_ODMI=y
-@@ -208,6 +219,7 @@ CONFIG_QUEUED_SPINLOCKS=y
+@@ -205,6 +216,7 @@ CONFIG_QUEUED_SPINLOCKS=y
  # CONFIG_RANDOMIZE_BASE is not set
  CONFIG_REGULATOR_GPIO=y
  CONFIG_RODATA_FULL_DEFAULT_ENABLED=y
@@ -101,7 +103,7 @@ index 40253e5..68e2445 100644
  CONFIG_SERIAL_8250_FSL=y
  # CONFIG_SERIAL_AMBA_PL011 is not set
  CONFIG_SPARSEMEM=y
-@@ -220,6 +232,7 @@ CONFIG_SWIOTLB=y
+@@ -217,6 +229,7 @@ CONFIG_SWIOTLB=y
  CONFIG_SYSCTL_EXCEPTION_TRACE=y
  CONFIG_SYS_SUPPORTS_HUGETLBFS=y
  CONFIG_THREAD_INFO_IN_TASK=y
@@ -110,7 +112,7 @@ index 40253e5..68e2445 100644
  CONFIG_UNMAP_KERNEL_AT_EL0=y
  CONFIG_VMAP_STACK=y
 diff --git a/target/linux/mvebu/image/cortexa53.mk b/target/linux/mvebu/image/cortexa53.mk
-index 6a3a568..ab694ab 100644
+index 6a3a568655..ab694ab4fb 100644
 --- a/target/linux/mvebu/image/cortexa53.mk
 +++ b/target/linux/mvebu/image/cortexa53.mk
 @@ -1,3 +1,15 @@
@@ -131,7 +133,8 @@ index 6a3a568..ab694ab 100644
    DEVICE_VENDOR := GL.iNet
 diff --git a/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
 new file mode 100644
-index 0000000..2675558
+index 0000000000..91ac156cc6
+--- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
 @@ -0,0 +1,158 @@
 +From 2cce7cc15a531c2e7c708040dc5aab269e8bb543 Mon Sep 17 00:00:00 2001
@@ -294,7 +297,7 @@ index 0000000..2675558
 +
 diff --git a/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch b/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
 new file mode 100644
-index 0000000..c0e1d31
+index 0000000000..c0e1d31a62
 --- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
 @@ -0,0 +1,32 @@
@@ -332,7 +335,7 @@ index 0000000..c0e1d31
 +
 diff --git a/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch b/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
 new file mode 100644
-index 0000000..47a9739
+index 0000000000..47a973981d
 --- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
 @@ -0,0 +1,137 @@
@@ -474,5 +477,5 @@ index 0000000..47a9739
 +2.24.1
 +
 -- 
-2.31.1
+2.33.0
 
