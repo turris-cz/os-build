@@ -1,6 +1,9 @@
 include(utils.m4)dnl
 _FEATURE_GUARD_
 
+-- Enforce contract
+Install("omnia-cti-support", { priority = 60 })
+
 -- Extra security
 Install('common_passwords')
 
