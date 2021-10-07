@@ -1,1 +1,0 @@
--- This list is obsoleted and superseded by luci_controls

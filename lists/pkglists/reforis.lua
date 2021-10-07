@@ -1,1 +1,0 @@
--- This list is obsoleted and its content was moved to base installation

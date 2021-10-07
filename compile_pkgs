@@ -15,77 +15,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-shopt -s nullglob
 
 # Step list that is run when no commands are specified
 DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_junit" )
 
-# Paths to OpenWRT build and turris-build sources
+# Paths to turris-build sources and common utilities inclusion
 src_dir="$(readlink -f "${0%/*}")"
-build_dir="$(readlink -f "$(pwd)")"
-if [ "$build_dir" == "$src_dir" ]; then
-	# Protect against turris-build repository wipe
-	mkdir -p build
-	cd build
-	build_dir="$(pwd)"
-fi
+source "$src_dir/helpers/generate_common.sh"
 
-# Include common utilities
-. "$src_dir/helpers/common.sh"
-
-# Sets various variables to match the specified target, just a helper
-# It is defined here so it can be used from configuration
-set_target() {
-	report "Setting target as $1"
-	case "$1" in
-		omnia)
-			TARGET_BOARD=omnia
-			TARGET_ARCH=armv7l
-			;;
-		turris1x)
-			TARGET_BOARD=turris1x
-			TARGET_ARCH=ppcspe
-			;;
-		mox)
-			TARGET_BOARD=mox
-			TARGET_ARCH=aarch64
-			;;
-		*)
-			echo "Invalid target board!!! Use -t [turris1x|omnia|mox]!!!"
-			exit 1
-			;;
-	esac
-}
-
-# Get OpenWRT URL and branch from feeds.conf file
-openwrt_feed() {
-	# OpenWRT git repository URL
-	OPENWRT_URL="$(sed -n 's/# openwrt \([^;^]\+\).*/\1/p' "$src_dir/feeds.conf")"
-	# Git reference used to checkout OpenWRT repository
-	OPENWRT_BRANCH="$(sed -n 's/# openwrt [^;^]\+[;^]\([^[:blank:]]\+\).*/\1/p' "$src_dir/feeds.conf")"
-	# Check if ^ is used to separate URL and branch and in such case it is hash not branch
-	grep -E '^# openwrt [^;^]+\^.+' "$src_dir/feeds.conf" && OPENWRT_BRANCH="#$OPENWRT_BRANCH"
-	[ -n "$OPENWRT_BRANCH" ] || OPENWRT_BRANCH="master"
-}
-
-# Configuration variables
-. "$src_dir/defaults.sh"
-FORCE="" # Force build
-CLONE_DEEP="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
-BUILD_ARGS=() # Additional arguments passed to OpenWRT make call (note that this is for all make calls in OpenWRT)
-BUILD_JOBS="$(nproc)" # Number of jobs to be passed to make calls
-SIGN_KEY="" # Path to private signing key
-GIT_MIRROR="" # Path to git mirror directory
-DL_MIRROR="" # Path to downloads mirror directory
-CCACHE_HOST_DIR="" # Path to ccache directory for host compilations
-CCACHE_TARGET_DIR="" # Path to ccache directory for target compilations
+# Configuration
+source "$src_dir/helpers/conf.sh"
 OUTPUT_DIR="./pkgsrepo" # Output directory for pkgsrepo command
-openwrt_feed
-
-# Load configurations
-[ -f "${src_dir}"/turris-build.conf ] && . "${src_dir}"/turris-build.conf
-[ -f ~/.turris-build ] && . ~/.turris-build
-[ -f ./turris-build.conf ] && . ./turris-build.conf
 
 ##################################################################################
 
@@ -93,19 +33,6 @@ openwrt_feed
 declare -A available_commands # Set of all commands defined in this script
 mirror_updated="" # Variable signaling that mirrors were update in this run already
 debug="" # set when debug on executed scripts should be enabled
-
-# OpenWRT directory for temporally data
-export TMPDIR="${build_dir}/tmp"
-mkdir -p "$TMPDIR"
-
-# Git that should be used for commands such as: git commit or git am
-_git() {
-	git \
-		-c "commit.gpgsign=false" \
-		-c "user.email=auto-build@example.com" \
-		-c "user.name=Build system automate" \
-		"$@"
-}
 
 _sh() {
 	sh ${debug:+-x} "$@"
@@ -181,7 +108,7 @@ stats() {
 available_commands+=( ["configure"]="Recreates configuration for target boards" )
 configure() {
 	report "Creating default configuration"
-	[ -n "${TARGET_BOARD}" ] || die "No board selected!"
+	[ -n "${TARGET_BOARD:-}" ] || die "No board selected!"
 	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
 	{
 		[ -n "$DL_MIRROR" ] && echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR"
@@ -213,62 +140,31 @@ configure() {
 
 available_commands+=( ["update_mirror"]="Updates all local mirrors" )
 update_mirror() {
-	[ -n "$GIT_MIRROR" ] || return 0
-	[ -d "$GIT_MIRROR" ] || return 0
-	[ -z "$mirror_updated" ] || return 0
-
+	use_git_mirror || return 0
 	report "Updating local mirrors"
-	flock --exclusive "$GIT_MIRROR" "$SHELL" -s "$GIT_MIRROR" <<"EOF"
-		cd "$1"
-		for mirror in ./*; do
-			[ -d "$mirror" ] || continue
-			cd "$mirror"
-			git remote update --prune
-			cd "$1"
-		done
-EOF
-	mirror_updated="yes"
+	git_mirror_update_all
 }
 
 available_commands+=( ["checkout"]="Start everything from scratch - all changes deleted and fresh copy of OpenWRT gets checked out" )
 checkout() {
-	local target="${OPENWRT_BRANCH#\#}"
-	report "Starting out: $target"
-
+	local url
+	url="$(get_feed "#" "openwrt")"
+	report "Starting out: $(feed_ref "$url")"
 	report "Checking out OpenWRT repository"
-	update_mirror
-	if [ -n "$GIT_MIRROR" ]; then
-		mkdir -p "$GIT_MIRROR"
-		[ -d "$GIT_MIRROR/openwrt" ] || \
-			git clone --mirror "$OPENWRT_URL" "$GIT_MIRROR/openwrt"
-		OPENWRT_URL="$GIT_MIRROR/openwrt"
-	fi
-	rm -rf .git
-	git init
-	git remote add origin "$OPENWRT_URL"
-	if [ -z "$GIT_MIRROR" -a "${OPENWRT_BRANCH:0:1}" = "#" ]; then
-		# If we are downloading directly from server we can't fetch specific
-		# commit so fetch everything
-		git fetch origin
-		git checkout -f "$target"
-	else
-		git fetch ${CLONE_DEEP+--depth 1} origin "$target"
-		git checkout -f FETCH_HEAD
-	fi
+	# Note: OpenWrt's script getver.sh expects full history so we do not do deep
+	# copy for OpenWrt repository no matter the configuration.
+	CLONE_DEEP="" git_clean_checkout "openwrt" "$url" "." \
+		"/turris-build.conf"
 
-	git clean -dff -e '/turris-build.conf'
-	find . -name '*.rej' -delete
-
-	git rev-parse --short HEAD > version
 	echo "/turris-build.conf" >> ./.gitignore
-	echo "/version" >> ./.gitignore
-	_git commit -m 'gitignore: Ignore some more files' ./.gitignore
+	_git commit -m 'gitignore: Ignore turris-build related files' ./.gitignore
 
 	cp "$src_dir"/feeds.conf .
 
 	if [ -n "$DL_MIRROR" ]; then
 		mkdir -p "$DL_MIRROR"
-		rm -rf dl && ln -s "$DL_MIRROR" dl
+		rm -rf dl
+		ln -s "$DL_MIRROR" dl
 	fi
 }
 
@@ -285,7 +181,7 @@ clean_ccache() {
 
 available_commands+=( ["set_ccache"]="Set persistent ccache paths" )
 set_ccache() {
-	[ -z "$CCACHE_SET" ] || return 0
+	[ "${CCACHE_SET:-n}" == "y" ] && return 0
 	report "Setting ccache paths"
 	CCACHE_SET=y
 	[ -z "$CCACHE_HOST_DIR" ] || sed -i 's|$(STAGING_DIR_HOST)/ccache|'"$CCACHE_HOST_DIR|" include/host-build.mk
@@ -295,40 +191,22 @@ set_ccache() {
 
 available_commands+=( ["set_local_feeds"]="Change feed URL to their mirror counterparts" )
 set_local_feeds() {
-	[ -n "$GIT_MIRROR" ] || return 0
+	use_git_mirror || return 0
 	report "Setting feeds to their local counterparts"
 	while read -r vcs name url rest; do
-		if [ "$vcs" = src-git ] && [ -d "$GIT_MIRROR/$name" ]; then
-			local branch=""
-			[[ "$url" != *^* ]] || branch="^${url#*^}"
-			[[ "$url" != *\;* ]] || branch=";${url#*;}"
-			echo "$vcs $name file://$GIT_MIRROR/$name$branch $rest"
-		else
-			echo "$vcs $name $url $rest"
+		if [ "$vcs" = src-git ]; then
+			git_mirror_update  "$name" "$(feed_url "$url")"
+			url="$(git_mirror_url "$name" "$url")"
 		fi
-	done < feeds.conf > feeds.conf.new
+		echo "$vcs" "$name" "$url" "$rest" >&3
+	done < feeds.conf 3> feeds.conf.new
 	mv feeds.conf.new feeds.conf
-}
-
-available_commands+=( ["mirror_feeds"]="Creates initial mirrors of all configured feeds" )
-mirror_feeds() {
-	[ -n "$GIT_MIRROR" ] || return 0
-	pushd "$GIT_MIRROR" >/dev/null
-	cat "$src_dir"/feeds.conf "$build_dir"/feeds.conf 2> /dev/null | while read -r vcs name url rest; do
-		if [ "$vcs" = src-git ] && [ ! -d "$GIT_MIRROR/$name" ]; then
-			git clone --mirror "${url%[;^]*}" "$name"
-		fi
-	done
-	popd >/dev/null
-	update_mirror
 }
 
 available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	report "Patching OpenWRT repository"
-	for patch in "$src_dir/patches/openwrt"/*/*.patch; do
-		_git am --whitespace=nowarn --reject "$patch"
-	done
+	patch_repository "openwrt"
 	if [ -d "$src_dir/src" ]; then
 		cp -r "$src_dir"/src/* .
 		find "$src_dir"/src -printf "%P\\0" | xargs --null git add
@@ -362,24 +240,17 @@ store_hash() {
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them" )
 repatch_feeds() {
-	report "Getting feeds"
-	update_mirror
 	set_local_feeds
+	report "Getting feeds"
 	_perl ./scripts/feeds clean -a
 	_perl ./scripts/feeds update -a
 
 	report "Patching feeds"
-	for feed in "$src_dir"/patches/*; do
-		[ -d "$feed" ] || continue
-		feed_name="$(basename "$feed")"
-		[ -d "$build_dir/feeds/$feed_name" ] || continue
-		for patch in "$feed"/*/*.patch; do
-			[ -f "$patch" ] || continue
-			pushd "$build_dir/feeds/$feed_name" >/dev/null
-			_git am --whitespace=nowarn --reject "$patch"
-			popd >/dev/null
-		done
-	done
+	while read -r vcs name url rest; do
+		if [ "$vcs" = src-git ]; then
+			patch_repository "$name" "$build_dir/feeds/$name"
+		fi
+	done < feeds.conf
 
 	report "Installing feeds packages"
 	_perl ./scripts/feeds update -a -i
@@ -527,8 +398,7 @@ while [ $# -gt 0 ]; do
 			PUBLISH_BRANCH="$1"
 			;;
 		-l)
-			mirror_updated="override"
-			OPENWRT_URL="$GIT_MIRROR/openwrt"
+			set_git_mirrors_updated
 			;;
 		-o)
 			shift
@@ -558,6 +428,13 @@ while [ $# -gt 0 ]; do
 done
 
 [ "$(id -u)" != 0 ] || die "Build should not be run under root!"
+
+# Set build_dir variable
+set_protected_build_dir
+
+# OpenWRT directory for temporally data
+export TMPDIR="${build_dir}/tmp"
+mkdir -p "$TMPDIR"
 
 [ ${#steps[@]} -gt 0 ] || steps=( "${DEFAULT_STEPS[@]}" )
 for step in "${steps[@]}"; do
