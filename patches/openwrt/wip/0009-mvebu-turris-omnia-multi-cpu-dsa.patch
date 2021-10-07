@@ -1,4 +1,4 @@
-From 664a3489bd5f4ab1aa306feb85c298529edefbad Mon Sep 17 00:00:00 2001
+From 2682dc34d53415acf0813a22c4305b8fc1fc028c Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Thu, 5 Sep 2019 18:43:13 +0200
 Subject: [PATCH] mvebu: turris-omnia: multi cpu dsa
@@ -8,22 +8,41 @@ Content-Transfer-Encoding: 8bit
 
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 ---
- .../90500-net-dsa-multi-cpu.patch             | 261 ++++++++++++++++++
- .../90501-omnia-dts-dsa-multi-cpu.patch       |  58 ++++
- 2 files changed, 319 insertions(+)
- create mode 100644 target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
- create mode 100644 target/linux/mvebu/patches-4.14/90501-omnia-dts-dsa-multi-cpu.patch
+ ...x-Add-support-for-multi-CPU-DSA-for-.patch | 287 ++++++++++++++++++
+ ...Turris-Omnia-add-multi-CPU-DSA-nodes.patch |  75 +++++
+ 2 files changed, 362 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-4.14/90500-net-dsa-mv88e6xxx-Add-support-for-multi-CPU-DSA-for-.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90501-dts-Turris-Omnia-add-multi-CPU-DSA-nodes.patch
 
-diff --git a/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch b/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
+diff --git a/target/linux/mvebu/patches-4.14/90500-net-dsa-mv88e6xxx-Add-support-for-multi-CPU-DSA-for-.patch b/target/linux/mvebu/patches-4.14/90500-net-dsa-mv88e6xxx-Add-support-for-multi-CPU-DSA-for-.patch
 new file mode 100644
-index 0000000000..1f0fd55727
+index 0000000..c3ef21a
 --- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90500-net-dsa-multi-cpu.patch
-@@ -0,0 +1,261 @@
-+diff -Naurp a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+--- a/drivers/net/dsa/mv88e6xxx/chip.c	2019-09-05 16:56:10.344470471 +0200
-++++ b/drivers/net/dsa/mv88e6xxx/chip.c	2019-09-05 18:37:15.627601841 +0200
-+@@ -1087,6 +1087,7 @@ static u16 mv88e6xxx_port_vlan(struct mv
++++ b/target/linux/mvebu/patches-4.14/90500-net-dsa-mv88e6xxx-Add-support-for-multi-CPU-DSA-for-.patch
+@@ -0,0 +1,287 @@
++From 15beb5c7bd4cb96c02b661adab564d21fa2a7489 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Thu, 17 Jun 2021 15:15:32 +0200
++Subject: [PATCH 1/2] net: dsa: mv88e6xxx: Add support for multi-CPU DSA (for
++ Turris Omnia)
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 27 +++++++++++++--
++ include/net/dsa.h                | 21 ++++++++++++
++ net/dsa/dsa2.c                   | 57 +++++++++++++++++++++++++++++---
++ net/dsa/dsa_priv.h               |  7 +++-
++ net/dsa/slave.c                  |  9 ++++-
++ 5 files changed, 111 insertions(+), 10 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index abc3f050f4a9..be45c367fec2 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -1087,6 +1087,7 @@ static u16 mv88e6xxx_port_vlan(struct mv88e6xxx_chip *chip, int dev, int port)
 + 	struct dsa_switch *ds = NULL;
 + 	struct net_device *br;
 + 	u16 pvlan;
@@ -31,7 +50,7 @@ index 0000000000..1f0fd55727
 + 	int i;
 + 
 + 	if (dev < DSA_MAX_SWITCHES)
-+@@ -1097,17 +1098,35 @@ static u16 mv88e6xxx_port_vlan(struct mv
++@@ -1097,17 +1098,35 @@ static u16 mv88e6xxx_port_vlan(struct mv88e6xxx_chip *chip, int dev, int port)
 + 		return 0;
 + 
 + 	/* Frames from DSA links and CPU ports can egress any local port */
@@ -69,7 +88,7 @@ index 0000000000..1f0fd55727
 + 		    dsa_is_dsa_port(chip->ds, i) ||
 + 		    (br && chip->ds->ports[i].bridge_dev == br))
 + 			pvlan |= BIT(i);
-+@@ -1943,9 +1962,11 @@ static int mv88e6xxx_setup_message_port(
++@@ -1943,9 +1962,11 @@ static int mv88e6xxx_setup_message_port(struct mv88e6xxx_chip *chip, int port)
 + 
 + static int mv88e6xxx_setup_egress_floods(struct mv88e6xxx_chip *chip, int port)
 + {
@@ -82,9 +101,10 @@ index 0000000000..1f0fd55727
 + 	if (chip->info->ops->port_set_egress_floods)
 + 		return chip->info->ops->port_set_egress_floods(chip, port,
 + 							       flood, flood);
-+diff -Naurp a/include/net/dsa.h b/include/net/dsa.h
-+--- a/include/net/dsa.h	2019-09-05 16:56:10.271137138 +0200
-++++ b/include/net/dsa.h	2019-09-05 17:22:07.974758267 +0200
++diff --git a/include/net/dsa.h b/include/net/dsa.h
++index 464397c41088..570dad8f3a60 100644
++--- a/include/net/dsa.h
+++++ b/include/net/dsa.h
 +@@ -188,6 +188,10 @@ struct dsa_port {
 + 	struct net_device	*bridge_dev;
 + 	struct devlink_port	devlink_port;
@@ -96,7 +116,7 @@ index 0000000000..1f0fd55727
 + 	/*
 + 	 * Original copy of the master netdev ethtool_ops
 + 	 */
-+@@ -269,6 +273,11 @@ static inline bool dsa_is_normal_port(st
++@@ -269,6 +273,11 @@ static inline bool dsa_is_normal_port(struct dsa_switch *ds, int p)
 + 	return !dsa_is_cpu_port(ds, p) && !dsa_is_dsa_port(ds, p);
 + }
 + 
@@ -108,7 +128,7 @@ index 0000000000..1f0fd55727
 + static inline u8 dsa_upstream_port(struct dsa_switch *ds)
 + {
 + 	struct dsa_switch_tree *dst = ds->dst;
-+@@ -285,6 +294,18 @@ static inline u8 dsa_upstream_port(struc
++@@ -285,6 +294,18 @@ static inline u8 dsa_upstream_port(struct dsa_switch *ds)
 + 		return ds->rtable[dst->cpu_dp->ds->index];
 + }
 + 
@@ -127,10 +147,11 @@ index 0000000000..1f0fd55727
 + typedef int dsa_fdb_dump_cb_t(const unsigned char *addr, u16 vid,
 + 			      bool is_static, void *data);
 + struct dsa_switch_ops {
-+diff -Naurp a/net/dsa/dsa2.c b/net/dsa/dsa2.c
-+--- a/net/dsa/dsa2.c	2019-08-29 08:26:46.000000000 +0200
-++++ b/net/dsa/dsa2.c	2019-09-05 17:25:55.361304595 +0200
-+@@ -253,6 +253,8 @@ static int dsa_cpu_port_apply(struct dsa
++diff --git a/net/dsa/dsa2.c b/net/dsa/dsa2.c
++index 0796355e74c1..8b5d3e500605 100644
++--- a/net/dsa/dsa2.c
+++++ b/net/dsa/dsa2.c
++@@ -253,6 +253,8 @@ static int dsa_cpu_port_apply(struct dsa_port *port)
 + 	memset(&port->devlink_port, 0, sizeof(port->devlink_port));
 + 	err = devlink_port_register(ds->devlink, &port->devlink_port,
 + 				    port->index);
@@ -139,7 +160,7 @@ index 0000000000..1f0fd55727
 + 	return err;
 + }
 + 
-+@@ -262,6 +264,12 @@ static void dsa_cpu_port_unapply(struct
++@@ -262,6 +264,12 @@ static void dsa_cpu_port_unapply(struct dsa_port *port)
 + 	dsa_cpu_dsa_destroy(port);
 + 	port->ds->cpu_port_mask &= ~BIT(port->index);
 + 
@@ -152,7 +173,7 @@ index 0000000000..1f0fd55727
 + }
 + 
 + static int dsa_user_port_apply(struct dsa_port *port)
-+@@ -505,10 +513,9 @@ static int dsa_cpu_parse(struct dsa_port
++@@ -505,10 +513,9 @@ static int dsa_cpu_parse(struct dsa_port *port, u32 index,
 + 		dev_put(ethernet_dev);
 + 	}
 + 
@@ -165,7 +186,7 @@ index 0000000000..1f0fd55727
 + 
 + 	/* Initialize cpu_port_mask now for drv->setup()
 + 	 * to have access to a correct value, just like what
-+@@ -526,6 +533,32 @@ static int dsa_cpu_parse(struct dsa_port
++@@ -526,6 +533,32 @@ static int dsa_cpu_parse(struct dsa_port *port, u32 index,
 + 
 + 	dst->rcv = dst->tag_ops->rcv;
 + 
@@ -198,7 +219,7 @@ index 0000000000..1f0fd55727
 + 	return 0;
 + }
 + 
-+@@ -533,8 +566,9 @@ static int dsa_ds_parse(struct dsa_switc
++@@ -533,8 +566,9 @@ static int dsa_ds_parse(struct dsa_switch_tree *dst, struct dsa_switch *ds)
 + {
 + 	struct dsa_port *port;
 + 	u32 index;
@@ -209,7 +230,7 @@ index 0000000000..1f0fd55727
 + 	for (index = 0; index < ds->num_ports; index++) {
 + 		port = &ds->ports[index];
 + 		if (!dsa_port_is_valid(port) ||
-+@@ -545,7 +579,20 @@ static int dsa_ds_parse(struct dsa_switc
++@@ -545,7 +579,20 @@ static int dsa_ds_parse(struct dsa_switch_tree *dst, struct dsa_switch *ds)
 + 			err = dsa_cpu_parse(port, index, dst, ds);
 + 			if (err)
 + 				return err;
@@ -231,9 +252,10 @@ index 0000000000..1f0fd55727
 + 			/* Initialize enabled_port_mask now for drv->setup()
 + 			 * to have access to a correct value, just like what
 + 			 * net/dsa/dsa.c::dsa_switch_setup_one does.
-+diff -Naurp a/net/dsa/dsa_priv.h b/net/dsa/dsa_priv.h
-+--- a/net/dsa/dsa_priv.h	2019-09-05 16:56:10.271137138 +0200
-++++ b/net/dsa/dsa_priv.h	2019-09-05 17:04:23.465370041 +0200
++diff --git a/net/dsa/dsa_priv.h b/net/dsa/dsa_priv.h
++index ae8eb8ce7d97..9ab297c2a93c 100644
++--- a/net/dsa/dsa_priv.h
+++++ b/net/dsa/dsa_priv.h
 +@@ -81,6 +81,8 @@ struct dsa_slave_priv {
 + 
 + 	/* TC context */
@@ -243,7 +265,7 @@ index 0000000000..1f0fd55727
 + };
 + 
 + /* dsa.c */
-+@@ -167,7 +169,10 @@ extern const struct dsa_device_ops trail
++@@ -167,7 +169,10 @@ extern const struct dsa_device_ops trailer_netdev_ops;
 + 
 + static inline struct net_device *dsa_master_netdev(struct dsa_slave_priv *p)
 + {
@@ -255,10 +277,11 @@ index 0000000000..1f0fd55727
 + }
 + 
 + static inline struct dsa_port *dsa_get_cpu_port(struct dsa_switch_tree *dst)
-+diff -Naurp a/net/dsa/slave.c b/net/dsa/slave.c
-+--- a/net/dsa/slave.c	2019-09-05 16:56:10.271137138 +0200
-++++ b/net/dsa/slave.c	2019-09-05 17:28:21.377969684 +0200
-+@@ -1242,7 +1242,13 @@ int dsa_slave_create(struct dsa_port *po
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index 0c0e6ddef2e6..0ab16ff5c75f 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1242,7 +1242,13 @@ int dsa_slave_create(struct dsa_port *port, const char *name)
 + 	int ret;
 + 
 + 	cpu_dp = ds->dst->cpu_dp;
@@ -273,7 +296,7 @@ index 0000000000..1f0fd55727
 + 
 + 	if (!ds->num_tx_queues)
 + 		ds->num_tx_queues = 1;
-+@@ -1280,6 +1286,7 @@ int dsa_slave_create(struct dsa_port *po
++@@ -1280,6 +1286,7 @@ int dsa_slave_create(struct dsa_port *port, const char *name)
 + 	p->dp = port;
 + 	INIT_LIST_HEAD(&p->mall_tc_list);
 + 	p->xmit = dst->tag_ops->xmit;
@@ -281,16 +304,33 @@ index 0000000000..1f0fd55727
 + 
 + 	port->netdev = slave_dev;
 + 
-diff --git a/target/linux/mvebu/patches-4.14/90501-omnia-dts-dsa-multi-cpu.patch b/target/linux/mvebu/patches-4.14/90501-omnia-dts-dsa-multi-cpu.patch
++-- 
++2.31.1
++
+diff --git a/target/linux/mvebu/patches-4.14/90501-dts-Turris-Omnia-add-multi-CPU-DSA-nodes.patch b/target/linux/mvebu/patches-4.14/90501-dts-Turris-Omnia-add-multi-CPU-DSA-nodes.patch
 new file mode 100644
-index 0000000000..07b6e12152
+index 0000000..50d1a08
 --- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90501-omnia-dts-dsa-multi-cpu.patch
-@@ -0,0 +1,58 @@
-+diff -Naurp a/arch/arm/boot/dts/armada-385-turris-omnia.dtsi b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+--- a/arch/arm/boot/dts/armada-385-turris-omnia.dtsi	2019-08-22 10:27:11.626341612 +0200
-++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi	2019-08-27 19:54:51.811729285 +0200
-+@@ -369,29 +369,34 @@
++++ b/target/linux/mvebu/patches-4.14/90501-dts-Turris-Omnia-add-multi-CPU-DSA-nodes.patch
+@@ -0,0 +1,75 @@
++From 91f2bc5b3844fdc25b56337760c08982737d0c75 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
++Date: Thu, 17 Jun 2021 15:16:43 +0200
++Subject: [PATCH 2/2] dts: Turris Omnia: add multi-CPU DSA nodes
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ .../arm/boot/dts/armada-385-turris-omnia.dtsi | 19 +++++++++++++++++--
++ 1 file changed, 17 insertions(+), 2 deletions(-)
++
++diff --git a/arch/arm/boot/dts/armada-385-turris-omnia.dtsi b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++index 3583a7926fc0..1dee4212dfa3 100644
++--- a/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
++@@ -370,29 +370,34 @@
 + 			ports@0 {
 + 				reg = <0>;
 + 				label = "lan0";
@@ -326,7 +366,7 @@ index 0000000000..07b6e12152
 + 				reg = <5>;
 + 				label = "cpu";
 + 				ethernet = <&eth1>;
-+@@ -403,7 +408,17 @@
++@@ -404,7 +409,17 @@
 + 				};
 + 			};
 + 
@@ -345,6 +385,9 @@ index 0000000000..07b6e12152
 + 		};
 + 	};
 + };
++-- 
++2.31.1
++
 -- 
-2.24.1
+2.31.1
 

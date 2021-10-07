@@ -1,0 +1,70 @@
+From fa751351007d87656ffc036f3c5f398453462d21 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Wed, 9 Jun 2021 11:02:56 +0200
+Subject: [PATCH] Generate files signature for packages
+
+The configuration of OpenWRT can be changed any time and it can cause
+change of content of the file. The issue is that configuration won't
+cause package bump. The primary problem we encounter this on is when
+files are moved between packages (because something is provided by some
+other package instead). The both packages are installed but new package
+might just simply want to be installed while old has same version and
+thus is ketps in system as it is. This in the end results in collision
+between packages. The solution is to trigger reinstall of such package.
+The files signature change triggers such reinstall.
+---
+ include/package-ipkg.mk        |  5 +++++
+ scripts/gen-files-signature.sh | 15 +++++++++++++++
+ 2 files changed, 20 insertions(+)
+ create mode 100755 scripts/gen-files-signature.sh
+
+diff --git a/include/package-ipkg.mk b/include/package-ipkg.mk
+index 866de94..0a20e81 100644
+--- a/include/package-ipkg.mk
++++ b/include/package-ipkg.mk
+@@ -101,6 +101,9 @@ ifneq ($(PKG_NAME),toolchain)
+ 		$(SCRIPT_DIR)/gen-link-signature.sh "$$(IDIR_$(1))"; \
+ 	)";
+   endef
++  define GenerateFilesSignature
++	FILES_SIGNATURE="$$$$($(SCRIPT_DIR)/gen-files-signature.sh "$$(IDIR_$(1))")";
++  endef
+ endif
+ 
+ _addsep=$(word 1,$(1))$(foreach w,$(wordlist 2,$(words $(1)),$(1)),$(strip $(2) $(w)))
+@@ -230,9 +233,11 @@ $(_endef)
+     endif
+ 	(cd $$(IDIR_$(1))/CONTROL; \
+ 		$(GenerateLinkSignature) \
++		$(GenerateFilesSignature) \
+ 		( \
+ 			echo "$$$$CONTROL"; \
+ 			echo "LinkSignature: $$$$LINK_SIGNATURE"; \
++			echo "FilesSignature: $$$$FILES_SIGNATURE"; \
+ 			printf "Description: "; echo "$$$$DESCRIPTION" | sed -e 's,^[[:space:]]*, ,g'; \
+ 		) > control; \
+ 		chmod 644 control; \
+diff --git a/scripts/gen-files-signature.sh b/scripts/gen-files-signature.sh
+new file mode 100755
+index 0000000..ee77d31
+--- /dev/null
++++ b/scripts/gen-files-signature.sh
+@@ -0,0 +1,15 @@
++#!/usr/bin/env bash
++SELF=${0##*/}
++
++[ -z "$*" ] && {
++	echo "$SELF: no directories / files specified" >&2
++	echo "usage: $SELF [PATH...]" >&2
++	exit 1
++}
++
++for path in "$@"; do
++	find "$path" -type d -o -printf "%P\n"
++done \
++	| sort -u \
++	| md5sum \
++	| cut -d' ' -f1
+-- 
+2.32.0
+

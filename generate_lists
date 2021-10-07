@@ -16,12 +16,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
+FEED_NAME="updater-lists"
+
 src_dir="$(readlink -f "${0%/*}")"
-. "$src_dir/helpers/common.sh"
-. "$src_dir/helpers/generate_common.sh"
+source "$src_dir/helpers/generate_common.sh"
 
 output_path=
 sign_key=
+prepare="n"
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -33,6 +35,8 @@ while [ $# -gt 0 ]; do
 			echo "    Prints this help text."
 			echo "  --sign KEY"
 			echo "    Sign lists with given KEY and usign utility"
+			echo "  --prepare"
+			echo "    Only prepare in current directory. Do not generate lists."
 			echo "  --debug"
 			echo "    Run this script in debug mode"
 			exit
@@ -40,6 +44,9 @@ while [ $# -gt 0 ]; do
 		--sign)
 			shift
 			sign_key="$1"
+			;;
+		--prepare)
+			prepare="y"
 			;;
 		--debug)
 			set -x
@@ -56,30 +63,30 @@ while [ $# -gt 0 ]; do
 	shift
 done
 [ -n "$output_path" ] || output_path="generated_lists"
+output_path="$(readlink -f "$output_path")"
 
-[ -d "$src_dir/lists" -a -f "$src_dir/feeds.conf" ] || \
-	die "This script has to be in the same direstory as feeds.conf and lists directory."
+[ -f "$src_dir/feeds.conf" ] || \
+	die "This script has to be in the same directory as feeds.conf file."
 
-rm -rf "$output_path"
-mkdir -p "$output_path"
+set_protected_build_dir "lists"
 
-"$src_dir/helpers/turris-version.sh" version > "$output_path/turris-version"
-( cd "$src_dir" && git rev-parse HEAD > "$output_path/git-hash" )
+url="$(get_feed "#" "$FEED_NAME" "$src_dir/feeds.conf")"
+tos_version="$("$src_dir/helpers/turris-version.sh" version)"
 
-lists_dir="$src_dir/lists"
-m4args=( "--include=$lists_dir" "-D_INCLUDE_=$lists_dir/" "-D_FEEDS_=$src_dir/feeds.conf" )
-m4args+=( "-D_TURRIS_OS_VERSION_=$("${0%/*}/helpers/turris-version.sh" version)" )
+git_clean_checkout "$FEED_NAME" "$url" "$build_dir"
+patch_repository "$FEED_NAME" "$build_dir"
 
-find "$lists_dir" -name '*.lua.m4' -print0 | while read -r -d '' f; do
-	output="$output_path/${f##$lists_dir/}"
-	mkdir -p "${output%/*}"
-	m4 "${m4args[@]}" "$f" > "${output%.m4}"
-done
-find "$lists_dir" -name '*.lua' -print0 | while read -r -d '' f; do
-	output="$output_path/${f##$lists_dir/}"
-	mkdir -p "${output%/*}"
-	cp "$f" "${output}"
-done
+(
+cd "$build_dir"
+./configure \
+	-f "$src_dir/feeds.conf" \
+	-v "$tos_version" \
+	-d "$output_path"
+)
+
+[ "$prepare" = "n" ] || exit 0
+
+make -C "$build_dir"
 
 if [ -n "$sign_key" ]; then
 	get_usign
@@ -87,3 +94,12 @@ if [ -n "$sign_key" ]; then
 		"$USIGN" -S -m "$f" -s "$sign_key"
 	done
 fi
+
+echo "$tos_version" > "$output_path/turris-version"
+cat > "$output_path/git-hash" <<EOF 
+Project was build from following repositories:"
+
+ * turris-build: $(git_remote_hash "$src_dir")
+ * $FEED_NAME: $(git_remote_hash "$output_path")
+
+EOF
