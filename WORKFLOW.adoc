@@ -1,39 +1,100 @@
 Turris OS release workflow
 ==========================
 
-Binary branches
----------------
+Turris OS is released as a set of packages, updater rules and medkit of distinct
+version. Such set is marked as some exact Turris OS version. To facilitate
+automatic updates with versioned distribution updater (tool on router to
+facilitate updates) follows so-called branches. This makes Turris OS effectively
+rollings distribution as well, although you have to understand that branch is in
+reality some floating link to full build of Turris OS (so not a real rolling
+distribution with incremental packages updates).
 
-There are several binary branches that people can switch into. Those differ in
-how well tested they are and from what sources they are build from. Generally
-releases can be in versioned directories (by compile date) in respective branch
-directory on repo and pointing to the correct version can be achieved using
-symlinks.
+User can choose to follow various binary feeds. There are some pure branches, such
+as HBS and HBT and also branches with corresponding source branch in this git
+repository. In reality, binaries in HBS and HBT are built in HBK and from there
+only copied.
 
-Here Be Dragons (HBD)
-~~~~~~~~~~~~~~~~~~~~~
+Binary branches are signed with two different signing keys. There is release
+key and test key. The reason is that the release key is stored more securely and
+requires more than one developer to receive it while the test key is available for all
+build jobs on build server.
+
+Users can switch between these branches with `switch-branch` script on the router.
+
+List of all primary binary branches continues. Branches are sorted in order of
+stability. Changes are flowing from bottom branch to top ones.
+
+Here Be Snails (HBS)
+--------------------
 
 --------------------------------------------------------------------------------
-                \||/
-                |  @___oo
-      /\  /\   / (__,,,,|
-     ) /^\) ^\/ _)
-     )   /^\/   _)
-     )   _ /  / _)
- /\  )/\/ ||  | )_)
-<  >      |(,,) )__)
- ||      /    \)___)\
- | \____(      )___) )___
-  \______(_______;;; __;;;
+    .----.   @   @
+   / .-"-.`.  \v/
+   | | '\ \ \_/ )
+ ,-\ `-.' /.'  /
+'---`----'----'
 --------------------------------------------------------------------------------
 
-Latest, greatest build. If it builds, ship it. Contains mix of our latest efforts
-and latest upstream development. Can and will break regularly, not meant to be
-used on daily basis, more just for testing. Can be understood as far future next
-major release.
+This is stable release branch. It contains the most tested and stable version. It
+is end-users branch. This is default branch routers follow.
+
+Binary packages in this branch are signed with release key.
+
+Releases in this branch are tagged in this repository with appropriate version tag
+(such as `v5.1.2`).
+
+Binaries in this branch are built in HBK branch and copied to this branch from
+HBT.
+
+Here Be Turtles (HBT)
+---------------------
+
+--------------------------------------------------------------------------------
+                    __
+         .,-;-;-,. /'_\
+       _/_/_/_|_\_\) /
+     '-<_><_><_><_>=/\
+jgs    `/_/====/_/-'\_\
+        ""     ""    ""
+--------------------------------------------------------------------------------
+
+This is branch used for end-users testing of next release. This branch contains
+basically release candidate versions.
+
+Binary packages in this branch are signed with release key.
+
+Releases in this branch are tagged in this repository with appropriate version tag
+with `-rcX` suffix where `X` is sequence number. Content of this branch can be
+potentially same as HBS if there is no other release candidate.
+
+Binaries in this branch are built and copied from HBK branch.
+
+Here Be Kittens (HBK)
+---------------------
+
+--------------------------------------------------------------------------------
+("`-''-/").___..--''"`-._ 
+ `6_ 6  )   `-.  (     ).`-.__.`) 
+ (_Y_.)'  ._   )  `._ `. ``-..-' 
+   _..`--'_..-_/  /--'_.'
+  ((((.-''  ((((.'  (((.-' 
+--------------------------------------------------------------------------------
+
+This branch contains accumulated changes for next release. It is used to build
+and continuously test binaries that are later moved to HBT and subsequently to
+HBS.
+
+Binary packages in this branch are signed with test key.
+
+This branch corresponds to git branch *hbk*.
+
+Feeds in this branch are configured to OpenWrt stable and Turris OS packages
+master branch. This means that this branch in general continually receives only
+hotfixes. The only case when it jumps and receives new features is when git branch
+*hbl* is merged in to it.
 
 Here Be Lions (HBL)
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 --------------------------------------------------------------------------------
              ,%%%%%%%%,
@@ -51,140 +112,530 @@ Here Be Lions (HBL)
      (___________)))))))
 --------------------------------------------------------------------------------
 
-Latest development release. Contains latest builds from upstream stable branch
-and our latest development changes. Should be mostly stable, rolling and is
-meant for testing latest features. Not for BFU, but mostly usable. Can be also
-understood as future minor release.
+This branch contains the latest development of Turris OS features that are based on
+stable OpenWrt. It is used to build and test the latest Turris features before they
+are merged to git branch *hbk*.
 
-Here Be Kittens (HBK)
-~~~~~~~~~~~~~~~~~~~~~
+Binary packages in this branch are signed with test key.
 
---------------------------------------------------------------------------------
-("`-''-/").___..--''"`-._ 
- `6_ 6  )   `-.  (     ).`-.__.`) 
- (_Y_.)'  ._   )  `._ `. ``-..-' 
-   _..`--'_..-_/  /--'_.'
-  ((((.-''  ((((.'  (((.-' 
---------------------------------------------------------------------------------
+Feeds in this branch are configured to OpenWrt stable branch and Turris OS packages
+development branch. This means that branch in general continually receives
+hotfixes from OpenWrt and the latest features and bugfixes from Turris OS. New
+features from OpenWrt are delivered to this branch by merging git branch *hbd* in
+to it.
 
-Latest kinda working release. Contains latest builds from upstream stable branch
-and our development changes. Should be mostly stable, rolling and is meant for
-testing latest fixes. Not for BFU, but mostly usable. Can be also understood as
-future fixup release.
-
-Here Be Turtles (HBT)
-~~~~~~~~~~~~~~~~~~~~~
+Here Be Dragons (HBD)
+---------------------
 
 --------------------------------------------------------------------------------
-                    __
-         .,-;-;-,. /'_\
-       _/_/_/_|_\_\) /
-     '-<_><_><_><_>=/\
-jgs    `/_/====/_/-'\_\
-        ""     ""    ""
+                \||/
+                |  @___oo
+      /\  /\   / (__,,,,|
+     ) /^\) ^\/ _)
+     )   /^\/   _)
+     )   _ /  / _)
+ /\  )/\/ ||  | )_)
+<  >      |(,,) )__)
+ ||      /    \)___)\
+ | \____(      )___) )___
+  \______(_______;;; __;;;
 --------------------------------------------------------------------------------
 
-Branch signed with deploy key, basically replacement for `rc`. Meant to contain
-stuff we are planning to release. Should be ever more stable just a little
-more bleeding edge that officially deployed images.
+This is the most unstable branch with all the latest development. It is used to test 
+the latest OpenWrt development changes together with the latest Turris OS improvements before they are
+merged to git branch *hbl*.
 
-Here Be Snails (HBS)
-~~~~~~~~~~~~~~~~~~~~
+Binary packages in this branch are signed with test key.
 
---------------------------------------------------------------------------------
-    .----.   @   @
-   / .-"-.`.  \v/
-   | | '\ \ \_/ )
- ,-\ `-.' /.'  /
-'---`----'----'
---------------------------------------------------------------------------------
-
-Branch for the real releases that are deployed to the end users automatically.
-
-Source to binary
-----------------
-
-The most bleeding edge branch is `master`. It is build periodically from
-upstream master branches of everything. If it builds it get's released. It's
-main purpose is to have some kind of check how does our software works with
-latest upstream and to get ready before next big release. This is published as
-`HBD` binary branch.
-
-When upstream releases new big release, we fork `master` branch of build repo
-into `vX.0` where we start working on our next big release. Builds from this
-are in `HBK` binary branch.
-
-Over the time when stuff seems to calm down, we push binaries to `HBS` and when
-we are ready to deploy it, we deploy from `HBS` and after that we create extra
-commit which is no longer part of `vX.0` branch and has hard-coded hashes for
-all repositories so we will be able to reproduce the build (in theory at
-least). Tags are in form `vX.0.0` to always have a triplet there.
-
-Next release will happen probably the same way from `vX.0`. In the mean time we
-will fork `vX.1` from `vX.0` where we will be working on new changes.  Builds
-from this branch will go to `HBK`, while when we need maintenance, we can still
-create it from `vX.0` through `HBS`. Over the time we will merge local small
-changes done in `vX.0` into `vX.1`.
-
-Maintenance
-~~~~~~~~~~~
-
-As we will be tracking upstream stable releases, hopefully we will have bunch
-of fixes automatically. When we need to be faster than upstream, we will create
-local patch, release our release, send patch upstream and when included
-upstream, we will drop our local patch. Generally, the main idea is to send as
-much as possible upstream and keep minimum patches, mostly just our packages
-and configuration.
+Feeds in this branch are configured to Turris OS packages development branch and
+OpenWrt development branch. OpenWrt branch in this case is either *master* or
+next not yet released stable branch. This branch is merged to *hbl* when OpenWrt releases new
+stable version.
 
 
---------------------------------------------------------------------------------
+Turris-build repository workflow
+================================
 
-  ------------------------
-  | build:        master |
-  | openwrt:      master |
-  | tos-packages: master |
-  | packages:     master |
-  ------------------------
-            |
-            |
-            |
-            |<---- binaries: dragons (HBD)
-            |
-            |                       -------------------------                           ------------------------
-            v                       | build:        v.4.0.0 |                           | build:        v4.0.1 |
-            |                       | openwrt:      #abcd1  |                           | openwrt:      #abcd2 |
-            |                       | tos-packages: #efgh1  |                           | tos-packages: #efgh2 |              binaries: turtles (HBT)
-            |                       | packages:     #ijkl1  |                           | packages:     #ijkl2 |
-            |                       -------------------------                           ------------------------
-            v                                  |                                                  |
-            |                                  | add tag                                          |
-            |  --------------------------      ^ replace branch with hash                         ^  add tag
-            |  | build:        v4.0     |      |                                                  |  replace branch with hash
-            |  | openwrt:      18.06    |      |                   --------------------------     |
-            |--| tos-packages: master   |-->---O--------->------->-| tos-packages: for-v4.0 |-->--O---------->---------
-            |  | packages:     for-v18  |      ^              |    --------------------------     ^                    |
-            |  --------------------------      |              |                                   |                    |
-            v             ^              binaries: 4.0.0      v                            binaries: 4.0.1             v
-            |             |                        (HBS)      |                                      (HBS)             |
-            |             |                                   |   --------------------------                           |   binaries: 4.1.0 (HBL)
-            |       binaries: kittens (HBK)                   |   | build:        v4.1     |                           |          |
-            |             |                                   |   | openwrt:      18.06    |                           |          v
-            v             |                                    ---| tos-packages: master   |-->----------->------->--------->-----O----------->>>>
-            |             |-------------------------------------> | packages:     for-v18  |                                      |
-            |             |                                       --------------------------                                      v add tag & hashes
-            |             |                                                                                                       |
-            |             |                                                                                             ------------------------
-            |             |                                                                                             | build:        v4.0.1 |
-            v             v                                                                                             | openwrt:      #abcd3 |
-            |  --------------------------                                                                               | tos-packages: #efgh3 |
-            |  | build:        v5.0     |                                                                               | packages:     #ijkl3 |
-            |--| openwrt:      20.3     |----->>>>                                                                      ------------------------
-            |  | tos-packages: master   |
-            |  | packages:     for-v20  |
-            |  --------------------------
-            v
-            v
-            v
-            v
+This section describes the development flow for this repository. It is closely related
+to the previous section, but unless you are developer looking to contribute or
+maintainer of this repository then it is probably not of interest to you.
 
---------------------------------------------------------------------------------
+
+Primary (protected) branches of this repository
+-----------------------------------------------
+
+*hbk*:: is default branch with version of Turris OS that is considered stable.
+This branch contains stable version with only bugfixes on top of it. It is based
+on OpenWrt stable branch (`openwrt-XX.XX`).
+
+*hbl*:: is branch used for development and contains possibly new features and
+larger changes. It is still based on OpenWrt stable branch, same as *hbk*.
+
+*hbd*:: is branch used for development of next major version. It contains not only
+large changes from Turris but also automatically pulls changes from OpenWrt
+development branch. The exact OpenWrt branch changes between _master_ and future
+OpenWrt stable.
+
+
+Overview of flow in this repository
+-----------------------------------
+
+Following flow describes how branches are merged and how repository works in
+general. It also describes feeds configured in that specific branch. We specify
+branch in OpenWrt repository (abbreviated as _owrt_)  and branch in Turris OS
+packages (abbreviated as _tos_). There are other repositories (feeds) but they
+should be configured to be consistent with OpenWrt feeds configuration.
+
+The master branch of this repository is called *hbk* and all branches are forked
+from it. Let's follow development of Turris OS 5.0 that is based on Turris OS 4.0
+and OpenWrt 19.07. Turris OS is based on OpenWrt 18.06. Initially this version is
+being developer in *hbd* branch and meanwhile *hbl* contains next minor release
+and *hbk* next fixup release for Turris OS 4.0
+..................................................................................
+        hbd                     hbl                     hbk
+         _______________________________________________/|
+         |---------------------  |---------------------  |---------------------
+         | owrt: openwrt-19.07|  | owrt: openwrt-18.06|  | owrt: openwrt-18.06|
+         | tos: develop       |  | tos: develop       |  | tos: stable        |
+         |---------------------  |---------------------  |---------------------
+         |                       |                       |
+..................................................................................
+When problem is discovered in *hbd*, such as that patches are broken, then fix is
+prepared in branch forked off of it.
+..................................................................................
+ fix/foo |                       |                       |
+    ____/|                       |                       |
+    |    |                       |                       |
+    |    |                       |                       |
+..................................................................................
+Later such branch is merged back to *hbd* when fix is finished and tested.
+..................................................................................
+    |    |                       |                       |
+    |___ |                       |                       |
+        \|                       |                       |
+         |                       |                       |
+..................................................................................
+Once OpenWrt releases new stable (marks in example case OpenWrt 19.07 as stable
+and 18.06 as old stable) then content of *hbd* can be merged to *hbl*. _Note that
+after that we can't release next minor release for previous major release of
+Turris OS._
+..................................................................................
+         |______________________ |                       |
+         |---------------       \|---------------------  |
+         | owrt: master |        | owrt: openwrt-19.07|  |
+         | tos: develop |        | tos: develop       |  |
+         |---------------        |---------------------  |
+         |                       |                       |
+..................................................................................
+When problem is discovered then new branch is forked off of *hbl* to fix it.
+..................................................................................
+         |           bugfix/foo  |                       |
+         |               _______/|                       |
+         |               |       |                       |
+         |               |       |                       |
+..................................................................................
+That is later merged to both *hbl* and *hbd* when bugfix is finished and tested.
+..................................................................................
+         |               |       |                       |
+         | ______________|______ |                       |
+         |/                     \|                       |
+         |                       |                       |
+..................................................................................
+To do final release of Turris OS 5.0.0 we have to first merge it to *hbk* and
+build it there. _Note that this is last step before releasing first release
+candidate as that removes possibility to release fixup for previous major
+version._
+..................................................................................
+         |                       |______________________ |
+         |                       |--------------------- \|---------------------
+         |                       | owrt: openwrt-19.07|  | owrt: openwrt-19.07|
+         |                       | tos: develop       |  | tos: stable        |
+         |                       |---------------------  |---------------------
+         |                       |                       |\<-v5.0.0
+         |                       |                       |
+..................................................................................
+Any problem discovered in *hbk*, *hbt* or *hbs* is fixed in branch forked off of
+latest commit in *hbk*.
+..................................................................................
+         |                       |            hotfix/foo |
+         |                       |               _______/|
+         |                       |               |       |
+         |                       |               |       |
+..................................................................................
+Such fix has to be merged to *hbk* as well as to *hbl* and *hbd*.
+..................................................................................
+         |                       |               |       |
+         | ______________________|_______________|______ |
+         |/                      |/                     \|
+         |                       |                       |\<- v5.0.1
+..................................................................................
+Now when new feature should be added then new branch is forked off of *hbl*.
+..................................................................................
+         |           feature/foo |                       |
+         |                ______/|                       |
+         |                |      |                       |
+         |                |      |                       |
+..................................................................................
+This feature is going to be part of Turris OS 5.1.0 and when it is finished and
+tested its branch is merged to both *hbl* as well as *hbd*.
+..................................................................................
+         |                |      |                       |
+         | _______________|_____ |                       |
+         |/                     \|                       |
+         |                       |                       |
+..................................................................................
+To release Turris OS 5.1.0 we merge again *hbl* to *hbk*.
+..................................................................................
+         |                       |______________________ |
+         |                       |                      \|                     
+         |                       |                       |\<-v5.1.0
+         |                       |                       |
+..................................................................................
+Now we continue with flow to release fixups as well as subsequent minor and major
+versions. All changes this way sooner or later end up in *hbk* branch and that
+way in binary branches and at users.
+
+
+Branch naming convention
+------------------------
+
+For quick orientation of maintainers in repository stable naming convention is
+required. Depending on what you are planning to do you can create new branch with
+name prefixed with one of following:
+
+*hotfix/*:: This is fix for problem affecting *hbk* or binary branches *hbt* and
+*hbs*. It has to be based on the latest commit in *hbk* branch and merged to all
+branches (*hbk*, *hbl*, *hbd*).
+
+*bugfix/*:: This is fix for problem affecting *hbl* that is not present neither in
+*hbk* branch or in any subsequent binary branches. It has to be based on the latest
+commit in *hbl* branch. It is merged to *hbl* as well as to *hbd*.
+
+*fix/*:: This is fix for problem affecting *hbd* that is not present in neither
+*hbl* nor *hbk* or subsequent binary branches. It has to be based on the latest commit
+in *hbd* branch and is merged only to *hbd*.
+
+*feature/*:: New featured that is supposed to be part of next minor release so that
+means that it has to be based on *hbl* branch. This can be any change that
+modifies packages/lists/medkit or build process itself. It is merged to both *hbl*
+as well as to *hbd*.
+
+*majorfeature/*:: New feature that is supposed to be part of only next major
+release. This is discouraged as you probably want to release it rather in some
+subsequent minor update but there can be reason why that can't be done and in that
+case this can be used. It has to be based on the latest commit in *hbd* branch and
+merged back to *hbd*.
+
+*refactor/*:: This is same as *feature/* but it should not change
+packages/lists/medkit or build process. This can be code cleanup, patches cleanup
+or any other refactor.
+
+*majorrefactor/*:: This is combination of *refactor/* and *majorfeature/*. Use
+when what you are refactoring is available only in *hbd* branch.
+
+*hack/*:: This is feature that is to be reverted in the future.
+
+*majorhack/*:: This is combination of *hack/* and *majorfeature/*. Use this if
+hack should be merged only to *hbd*.
+
+After prefix you should add short name for what you are about to do. Acceptable
+is for example name of package or feature you are about to implement. Please do
+not use issue numbers of nothing saying generic words (such as: hotfix/problem).
+
+
+Release tags
+------------
+
+
+Operations performed by developers
+----------------------------------
+
+Developer is anyone who wants to contribute to this repository. Developers are not
+allowed to merge to primary branches (*hbk*, *hbl* and *hbd*) and have to ask
+maintainers to do so (submit pull or merge request or patch).
+
+=== Implementing fix for problem in *hbk* (hotfix)
+You have to base your work on latest commit in *hbk*. For example:
+[,sh]
+----------------------------------------------------------------------------------
+git fetch
+git checkout -b hotfix/foo origin/hbk
+----------------------------------------------------------------------------------
+
+Also note that you might and will be asked by maintainer to possibly rebase your
+changes on latest *hbk* commit.
+[,sh]
+----------------------------------------------------------------------------------
+git fetch
+git checkout hotfix/foo
+git rebase origin/hbk
+----------------------------------------------------------------------------------
+
+=== Implementing new feature or fixing something affecting *hbl* (bugfix/feature/refactor/hack)
+You have to base you work on latest commit in *hbl* branch. For example:
+[,sh]
+----------------------------------------------------------------------------------
+git fetch
+git checkout -b bugfix/foo origin/hbl
+----------------------------------------------------------------------------------
+
+Same as in case of hotfixes you might be asked by maintainer to rebase your work
+on latest commit in *develop* branch.
+[,sh]
+----------------------------------------------------------------------------------
+git fetch
+git checkout bugfix/foo
+git rebase origin/develop
+----------------------------------------------------------------------------------
+
+=== Implementing feature or fix that requires OpenWrt unstable (fix/majorfeature/majorrefactor/majorhack)
+You have to base you work on latest commit in *hbk* branch. For example:
+[,sh]
+----------------------------------------------------------------------------------
+git fetch
+git checkout -b bugfix/foo origin/hbk
+----------------------------------------------------------------------------------
+
+
+Operations performed by maintainers
+-----------------------------------
+
+There are well informed maintainers who are well educated with git-craft and with
+the flow of this repository that they are allowed to manage *hbk*, *hbl* and *hbd*
+branches. For those not so lucky and new in this craft there is following list of
+operations commonly performed by maintainer.
+
+=== Merging hotfix
+
+Hotfixes should always be merged to branches *hbk*, *hbl* and *hbd*.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbk
+git merge --ff-only --gpg-sign hotfix/foo
+git checkout hbl
+git merge --no-ff --gpg-sign -m "Merge branch 'hotfix/foo' into hbl" hbk
+git checkout hbd
+git merge --no-ff --gpg-sign -m "Merge branch 'hotfix/foo' into hbd" hbl
+git push origin hbk hbl hbd
+git branch -d hotfix/foo && git push origin :hotfix/foo
+----------------------------------------------------------------------------------
+IMPORTANT: Push target first before you remove source branch. Otherwise GitLab
+merge request would be _closed_ and not _merged_.
+
+Hotfix merge to *hbk* should always be clean. That means that there should be no
+merge conflicts (ensured by requiring fast forward only). This is to ensure that
+stable release won't be broken by merge. When that can't be done rebase to latest
+changes has to be performed. The maintainer can either ask author or do it by
+himself.
+
+There is possibility that hotfix is not required in *hbl* or *hbd* branch because
+it can be fixed by some other means or was already fixed by some previous feature.
+In such case it should be merged anyway to ease future merge of *hbl* and *hbd*
+back to *hbk*. For doing merge without merging changes you can use git merge
+strategy `ours`.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbd
+git merge --no-ff --strategy=ours --gpg-sign hbk
+----------------------------------------------------------------------------------
+
+=== Merging feature, bugfix and others for git branch *hbl*
+
+Branches with new features, bugfixes, refactoring or hacks are merged to *hbl*
+branch. This merge should be without conflict as well to prevent bugs created by
+merge skipping testing. On merge conflict it should be evaluated, rebased on
+latest commit in *hbl* (to resolve conflict) and test again before merge.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbl
+git merge --ff-only --gpg-sign feature/foo
+git checkout hbd
+git merge --no-ff --gpg-sign -m "Merge branch 'feature/foo' into hbd" hbl
+git push origin hbl hbd
+git branch -d feature/foo && git push origin :feature/foo
+----------------------------------------------------------------------------------
+IMPORTANT: Push target first before you remove source branch. Otherwise Gitlab
+merge request would be _closed_ and not _merged_.
+
+=== Merging features, fixes and other to git branch *hbd*
+
+Branches with new major features, fixes, major refactoring or major hacks are
+merged to *hbd* branch. This merge should be without conflict as well to prevent
+bugs created by merge skipping testing. On merge conflict it should be evaluated,
+rebased on latest commit in *hbd* (to resolve conflict) and test again before
+merge.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbd
+git merge --ff-only --gpg-sign majorfeature/foo
+git push origin hbd
+git branch -d majorfeature/foo && git push origin :majorfeature/foo
+----------------------------------------------------------------------------------
+IMPORTANT: Push target first before you remove source branch. Otherwise Gitlab
+merge request would be _closed_ and not _merged_.
+
+=== Merging and reverting hack or majorhack
+
+Hacks are intended to be present only temporally and so it is expected that in
+the future we want them reverted and that way removed. This means that hacks are
+merged as an exception with merge commit instead of doing fast-forward merge.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbl
+git merge --no-ff --gpg-sign feature/foo
+...
+----------------------------------------------------------------------------------
+
+Later hack, thanks to merge commit, can be just reverted by locating appropriate
+merge commit hash and reverting it. Note that this is considered as refactor and
+new appropriate merge request should be created and review should be performed.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout -b refactor/foo origin/hbl
+git revert -m 1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+----------------------------------------------------------------------------------
+
+All stated here also apply on major hack with exception that target branch is
+*hbd* instead of *hbl*.
+
+=== Moving minor release to *hbk* for release build
+
+Turris OS minor releases are prepared in *hbl* branch but all changes introduced
+have to land to *hbk* before they are propagated for testing to HBT and later for
+final release to HBS. Thanks to previous steps this should be merge without
+conflicts.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbk
+git merge --no-ff --no-commit hbl
+----------------------------------------------------------------------------------
+Do not create commit immediately as it is required to modify few files:
+
+- Change `PUBLISH_BRANCH` variable value to `hbs` in file `defaults.sh`.
+- Change branch from `develop` to `master` for `turrisospackages` feed in
+  `feeds.conf` file.
+
+Now add changes to the git staging area and create a commit.
+[,sh]
+----------------------------------------------------------------------------------
+git add defaults.sh feeds.conf
+git commit --no-edit --gpg-sign
+----------------------------------------------------------------------------------
+
+The last step before the push to the server has to be propagation of changes to
+*hbl* and *hbd* branches. Failing to do so would reset defaults for those branches
+with next merge.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbl
+git merge --no-ff -m "Merge Turris OS 4.2.0 into hbl" hbk
+git checkout hbd
+git merge --no-ff -m "Merge Turris OS 4.2.0 into hbd" hbl
+git push origin hbk hbl hbd
+----------------------------------------------------------------------------------
+Lastly all changes are pushed to server.
+
+[IMPORTANT]
+  At the same time it is required to merge branch *develop* to *master* in
+  _turris-os-packages_ repository!
+
+=== Moving major release to *hbl* and later to *hbk* for release build
+
+Turris OS major releases are based on major versions of OpenWrt. HBD branch
+collects fixes and changes based on latest OpenWrt development and thus when these
+changes became stable thanks to OpenWrt release they have to be moved/merged to
+*hbl* and *hbk*. At some point it is decided that there is going to be no new
+minor version of Turris OS based on at that time old stable version of OpenWrt and
+major release is going to be performed. This can take considerable amount of time
+during which it is desirable to still be able to develop and release fixes. This
+means that first step has to be move of all changes from *hbd* just to *hbl*. This
+is analogous to move of *hbl* to *hbk*:
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbl
+git merge --no-ff --no-commit hbd
+----------------------------------------------------------------------------------
+Commit is not created immediately as changes to defaults have to be reverted:
+
+- Change `PUBLISH_BRANCH` variable value to `hbl` in file `defaults.sh`.
+
+[,sh]
+----------------------------------------------------------------------------------
+git add defaults.sh
+git commit --no-edit --gpg-sign
+----------------------------------------------------------------------------------
+
+The last step before the push to the server has to be propagation of changes back
+to *hbd*. Failing to do so would reset defaults for those branches with next
+merge.
+[,sh]
+----------------------------------------------------------------------------------
+git checkout hbd
+git merge --no-ff -m "Merge Turris OS 4.0 into hbd" hbl
+git push origin hbl hbd
+----------------------------------------------------------------------------------
+Lastly all changes are pushed to server.
+
+Subsequent merge to *hbk* is performed the same way as if minor release of Turris
+OS is being released.
+
+=== Releasing release candidate
+
+The release itself is performed outside of this repository. In effect files in HBK
+branch are taken, all signatures are updated and all is deployed to HBT.
+
+Before release the verification should be performed using dedicated script:
+[,sh]
+----------------------------------------------------------------------------------
+./helpers/new_release.sh verify
+----------------------------------------------------------------------------------
+This checks if all boards are in sync. It is acceptable to do release of release
+candidate even when not all boards are in sync but such build should not be pushed
+to HBS.
+
+=== Releasing release
+
+The final release itself is just move of files from HBT to HBS.
+
+The final releases have to be tagged in this repository as well as in
+_turris-os-packages_ repository. There is helper script implemented to correctly
+create tag in this repository. Tag is not automatically pushed. It should be
+reviewed and pushed manually.
+[,sh]
+----------------------------------------------------------------------------------
+./helpers/new_release.sh release
+git push --tags origin vX.Y.Z
+----------------------------------------------------------------------------------
+
+
+Tips for developers and maintainers
+-----------------------------------
+
+This is collection of various tips and primarily configuration options you can use
+to simplify commands described in this flow.
+
+Use project specific git configuration::
+It is highly advised to use project specific git config. You can apply it by
+running following command:
+[,sh]
+----------------------------------------------------------------------------------
+git config --local include.path ../.gitconfig
+----------------------------------------------------------------------------------
+
+Sign commits and tags with GPG without using `--gpg-sign` and `-s`::
+You can configure global or local git option `commit.gpgSign` and `tag.gpgSign`.
+[,sh]
+----------------------------------------------------------------------------------
+git config --local commit.gpgSign true
+git config --local tag.gpgSign true
+----------------------------------------------------------------------------------
+
+Sign commits and tags with specific PGP key::
+If you have more than one PGP key (for example different for personal and work
+identity), you can specify exactly which should be always used in git
+configuration option `user.signingKey`. Value of that option is fingerprint of
+your PGP key.
+[,sh]
+----------------------------------------------------------------------------------
+git config --local user.signingKey "XXXXXXXXXXXXXXXX"
+----------------------------------------------------------------------------------
