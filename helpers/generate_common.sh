@@ -51,7 +51,7 @@ set_protected_build_dir() {
 }
 
 # Helper function to locate specific line in feeds.conf
-# First argument is feed's VCS. That is in general "src-git" for real feeds or
+# First argument is feed's VCS. That is in general "src-git-full" for real feeds or
 # "#" for non-feed repositories.
 # Second argument is feed's name.
 # Echoes URL as stored in feeds.conf file
