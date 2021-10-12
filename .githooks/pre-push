@@ -77,23 +77,37 @@ while read -r local_ref local_sha1 remote_ref remote_sha1; do
 	esac
 done
 
-if [[ -n "$push_hbk" || -n "$push_hbl" ]]; then
-	if [[ -z "$push_hbd" ]]; then
-		if [[ -n "$push_hbk" ]]; then
+if [[ -n "$push_hbk" ]]; then
+	if [[ -z "$push_hbl" || -z "$push_hbd" ]]; then
+		# We allow fast forward. That means forward to any commit in hbd branch
+		# history. This includes hbl as well due to our workflow. Important
+		# thing here to note is that there should be no way that hbl is not
+		# ancestor of hbd and if we are trying to push that the second check for
+		# hbl caches that. That way we can safely check here only against hbd.
+		if ! git merge-base --is-ancestor "$push_hbk" "$(git rev-parse "$remote_name/hbd")"; then
 			echo "HBL and HBD branches have to be always updated with HBK branch." >&2
-		else
-			echo "HBD branch has to be always updated with HBL branch." >&2
-		fi
-		echo "Push all of them at the same time with: git push origin hbk hbl hbd" >&2
-		exit 1
-	fi
-	if [[ -n "$push_hbk" ]]; then
-		if ! git merge-base --is-ancestor "$push_hbk" "$push_hbl"; then
-			echo "Tip commit of HBK is not merged to HBL branch." >&2
+			echo "Push all of them at the same time with: git push origin hbk hbl hbd" >&2
 			exit 1
 		fi
-		if ! git merge-base --is-ancestor "$push_hbk" "$push_hbd"; then
-			echo "Tip commit of HBK is not merged to HBD branch." >&2
+	fi
+	if [[ -z "$push_hbl" ]] && ! git merge-base --is-ancestor "$push_hbk" "$push_hbl"; then
+		echo "Tip commit of HBK is not merged to HBL branch." >&2
+		exit 1
+	fi
+	if [[ -n "$push_hbd" ]] && ! git merge-base --is-ancestor "$push_hbk" "$push_hbd"; then
+		echo "Tip commit of HBK is not merged to HBD branch." >&2
+		exit 1
+	fi
+fi
+if [[ -n "$push_hbl" ]]; then
+	if [[ -z "$push_hbd" ]]; then
+		if ! git merge-base --is-ancestor "$push_hbl" "$(git rev-parse "$remote_name/hbd")"; then
+			echo "HBL branch have to be always updated with HBD branch." >&2
+			if [[ -z "$push_hbk" ]]; then
+				echo "Push all of them at the same time with: git push origin hbl hbd" >&2
+			else
+				echo "Push all of them at the same time with: git push origin hbk hbl hbd" >&2
+			fi
 			exit 1
 		fi
 	else
