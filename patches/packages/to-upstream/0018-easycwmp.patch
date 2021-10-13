@@ -1,0 +1,230 @@
+From bb22d7be3245d9171d58709ba1d0ee64c100f4e8 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Wed, 13 Oct 2021 10:25:19 +0200
+Subject: [PATCH] easycwmp & libmicroxml: Add new packages
+
+Addin EasyCwmp - TR-069 solution - to our packages list together with
+it's dependency - microxml library.
+---
+ libs/libmicroxml/Makefile |  52 ++++++++++++++++++++
+ utils/easycwmp/Config.in  |  41 ++++++++++++++++
+ utils/easycwmp/Makefile   | 100 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 193 insertions(+)
+ create mode 100644 libs/libmicroxml/Makefile
+ create mode 100755 utils/easycwmp/Config.in
+ create mode 100755 utils/easycwmp/Makefile
+
+diff --git a/libs/libmicroxml/Makefile b/libs/libmicroxml/Makefile
+new file mode 100644
+index 000000000..a9f8b4563
+--- /dev/null
++++ b/libs/libmicroxml/Makefile
+@@ -0,0 +1,52 @@
++#
++# Copyright (C) 2021 CZ.NIC z.s.p.o. (https://www.nic.cz/)
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=libmicroxml
++PKG_VERSION:=2018-06-14
++PKG_RELEASE:=1
++
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_URL:=https://github.com/pivasoftware/microxml.git
++PKG_MIRROR_HASH:=bce6c08f273319f3468e71ca149f8c331a8cde9451b3e2056fe90c2401477810
++PKG_SOURCE_VERSION:=80a15162f3a8318c70e8688d8ecbfc38676bd9a2
++
++PKG_FIXUP:=autoreconf
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/libmicroxml
++  SECTION:=libs
++  CATEGORY:=Libraries
++  TITLE:=The Mini-XML library
++  URL:=http://libevent.org
++endef
++
++define Package/libmicroxml/description
++	microxml is a small XML parsing library that you can use to read XML and
++	XML-like data files in your application without requiring large non-standard
++	libraries.  microxml only requires an ANSI C compatible compiler (GCC works,
++	as do most vendors' ANSI C compilers) and a "make" program.
++endef
++
++define Build/InstallDev
++	$(INSTALL_DIR) $(1)/usr/include
++	$(CP) $(PKG_BUILD_DIR)/*.h $(1)/usr/include/
++	$(INSTALL_DIR) $(1)/usr/lib
++	$(CP) $(PKG_BUILD_DIR)/libmicro*.so* $(1)/usr/lib/
++	$(INSTALL_DIR) $(1)/usr/lib/pkgconfig
++	$(CP) $(PKG_BUILD_DIR)/*.pc $(1)/usr/lib/pkgconfig/
++endef
++
++define Package/libmicroxml/install
++	$(INSTALL_DIR) $(1)/usr/lib
++	$(CP) $(PKG_BUILD_DIR)/libmicroxml.so.* $(1)/usr/lib/
++endef
++
++$(eval $(call BuildPackage,libmicroxml))
++
+diff --git a/utils/easycwmp/Config.in b/utils/easycwmp/Config.in
+new file mode 100755
+index 000000000..b645447be
+--- /dev/null
++++ b/utils/easycwmp/Config.in
+@@ -0,0 +1,41 @@
++if PACKAGE_easycwmp
++
++config EASYCWMP_SCRIPTS_FULL
++	bool "Install all easycwmp scripts"
++	default y
++	
++if EASYCWMP_SCRIPTS_FULL
++choice
++	prompt "Selected Data Model"
++	default EASYCWMP_DATA_MODEL_TR181
++
++	config EASYCWMP_DATA_MODEL_TR181
++		bool "TR-181 Data Model"
++		
++	config EASYCWMP_DATA_MODEL_TR98
++		bool "TR-098 Data Model"
++
++endchoice
++endif
++
++choice
++	prompt "Save Backup Data"
++	default EASYCWMP_BACKUP_DATA_FILE
++
++	config EASYCWMP_BACKUP_DATA_FILE
++		bool "/etc/easycwmp/.backup.xml"
++		
++	config EASYCWMP_BACKUP_DATA_CONFIG
++		bool "easycwmp config"
++
++endchoice
++
++config EASYCWMP_DEBUG
++	bool "Compile with debug options"
++	default n
++
++config EASYCWMP_DEVEL
++	bool "Compile with development options"
++	default n
++
++endif
+diff --git a/utils/easycwmp/Makefile b/utils/easycwmp/Makefile
+new file mode 100755
+index 000000000..e2f2426f1
+--- /dev/null
++++ b/utils/easycwmp/Makefile
+@@ -0,0 +1,100 @@
++# Copyright (C) 2012-2016 PIVA Software <www.pivasoftware.com>
++# 	Author: MOHAMED Kallel <mohamed.kallel@pivasoftware.com>
++# 	Author: ANIS ELLOUZE <anis.ellouze@pivasoftware.com>
++
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=easycwmp
++PKG_VERSION:=1.8.6
++PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
++PKG_HASH:=b15a28b9db65f6f511f8fadf968e6fdafa766d5fb1d09bd7d69f12e513126e4b
++PKG_SOURCE_URL:=https://easycwmp.org/download/
++
++PKG_FIXUP:=autoreconf
++
++PKG_CONFIG_DEPENDS:= \
++	CONFIG_EASYCWMP_DEBUG \
++	CONFIG_EASYCWMP_DEVEL
++
++PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_NAME)-$(PKG_VERSION)
++
++include $(INCLUDE_DIR)/package.mk
++
++define Package/easycwmp
++  SECTION:=utils
++  CATEGORY:=Utilities
++  TITLE:=CWMP client (using libcurl)
++  DEPENDS:=+libubus +libuci +libubox +libmicroxml +libjson-c +libcurl +curl
++endef
++
++define Package/easycwmp/description
++ An open source implementation of the client CWMP (TR-069) protocol
++endef
++
++define Package/easycwmp/config
++	source "$(SOURCE)/Config.in"
++endef
++
++TARGET_CFLAGS += \
++	-D_GNU_SOURCE
++
++TARGET_LDFLAGS += \
++	-Wl,-rpath-link=$(STAGING_DIR)/usr/lib
++
++CONFIGURE_ARGS += \
++	--with-uci-include-path=$(STAGING_DIR)/usr/include \
++	--with-libubox-include-path=$(STAGING_DIR)/usr/include \
++	--with-libubus-include-path=$(STAGING_DIR)/usr/include
++
++ifeq ($(CONFIG_EASYCWMP_DEBUG),y)
++CONFIGURE_ARGS += \
++	--enable-debug
++endif
++
++ifeq ($(CONFIG_EASYCWMP_DEVEL),y)
++CONFIGURE_ARGS += \
++	--enable-devel
++endif
++
++ifeq ($(CONFIG_EASYCWMP_BACKUP_DATA_CONFIG),y)
++CONFIGURE_ARGS += \
++	--enable-backupdatainconfig
++endif
++
++CONFIGURE_ARGS += \
++	--enable-jsonc=1
++
++define Package/easycwmp/conffiles
++/etc/config/easycwmp
++/usr/share/easycwmp/defaults
++endef
++
++define Package/easycwmp/install
++	$(INSTALL_DIR) $(1)/usr/sbin
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/bin/easycwmpd $(1)/usr/sbin
++	$(INSTALL_DIR) $(1)/etc/config
++	$(INSTALL_CONF) $(PKG_BUILD_DIR)/ext/openwrt/config/easycwmp $(1)/etc/config
++	$(INSTALL_DIR) $(1)/etc/init.d
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ext/openwrt/init.d/easycwmpd $(1)/etc/init.d
++ifeq ($(EASYCWMP_BACKUP_DATA_FILE),y)
++	$(INSTALL_DIR) $(1)/etc/easycwmp
++endif
++ifeq ($(CONFIG_EASYCWMP_SCRIPTS_FULL),y)
++	$(INSTALL_DIR) $(1)/usr/share/easycwmp/functions/
++	$(CP) $(PKG_BUILD_DIR)/ext/openwrt/scripts/defaults $(1)/usr/share/easycwmp
++	$(CP) $(PKG_BUILD_DIR)/ext/openwrt/scripts/functions/common/* $(1)/usr/share/easycwmp/functions/
++ifeq ($(CONFIG_EASYCWMP_DATA_MODEL_TR181),y)
++	$(CP) $(PKG_BUILD_DIR)/ext/openwrt/scripts/functions/tr181/* $(1)/usr/share/easycwmp/functions/
++else
++	$(CP) $(PKG_BUILD_DIR)/ext/openwrt/scripts/functions/tr098/* $(1)/usr/share/easycwmp/functions/
++endif
++	$(INSTALL_DIR) $(1)/usr/sbin
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ext/openwrt/scripts/easycwmp.sh $(1)/usr/sbin/easycwmp
++	chmod +x $(1)/usr/share/easycwmp/functions/*
++else
++	$(INSTALL_DIR) $(1)/usr/share/easycwmp/functions/
++	$(INSTALL_BIN) $(PKG_BUILD_DIR)/ext/openwrt/scripts/functions/common/ipping_launch $(1)/usr/share/easycwmp/functions/ipping_launch
++endif
++endef
++
++$(eval $(call BuildPackage,easycwmp))
+-- 
+2.30.2
+
