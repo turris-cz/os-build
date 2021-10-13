@@ -1,0 +1,189 @@
+From fc9682ed3961e098ace708ca1ca41c2239a4e2ee Mon Sep 17 00:00:00 2001
+From: Rosen Penev <rosenp@gmail.com>
+Date: Wed, 3 Mar 2021 18:00:26 -0800
+Subject: [PATCH] tools/m4: update to 1.4.19
+
+Remove upstreamed patches.
+
+Signed-off-by: Rosen Penev <rosenp@gmail.com>
+---
+ tools/m4/Makefile                             |   4 +-
+ .../m4/patches/001-fix-macos-vasnprintf.patch |  25 ----
+ .../010-glibc-change-work-around.patch        | 118 ------------------
+ 3 files changed, 2 insertions(+), 145 deletions(-)
+ delete mode 100644 tools/m4/patches/001-fix-macos-vasnprintf.patch
+ delete mode 100644 tools/m4/patches/010-glibc-change-work-around.patch
+
+diff --git a/tools/m4/Makefile b/tools/m4/Makefile
+index a6d931b0fd51..0a358c35f1b8 100644
+--- a/tools/m4/Makefile
++++ b/tools/m4/Makefile
+@@ -8,11 +8,11 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=m4
+ PKG_CPE_ID:=cpe:/a:gnu:m4
+-PKG_VERSION:=1.4.18
++PKG_VERSION:=1.4.19
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=@GNU/$(PKG_NAME)
+-PKG_HASH:=f2c1e86ca0a404ff281631bdc8377638992744b175afb806e25871a24a934e07
++PKG_HASH:=63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96
+ PKG_CAT:=xzcat
+ 
+ HOST_BUILD_PARALLEL:=1
+diff --git a/tools/m4/patches/001-fix-macos-vasnprintf.patch b/tools/m4/patches/001-fix-macos-vasnprintf.patch
+deleted file mode 100644
+index e41315d34ec7..000000000000
+--- a/tools/m4/patches/001-fix-macos-vasnprintf.patch
++++ /dev/null
+@@ -1,25 +0,0 @@
+---- a/lib/vasnprintf.c
+-+++ b/lib/vasnprintf.c
+-@@ -4858,7 +4858,11 @@ VASNPRINTF (DCHAR_T *resultbuf, size_t *
+- #endif
+-                   *fbp = dp->conversion;
+- #if USE_SNPRINTF
+--# if !(((__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 3)) && !defined __UCLIBC__) || ((defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__))
+-+# if ! (((__GLIBC__ > 2                                                 \
+-+          || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 3))                  \
+-+         && !defined __UCLIBC__)                                        \
+-+        || (defined __APPLE__ && defined __MACH__)                      \
+-+        || ((defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__))
+-                 fbp[1] = '%';
+-                 fbp[2] = 'n';
+-                 fbp[3] = '\0';
+-@@ -4872,6 +4876,9 @@ VASNPRINTF (DCHAR_T *resultbuf, size_t *
+-                    in format strings in writable memory may crash the program
+-                    (if compiled with _FORTIFY_SOURCE=2), so we should avoid it
+-                    in this situation.  */
+-+                /* macOS 10.13 High Sierra behaves like glibc with
+-+                   _FORTIFY_SOURCE=2, and older macOS releases
+-+                   presumably do not need %n.  */
+-                 /* On native Windows systems (such as mingw), we can avoid using
+-                    %n because:
+-                      - Although the gl_SNPRINTF_TRUNCATION_C99 test fails,
+diff --git a/tools/m4/patches/010-glibc-change-work-around.patch b/tools/m4/patches/010-glibc-change-work-around.patch
+deleted file mode 100644
+index 0ef6216965c4..000000000000
+--- a/tools/m4/patches/010-glibc-change-work-around.patch
++++ /dev/null
+@@ -1,118 +0,0 @@
+-Subject: Workaround change in glibc
+-
+-Temporary workaround to compile with glibc 2.28, which
+-deprecated some constants
+-
+-Taken from the rpms/m4 Fedora repository, commit 814d5921
+-(Work around change in glibc)
+-
+-Original filename: m4-1.4.18-glibc-change-work-around.patch
+-
+---- a/lib/stdio-impl.h
+-+++ b/lib/stdio-impl.h
+-@@ -18,6 +18,12 @@
+-    the same implementation of stdio extension API, except that some fields
+-    have different naming conventions, or their access requires some casts.  */
+- 
+-+/* Glibc 2.28 made _IO_IN_BACKUP private.  For now, work around this
+-+   problem by defining it ourselves.  FIXME: Do not rely on glibc
+-+   internals.  */
+-+#if !defined _IO_IN_BACKUP && defined _IO_EOF_SEEN
+-+# define _IO_IN_BACKUP 0x100
+-+#endif
+- 
+- /* BSD stdio derived implementations.  */
+- 
+---- a/lib/fflush.c
+-+++ b/lib/fflush.c
+-@@ -33,7 +33,7 @@
+- #undef fflush
+- 
+- 
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+- 
+- /* Clear the stream's ungetc buffer, preserving the value of ftello (fp).  */
+- static void
+-@@ -72,7 +72,7 @@ clear_ungetc_buffer (FILE *fp)
+- 
+- #endif
+- 
+--#if ! (defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */)
+-+#if ! (defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */)
+- 
+- # if (defined __sferror || defined __DragonFly__ || defined __ANDROID__) && defined __SNPT
+- /* FreeBSD, NetBSD, OpenBSD, DragonFly, Mac OS X, Cygwin, Android */
+-@@ -148,7 +148,7 @@ rpl_fflush (FILE *stream)
+-   if (stream == NULL || ! freading (stream))
+-     return fflush (stream);
+- 
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+- 
+-   clear_ungetc_buffer_preserving_position (stream);
+- 
+---- a/lib/fpending.c
+-+++ b/lib/fpending.c
+-@@ -32,7 +32,7 @@ __fpending (FILE *fp)
+-   /* Most systems provide FILE as a struct and the necessary bitmask in
+-      <stdio.h>, because they need it for implementing getc() and putc() as
+-      fast macros.  */
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-   return fp->_IO_write_ptr - fp->_IO_write_base;
+- #elif defined __sferror || defined __DragonFly__ || defined __ANDROID__
+-   /* FreeBSD, NetBSD, OpenBSD, DragonFly, Mac OS X, Cygwin, Android */
+---- a/lib/fpurge.c
+-+++ b/lib/fpurge.c
+-@@ -62,7 +62,7 @@ fpurge (FILE *fp)
+-   /* Most systems provide FILE as a struct and the necessary bitmask in
+-      <stdio.h>, because they need it for implementing getc() and putc() as
+-      fast macros.  */
+--# if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+# if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-   fp->_IO_read_end = fp->_IO_read_ptr;
+-   fp->_IO_write_ptr = fp->_IO_write_base;
+-   /* Avoid memory leak when there is an active ungetc buffer.  */
+---- a/lib/freadahead.c
+-+++ b/lib/freadahead.c
+-@@ -25,7 +25,7 @@
+- size_t
+- freadahead (FILE *fp)
+- {
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-   if (fp->_IO_write_ptr > fp->_IO_write_base)
+-     return 0;
+-   return (fp->_IO_read_end - fp->_IO_read_ptr)
+---- a/lib/freading.c
+-+++ b/lib/freading.c
+-@@ -31,7 +31,7 @@ freading (FILE *fp)
+-   /* Most systems provide FILE as a struct and the necessary bitmask in
+-      <stdio.h>, because they need it for implementing getc() and putc() as
+-      fast macros.  */
+--# if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+# if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-   return ((fp->_flags & _IO_NO_WRITES) != 0
+-           || ((fp->_flags & (_IO_NO_READS | _IO_CURRENTLY_PUTTING)) == 0
+-               && fp->_IO_read_base != NULL));
+---- a/lib/fseeko.c
+-+++ b/lib/fseeko.c
+-@@ -47,7 +47,7 @@ fseeko (FILE *fp, off_t offset, int when
+- #endif
+- 
+-   /* These tests are based on fpurge.c.  */
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-   if (fp->_IO_read_end == fp->_IO_read_ptr
+-       && fp->_IO_write_ptr == fp->_IO_write_base
+-       && fp->_IO_save_base == NULL)
+-@@ -123,7 +123,7 @@ fseeko (FILE *fp, off_t offset, int when
+-           return -1;
+-         }
+- 
+--#if defined _IO_ftrylockfile || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-+#if defined _IO_EOF_SEEN || __GNU_LIBRARY__ == 1 /* GNU libc, BeOS, Haiku, Linux libc5 */
+-       fp->_flags &= ~_IO_EOF_SEEN;
+-       fp->_offset = pos;
+- #elif defined __sferror || defined __DragonFly__ || defined __ANDROID__
