@@ -1,13 +1,11 @@
-Turris OS building scripts
-==========================
+= Turris OS building scripts
 
 Turris OS is based on OpenWrt. This repository contains script and additional
 patches to convert OpenWrt tree to Turris OS one.
 
 OpenWrt consists of core repository and additional packages feeds defined in `feeds.conf`.
 
-Repository layout
------------------
+== Repository layout
 
 `compile_pkgs`:: script to prepare OpenWrt based source tree and to compile
   Turris OS in it. The final result are Turris OS packages.
@@ -30,25 +28,36 @@ Repository layout
   the feeds to sort patches to groups. Please read
   link:patches/README.adoc[readme file] in `patches` directory for more in depth
   explanation.
-`lists/`:: directory with sources used in script `generate_lists` to generate
-  updater's lists.
 `NEWS`:: this is Turris OS changelog. It is parsed and used in git tags or in
   package informing users about changes.
 `helpers/`:: directory containing libraries and utility scripts for top level
   scripts and some less important scripts as well.
 
-Getting started
----------------
+== Requirements
 
-Create an empty directory you want to build Turris OS in, enter that directory and
-from it call `compile_pkgs` script. In most basic use-case, this should be enough.
+You need to have a GNU/Linux distribution to be able to compile Turris OS and packages.
 
-[TIP]
-*It will delete all previous content of the current directory*.
+To install all dependencies for Debian distribution, you can use:
 
-You can repeat individual steps of the compilation separately, check with the following
-command `compile_pkgs --help` for a list of available commands, generic options,
-and their brief descriptions.
+----
+apt install ca-certificates git build-essential zlib1g-dev gawk libssl-dev subversion unzip libncurses-dev wget python python3 file rsync gcc-multilib g++-multilib libc6-dev-i386
+----
+
+For other distributions, we suggest to look at
+https://openwrt.org/docs/guide-developer/build-system/install-buildsystem[OpenWrt
+documentation].
+
+== Getting started
+
+Create an empty directory you want to build Turris OS in, enter that directory
+and from it call `compile_pkgs` script. In most basic use-case, this should be
+enough.
+
+WARNING: *It will delete all previous content of the current directory!*
+
+You can repeat individual steps of the compilation separately, check with the
+following command `compile_pkgs --help` for a list of available commands,
+generic options, and their brief descriptions.
 
 Before you started you need to choose what version of Turris OS you want to
 build. There are development versions in branches named `hbk`, `hbl` and `hbd`
@@ -60,79 +69,121 @@ To get to appropriate version you have to run command like this:
 `git checkout hbk` where in this case this takes you to development branch for
 Turris OS fixup releases.
 
-It is advised to build the latest release version as with that you are most likely
-to get to the end. To get latest version you can do:
+It is advised to build the latest release version as with that you are most
+likely to get to the end. To get the latest version you can do:
 `git checkout "$(git tag | sort -V | tail -1)"`.
 
-Requirements
--------------
+== Advanced usage
 
-You need to have a GNU/Linux distribution to be able to compile Turris OS and packages.
+=== OpenWrt build system preparation
 
-To install all dependencies for Debian distribution you can use:
+Sometimes you want to just get OpenWrt build system. That is possible with
+the following command:
 
---
-  apt install ca-certificates git build-essential zlib1g-dev gawk libssl-dev subversion unzip libncurses-dev wget python python3 file rsync gcc-multilib g++-multilib libc6-dev-i386
---
+----
+./compile_pkgs prepare -t omnia
+----
 
-For other distributions, we suggest to look at https://openwrt.org/docs/guide-developer/build-system/install-buildsystem[OpenWrt documentation].
+Where `-t` means `-target`, so the only valid values are `turris1x`, `omnia`,
+`mox`.
 
-Advanced usage
---------------
+WARNING: Be aware *it removes previous content of current directory*!
 
-Building packages
-~~~~~~~~~~~~~~~~~~
+This gives you fully patched OpenWrt build system. The "patched" here is
+important. You should not use `scripts/feeds` script for fetching feeds as that
+can remove local patches. Instead to refetch feeds you can use
+`./compile_pkgs repatch_feeds`.
+
+=== Building packages
 
 To build a package you have to first prepare build directory. That can be
 achieved by running in target directory.
---
- compile_pkgs prepare_tools -t board # <1>
---
+----
+./compile_pkgs prepare_tools -t omnia
+----
 
-<1> ~-t~ means `-target`, so only valid values are `turris1x`, `omnia`, `mox`.
+Where `-t` means `-target`, so the only valid values are `turris1x`, `omnia`,
+`mox`.
 
-Be aware *it removes previous content of current directory*!
+WARNING: Be aware *it removes previous content of current directory*!
 
 Once, you have compiled required tools, you can build packages using this command:
---
- make package/name/compile # <2>
---
 
-<2> ~name~ is package name, which you want to compile.
+----
+make package/name/compile
+----
+
+The `name` is package name, which you want to compile.
 
 You can also clean single package just by replacing `compile` with `clean`.
 
-The resulting package is placed in directory **bin/packages/~ARCH~/~REPO~**
+The resulting package is placed in directory `bin/packages/ARCH/REPO` where the
+`ARCH` is target architecture specific string and the `REPO` is the name of
+package's source repository.
 
-;; `ARCH` is target architecture specific string.
-;; `REPO` is the name of package's source repository.
+Occasionally, you can meet cases, where you need to run
+`make package/name/compile` with parameters `-j1 V=s` or `-j1 V=sc` to be able
+to see, what went wrong.
 
-Occasionally, you can meet cases, where you need to run `make
-package/name/compile` with parameters `-j1 V=s` or `-j1 V=sc` to be able to see,
-what went wrong.
+=== Generate lists
+
+The lists are rules for Turris packages manager called Updater-ng. They are
+processed using M4 macro language. To generate the lists you have to run:
+
+----
+./generate_lists generated_lists
+----
+
+The output is placed to directory `generated_lists` (feel free to use some other
+path).
+
+WARNING: Be aware *it removes previous content of current directory*!
 
 
-Development and maintenance
----------------------------
+=== Generate medkits
 
-Configuration
-~~~~~~~~~~~~~
+Generating medkits is using Turris package manager Updater-ng and using for
+signing. 
+
+Medkits are always generated against https://repo.turris.cz[official Turris
+repositories]. There is no easy way to generate medkits against locally compiled
+packages and generated lists. This also means that you don't have to generate
+lists nor compile packages to generate medkits.
+
+Requirements to be able to compile Updater-ng and usign.
+
+----
+apt install cmake liblua5.1-0-dev libevent-dev libarchive-dev libcurl4-openssl-dev liburiparser-dev uthash-dev
+----
+
+If you installed all the requirements for Updater-ng, you can now use following
+command:
+
+----
+ generate_medkit -t omnia
+----
+
+Where `-t` means `--target`, so the only valid values are `turris1x`, `omnia`,
+`mox`.
+
+
+== Development and maintenance
+
+=== Configuration
 
 Default config for OpenWrt is put in `configs` directory either in directory
 `common` or in a directory named after the target board. Files in those
 directories get merged (common ones first) and will form the final `.config`
 file. Some parts of `compile_pkgs` might modify it further.
 
-Release notes
-~~~~~~~~~~~~~
+=== Release notes
 
 There is a `NEWS` file in this directory that contains the version number and after
 it lines with new features in the release. This file is used to generate
 `turris-version` package. `compile_pkgs` script reads it, finds the newest
 version and from notes underneath it creates the package with release notes.
 
-Releasing new version
-~~~~~~~~~~~~~~~~~~~~~
+=== Releasing new version
 
 When new version is released to Snails (see workflow for explanation) then new
 commit with hashes has to be created and pushed. This commit have to be tagged
@@ -147,8 +198,7 @@ Script `helpers/new_release.sh` can generate various errors and warnings. It is
 advised to run it even before release in `verify` mode to review possible problems
 with release.
 
-Forking new release
-~~~~~~~~~~~~~~~~~~~
+=== Forking new release
 
 According to workflow new releases are forked from parent branch. During this
 process care should be taken to tweak defaults to appropriate values. Following
@@ -162,8 +212,7 @@ list should be taken as a checklist for new release branch.
   and with exception of first column it has same format as feeds. Note that that
   line is intentionally commented out as that is not feed.
 
-Patching
-~~~~~~~~
+=== Patching
 
 If you need to patch OpenWRT or any of the feeds, put a git formatted patch
 into the respective subdirectory of patches directory. In patches directory, there
@@ -171,8 +220,7 @@ is openwrt directory and directory for each feed we are patching. Inside those
 directories, patches are also divided into subdirectories like `to-upstream`,
 `wip` or `hack` to somehow distinguish between the quality of patches.
 
-Rebasing patches
-^^^^^^^^^^^^^^^^
+==== Rebasing patches
 
 Sometimes patches no longer apply cleanly and need to be rebased. The most
 simple way to do that, given that we have everything in git, is the following:
