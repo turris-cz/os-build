@@ -1,0 +1,77 @@
+From b8b623c088cc49afb4ed2923f60ccc6b49f251c2 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Thu, 21 Oct 2021 12:55:08 +0200
+Subject: [PATCH] uboot-tools: Fix compilation
+
+Avoid multiple definitions of symbols and fix conflicting definitions in
+different ctype.h efectivelly fixing the build.
+---
+ package/boot/uboot-tools/Makefile             |  2 +-
+ .../boot/uboot-tools/patches/build-fix.patch  | 42 +++++++++++++++++++
+ 2 files changed, 43 insertions(+), 1 deletion(-)
+ create mode 100644 package/boot/uboot-tools/patches/build-fix.patch
+
+diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
+index e9f13e6bd5..8c75e60f61 100644
+--- a/package/boot/uboot-tools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ PKG_NAME:=uboot-tools
+ PKG_DISTNAME:=u-boot
+ PKG_VERSION:=2018.03
+-PKG_RELEASE:=4
++PKG_RELEASE:=5
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE:=$(PKG_DISTNAME)-$(PKG_VERSION).tar.xz
+diff --git a/package/boot/uboot-tools/patches/build-fix.patch b/package/boot/uboot-tools/patches/build-fix.patch
+new file mode 100644
+index 0000000000..2dcef0e169
+--- /dev/null
++++ b/package/boot/uboot-tools/patches/build-fix.patch
+@@ -0,0 +1,42 @@
++Index: u-boot-2018.03/env/flags.c
++===================================================================
++--- u-boot-2018.03.orig/env/flags.c
+++++ u-boot-2018.03/env/flags.c
++@@ -6,7 +6,7 @@
++  */
++ 
++ #include <linux/string.h>
++-#include <linux/ctype.h>
+++#include <ctype.h>
++ 
++ #ifdef USE_HOSTCC /* Eliminate "ANSI does not permit..." warnings */
++ #include <stdint.h>
++Index: u-boot-2018.03/scripts/dtc/dtc-lexer.l
++===================================================================
++--- u-boot-2018.03.orig/scripts/dtc/dtc-lexer.l
+++++ u-boot-2018.03/scripts/dtc/dtc-lexer.l
++@@ -38,7 +38,6 @@ LINECOMMENT	"//".*\n
++ #include "srcpos.h"
++ #include "dtc-parser.tab.h"
++ 
++-YYLTYPE yylloc;
++ extern bool treesource_error;
++ 
++ /* CAUTION: this will stop working if we ever use yyless() or yyunput() */
++Index: u-boot-2018.03/scripts/dtc/dtc-parser.tab.c_shipped
++===================================================================
++--- u-boot-2018.03.orig/scripts/dtc/dtc-parser.tab.c_shipped
+++++ u-boot-2018.03/scripts/dtc/dtc-parser.tab.c_shipped
++@@ -1201,12 +1201,6 @@ int yychar;
++ 
++ /* The semantic value of the lookahead symbol.  */
++ YYSTYPE yylval;
++-/* Location data for the lookahead symbol.  */
++-YYLTYPE yylloc
++-# if defined YYLTYPE_IS_TRIVIAL && YYLTYPE_IS_TRIVIAL
++-  = { 1, 1, 1, 1 }
++-# endif
++-;
++ /* Number of syntax errors so far.  */
++ int yynerrs;
++ 
+-- 
+2.33.1
+
