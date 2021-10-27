@@ -109,7 +109,12 @@ available_commands+=( ["configure"]="Recreates configuration for target boards" 
 configure() {
 	report "Creating default configuration"
 	[ -n "${TARGET_BOARD:-}" ] || die "No board selected!"
-	cat "${src_dir}"/configs/common/* "${src_dir}/configs/${TARGET_BOARD}"/* > ./.config
+	rm -f .config
+	cat "${src_dir}/configs/common"/* "${src_dir}/configs/${TARGET_BOARD}"/* | grep "^CONFIG.*=" | while IFS="=" read -r name value; do
+		[ \! -f .config ] || sed -i "/^$name=/ d" .config
+		echo "$name=$value" >> .config
+	done
+	cp .config .config_generated
 	{
 		[ -n "$DL_MIRROR" ] && echo "CONFIG_DOWNLOAD_FOLDER=$DL_MIRROR"
 		echo "CONFIG_VERSION_REPO=\"https://repo.turris.cz/$PUBLISH_BRANCH/$TARGET_BOARD/packages\""
@@ -119,23 +124,25 @@ configure() {
 	_make defconfig diffconfig
 
 	# Verify config
-	for config in "${src_dir}/configs/common"/* "${src_dir}/configs/${TARGET_BOARD}"/*; do
-		 while IFS="=" read -r name value; do
-			 [ -z "$value" ] && continue
-			 [ "${value:0:1}" = "#" ] && continue
-			 if [ "$value" = "n" ]; then
-				 # No options can be ommited in the result so instead check it
-				 # they are not enabled by any chance.
-				 if grep -qE "^$name=y" ./.config; then
-					 die "Config option that is forced to 'n' is set to 'y': $name=$value"
-				 fi
-			else
-				 if ! grep -qE "^$name=$value$" ./.config; then
-					 die "Config option is not present in generated config: $name=$value"
-				 fi
-			 fi
-		done < "$config"
-	done
+	rm -f .missing_values
+	while IFS="=" read -r name value; do
+		[ -z "$value" ] && continue
+		[ "${value:0:1}" = "#" ] && continue
+		if [ "$value" = "n" ]; then
+			# No options can be ommited in the result so instead check it
+			# they are not enabled by any chance.
+			if grep -qE "^$name=y" ./.config; then
+				warn "Config option that is forced to 'n' is set to 'y': $name=$value"
+				echo "^$name=y" >> .missing_values
+			fi
+		else
+			if ! grep -qE "^$name=$value$" ./.config; then
+				warn "Config option is not present in generated config: $name=$value"
+				echo "^$name=$value" >> .missing_values
+			fi
+		fi
+	done < .config_generated
+	[ \! -f .missing_values ] || [ "$(cat .missing_values | wc -l)" -eq 0 ] || die "Broken configuration"
 }
 
 available_commands+=( ["update_mirror"]="Updates all local mirrors" )
