@@ -1,6 +1,6 @@
 #!/bin/bash
 # Turris OS script verifying new release
-# (C) 2019 CZ.NIC, z.s.p.o.
+# (C) 2019-2021 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
+set -eu
 
 # TODO:
 # * Do we want to verify medkit somehow?
@@ -85,10 +85,10 @@ fetch_files() {
 	done
 }
 
-# Get git hash from git-hash file on REPO
-# Expected arguments are: BOARD FEED
+# Get git hash from GIT_HASH file for FEED
+# Expected arguments are: GIT_HASH FEED
 git_hash() {
-	awk -v feed="$2:" '$2 == feed { print $3; exit }' "$GIT_HASH_PACKAGES-$1"
+	awk -v feed="$2:" '$2 == feed { print $3; exit }' "$1"
 }
 
 # Get turris-build hash
@@ -96,9 +96,9 @@ tb_hash() {
 	local ec=0
 	local p_hash l_hash b_hash
 	for board in "${BOARDS[@]}"; do
-		l_hash="$(cat "$GIT_HASH_LISTS-$board")"
-		b_hash="$(git_hash "$board" "turris-build")"
-		[ -n "$p_hash" ] || p_hash="$b_hash" # First board is considered primary and packages are authoritative
+		l_hash="$(git_hash "$GIT_HASH_LISTS-$board" "turris-build")"
+		b_hash="$(git_hash "$GIT_HASH_PACKAGES-$board" "turris-build")"
+		[ -n "${p_hash:-}" ] || p_hash="$b_hash" # First board is considered primary and packages are authoritative
 		[ "$p_hash" = "$b_hash" ] || {
 			error "Turris build used to generate packages is not same as for ${BOARDS[0]} board: $board ($b_hash / $p_hash)"
 			ec=1
@@ -117,10 +117,26 @@ owrt_hash() {
 	local ec=0
 	local p_hash t_hash
 	for board in "${BOARDS[@]}"; do
-		t_hash="$(git_hash "$board" openwrt)"
-		[ -n "$p_hash" ] || p_hash="$t_hash" # first board is primary one
+		t_hash="$(git_hash "$GIT_HASH_PACKAGES-$board" "openwrt")"
+		[ -n "${p_hash:-}" ] || p_hash="$t_hash" # first board is primary one
 		[ "$p_hash" = "$t_hash" ] || {
-			error "Different OpenWRT commit build for board: $board ($t_hash / $p_hash)"
+			error "Different OpenWrt commit build for board: $board ($t_hash / $p_hash)"
+			ec=1
+		}
+	done
+	echo "$p_hash"
+	return $ec
+}
+
+# Get hash for updater's lists
+lists_hash() {
+	local ec=0
+	local p_hash t_hash
+	for board in "${BOARDS[@]}"; do
+		t_hash="$(git_hash "$GIT_HASH_LISTS-$board" "updater-lists")"
+		[ -n "${p_hash:-}" ] || p_hash="$t_hash"
+		[ "$p_hash" = "$t_hash" ] || {
+			error "Different Updater's Lists commit build for board: $board ($t_hash / $p_hash)"
 			ec=1
 		}
 	done
@@ -172,6 +188,7 @@ verify() {
 
 	tb_hash >/dev/null || ec=$?
 	owrt_hash >/dev/null || ec=$?
+	lists_hash >/dev/null || ec=$?
 	feeds || ec=$?
 	[ "$ec" = 0 ] && info "No problems detected in branch: $branch"
 	return $ec
@@ -184,14 +201,15 @@ _release_git() {
 ##########
 release() {
 	local branch="$1"
-	local tversion target_hsh owrt_hsh
+	local tversion target_hsh owrt_hsh lists_hsh
 	declare -A FEEDS
 	fetch_files "$branch"
 
 	tversion="$(cat "$TOS_VERSION-${BOARDS[0]}")"
 	target_hsh="$(tb_hash)" || ask "turris-build hashes do not match. Planning to use: $target_hsh"
 	owrt_hsh="$(owrt_hash)" || ask "openwrt hashes do not match. Planning to use: $owrt_hsh"
-	feeds || ask "feed hashes do not match. Please review difference."
+	lists_hsh="$(lists_hash)" || ask "updater-lists hashes do not match. Planning to use: $lists_hsh"
+	feeds || ask "feed hashes do not match. Please review the difference."
 
 	check_for_turris_build_root
 	local tag="v$tversion"
@@ -200,6 +218,7 @@ release() {
 
 	git checkout "$target_hsh"
 	feeds_conf_set openwrt "$owrt_hsh"
+	feeds_conf_set updater-lists "$lists_hsh"
 	for feed in "${!FEEDS[@]}"; do
 		feeds_conf_set "$feed" "${FEEDS["$feed"]}"
 	done
@@ -231,19 +250,19 @@ print_help() {
 }
 
 while getopts ':hd' OPT; do
-    case "$OPT" in
-        h)
-            print_help
-            exit 0
-            ;;
-        d)
-            set -x
-            ;;
-        \?)
-            error "Illegal option '-$OPTARG'"
-            exit 1
-            ;;
-    esac
+	case "$OPT" in
+		h)
+			print_help
+			exit 0
+			;;
+		d)
+			set -x
+			;;
+		\?)
+			error "Illegal option '-$OPTARG'"
+			exit 1
+			;;
+	esac
 done
 shift $(( OPTIND-1 ))
 
