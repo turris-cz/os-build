@@ -1,0 +1,114 @@
+From 79a8ac3b9fcb40589815782cfb30e8f580711245 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 23 Nov 2021 18:27:34 +0100
+Subject: [PATCH 3/3] Revert "pakon: protect with turris-auth login gateway"
+
+This reverts commit 7cee0bb832f9e0d8c5550696c99f3754283ed812.
+---
+ collect/pakon/Makefile                  | 35 +++++++++++--------------
+ collect/pakon/files/lighttpd-pakon.conf | 13 ++++++---
+ 2 files changed, 25 insertions(+), 23 deletions(-)
+
+diff --git a/collect/pakon/Makefile b/collect/pakon/Makefile
+index 344e3162f..b9267dd90 100644
+--- a/collect/pakon/Makefile
++++ b/collect/pakon/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=pakon
+ PKG_VERSION:=1.3.1
+-PKG_RELEASE:=2
++PKG_RELEASE:=1
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/pakon.git
+@@ -20,33 +20,28 @@ PKG_MAINTAINER:=CZ.NIC <packaging@turris.cz>
+ PKG_LICENSE:=GPL-3.0-only
+ PKG_LICENSE_FILES:=LICENSE
+ 
++PKG_INSTALL:=0
++
+ include $(INCLUDE_DIR)/package.mk
+ 
+ define Package/pakon
+   SECTION:=collect
+   CATEGORY:=Collect
+   TITLE:=PArental KONtrol - light
+-  DEPENDS:=\
+-    +suricata-pakon \
+-    +suricata-conntrack-flows \
+-    +pakon-lists \
+-    +python3-light \
+-    +python3-logging \
+-    +python3-ctypes \
+-    +python3-cachetools \
+-    +python3-sqlite3 \
+-    +sqlite3-cli \
+-    +xz \
+-    +ouidb \
+-    +turris-auth \
+-    +lighttpd-mod-proxy
++  DEPENDS:=+suricata-pakon +xz +python3-light +python3-logging +python3-ctypes +python3-cachetools +python3-sqlite3 +sqlite3-cli +pakon-lists +ouidb +suricata-conntrack-flows +lighttpd-mod-authn_pam +lighttpd-mod-proxy
+ endef
+ 
+ define Package/pakon/description
+   Simple daemon that is able to collect events from suricata and store them locally to SQLite DB.
+ endef
+ 
+-Build/Compile:=:
++define Build/Compile
++  true
++endef
++
++define Build/Install
++  true
++endef
+ 
+ define Package/pakon/conffiles
+ /etc/config/pakon
+@@ -117,10 +112,10 @@ endef
+ 
+ define Package/pakon/prerm
+ #!/bin/sh
+-/etc/init.d/pakon-monitor disable
+-/etc/init.d/pakon-monitor stop
+-/etc/init.d/pakon-handler disable
+-/etc/init.d/pakon-handler stop
++        /etc/init.d/pakon-monitor disable
++        /etc/init.d/pakon-monitor stop
++        /etc/init.d/pakon-handler disable
++        /etc/init.d/pakon-handler stop
+ endef
+ 
+ $(eval $(call BuildPackage,pakon))
+diff --git a/collect/pakon/files/lighttpd-pakon.conf b/collect/pakon/files/lighttpd-pakon.conf
+index 62824727e..b2cc95853 100644
+--- a/collect/pakon/files/lighttpd-pakon.conf
++++ b/collect/pakon/files/lighttpd-pakon.conf
+@@ -5,13 +5,20 @@ $HTTP["url"] =~ "^/pakon/api" {
+ 
+ # Set security
+ $HTTP["url"] =~ "^/pakon/" {
+-    fastcgi.server = ( "/" => ( turris_auth_scriptname => turris_auth ))
++  auth.backend = "pam"
++  auth.require = ( "" =>
++                   (
++                     "method"    => "basic",
++                     "realm"     => "Pakon",
++                     "require"   => "valid-user"
++                   )
++                 )
+ }
+ 
+ ## Set URLs
+ alias.url += (
+-    "/pakon/api" => "/www/cgi-bin/pakon",
+-    "/pakon/" => "/www/pakon/"
++	"/pakon/api" => "/www/cgi-bin/pakon",
++	"/pakon/" => "/www/pakon/"
+ )
+ $HTTP["url"] =~ "^/pakon$" {
+     url.redirect = ( "^/pakon$" => "/pakon/" )
+-- 
+2.30.2
+
