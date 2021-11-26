@@ -5,16 +5,41 @@ Subject: [PATCH] lxc: Use our servers by default
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- utils/lxc/patches/030-turris-servers.patch | 38 ++++++++++++++++++++++
- 1 file changed, 38 insertions(+)
+ utils/lxc/Makefile                         |  1 +
+ utils/lxc/files/systemd-workaround         |  4 +++
+ utils/lxc/patches/030-turris-servers.patch | 39 ++++++++++++++++++++++
+ 3 files changed, 44 insertions(+)
+ create mode 100644 utils/lxc/files/systemd-workaround
  create mode 100644 utils/lxc/patches/030-turris-servers.patch
 
+diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
+index 209fc8b72..6ca59cf78 100644
+--- a/utils/lxc/Makefile
++++ b/utils/lxc/Makefile
+@@ -211,6 +211,7 @@ define Package/lxc-hooks/install
+ 	$(CP) \
+ 		$(PKG_INSTALL_DIR)/usr/share/lxc/hooks/* \
+ 		$(1)/usr/share/lxc/hooks/
++	$(INSTALL_BIN) ./files/systemd-workaround $(1)/usr/share/lxc/hooks/
+ endef
+ 
+ define Package/lxc-templates/install
+diff --git a/utils/lxc/files/systemd-workaround b/utils/lxc/files/systemd-workaround
+new file mode 100644
+index 000000000..2e343dc68
+--- /dev/null
++++ b/utils/lxc/files/systemd-workaround
+@@ -0,0 +1,4 @@
++#!/bin/sh
++[ -d /sys/fs/cgroup/systemd ] || {
++mkdir /sys/fs/cgroup/systemd && mount -t cgroup -o none,name=systemd systemd /sys/fs/cgroup/systemd/
++}
 diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
 new file mode 100644
-index 0000000..cf9ebce
+index 000000000..8fc32e949
 --- /dev/null
 +++ b/utils/lxc/patches/030-turris-servers.patch
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,39 @@
 +Index: lxc-2.1.1/config/etc/default.conf.unknown
 +===================================================================
 +--- lxc-2.1.1.orig/config/etc/default.conf.unknown
@@ -53,6 +78,7 @@ index 0000000..cf9ebce
 + DOWNLOAD_SHOW_GPG_WARNING="true"
 + DOWNLOAD_SHOW_HTTP_WARNING="true"
 + DOWNLOAD_TARGET="system"
++
 -- 
-2.20.1
+2.30.2
 
