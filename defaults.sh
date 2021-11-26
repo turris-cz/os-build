@@ -6,4 +6,4 @@
 #   "hbd" for master branch
 #   "hbl" for development branch
 #   "hbs" for release branch
-PUBLISH_BRANCH="hbl"
+PUBLISH_BRANCH="hbd"
