@@ -41,8 +41,8 @@ new file mode 100644
 index 0000000..61756be
 --- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
-@@ -0,0 +1,232 @@
-+From 4ec877a2516675c96573c3c6ddc71819595dec6c Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,213 @@
++From 848dfda2610dba5c051c9114ab05449e64d5de08 Mon Sep 17 00:00:00 2001
 +From: Tomas Hlavacek <tmshlvck@gmail.com>
 +Date: Tue, 5 May 2020 20:40:24 +0200
 +Subject: [PATCH] ARM: dts: mvebu: armada-385-turris-omnia: separate dts for
@@ -76,19 +76,19 @@ index 0000000..61756be
 +Signed-off-by: Marek Behún <marek.behun@nic.cz>
 +---
 + arch/arm/boot/dts/Makefile                    |  3 +-
-+ .../boot/dts/armada-385-turris-omnia-phy.dts  | 22 ++++++++++
-+ .../boot/dts/armada-385-turris-omnia-sfp.dts  | 23 ++++++++++
-+ ...omnia.dts => armada-385-turris-omnia.dtsi} | 42 +++++++++++++------
-+ 4 files changed, 77 insertions(+), 13 deletions(-)
++ .../boot/dts/armada-385-turris-omnia-phy.dts  | 22 ++++++++++++
++ .../boot/dts/armada-385-turris-omnia-sfp.dts  | 23 ++++++++++++
++ ...omnia.dts => armada-385-turris-omnia.dtsi} | 35 +++++++++++--------
++ 4 files changed, 68 insertions(+), 15 deletions(-)
 + create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
 + create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
-+ rename arch/arm/boot/dts/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (88%)
++ rename arch/arm/boot/dts/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (94%)
 +
 +diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
-+index b21b3a64641a..0ddd11b238ce 100644
++index ce66ffd5a1bb..e702896345e9 100644
 +--- a/arch/arm/boot/dts/Makefile
 ++++ b/arch/arm/boot/dts/Makefile
-+@@ -1234,7 +1234,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++@@ -1328,7 +1328,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
 + 	armada-385-linksys-rango.dtb \
 + 	armada-385-linksys-shelby.dtb \
 + 	armada-385-synology-ds116.dtb \
@@ -156,69 +156,59 @@ index 0000000..61756be
 ++	sfp = <&sfp>;
 ++};
 +diff --git a/arch/arm/boot/dts/armada-385-turris-omnia.dts b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+similarity index 88%
++similarity index 94%
 +rename from arch/arm/boot/dts/armada-385-turris-omnia.dts
 +rename to arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+index 768b6c5d2129..2f7c7da0d7e8 100644
++index 5bd6a66d2c2b..6bf7d3e184ab 100644
 +--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
 ++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dtsi
-+@@ -3,13 +3,11 @@
-+  * Device Tree file for the Turris Omnia
-+  *
-+  * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
-+- * Copyright (C) 2016 Tomas Hlavacek <tmshlvkc@gmail.com>
-++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
-+  *
++@@ -8,8 +8,6 @@
 +  * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
 +  */
-+
++ 
 +-/dts-v1/;
 +-
 + #include <dt-bindings/gpio/gpio.h>
 + #include <dt-bindings/input/input.h>
-+ #include "armada-385.dtsi"
-+@@ -83,6 +83,17 @@
-+ 			};
-+ 		};
++ #include <dt-bindings/leds/common.h>
++@@ -88,11 +86,11 @@ pcie@3,0 {
++ 	sfp: sfp {
++ 		compatible = "sff,sfp";
++ 		i2c-bus = <&sfp_i2c>;
++-		tx-fault-gpios = <&pcawan 0 GPIO_ACTIVE_HIGH>;
++-		tx-disable-gpios = <&pcawan 1 GPIO_ACTIVE_HIGH>;
++-		rate-select0-gpios = <&pcawan 2 GPIO_ACTIVE_HIGH>;
++-		los-gpios = <&pcawan 3 GPIO_ACTIVE_HIGH>;
++-		mod-def0-gpios = <&pcawan 4 GPIO_ACTIVE_LOW>;
+++		tx-fault-gpios = <&sfpgpio 0 GPIO_ACTIVE_HIGH>;
+++		tx-disable-gpios = <&sfpgpio 1 GPIO_ACTIVE_HIGH>;
+++		rate-select0-gpios = <&sfpgpio 2 GPIO_ACTIVE_HIGH>;
+++		los-gpios = <&sfpgpio 3 GPIO_ACTIVE_HIGH>;
+++		mod-def0-gpios = <&sfpgpio 4 GPIO_ACTIVE_LOW>;
++ 		maximum-power-milliwatt = <3000>;
++ 
++ 		/*
++@@ -144,7 +142,7 @@ fixed-link {
 + 	};
-++
-++       sfp: sfp {
-++               compatible = "sff,sfp";
-++               status = "disabled";
-++               i2c-bus = <&i2csfp>;
-++               tx-fault-gpios = <&sfpgpio 0 GPIO_ACTIVE_HIGH>;
-++               tx-disable-gpios = <&sfpgpio 1 GPIO_ACTIVE_HIGH>;
-++               rate-select0-gpios = <&sfpgpio 2 GPIO_ACTIVE_HIGH>;
-++               los-gpios = <&sfpgpio 3 GPIO_ACTIVE_HIGH>;
-++               mod-def0-gpios = <&sfpgpio 4 GPIO_ACTIVE_LOW>;
-++       };
 + };
-+
-+ &bm {
-+@@ -125,11 +136,10 @@
-+ 	};
-+ };
-+
++ 
 +-/* WAN port */
 ++/* WAN dual-personality port */
 + &eth2 {
++ 	/*
++ 	 * eth2 is connected via a multiplexor to both the SFP cage and to
++@@ -155,9 +153,8 @@ &eth2 {
++ 	 * is present, U-Boot has to enable the sfp node above, remove phy
++ 	 * handle and add managed = "in-band-status" property.
++ 	 */
 ++	phys = <&comphy5 2>;
 + 	status = "okay";
 +-	phy-mode = "sgmii";
-+-	phy = <&phy1>;
++-	phy-handle = <&phy1>;
++ 	phys = <&comphy5 2>;
++ 	sfp = <&sfp>;
 + 	buffer-manager = <&bm>;
-+ 	bm,pool-long = <2>;
-+ 	bm,pool-short = <3>;
-+@@ -177,7 +185,7 @@
-+ 			/* routed to PCIe2 connector (CN62A) */
-+ 		};
-+ 
-+-		i2c@4 {
-++		i2csfp: i2c@4 {
-+ 			#address-cells = <1>;
-+ 			#size-cells = <0>;
-+ 			reg = <4>;
-+@@ -206,7 +214,7 @@
++@@ -361,7 +358,7 @@ i2c@7 {
 + 			#size-cells = <0>;
 + 			reg = <7>;
 + 
@@ -227,7 +217,7 @@ index 0000000..61756be
 + 				/*
 + 				 * GPIO expander for SFP+ signals and
 + 				 * and phy irq
-+@@ -215,7 +223,7 @@
++@@ -370,7 +367,7 @@ pcawan: gpio@71 {
 + 				reg = <0x71>;
 + 
 + 				pinctrl-names = "default";
@@ -236,16 +226,7 @@ index 0000000..61756be
 + 
 + 				interrupt-parent = <&gpio1>;
 + 				interrupts = <14 IRQ_TYPE_LEVEL_LOW>;
-+@@ -233,7 +241,7 @@
-+ 	status = "okay";
-+ 
-+ 	phy1: phy@1 {
-+-		status = "okay";
-++		status = "disabled";
-+ 		compatible = "ethernet-phy-id0141.0DD1", "ethernet-phy-ieee802.3-c22";
-+ 		reg = <1>;
-+ 
-+@@ -290,13 +298,23 @@
++@@ -450,13 +447,23 @@ fixed-link {
 + 				};
 + 			};
 + 
@@ -272,7 +253,7 @@ index 0000000..61756be
 + 		marvell,function = "gpio";
 + 	};
 +-- 
-+2.24.1
++2.30.2
 +
 diff --git a/target/linux/mvebu/patches-5.4/8801-leds-Add-LED-driver-for-Turris-Omnia.patch b/target/linux/mvebu/patches-5.4/8801-leds-Add-LED-driver-for-Turris-Omnia.patch
 new file mode 100644
