@@ -39,7 +39,7 @@ def indexread(index):
     yield pkg
 
 
-@functools.lru_cache
+@functools.lru_cache(None)
 def packages(repo):
     """Index of all packages
     """
@@ -55,7 +55,7 @@ def packages(repo):
     return res
 
 
-@functools.lru_cache
+@functools.lru_cache(None)
 def pkgcontent(pkg):
     """Reads info from ipk file.
     """
@@ -68,7 +68,7 @@ def pkgcontent(pkg):
     return res
 
 
-@functools.lru_cache
+@functools.lru_cache(None)
 def fstree(repo):
     """Collects all files packages provide and their owners.
     """
