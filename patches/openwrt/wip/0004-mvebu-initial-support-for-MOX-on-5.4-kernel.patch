@@ -1,17 +1,17 @@
-From 7780e4a914e8d2942a4a9d3590177eaaff0cdcdb Mon Sep 17 00:00:00 2001
+From 739123196cc4bdb6eb1005d561cdf5987cc6d4f7 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Thu, 30 Apr 2020 00:18:17 +0200
 Subject: [PATCH] mvebu: initial support for MOX on 5.4 kernel
 
 ---
  package/boot/uboot-tools/files/mvebu          |   3 +
- .../base-files/etc/board.d/02_network         |   7 +
+ .../base-files/etc/board.d/02_network         |  12 ++
  target/linux/mvebu/cortexa53/config-5.4       |  13 ++
  target/linux/mvebu/image/cortexa53.mk         |  12 ++
  ...is-mox-rwtm-support-ECDSA-signatures.patch | 158 ++++++++++++++++++
  ...Zero-max-link-speed-value-is-invalid.patch |  32 ++++
  ...x-implement-phylink-AN-restart-on-Se.patch | 137 +++++++++++++++
- 7 files changed, 362 insertions(+)
+ 7 files changed, 367 insertions(+)
  create mode 100644 target/linux/mvebu/patches-5.4/9903-firmware-turris-mox-rwtm-support-ECDSA-signatures.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9908-PCI-of-Zero-max-link-speed-value-is-invalid.patch
  create mode 100644 target/linux/mvebu/patches-5.4/9912-net-dsa-mv88e6xxx-implement-phylink-AN-restart-on-Se.patch
@@ -31,19 +31,24 @@ index 92b144330f..c298dfc63a 100644
  	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x8000" "0x8000" "1"
  	;;
 diff --git a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
-index c945251e4e..69cc8662ae 100755
+index c945251e4e..ad76a31ba9 100755
 --- a/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
 +++ b/target/linux/mvebu/cortexa53/base-files/etc/board.d/02_network
-@@ -11,6 +11,13 @@ board_config_update
+@@ -11,6 +11,18 @@ board_config_update
  board=$(board_name)
  
  case "$board" in
 +cznic,turris-mox)
++	mox_lan_interfaces=""
 +	for net in /sys/class/net/lan*; do
 +		[ -e "$net" ] || continue
-+		ucidef_set_interface_lan "${net##*/}"
++		append mox_lan_interfaces "${net##*/}"
 +	done
-+	ucidef_set_interface_wan "eth0"
++	if [ -z "$mox_lan_interfaces" ]; then
++		ucidef_set_interface_lan "eth0"
++	else
++		ucidef_set_interfaces_lan_wan "$mox_lan_interfaces" "eth0"
++	fi
 +	;;
  glinet,gl-mv1000|\
  globalscale,espressobin|\
@@ -477,5 +482,5 @@ index 0000000000..47a973981d
 +2.24.1
 +
 -- 
-2.33.0
+2.34.1
 
