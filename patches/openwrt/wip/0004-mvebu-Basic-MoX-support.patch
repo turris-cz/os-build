@@ -210,7 +210,6 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  create mode 100644 target/linux/mvebu/patches-4.14/90109-net-dsa-mv88e6xxx-Share-main-switch-IRQ.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90111-net-ethernet-mvneta-Fix-napi-structure-mixup-on-arma.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90112-net-mvneta-fix-mvneta_config_rss-on-armada-3700.patch
- create mode 100644 target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90114-arm64-dts-marvell-armada-37xx-mark-the-gpio-controll.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90115-drivers-mfd-Add-support-for-Moxtet-bus.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90116-drivers-gpio-Add-support-for-GPIOs-over-Moxtet-bus.patch
@@ -11058,120 +11057,6 @@ index 0000000000..6fc5b61bcf
 + 	}
 + 
 + 	netif_tx_start_all_queues(pp->dev);
-+-- 
-+2.21.0
-+
-diff --git a/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch b/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
-new file mode 100644
-index 0000000000..79a841aabb
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90113-pinctrl-armada-37xx-Correct-mpp-definitions.patch
-@@ -0,0 +1,108 @@
-+From 841332d49b280dd92f2ad42b6e34f6b64a387d78 Mon Sep 17 00:00:00 2001
-+From: Ken Ma <make@marvell.com>
-+Date: Thu, 3 May 2018 14:31:41 +0200
-+Subject: [PATCH 113/126] pinctrl: armada-37xx: Correct mpp definitions
-+
-+This patch icorrects below mpp definitions:
-+ - The sdio_sb group is composed of 6 pins and not 5;
-+ - The rgmii group contains pins mpp2[17:6] and not mpp2[19:6];
-+ - Pin of group "pmic0" is mpp1[6] but not mpp1[16];
-+ - Pin of group "pmic1" is mpp1[7] but not mpp1[17];
-+ - A new group "smi" is added in A0 with 2 pins - mpp2[19:18], its
-+   bitmask is bit4;
-+ - Group "pcie1" has 3 pins in A0 - mpp2[5:3], its bit mask is
-+   bit5 | bit9 | bit10 but not bit4;
-+ - Group "ptp" has 3 pins in A0 as Z1, but its bitmask is changed to
-+   bit11 | bit12 | bit13.
-+
-+Reviewed-on: http://vgitil04.il.marvell.com:8080/41830
-+Reviewed-on: http://vgitil04.il.marvell.com:8080/42774
-+Reviewed-on: http://vgitil04.il.marvell.com:8080/41970
-+Reviewed-on: http://vgitil04.il.marvell.com:8080/42775
-+Reviewed-by: Wilson Ding <dingwei@marvell.com>
-+Reviewed-by: Evan Wang <xswang@marvell.com>
-+Reviewed-by: Victor Gu <xigu@marvell.com>
-+Tested-by: Wilson Ding <dingwei@marvell.com>
-+Tested-by: iSoC Platform CI <ykjenk@marvell.com>
-+Tested-by: Victor Gu <xigu@marvell.com>
-+Verified-Armada37x0: Wilson Ding <dingwei@marvell.com>
-+Signed-off-by: Ken Ma <make@marvell.com>
-+Signed-off-by: Marek Behun <marek.behun@nic.cz>
-+---
-+ .../pinctrl/marvell,armada-37xx-pinctrl.txt        | 14 +++++++++-----
-+ drivers/pinctrl/mvebu/pinctrl-armada-37xx.c        |  9 +++++----
-+ 2 files changed, 14 insertions(+), 9 deletions(-)
-+
-+diff --git a/Documentation/devicetree/bindings/pinctrl/marvell,armada-37xx-pinctrl.txt b/Documentation/devicetree/bindings/pinctrl/marvell,armada-37xx-pinctrl.txt
-+index f64060908d5a..e1469852d5ea 100644
-+--- a/Documentation/devicetree/bindings/pinctrl/marvell,armada-37xx-pinctrl.txt
-++++ b/Documentation/devicetree/bindings/pinctrl/marvell,armada-37xx-pinctrl.txt
-+@@ -58,11 +58,11 @@ group pwm3
-+  - functions pwm, gpio
-+ 
-+ group pmic1
-+- - pin 17
-++ - pin 7
-+  - functions pmic, gpio
-+ 
-+ group pmic0
-+- - pin 16
-++ - pin 6
-+  - functions pmic, gpio
-+ 
-+ group i2c2
-+@@ -112,17 +112,21 @@ group usb2_drvvbus1
-+  - functions drvbus, gpio
-+ 
-+ group sdio_sb
-+- - pins 60-64
-++ - pins 60-65
-+  - functions sdio, gpio
-+ 
-+ group rgmii
-+- - pins 42-55
-++ - pins 42-53
-+  - functions mii, gpio
-+ 
-+ group pcie1
-+- - pins 39-40
-++ - pins 39-41
-+  - functions pcie, gpio
-+ 
-++group smi
-++ - pins 54-55
-++ - functions smi, gpio
-++
-+ group ptp
-+  - pins 56-58
-+  - functions ptp, gpio
-+diff --git a/drivers/pinctrl/mvebu/pinctrl-armada-37xx.c b/drivers/pinctrl/mvebu/pinctrl-armada-37xx.c
-+index 44897d4b9d88..67a9a747a1b9 100644
-+--- a/drivers/pinctrl/mvebu/pinctrl-armada-37xx.c
-++++ b/drivers/pinctrl/mvebu/pinctrl-armada-37xx.c
-+@@ -157,8 +157,8 @@ static struct armada_37xx_pin_group armada_37xx_nb_groups[] = {
-+ 	PIN_GRP_GPIO("pwm1", 12, 1, BIT(4), "pwm"),
-+ 	PIN_GRP_GPIO("pwm2", 13, 1, BIT(5), "pwm"),
-+ 	PIN_GRP_GPIO("pwm3", 14, 1, BIT(6), "pwm"),
-+-	PIN_GRP_GPIO("pmic1", 17, 1, BIT(7), "pmic"),
-+-	PIN_GRP_GPIO("pmic0", 16, 1, BIT(8), "pmic"),
-++	PIN_GRP_GPIO("pmic1", 7, 1, BIT(7), "pmic"),
-++	PIN_GRP_GPIO("pmic0", 6, 1, BIT(8), "pmic"),
-+ 	PIN_GRP_GPIO("i2c2", 2, 2, BIT(9), "i2c"),
-+ 	PIN_GRP_GPIO("i2c1", 0, 2, BIT(10), "i2c"),
-+ 	PIN_GRP_GPIO("spi_cs1", 17, 1, BIT(12), "spi"),
-+@@ -182,8 +182,9 @@ static struct armada_37xx_pin_group armada_37xx_sb_groups[] = {
-+ 	PIN_GRP_GPIO("usb2_drvvbus1", 1, 1, BIT(1), "drvbus"),
-+ 	PIN_GRP_GPIO("sdio_sb", 24, 6, BIT(2), "sdio"),
-+ 	PIN_GRP_GPIO("rgmii", 6, 12, BIT(3), "mii"),
-+-	PIN_GRP_GPIO("pcie1", 3, 2, BIT(4), "pcie"),
-+-	PIN_GRP_GPIO("ptp", 20, 3, BIT(5), "ptp"),
-++	PIN_GRP_GPIO("smi", 18, 2, BIT(4), "smi"),
-++	PIN_GRP_GPIO("pcie1", 3, 3, BIT(5) | BIT(9) | BIT(10), "pcie"),
-++	PIN_GRP_GPIO("ptp", 20, 3, BIT(11) | BIT(12) | BIT(13), "ptp"),
-+ 	PIN_GRP("ptp_clk", 21, 1, BIT(6), "ptp", "mii"),
-+ 	PIN_GRP("ptp_trig", 22, 1, BIT(7), "ptp", "mii"),
-+ 	PIN_GRP_GPIO_3("mii_col", 23, 1, BIT(8) | BIT(14), 0, BIT(8), BIT(14),
 +-- 
 +2.21.0
 +
