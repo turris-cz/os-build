@@ -11,15 +11,15 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  package/boot/uboot-tools/files/mpc85xx        |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.4               |  59 +++-
- .../files/arch/powerpc/boot/dts/turris1x.dts  | 296 ++++++++++++++++++
+ target/linux/mpc85xx/config-5.4               |  64 +++-
+ .../files/arch/powerpc/boot/dts/turris1x.dts  | 304 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 ++
- 6 files changed, 394 insertions(+), 4 deletions(-)
+ 6 files changed, 405 insertions(+), 6 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
-index d219b57..932a46a 100644
+index d219b57cb1..932a46af7b 100644
 --- a/package/boot/uboot-tools/files/mpc85xx
 +++ b/package/boot/uboot-tools/files/mpc85xx
 @@ -10,6 +10,9 @@ touch /etc/config/ubootenv
@@ -33,7 +33,7 @@ index d219b57..932a46a 100644
  	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000"
  	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x20000" "0x20000"
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index aa33a4a..b24bcb6 100755
+index aa33a4af96..b24bcb68ae 100755
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
 @@ -23,6 +23,10 @@ tplink,tl-wdr4900-v1)
@@ -48,7 +48,7 @@ index aa33a4a..b24bcb6 100755
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.4 b/target/linux/mpc85xx/config-5.4
-index d6683dab35..3f1dfb6db5 100644
+index d6683dab35..4397141507 100644
 --- a/target/linux/mpc85xx/config-5.4
 +++ b/target/linux/mpc85xx/config-5.4
 @@ -24,6 +24,15 @@ CONFIG_BOOKE=y
@@ -191,7 +191,7 @@ index d6683dab35..3f1dfb6db5 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -273,3 +318,9 @@ CONFIG_WATCHDOG_CORE=y
+@@ -273,3 +318,10 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -201,12 +201,13 @@ index d6683dab35..3f1dfb6db5 100644
 +CONFIG_USB_UAS=y
 +CONFIG_SCSI=y
 +CONFIG_BLK_DEV_SD=y
++CONFIG_MTD_NAND_ECC_SW_BCH=y
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000..5ba550f
+index 0000000000..1e2d82c2cf
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,304 @@
 +/*
 + * Turris RDB Device Tree Source
 + *
@@ -218,6 +219,7 @@ index 0000000..5ba550f
 + * option) any later version.
 + */
 +
++#include <dt-bindings/gpio/gpio.h>
 +/include/ "fsl/p2020si-pre.dtsi"
 +
 +/ {
@@ -355,6 +357,9 @@ index 0000000..5ba550f
 +			};
 +		};
 +
++		gpio0: gpio-controller@fc00 {
++		};
++
 +		usb@22000 {
 +			phy_type = "ulpi";
 +			dr_mode = "host";
@@ -376,7 +381,7 @@ index 0000000..5ba550f
 +						reg = <0>;
 +						label = "cpu";
 +						ethernet = <&enet1>;
-+						phy-mode = "rgmii";
++						phy-mode = "rgmii-id";
 +						fixed-link {
 +							speed = <1000>;
 +							full-duplex;
@@ -454,6 +459,10 @@ index 0000000..5ba550f
 +			phy-handle = <&phy7>;
 +			phy-connection-type = "rgmii-id";
 +		};
++
++		sdhc@2e000 {
++			cd-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
++		};
 +	};
 +	pci2: pcie@ffe08000 {
 +		ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
@@ -504,7 +513,7 @@ index 0000000..5ba550f
 +
 +/include/ "fsl/p2020si-post.dtsi"
 diff --git a/target/linux/mpc85xx/image/p2020.mk b/target/linux/mpc85xx/image/p2020.mk
-index 79b5fa6..e6ef38f 100644
+index 79b5fa660c..e6ef38ff18 100644
 --- a/target/linux/mpc85xx/image/p2020.mk
 +++ b/target/linux/mpc85xx/image/p2020.mk
 @@ -13,3 +13,12 @@ define Device/freescale_p2020rdb
@@ -521,7 +530,7 @@ index 79b5fa6..e6ef38f 100644
 +endef
 +TARGET_DEVICES += turris1x
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index fa43a21..1576302 100644
+index fa43a214cd..157630282e 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
 @@ -4,6 +4,10 @@ CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
@@ -574,5 +583,5 @@ index fa43a21..1576302 100644
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
 -- 
-2.31.1
+2.32.0
 
