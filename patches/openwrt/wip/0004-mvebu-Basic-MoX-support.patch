@@ -113,7 +113,6 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  ...hdog-Document-armada-37xx-wdt-bindin.patch |  52 +
  ...tchdog-add-documentation-for-armada-.patch |  37 +
  ...l-armada-37xx-add-nodes-to-support-w.patch |  44 +
- ...drvark-warm-reset-the-cores-and-card.patch | 121 +++
  ...support-for-Armada-37xx-rWTM-mailbox.patch | 328 ++++++
  ...ell-armada37xx-add-rWTM-mailbox-node.patch |  38 +
  ...-Add-Turris-Mox-rWTM-firmware-driver.patch | 454 +++++++++
@@ -217,7 +216,6 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  create mode 100644 target/linux/mvebu/patches-4.14/90118-dt-bindings-watchdog-Document-armada-37xx-wdt-bindin.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90119-documentation-watchdog-add-documentation-for-armada-.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90120-arm64-dts-marvell-armada-37xx-add-nodes-to-support-w.patch
- create mode 100644 target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90122-mailbox-Add-support-for-Armada-37xx-rWTM-mailbox.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90123-arm64-dts-marvell-armada37xx-add-rWTM-mailbox-node.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90124-crypto-Add-Turris-Mox-rWTM-firmware-driver.patch
@@ -12793,133 +12791,6 @@ index 0000000000..7527bb051c
 + 			spi0: spi@10600 {
 + 				compatible = "marvell,armada-3700-spi";
 + 				#address-cells = <1>;
-+-- 
-+2.21.0
-+
-diff --git a/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
-new file mode 100644
-index 0000000000..d0767bbbbb
---- /dev/null
-+++ b/target/linux/mvebu/patches-4.14/90121-PCI-aadrvark-warm-reset-the-cores-and-card.patch
-@@ -0,0 +1,121 @@
-+From 96d797e5903817474c467140f2e01e9736934693 Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Wed, 24 Oct 2018 16:55:11 +0200
-+Subject: [PATCH 121/126] PCI: aadrvark: warm reset the cores and card
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+Add code to do a warm reset on the PHY and PCIE cores and if PERSTN GPIO
-+is specified in device tree (as reset-gpio), also reset the card.
-+
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ drivers/pci/host/pci-aardvark.c | 46 +++++++++++++++++++++++++++++++--
-+ 1 file changed, 44 insertions(+), 2 deletions(-)
-+
-+diff --git a/drivers/pci/host/pci-aardvark.c b/drivers/pci/host/pci-aardvark.c
-+index 50e8addc22f9..ccce013bbef8 100644
-+--- a/drivers/pci/host/pci-aardvark.c
-++++ b/drivers/pci/host/pci-aardvark.c
-+@@ -21,6 +21,7 @@
-+ #include <linux/platform_device.h>
-+ #include <linux/of_address.h>
-+ #include <linux/of_pci.h>
-++#include <linux/of_gpio.h>
-+ 
-+ /* PCIe core registers */
-+ #define PCIE_CORE_CMD_STATUS_REG				0x4
-+@@ -147,6 +148,9 @@
-+ #define     CTRL_MODE_MASK			0x1
-+ #define     PCIE_CORE_MODE_DIRECT		0x0
-+ #define     PCIE_CORE_MODE_COMMAND		0x1
-++#define CTRL_WARM_RESET_REG			(CTRL_CORE_BASE_ADDR + 0x4)
-++#define     CTRL_PCIE_CORE_WARM_RESET		BIT(0)
-++#define     CTRL_PHY_CORE_WARM_RESET		BIT(1)
-+ 
-+ /* PCIe Central Interrupts Registers */
-+ #define CENTRAL_INT_BASE_ADDR			0x1b000
-+@@ -270,8 +274,25 @@ static void advk_pcie_set_ob_win(struct advk_pcie *pcie,
-+ 	advk_writel(pcie, match_ls | BIT(0), OB_WIN_MATCH_LS(win_num));
-+ }
-+ 
-++static void advk_pcie_warm_reset(struct advk_pcie *pcie)
-++{
-++	u32 reg;
-++
-++	reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++	reg |= CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET;
-++	advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
-++
-++	mdelay(100);
-++
-++	reg = advk_readl(pcie, CTRL_WARM_RESET_REG);
-++	reg &= ~(CTRL_PCIE_CORE_WARM_RESET | CTRL_PHY_CORE_WARM_RESET);
-++	advk_writel(pcie, reg, CTRL_WARM_RESET_REG);
-++}
-++
-+ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ {
-++	struct device *dev = &pcie->pdev->dev;
-++	struct device_node *node = dev->of_node;
-+ 	u32 reg;
-+ 	int i;
-+ 
-+@@ -311,10 +332,15 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ 		PCIE_CORE_CTRL2_TD_ENABLE;
-+ 	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
-+ 
-+-	/* Set GEN2 */
-++	/* Set GEN */
-+ 	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
-+ 	reg &= ~PCIE_GEN_SEL_MSK;
-+-	reg |= SPEED_GEN_2;
-++	if (of_pci_get_max_link_speed(node) == 1)
-++		reg |= SPEED_GEN_1;
-++	if (of_pci_get_max_link_speed(node) == 3)
-++		reg |= SPEED_GEN_3;
-++	else
-++		reg |= SPEED_GEN_2;
-+ 	advk_writel(pcie, reg, PCIE_CORE_CTRL0_REG);
-+ 
-+ 	/* Set lane X1 */
-+@@ -948,6 +974,8 @@ static int advk_pcie_probe(struct platform_device *pdev)
-+ 	struct pci_bus *bus, *child;
-+ 	struct pci_host_bridge *bridge;
-+ 	int ret, irq;
-++	int reset_gpio;
-++	enum of_gpio_flags flags;
-+ 
-+ 	bridge = devm_pci_alloc_host_bridge(dev, sizeof(struct advk_pcie));
-+ 	if (!bridge)
-+@@ -970,12 +998,26 @@ static int advk_pcie_probe(struct platform_device *pdev)
-+ 		return ret;
-+ 	}
-+ 
-++	advk_pcie_warm_reset(pcie);
-++
-+ 	ret = advk_pcie_parse_request_of_pci_ranges(pcie);
-+ 	if (ret) {
-+ 		dev_err(dev, "Failed to parse resources\n");
-+ 		return ret;
-+ 	}
-+ 
-++	/* Config reset gpio for pcie if there is valid gpio setting in DTS */
-++	reset_gpio = of_get_named_gpio_flags(pdev->dev.of_node, "reset-gpio",
-++					     0, &flags);
-++	if (gpio_is_valid(reset_gpio)) {
-++		struct gpio_desc *reset_gpiod;
-++		reset_gpiod = gpio_to_desc(reset_gpio);
-++		gpiod_direction_output(reset_gpiod, 0);
-++		mdelay(200);
-++		gpiod_direction_output(reset_gpiod, 1);
-++		mdelay(200);
-++	}
-++
-+ 	advk_pcie_setup_hw(pcie);
-+ 
-+ 	ret = advk_pcie_init_irq_domain(pcie);
 +-- 
 +2.21.0
 +
