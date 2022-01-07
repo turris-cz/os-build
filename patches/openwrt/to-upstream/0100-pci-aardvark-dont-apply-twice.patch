@@ -1,0 +1,79 @@
+From d0816aeee24c69a1e8cdef5933054dad602f1c96 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 7 Jan 2022 19:45:15 +0100
+Subject: [PATCH] mvebu: remove patch that was applied into linux stable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The patch
+  PCI: aardvark: Don't touch PCIe registers if no card connected
+was applied into Linux stable version 5.4.163.
+
+Remove it from patches-5.4.
+
+(It applied even though it was applied already, resulting in repeated
+ code.)
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...-t-touch-PCIe-registers-if-no-card-c.patch | 50 -------------------
+ 1 file changed, 50 deletions(-)
+ delete mode 100644 target/linux/mvebu/patches-5.4/024-PCI-aardvark-Don-t-touch-PCIe-registers-if-no-card-c.patch
+
+diff --git a/target/linux/mvebu/patches-5.4/024-PCI-aardvark-Don-t-touch-PCIe-registers-if-no-card-c.patch b/target/linux/mvebu/patches-5.4/024-PCI-aardvark-Don-t-touch-PCIe-registers-if-no-card-c.patch
+deleted file mode 100644
+index 7a8c50634f6d..000000000000
+--- a/target/linux/mvebu/patches-5.4/024-PCI-aardvark-Don-t-touch-PCIe-registers-if-no-card-c.patch
++++ /dev/null
+@@ -1,50 +0,0 @@
+-From 70e380250c3621c55ff218cbaf2272830d9dbb1d Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
+-Date: Thu, 2 Jul 2020 10:30:36 +0200
+-Subject: [PATCH] PCI: aardvark: Don't touch PCIe registers if no card
+- connected
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-When there is no PCIe card connected and advk_pcie_rd_conf() or
+-advk_pcie_wr_conf() is called for PCI bus which doesn't belong to emulated
+-root bridge, the aardvark driver throws the following error message:
+-
+-  advk-pcie d0070000.pcie: config read/write timed out
+-
+-Obviously accessing PCIe registers of disconnected card is not possible.
+-
+-Extend check in advk_pcie_valid_device() function for validating
+-availability of PCIe bus. If PCIe link is down, then the device is marked
+-as Not Found and the driver does not try to access these registers.
+-
+-This is just an optimization to prevent accessing PCIe registers when card
+-is disconnected. Trying to access PCIe registers of disconnected card does
+-not cause any crash, kernel just needs to wait for a timeout. So if card
+-disappear immediately after checking for PCIe link (before accessing PCIe
+-registers), it does not cause any problems.
+-
+-Link: https://lore.kernel.org/r/20200702083036.12230-1-pali@kernel.org
+-Signed-off-by: Pali Rohár <pali@kernel.org>
+-Signed-off-by: Lorenzo Pieralisi <lorenzo.pieralisi@arm.com>
+----
+- drivers/pci/controller/pci-aardvark.c | 7 +++++++
+- 1 file changed, 7 insertions(+)
+-
+---- a/drivers/pci/controller/pci-aardvark.c
+-+++ b/drivers/pci/controller/pci-aardvark.c
+-@@ -976,6 +976,13 @@ static bool advk_pcie_valid_device(struc
+- 	if (bus->number != pcie->root_bus_nr && !advk_pcie_link_up(pcie))
+- 		return false;
+- 
+-+	/*
+-+	 * If the link goes down after we check for link-up, nothing bad
+-+	 * happens but the config access times out.
+-+	 */
+-+	if (bus->number != pcie->root_bus_nr && !advk_pcie_link_up(pcie))
+-+		return false;
+-+
+- 	return true;
+- }
+- 
