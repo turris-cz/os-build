@@ -1,0 +1,42 @@
+From 7166cf4f58850b8171d4382e6210c97e6a599cb2 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Sun, 16 Jan 2022 14:29:17 +0100
+Subject: [PATCH] base-files: set full version
+
+The OpenWrt uses revision as part of base-files and that works for them
+but not for us. Our version is declared by turris-build repository and
+applied as a patch. We also have patch that changes revision detection
+to latest OpenWrt commit (ignoring our patches). That is done to not
+reinstall base-files with pretty much every rebuild as hashes for
+patches change with any change in OpenWrt. Thus it is easy for us to
+have same version of base-files where the content of it is different.
+The most problematic is /etc/os-release file [1].
+
+Before:
+- base-files_204.4-r11388+89-f14bc5cf56_arm_cortex-a9_vfpv3-d16.ipk
+
+After:
+- base-files_204.4-5.3.4-r11392+89-81d0b4a9f4_powerpc_8540.ipk
+
+[1] https://gitlab.nic.cz/turris/os/build/-/issues/205
+
+---
+ package/base-files/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/package/base-files/Makefile b/package/base-files/Makefile
+index 09d36e1d01..ad4d63c099 100644
+--- a/package/base-files/Makefile
++++ b/package/base-files/Makefile
+@@ -40,7 +40,7 @@ define Package/base-files
+   DEPENDS:=+netifd +libc +procd +jsonfilter +SIGNED_PACKAGES:usign +SIGNED_PACKAGES:openwrt-keyring +NAND_SUPPORT:ubi-utils +fstools +fwtool +switch-branch
+   TITLE:=Base filesystem for OpenWrt
+   URL:=http://openwrt.org/
+-  VERSION:=$(PKG_RELEASE)-$(REVISION)
++  VERSION:=$(PKG_RELEASE)-$(VERSION_NUMBER)-$(REVISION)
+ endef
+ 
+ define Package/base-files/conffiles
+-- 
+2.34.1
+
