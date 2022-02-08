@@ -1,0 +1,219 @@
+From f74b061c9bfa969634d99973e26d084821747743 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 9 Feb 2022 00:06:07 +0100
+Subject: [PATCH] turris-netboot: update busybox version to 1.35.0
+
+Fixes:
+coreutils/date.c: In function 'date_main':
+coreutils/date.c:277:25: error: '__NR_clock_gettime' undeclared (first use in this function); did you mean 'clock_gettime'?
+  277 |                 syscall(__NR_clock_gettime, CLOCK_REALTIME, &ts);
+      |                         ^~~~~~~~~~~~~~~~~~
+      |                         clock_gettime
+coreutils/date.c:277:25: note: each undeclared identifier is reported only once for each function it appears in
+---
+ utils/turris-netboot/Makefile             |  8 ++++----
+ utils/turris-netboot/files/busybox-config | 25 ++++++++++++++++++++++-
+ 2 files changed, 28 insertions(+), 5 deletions(-)
+
+diff --git a/utils/turris-netboot/Makefile b/utils/turris-netboot/Makefile
+index f5f7aec57..5041326d1 100644
+--- a/utils/turris-netboot/Makefile
++++ b/utils/turris-netboot/Makefile
+@@ -9,18 +9,18 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=turris-netboot
+ PKG_VERSION:=0.6.2
+-PKG_RELEASE:=3
++PKG_RELEASE:=4
+ 
+ PKG_SOURCE_PROTO:=git
+ PKG_SOURCE_VERSION:=v$(PKG_VERSION)
+ PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/turris-netboot.git
+ PKG_MIRROR_HASH:=0e115d474eacd4394e08b748e3e8641d68d77d0e9b8cf5a5898b1f7e451029cb
+ 
+-BB_VERSION:=1.29.3
++BB_VERSION:=1.35.0
+ PKG_BB_SOURCE:=busybox-$(BB_VERSION).tar.bz2
+ PKG_BB_SOURCE_URL:=https://www.busybox.net/downloads \
+-		http://sources.buildroot.net
+-PKG_BB_HASH:=0a367e19cdfd157e8258d87f893ee516
++                http://sources.buildroot.net
++PKG_BB_HASH:=faeeb244c35a348a334f4a59e44626ee870fb07b6884d68c10ae8bc19f83a694
+ 
+ PKG_MAINTAINER:=Michal Hrusecky <michal.hrusecky@nic.cz>
+ 
+diff --git a/utils/turris-netboot/files/busybox-config b/utils/turris-netboot/files/busybox-config
+index c1c714017..5e13e011c 100644
+--- a/utils/turris-netboot/files/busybox-config
++++ b/utils/turris-netboot/files/busybox-config
+@@ -24,6 +24,7 @@ CONFIG_FEATURE_DEVPTS=y
+ CONFIG_FEATURE_PIDFILE=y
+ CONFIG_PID_FILE_PATH="/var/run"
+ CONFIG_BUSYBOX=y
++CONFIG_FEATURE_SHOW_SCRIPT=n
+ CONFIG_FEATURE_INSTALLER=y
+ CONFIG_INSTALL_NO_USR=y
+ # CONFIG_FEATURE_SUID is not set
+@@ -53,7 +54,7 @@ CONFIG_EXTRA_LDFLAGS=""
+ CONFIG_EXTRA_LDLIBS=""
+ # CONFIG_USE_PORTABLE_CODE is not set
+ CONFIG_STACK_OPTIMIZATION_386=y
+-
++CONFIG_STATIC_LIBGCC=n
+ #
+ # Installation Options ("make install" behavior)
+ #
+@@ -74,6 +75,7 @@ CONFIG_PREFIX="./_install"
+ # CONFIG_DEBUG_SANITIZE is not set
+ # CONFIG_UNIT_TEST is not set
+ # CONFIG_WERROR is not set
++CONFIG_WARN_SIMPLE_MSG=n
+ CONFIG_NO_DEBUG_LIB=y
+ # CONFIG_DMALLOC is not set
+ # CONFIG_EFENCE is not set
+@@ -82,6 +84,7 @@ CONFIG_NO_DEBUG_LIB=y
+ # Library Tuning
+ #
+ # CONFIG_FEATURE_USE_BSS_TAIL is not set
++CONFIG_FLOAT_DURATION=n
+ # CONFIG_FEATURE_RTMINMAX is not set
+ # CONFIG_FEATURE_BUFFERS_USE_MALLOC is not set
+ CONFIG_FEATURE_BUFFERS_GO_ON_STACK=y
+@@ -197,6 +200,7 @@ CONFIG_CAT=y
+ # CONFIG_FEATURE_CATN is not set
+ # CONFIG_FEATURE_CATV is not set
+ # CONFIG_CKSUM is not set
++# CONFIG_CRC32 is not set
+ # CONFIG_COMM is not set
+ CONFIG_CP=y
+ # CONFIG_FEATURE_CP_LONG_OPTIONS is not set
+@@ -326,6 +330,7 @@ CONFIG_UNAME_OSNAME=""
+ # CONFIG_UNLINK is not set
+ # CONFIG_USLEEP is not set
+ # CONFIG_UUDECODE is not set
++# CONFIG_BASE32 is not set
+ # CONFIG_BASE64 is not set
+ # CONFIG_UUENCODE is not set
+ CONFIG_WC=y
+@@ -414,6 +419,7 @@ CONFIG_VI=y
+ CONFIG_FEATURE_VI_MAX_LEN=4096
+ CONFIG_FEATURE_VI_8BIT=y
+ CONFIG_FEATURE_VI_COLON=y
++# CONFIG_FEATURE_VI_COLON_EXPAND is not set
+ CONFIG_FEATURE_VI_YANKMARK=y
+ CONFIG_FEATURE_VI_SEARCH=y
+ # CONFIG_FEATURE_VI_REGEX_SEARCH is not set
+@@ -427,6 +433,7 @@ CONFIG_FEATURE_VI_ASK_TERMINAL=y
+ CONFIG_FEATURE_VI_UNDO=y
+ CONFIG_FEATURE_VI_UNDO_QUEUE=y
+ CONFIG_FEATURE_VI_UNDO_QUEUE_MAX=256
++# CONFIG_FEATURE_VI_VERBOSE_STATUS is not set
+ CONFIG_FEATURE_ALLOW_EXEC=y
+ 
+ #
+@@ -435,13 +442,17 @@ CONFIG_FEATURE_ALLOW_EXEC=y
+ CONFIG_FIND=y
+ CONFIG_FEATURE_FIND_PRINT0=y
+ CONFIG_FEATURE_FIND_MTIME=y
++# CONFIG_FEATURE_FIND_ATIME is not set
++# CONFIG_FEATURE_FIND_CTIME is not set
+ # CONFIG_FEATURE_FIND_MMIN is not set
+ CONFIG_FEATURE_FIND_PERM=y
+ CONFIG_FEATURE_FIND_TYPE=y
++# CONFIG_FEATURE_FIND_EXECUTABLE is not set
+ CONFIG_FEATURE_FIND_XDEV=y
+ CONFIG_FEATURE_FIND_MAXDEPTH=y
+ CONFIG_FEATURE_FIND_NEWER=y
+ # CONFIG_FEATURE_FIND_INUM is not set
++# CONFIG_FEATURE_FIND_SAMEFILE is not set
+ CONFIG_FEATURE_FIND_EXEC=y
+ CONFIG_FEATURE_FIND_EXEC_PLUS=y
+ # CONFIG_FEATURE_FIND_USER is not set
+@@ -451,7 +462,9 @@ CONFIG_FEATURE_FIND_DEPTH=y
+ CONFIG_FEATURE_FIND_PAREN=y
+ CONFIG_FEATURE_FIND_SIZE=y
+ CONFIG_FEATURE_FIND_PRUNE=y
++# CONFIG_FEATURE_FIND_QUIT is not set
+ CONFIG_FEATURE_FIND_DELETE=y
++# CONFIG_FEATURE_FIND_EMPTY is not set
+ CONFIG_FEATURE_FIND_PATH=y
+ CONFIG_FEATURE_FIND_REGEX=y
+ # CONFIG_FEATURE_FIND_CONTEXT is not set
+@@ -630,6 +643,7 @@ CONFIG_FEATURE_MDEV_RENAME=y
+ CONFIG_FEATURE_MDEV_RENAME_REGEXP=y
+ CONFIG_FEATURE_MDEV_EXEC=y
+ CONFIG_FEATURE_MDEV_LOAD_FIRMWARE=y
++# CONFIG_FEATURE_MDEV_DAEMON is not set
+ # CONFIG_MESG is not set
+ # CONFIG_FEATURE_MESG_ENABLE_ONLY_GROUP is not set
+ # CONFIG_MKE2FS is not set
+@@ -653,6 +667,7 @@ CONFIG_FEATURE_MOUNT_FLAGS=y
+ CONFIG_FEATURE_MOUNT_FSTAB=y
+ CONFIG_FEATURE_MOUNT_OTHERTAB=y
+ # CONFIG_MOUNTPOINT is not set
++# CONFIG_NOLOGIN is not set
+ # CONFIG_NSENTER is not set
+ # CONFIG_PIVOT_ROOT is not set
+ # CONFIG_RDATE is not set
+@@ -699,6 +714,7 @@ CONFIG_VOLUMEID=y
+ # CONFIG_FEATURE_VOLUMEID_BCACHE is not set
+ CONFIG_FEATURE_VOLUMEID_BTRFS=y
+ # CONFIG_FEATURE_VOLUMEID_CRAMFS is not set
++# CONFIG_FEATURE_VOLUMEID_EROFS is not set
+ CONFIG_FEATURE_VOLUMEID_EXFAT=y
+ CONFIG_FEATURE_VOLUMEID_EXT=y
+ CONFIG_FEATURE_VOLUMEID_FAT=y
+@@ -726,8 +742,10 @@ CONFIG_FEATURE_VOLUMEID_NTFS=y
+ # Miscellaneous Utilities
+ #
+ # CONFIG_ADJTIMEX is not set
++# CONFIG_ASCII is not set
+ # CONFIG_BBCONFIG is not set
+ # CONFIG_FEATURE_COMPRESS_BBCONFIG is not set
++# CONFIG_BC is not set
+ # CONFIG_BEEP is not set
+ CONFIG_FEATURE_BEEP_FREQ=0
+ CONFIG_FEATURE_BEEP_LENGTH_MS=0
+@@ -772,6 +790,7 @@ CONFIG_I2CGET=y
+ CONFIG_I2CSET=y
+ CONFIG_I2CDUMP=y
+ CONFIG_I2CDETECT=y
++# CONFIG_I2CTRANSFER is not set
+ CONFIG_LESS=y
+ CONFIG_FEATURE_LESS_MAXLINES=9999999
+ CONFIG_FEATURE_LESS_BRACKETS=y
+@@ -791,6 +810,7 @@ CONFIG_FEATURE_LESS_ENV=y
+ # CONFIG_FEATURE_MAKEDEVS_TABLE is not set
+ # CONFIG_MAN is not set
+ # CONFIG_MICROCOM is not set
++# CONFIG_MIM is not set
+ # CONFIG_MT is not set
+ CONFIG_NANDWRITE=y
+ # CONFIG_NANDDUMP is not set
+@@ -804,6 +824,7 @@ CONFIG_PARTPROBE=y
+ # CONFIG_SETSERIAL is not set
+ # CONFIG_STRINGS is not set
+ # CONFIG_TIME is not set
++# CONFIG_TS is not set
+ # CONFIG_TTYSIZE is not set
+ # CONFIG_UBIRENAME is not set
+ # CONFIG_UBIATTACH is not set
+@@ -814,6 +835,7 @@ CONFIG_PARTPROBE=y
+ # CONFIG_UBIUPDATEVOL is not set
+ # CONFIG_VOLNAME is not set
+ CONFIG_WATCHDOG=y
++# CONFIG_FEATURE_WATCHDOG_OPEN_TWICE is not set
+ 
+ #
+ # Networking Utilities
+@@ -965,6 +987,7 @@ CONFIG_FEATURE_UDHCPC6_RFC5970=y
+ # Common options for DHCP applets
+ #
+ # CONFIG_FEATURE_UDHCP_PORT is not set
++CONFIG_UDHCPC_DEFAULT_INTERFACE=eth0
+ CONFIG_UDHCP_DEBUG=9
+ CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+-- 
+2.32.0
+
