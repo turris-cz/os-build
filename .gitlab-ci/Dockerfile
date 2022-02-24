@@ -31,6 +31,14 @@ RUN apt-get -y install --no-install-recommends \
 ## And finally, clean apt cache to not be present in the final container
 RUN apt-get clean
 
+## Compile custom library base64c required by updater-ng
+RUN \
+  git clone --branch "v0.2.1" "https://gitlab.nic.cz/turris/base64c.git" && \
+  cd base64c && \
+  ./bootstrap && ./configure --prefix=/usr && make install && \
+  cd .. && \
+  rm -rf base64c
+
 ## Add a user for build environment as it is not possible to build OpenWrt as root
 RUN useradd -ms /bin/bash -d /build build
 USER build
