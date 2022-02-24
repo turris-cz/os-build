@@ -1,8 +1,26 @@
-image: registry.nic.cz/turris/os/build
+image: $CI_REGISTRY_IMAGE
 
 stages:
+  - docker
   - build
   - verify
+
+## Docker stage ##################################################################
+docker:
+  stage: docker
+  image: $CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/docker
+  services:
+    - $CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/docker:dind
+  tags:
+    - dind
+    - privileged
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker pull $CI_REGISTRY_IMAGE || true
+    - docker build --pull --cache-from $CI_REGISTRY_IMAGE --tag $CI_REGISTRY_IMAGE --file .gitlab-ci/Dockerfile .gitlab-ci
+    - docker push $CI_REGISTRY_IMAGE
+
 
 ## Package build prepare #########################################################
 .prepare:
