@@ -1,4 +1,4 @@
-From e3721ffc719813fe9500334d6c4ebfdb09a534f8 Mon Sep 17 00:00:00 2001
+From 52fc185eba49b5cf5a282b89a29ae0c29eb10a84 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Thu, 24 Sep 2020 00:28:51 +0200
 Subject: [PATCH] mvebu: add support for Turris SFP module
@@ -35,7 +35,7 @@ Subject: [PATCH] mvebu: add support for Turris SFP module
  ...ylink-use-phy-interface-mode-bitmaps.patch | 199 ++++++++++++
  ...ta-fill-in-phy-interface-mode-bitmap.patch |  43 +++
  ...-support-I2C-MDIO-protocol-for-RollB.patch | 285 ++++++++++++++++++
- ...support-for-multigig-RollBall-module.patch | 170 +++++++++++
+ ...support-for-multigig-RollBall-module.patch | 171 +++++++++++
  ...t-fail-attaching-phy-on-1000base-x-2.patch |  37 +++
  ...PHYs-know-what-interfaces-are-suppor.patch | 111 +++++++
  ...ll10g-read-copper-results-from-CSSR1.patch | 208 +++++++++++++
@@ -51,7 +51,7 @@ Subject: [PATCH] mvebu: add support for Turris SFP module
  ...ll10g-fix-temperature-sensor-on-2110.patch |  89 ++++++
  ...0g-change-MACTYPE-according-to-host-.patch | 216 +++++++++++++
  ...vell10g-fix-null-pointer-dereference.patch |  88 ++++++
- 47 files changed, 4610 insertions(+)
+ 47 files changed, 4611 insertions(+)
  create mode 100644 target/linux/mvebu/patches-5.4/8500-net-phylink-use-more-linkmode_.patch
  create mode 100644 target/linux/mvebu/patches-5.4/8543-net-phylink-propagate-phy_attach_direct-return-code.patch
  create mode 100644 target/linux/mvebu/patches-5.4/8544-net-phylink-improve-clause-45-PHY-ksettings_set-impl.patch
@@ -3276,11 +3276,11 @@ index 0000000000..4e5424e83f
 +
 diff --git a/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch b/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch
 new file mode 100644
-index 0000000000..eaaf635bff
+index 0000000000..e8f21e70b5
 --- /dev/null
 +++ b/target/linux/mvebu/patches-5.4/8572-net-phy-sfp-add-support-for-multigig-RollBall-module.patch
-@@ -0,0 +1,170 @@
-+From fcd97486770bc47fc9cdd72952153413fb6a06b9 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,171 @@
++From d38eb1727ef7827054af58bd6327ffa431fb7f5f Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 +Date: Wed, 12 Aug 2020 16:14:54 +0200
 +Subject: [PATCH] net: phy: sfp: add support for multigig RollBall modules
@@ -3297,11 +3297,11 @@ index 0000000000..eaaf635bff
 +
 +Signed-off-by: Marek Behún <marek.behun@nic.cz>
 +---
-+ drivers/net/phy/sfp.c | 67 +++++++++++++++++++++++++++++++++++++++----
-+ 1 file changed, 62 insertions(+), 5 deletions(-)
++ drivers/net/phy/sfp.c | 68 +++++++++++++++++++++++++++++++++++++++----
++ 1 file changed, 63 insertions(+), 5 deletions(-)
 +
 +diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index ff31fdab9ac6..582a28dc7b11 100644
++index ff31fdab9ac6..54b42ad76b89 100644
 +--- a/drivers/net/phy/sfp.c
 ++++ b/drivers/net/phy/sfp.c
 +@@ -165,6 +165,7 @@ static const enum gpiod_flags gpio_flags[] = {
@@ -3390,7 +3390,7 @@ index 0000000000..eaaf635bff
 + 	u8 check;
 + 	int ret;
 + 
-+@@ -1799,6 +1833,24 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++@@ -1799,6 +1833,25 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
 + 		}
 + 	}
 + 
@@ -3400,6 +3400,7 @@ index 0000000000..eaaf635bff
 ++		     !memcmp(id.base.vendor_name, "Turris          ", 16)) &&
 ++		    (!memcmp(id.base.vendor_pn, "SFP-10G-T       ", 16) ||
 ++		     !memcmp(id.base.vendor_pn, "RTSFP-10        ", 16) ||
+++		     !memcmp(id.base.vendor_pn, "RTSFP-10G       ", 16) ||
 ++		     !memcmp(id.base.vendor_pn, "RTSFP-2.5G      ", 16)));
 ++	if (rollball) {
 ++		sfp->phy_addr = SFP_PHY_ADDR_ROLLBALL;
@@ -3415,7 +3416,7 @@ index 0000000000..eaaf635bff
 + 	sfp->id = id;
 + 
 + 	dev_info(sfp->dev, "module %.*s %.*s rev %.*s sn %.*s dc %.*s\n",
-+@@ -1832,6 +1884,11 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++@@ -1832,6 +1885,11 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
 + 	else
 + 		sfp->module_t_start_up = T_START_UP;
 + 
@@ -3427,7 +3428,7 @@ index 0000000000..eaaf635bff
 + 	return 0;
 + }
 + 
-+@@ -2027,7 +2084,7 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
++@@ -2027,7 +2085,7 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
 + 		 * while TX_DISABLE is asserted. The earliest we want to do
 + 		 * anything (such as probe for a PHY) is 50ms.
 + 		 */
@@ -3436,7 +3437,7 @@ index 0000000000..eaaf635bff
 + 		break;
 + 
 + 	case SFP_S_WAIT:
-+@@ -2041,8 +2098,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
++@@ -2041,8 +2099,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
 + 			 * deasserting.
 + 			 */
 + 			timeout = sfp->module_t_start_up;
