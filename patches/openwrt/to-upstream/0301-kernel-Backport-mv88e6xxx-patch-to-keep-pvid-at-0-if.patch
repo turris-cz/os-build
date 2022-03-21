@@ -1,6 +1,6 @@
-From b2ae87a14e97dc453b2e91fba63f3507b34250c3 Mon Sep 17 00:00:00 2001
+From 1ccfd041b8f3bc8cefac18c6fd0f1d8e691de43c Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
-Date: Mon, 21 Mar 2022 00:34:40 +0100
+Date: Mon, 21 Mar 2022 17:53:10 +0100
 Subject: [PATCH] kernel: Backport mv88e6xxx patch to keep pvid at 0 if
  VLAN-unaware and remove hack
 MIME-Version: 1.0
@@ -11,27 +11,28 @@ Backport patch
   8b6836d82470 ("net: dsa: mv88e6xxx: keep the pvid at 0 when VLAN-unaware")
 from 5.15.
 
-Keeping the pvid at 0 when VLAN-unaware makes it possible to drop the hack
-introduced in commit 920eaab1d817 ("kernel: DSA roaming fix for Marvell
-mv88e6xxx").
+Keeping the pvid at 0 when VLAN-unaware makes it possible to drop the
+hack introduced in commit 920eaab1d817 ("kernel: DSA roaming fix for
+Marvell mv88e6xxx"). Dropping the hack makes it possible to use VLAN
+interfaces with VID 1 on DSA ports without problems with FDB.
 
 Signed-off-by: Marek Behún <kabel@kernel.org>
 ---
  ...x-keep-the-pvid-at-0-when-VLAN-unawa.patch | 236 ++++++++++++++++++
  .../710-net-dsa-mv88e6xxx-default-VID-1.patch |  18 --
  2 files changed, 236 insertions(+), 18 deletions(-)
- create mode 100644 target/linux/generic/backport-5.4/776-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
- delete mode 100644 target/linux/generic/hack-5.4/710-net-dsa-mv88e6xxx-default-VID-1.patch
+ create mode 100644 target/linux/generic/backport-5.10/774-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
+ delete mode 100644 target/linux/generic/hack-5.10/710-net-dsa-mv88e6xxx-default-VID-1.patch
 
-diff --git a/target/linux/generic/backport-5.4/776-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch b/target/linux/generic/backport-5.4/776-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
+diff --git a/target/linux/generic/backport-5.10/774-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch b/target/linux/generic/backport-5.10/774-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
 new file mode 100644
-index 0000000000..6d7e5f63f6
+index 000000000000..c5b006493c1d
 --- /dev/null
-+++ b/target/linux/generic/backport-5.4/776-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
++++ b/target/linux/generic/backport-5.10/774-v5.15-net-dsa-mv88e6xxx-keep-the-pvid-at-0-when-VLAN-unawa.patch
 @@ -0,0 +1,236 @@
-+From 790d68e6e0ad5a7b7c8f09f5e3aeb91771eac635 Mon Sep 17 00:00:00 2001
++From 675992be6f7b603b8cfda4678f173e1021fc1ab6 Mon Sep 17 00:00:00 2001
 +From: Vladimir Oltean <vladimir.oltean@nxp.com>
-+Date: Mon, 21 Mar 2022 00:02:20 +0100
++Date: Thu, 7 Oct 2021 19:47:10 +0300
 +Subject: [PATCH] net: dsa: mv88e6xxx: keep the pvid at 0 when VLAN-unaware
 +
 +The VLAN support in mv88e6xxx has a loaded history. Commit 2ea7a679ca2a
@@ -93,16 +94,16 @@ index 0000000000..6d7e5f63f6
 + 4 files changed, 81 insertions(+), 4 deletions(-)
 +
 +diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index a39c370a844d..899ed230b6a9 100644
++index 1992be77522a..a77c86e0321d 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -1426,6 +1426,26 @@ static int mv88e6xxx_port_check_hw_vlan(struct dsa_switch *ds, int port,
++@@ -1586,6 +1586,26 @@ static int mv88e6xxx_port_check_hw_vlan(struct dsa_switch *ds, int port,
 + 	return 0;
 + }
 + 
 ++static int mv88e6xxx_port_commit_pvid(struct mv88e6xxx_chip *chip, int port)
 ++{
-++	struct dsa_port *dp = &chip->ds->ports[port];
+++	struct dsa_port *dp = dsa_to_port(chip->ds, port);
 ++	struct mv88e6xxx_port *p = &chip->ports[port];
 ++	bool drop_untagged = false;
 ++	u16 pvid = 0;
@@ -121,10 +122,10 @@ index 0000000000..6d7e5f63f6
 ++}
 ++
 + static int mv88e6xxx_port_vlan_filtering(struct dsa_switch *ds, int port,
-+ 					 bool vlan_filtering)
-+ {
-+@@ -1438,7 +1458,16 @@ static int mv88e6xxx_port_vlan_filtering(struct dsa_switch *ds, int port,
-+ 		return -EOPNOTSUPP;
++ 					 bool vlan_filtering,
++ 					 struct switchdev_trans *trans)
++@@ -1599,7 +1619,16 @@ static int mv88e6xxx_port_vlan_filtering(struct dsa_switch *ds, int port,
++ 		return chip->info->max_vid ? 0 : -EOPNOTSUPP;
 + 
 + 	mv88e6xxx_reg_lock(chip);
 ++
@@ -140,7 +141,7 @@ index 0000000000..6d7e5f63f6
 + 	mv88e6xxx_reg_unlock(chip);
 + 
 + 	return err;
-+@@ -1821,8 +1850,10 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
++@@ -1982,8 +2011,10 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
 + 	struct mv88e6xxx_chip *chip = ds->priv;
 + 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
 + 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
@@ -151,7 +152,7 @@ index 0000000000..6d7e5f63f6
 + 	u16 vid;
 + 
 + 	if (!chip->info->max_vid)
-+@@ -1847,9 +1878,23 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
++@@ -2008,9 +2039,23 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
 + 			dev_err(ds->dev, "p%d: failed to add VLAN %d%c\n", port,
 + 				vid, untagged ? 'u' : 't');
 + 
@@ -178,7 +179,7 @@ index 0000000000..6d7e5f63f6
 + 
 + 	mv88e6xxx_reg_unlock(chip);
 + }
-+@@ -1900,6 +1945,7 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
++@@ -2061,6 +2106,7 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
 + 				   const struct switchdev_obj_port_vlan *vlan)
 + {
 + 	struct mv88e6xxx_chip *chip = ds->priv;
@@ -186,7 +187,7 @@ index 0000000000..6d7e5f63f6
 + 	u16 pvid, vid;
 + 	int err = 0;
 + 
-+@@ -1918,7 +1964,9 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
++@@ -2079,7 +2125,9 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
 + 			goto unlock;
 + 
 + 		if (vid == pvid) {
@@ -198,10 +199,10 @@ index 0000000000..6d7e5f63f6
 + 				goto unlock;
 + 		}
 +diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
-+index a0e586379bc3..9f5b0a65c566 100644
++index 51a7ff44478e..843803c3adf2 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.h
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.h
-+@@ -222,9 +222,15 @@ struct mv88e6xxx_policy {
++@@ -224,9 +224,15 @@ struct mv88e6xxx_policy {
 + 	u16 vid;
 + };
 + 
@@ -218,10 +219,10 @@ index 0000000000..6d7e5f63f6
 + 	u64 atu_member_violation;
 + 	u64 atu_miss_violation;
 +diff --git a/drivers/net/dsa/mv88e6xxx/port.c b/drivers/net/dsa/mv88e6xxx/port.c
-+index 0b43c650e100..99296b7bd4d2 100644
++index dfd9e8292e9a..a7177aa254a8 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.c
 ++++ b/drivers/net/dsa/mv88e6xxx/port.c
-+@@ -1241,6 +1241,27 @@ int mv88e6xxx_port_set_8021q_mode(struct mv88e6xxx_chip *chip, int port,
++@@ -1062,6 +1062,27 @@ int mv88e6xxx_port_set_8021q_mode(struct mv88e6xxx_chip *chip, int port,
 + 	return 0;
 + }
 + 
@@ -250,30 +251,30 @@ index 0000000000..6d7e5f63f6
 + {
 + 	u16 reg;
 +diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
-+index 0ec4327c2b42..44a035221b4b 100644
++index 44d76ac973f6..3390517df42e 100644
 +--- a/drivers/net/dsa/mv88e6xxx/port.h
 ++++ b/drivers/net/dsa/mv88e6xxx/port.h
-+@@ -359,6 +359,8 @@ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
++@@ -364,6 +364,8 @@ int mv88e6390x_port_set_cmode(struct mv88e6xxx_chip *chip, int port,
 + 			      phy_interface_t mode);
 + int mv88e6185_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode);
 + int mv88e6352_port_get_cmode(struct mv88e6xxx_chip *chip, int port, u8 *cmode);
 ++int mv88e6xxx_port_drop_untagged(struct mv88e6xxx_chip *chip, int port,
 ++				 bool drop_untagged);
-+ int mv88e6185_port_link_state(struct mv88e6xxx_chip *chip, int port,
-+ 			      struct phylink_link_state *state);
-+ int mv88e6250_port_link_state(struct mv88e6xxx_chip *chip, int port,
++ int mv88e6xxx_port_set_map_da(struct mv88e6xxx_chip *chip, int port);
++ int mv88e6095_port_set_upstream_port(struct mv88e6xxx_chip *chip, int port,
++ 				     int upstream_port);
 +-- 
 +2.34.1
 +
-diff --git a/target/linux/generic/hack-5.4/710-net-dsa-mv88e6xxx-default-VID-1.patch b/target/linux/generic/hack-5.4/710-net-dsa-mv88e6xxx-default-VID-1.patch
+diff --git a/target/linux/generic/hack-5.10/710-net-dsa-mv88e6xxx-default-VID-1.patch b/target/linux/generic/hack-5.10/710-net-dsa-mv88e6xxx-default-VID-1.patch
 deleted file mode 100644
-index 5dc5ac6825..0000000000
---- a/target/linux/generic/hack-5.4/710-net-dsa-mv88e6xxx-default-VID-1.patch
+index 03725653f950..000000000000
+--- a/target/linux/generic/hack-5.10/710-net-dsa-mv88e6xxx-default-VID-1.patch
 +++ /dev/null
 @@ -1,18 +0,0 @@
 ---- a/drivers/net/dsa/mv88e6xxx/chip.c
 -+++ b/drivers/net/dsa/mv88e6xxx/chip.c
--@@ -1930,6 +1930,7 @@ static int mv88e6xxx_port_fdb_add(struct
+-@@ -2097,6 +2097,7 @@ static int mv88e6xxx_port_fdb_add(struct
 - 	struct mv88e6xxx_chip *chip = ds->priv;
 - 	int err;
 - 
@@ -281,7 +282,7 @@ index 5dc5ac6825..0000000000
 - 	mv88e6xxx_reg_lock(chip);
 - 	err = mv88e6xxx_port_db_load_purge(chip, port, addr, vid,
 - 					   MV88E6XXX_G1_ATU_DATA_STATE_UC_STATIC);
--@@ -1944,6 +1945,7 @@ static int mv88e6xxx_port_fdb_del(struct
+-@@ -2111,6 +2112,7 @@ static int mv88e6xxx_port_fdb_del(struct
 - 	struct mv88e6xxx_chip *chip = ds->priv;
 - 	int err;
 - 
@@ -289,6 +290,3 @@ index 5dc5ac6825..0000000000
 - 	mv88e6xxx_reg_lock(chip);
 - 	err = mv88e6xxx_port_db_load_purge(chip, port, addr, vid, 0);
 - 	mv88e6xxx_reg_unlock(chip);
--- 
-2.34.1
-
