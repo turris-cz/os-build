@@ -1,0 +1,98 @@
+From 3eb6a00e9730b34aa7999d6e3602f635c4f56b0d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Mon, 21 Mar 2022 00:32:50 +0100
+Subject: [PATCH] kernel: Backport DSA warning fix patch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Backport patch
+  933b4425086a ("net: dsa: mv88e6xxx: fix duplicate vlan warning")
+from upstream to fix
+  failed to add VLAN
+warning.
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ ...mv88e6xxx-fix-duplicate-vlan-warning.patch | 69 +++++++++++++++++++
+ 1 file changed, 69 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.4/759-v5.7-net-dsa-mv88e6xxx-fix-duplicate-vlan-warning.patch
+
+diff --git a/target/linux/generic/backport-5.4/759-v5.7-net-dsa-mv88e6xxx-fix-duplicate-vlan-warning.patch b/target/linux/generic/backport-5.4/759-v5.7-net-dsa-mv88e6xxx-fix-duplicate-vlan-warning.patch
+new file mode 100644
+index 0000000000..43ae27d91a
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/759-v5.7-net-dsa-mv88e6xxx-fix-duplicate-vlan-warning.patch
+@@ -0,0 +1,69 @@
++From db922b206b96fb2c470664dbf53b22abb2bb2786 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Wed, 26 Feb 2020 17:14:26 +0000
++Subject: [PATCH 1/2] net: dsa: mv88e6xxx: fix duplicate vlan warning
++
++When setting VLANs on DSA switches, the VLAN is added to both the port
++concerned as well as the CPU port by dsa_slave_vlan_add(), as well as
++any DSA ports.  If multiple ports are configured with the same VLAN ID,
++this triggers a warning on the CPU and DSA ports.
++
++Avoid this warning for CPU and DSA ports.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 12 +++++++++---
++ 1 file changed, 9 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 544e105d8555..a39c370a844d 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -1762,7 +1762,7 @@ static int mv88e6xxx_broadcast_setup(struct mv88e6xxx_chip *chip, u16 vid)
++ }
++ 
++ static int mv88e6xxx_port_vlan_join(struct mv88e6xxx_chip *chip, int port,
++-				    u16 vid, u8 member)
+++				    u16 vid, u8 member, bool warn)
++ {
++ 	const u8 non_member = MV88E6XXX_G1_VTU_DATA_MEMBER_TAG_NON_MEMBER;
++ 	struct mv88e6xxx_vtu_entry vlan;
++@@ -1807,7 +1807,7 @@ static int mv88e6xxx_port_vlan_join(struct mv88e6xxx_chip *chip, int port,
++ 		err = mv88e6xxx_vtu_loadpurge(chip, &vlan);
++ 		if (err)
++ 			return err;
++-	} else {
+++	} else if (warn) {
++ 		dev_info(chip->dev, "p%d: already a member of VLAN %d\n",
++ 			 port, vid);
++ 	}
++@@ -1821,6 +1821,7 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
++ 	struct mv88e6xxx_chip *chip = ds->priv;
++ 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
++ 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
+++	bool warn;
++ 	u8 member;
++ 	u16 vid;
++ 
++@@ -1834,10 +1835,15 @@ static void mv88e6xxx_port_vlan_add(struct dsa_switch *ds, int port,
++ 	else
++ 		member = MV88E6XXX_G1_VTU_DATA_MEMBER_TAG_TAGGED;
++ 
+++	/* net/dsa/slave.c will call dsa_port_vlan_add() for the affected port
+++	 * and then the CPU port. Do not warn for duplicates for the CPU port.
+++	 */
+++	warn = !dsa_is_cpu_port(ds, port) && !dsa_is_dsa_port(ds, port);
+++
++ 	mv88e6xxx_reg_lock(chip);
++ 
++ 	for (vid = vlan->vid_begin; vid <= vlan->vid_end; ++vid)
++-		if (mv88e6xxx_port_vlan_join(chip, port, vid, member))
+++		if (mv88e6xxx_port_vlan_join(chip, port, vid, member, warn))
++ 			dev_err(ds->dev, "p%d: failed to add VLAN %d%c\n", port,
++ 				vid, untagged ? 'u' : 't');
++ 
++-- 
++2.34.1
++
+-- 
+2.34.1
+

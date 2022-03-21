@@ -1,0 +1,665 @@
+From a949f191a81c9d401b96e24b3a0fdb9e88d05296 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Mon, 21 Mar 2022 15:09:28 +0100
+Subject: [PATCH] kernel: Backport another 6 DSA patches from upstream
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Backport first 6 patches of series
+  DSA with VLAN filtering and offloading masters [1]
+
+This makes it possible, among other things, to create a VLAN interface
+with VID 1 under default configuration under a switch port, i.e. with
+command
+  ip link add link lan1 name lan1.1 type vlan id 1
+
+Previously this caused
+  RTNETLINK answers: Resource busy
+
+[1] https://lore.kernel.org/netdev/20200921001031.3650456-1-vladimir.oltean@nxp.com/
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...laving-802.1Q-upper-to-VLAN-aware-br.patch |  51 ++++++
+ ...sa_slave_upper_vlan_check-to-somethi.patch |  50 ++++++
+ ...check-for-802.1Q-upper-when-bridged-.patch | 143 +++++++++++++++++
+ ...denying-bridge-VLAN-with-existing-80.patch | 147 ++++++++++++++++++
+ ...onfiguration-in-prepare-phase-of-dsa.patch |  79 ++++++++++
+ ...21q-uppers-while-the-bridge-has-vlan.patch | 119 ++++++++++++++
+ 6 files changed, 589 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-1-net-dsa-deny-enslaving-802.1Q-upper-to-VLAN-aware-br.patch
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-2-net-dsa-rename-dsa_slave_upper_vlan_check-to-somethi.patch
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-3-net-dsa-convert-check-for-802.1Q-upper-when-bridged-.patch
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-4-net-dsa-convert-denying-bridge-VLAN-with-existing-80.patch
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-5-net-dsa-refuse-configuration-in-prepare-phase-of-dsa.patch
+ create mode 100644 target/linux/generic/backport-5.4/777-v5.10-6-net-dsa-allow-8021q-uppers-while-the-bridge-has-vlan.patch
+
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-1-net-dsa-deny-enslaving-802.1Q-upper-to-VLAN-aware-br.patch b/target/linux/generic/backport-5.4/777-v5.10-1-net-dsa-deny-enslaving-802.1Q-upper-to-VLAN-aware-br.patch
+new file mode 100644
+index 0000000000..aa7bfa3beb
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-1-net-dsa-deny-enslaving-802.1Q-upper-to-VLAN-aware-br.patch
+@@ -0,0 +1,51 @@
++From 22b72d96a7c0a069e6b0208b05417359feb3600f Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:23 +0300
++Subject: [PATCH 1/6] net: dsa: deny enslaving 802.1Q upper to VLAN-aware
++ bridge from PRECHANGEUPPER
++
++There doesn't seem to be any strong technical reason for doing it this
++way, but we'll be adding more checks for invalid upper device
++configurations, and it will be easier to have them all grouped under
++PRECHANGEUPPER.
++
++Tested that it still works:
++ip link set br0 type bridge vlan_filtering 1
++ip link add link swp2 name swp2.100 type vlan id 100
++ip link set swp2.100 master br0
++[   20.321312] br0: port 5(swp2.100) entered blocking state
++[   20.326711] br0: port 5(swp2.100) entered disabled state
++Error: dsa_core: Cannot enslave VLAN device into VLAN aware bridge.
++[   20.346549] br0: port 5(swp2.100) entered blocking state
++[   20.351957] br0: port 5(swp2.100) entered disabled state
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/slave.c | 7 ++++++-
++ 1 file changed, 6 insertions(+), 1 deletion(-)
++
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index 036fda317bcc..a8c7f2c87fe1 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1558,9 +1558,14 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
++ {
++ 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
++ 
++-	if (event == NETDEV_CHANGEUPPER) {
+++	switch (event) {
+++	case NETDEV_PRECHANGEUPPER:
++ 		if (!dsa_slave_dev_check(dev))
++ 			return dsa_slave_upper_vlan_check(dev, ptr);
+++		break;
+++	case NETDEV_CHANGEUPPER:
+++		if (!dsa_slave_dev_check(dev))
+++			return NOTIFY_DONE;
++ 
++ 		return dsa_slave_changeupper(dev, ptr);
++ 	}
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-2-net-dsa-rename-dsa_slave_upper_vlan_check-to-somethi.patch b/target/linux/generic/backport-5.4/777-v5.10-2-net-dsa-rename-dsa_slave_upper_vlan_check-to-somethi.patch
+new file mode 100644
+index 0000000000..de02dbd10a
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-2-net-dsa-rename-dsa_slave_upper_vlan_check-to-somethi.patch
+@@ -0,0 +1,50 @@
++From 4efd1017dd541996129bf31cec8c67ddd532c3b9 Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:24 +0300
++Subject: [PATCH 2/6] net: dsa: rename dsa_slave_upper_vlan_check to something
++ more suggestive
++
++We'll be adding a new check in the PRECHANGEUPPER notifier, where we'll
++need to check some VLAN uppers. It is hard to do that when there is
++already a function named dsa_slave_upper_vlan_check. So rename this one.
++
++Not to mention that this function probably shouldn't have started with
++"dsa_slave_" in the first place, since the struct net_device argument
++isn't a DSA slave, but an 8021q upper of one.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/slave.c | 8 ++++----
++ 1 file changed, 4 insertions(+), 4 deletions(-)
++
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index a8c7f2c87fe1..bfa12ce7e98e 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1521,9 +1521,9 @@ static int dsa_slave_changeupper(struct net_device *dev,
++ 	return err;
++ }
++ 
++-static int dsa_slave_upper_vlan_check(struct net_device *dev,
++-				      struct netdev_notifier_changeupper_info *
++-				      info)
+++static int
+++dsa_prevent_bridging_8021q_upper(struct net_device *dev,
+++				 struct netdev_notifier_changeupper_info *info)
++ {
++ 	struct netlink_ext_ack *ext_ack;
++ 	struct net_device *slave;
++@@ -1561,7 +1561,7 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
++ 	switch (event) {
++ 	case NETDEV_PRECHANGEUPPER:
++ 		if (!dsa_slave_dev_check(dev))
++-			return dsa_slave_upper_vlan_check(dev, ptr);
+++			return dsa_prevent_bridging_8021q_upper(dev, ptr);
++ 		break;
++ 	case NETDEV_CHANGEUPPER:
++ 		if (!dsa_slave_dev_check(dev))
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-3-net-dsa-convert-check-for-802.1Q-upper-when-bridged-.patch b/target/linux/generic/backport-5.4/777-v5.10-3-net-dsa-convert-check-for-802.1Q-upper-when-bridged-.patch
+new file mode 100644
+index 0000000000..721c62eb98
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-3-net-dsa-convert-check-for-802.1Q-upper-when-bridged-.patch
+@@ -0,0 +1,143 @@
++From f7efb70a26edec6647a2b0ff0139ea861f25ea91 Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:25 +0300
++Subject: [PATCH 3/6] net: dsa: convert check for 802.1Q upper when bridged
++ into PRECHANGEUPPER
++
++DSA tries to prevent having a VLAN added by a bridge and by an 802.1Q
++upper at the same time. It does that by checking the VID in
++.ndo_vlan_rx_add_vid(), since that's something that the 8021q module
++calls, via vlan_vid_add(). When a VLAN matches in both subsystems, this
++check returns -EBUSY.
++
++However the vlan_vid_add() function isn't specific to the 8021q module
++in any way at all. It is simply the kernel's way to tell an interface to
++add a VLAN to its RX filter and not drop that VLAN. So there's no reason
++to return -EBUSY when somebody tries to call vlan_vid_add() for a VLAN
++that was installed by the bridge. The proper behavior is to accept that
++configuration.
++
++So what's wrong is how DSA checks that it has an 8021q upper. It should
++look at the actual uppers for that, not just assume that the 8021q
++module was somewhere in the call stack of .ndo_vlan_rx_add_vid().
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/slave.c | 74 +++++++++++++++++++++++++------------------------
++ 1 file changed, 38 insertions(+), 36 deletions(-)
++
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index bfa12ce7e98e..c7dc177b75a0 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1116,25 +1116,8 @@ static int dsa_slave_vlan_rx_add_vid(struct net_device *dev, __be16 proto,
++ 				     u16 vid)
++ {
++ 	struct dsa_port *dp = dsa_slave_to_port(dev);
++-	struct bridge_vlan_info info;
++ 	int ret;
++ 
++-	/* Check for a possible bridge VLAN entry now since there is no
++-	 * need to emulate the switchdev prepare + commit phase.
++-	 */
++-	if (dp->bridge_dev) {
++-		if (dsa_port_skip_vlan_configuration(dp))
++-			return 0;
++-
++-		/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
++-		 * device, respectively the VID is not found, returning
++-		 * 0 means success, which is a failure for us here.
++-		 */
++-		ret = br_vlan_get_info(dp->bridge_dev, vid, &info);
++-		if (ret == 0)
++-			return -EBUSY;
++-	}
++-
++ 	ret = dsa_port_vid_add(dp, vid, 0);
++ 	if (ret)
++ 		return ret;
++@@ -1150,24 +1133,6 @@ static int dsa_slave_vlan_rx_kill_vid(struct net_device *dev, __be16 proto,
++ 				      u16 vid)
++ {
++ 	struct dsa_port *dp = dsa_slave_to_port(dev);
++-	struct bridge_vlan_info info;
++-	int ret;
++-
++-	/* Check for a possible bridge VLAN entry now since there is no
++-	 * need to emulate the switchdev prepare + commit phase.
++-	 */
++-	if (dp->bridge_dev) {
++-		if (dsa_port_skip_vlan_configuration(dp))
++-			return 0;
++-
++-		/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
++-		 * device, respectively the VID is not found, returning
++-		 * 0 means success, which is a failure for us here.
++-		 */
++-		ret = br_vlan_get_info(dp->bridge_dev, vid, &info);
++-		if (ret == 0)
++-			return -EBUSY;
++-	}
++ 
++ 	/* Do not deprogram the CPU port as it may be shared with other user
++ 	 * ports which can be members of this VLAN as well.
++@@ -1553,16 +1518,53 @@ dsa_prevent_bridging_8021q_upper(struct net_device *dev,
++ 	return NOTIFY_DONE;
++ }
++ 
+++static int
+++dsa_slave_check_8021q_upper(struct net_device *dev,
+++			     struct netdev_notifier_changeupper_info *info)
+++{
+++	struct dsa_port *dp = dsa_slave_to_port(dev);
+++	struct net_device *br = dp->bridge_dev;
+++	struct bridge_vlan_info br_info;
+++	struct netlink_ext_ack *extack;
+++	int err = NOTIFY_DONE;
+++	u16 vid;
+++
+++	if (!br)
+++		return NOTIFY_DONE;
+++
+++	extack = netdev_notifier_info_to_extack(&info->info);
+++	vid = vlan_dev_vlan_id(info->upper_dev);
+++
+++	/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
+++	 * device, respectively the VID is not found, returning
+++	 * 0 means success, which is a failure for us here.
+++	 */
+++	err = br_vlan_get_info(br, vid, &br_info);
+++	if (err == 0) {
+++		NL_SET_ERR_MSG_MOD(extack,
+++				   "This VLAN is already configured by the bridge");
+++		return notifier_from_errno(-EBUSY);
+++	}
+++
+++	return NOTIFY_DONE;
+++}
+++
++ static int dsa_slave_netdevice_event(struct notifier_block *nb,
++ 				     unsigned long event, void *ptr)
++ {
++ 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
++ 
++ 	switch (event) {
++-	case NETDEV_PRECHANGEUPPER:
+++	case NETDEV_PRECHANGEUPPER: {
+++		struct netdev_notifier_changeupper_info *info = ptr;
+++
++ 		if (!dsa_slave_dev_check(dev))
++ 			return dsa_prevent_bridging_8021q_upper(dev, ptr);
+++
+++		if (is_vlan_dev(info->upper_dev))
+++			return dsa_slave_check_8021q_upper(dev, ptr);
++ 		break;
+++	}
++ 	case NETDEV_CHANGEUPPER:
++ 		if (!dsa_slave_dev_check(dev))
++ 			return NOTIFY_DONE;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-4-net-dsa-convert-denying-bridge-VLAN-with-existing-80.patch b/target/linux/generic/backport-5.4/777-v5.10-4-net-dsa-convert-denying-bridge-VLAN-with-existing-80.patch
+new file mode 100644
+index 0000000000..dad4f6c8d1
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-4-net-dsa-convert-denying-bridge-VLAN-with-existing-80.patch
+@@ -0,0 +1,147 @@
++From 400d4b5c12268f8885183dcf3cf06ab04164e610 Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:26 +0300
++Subject: [PATCH 4/6] net: dsa: convert denying bridge VLAN with existing 8021q
++ upper to PRECHANGEUPPER
++
++This is checking for the following order of operations, and makes sure
++to deny that configuration:
++
++ip link add link swp2 name swp2.100 type vlan id 100
++ip link add br0 type bridge vlan_filtering 1
++ip link set swp2 master br0
++bridge vlan add dev swp2 vid 100
++
++Instead of using vlan_for_each(), which looks at the VLAN filters
++installed with vlan_vid_add(), just track the 8021q uppers. This has the
++advantage of freeing up the vlan_vid_add() call for actual VLAN
++filtering.
++
++There is another change in this patch. The check is moved in slave.c,
++from switch.c. I don't think it makes sense to have this 8021q upper
++check for each switch port that gets notified of that VLAN addition
++(these include DSA links and CPU ports, we know those can't have 8021q
++uppers because they don't have a net_device registered for them), so
++just do it in slave.c, for that one slave interface.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/slave.c  | 33 +++++++++++++++++++++++++++++++++
++ net/dsa/switch.c | 41 -----------------------------------------
++ 2 files changed, 33 insertions(+), 41 deletions(-)
++
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index c7dc177b75a0..958d64c7b8a5 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -311,6 +311,28 @@ static int dsa_slave_port_attr_set(struct net_device *dev,
++ 	return ret;
++ }
++ 
+++/* Must be called under rcu_read_lock() */
+++static int
+++dsa_slave_vlan_check_for_8021q_uppers(struct net_device *slave,
+++				      const struct switchdev_obj_port_vlan *vlan)
+++{
+++	struct net_device *upper_dev;
+++	struct list_head *iter;
+++
+++	netdev_for_each_upper_dev_rcu(slave, upper_dev, iter) {
+++		u16 vid;
+++
+++		if (!is_vlan_dev(upper_dev))
+++			continue;
+++
+++		vid = vlan_dev_vlan_id(upper_dev);
+++		if (vid >= vlan->vid_begin && vid <= vlan->vid_end)
+++			return -EBUSY;
+++	}
+++
+++	return 0;
+++}
+++
++ static int dsa_slave_vlan_add(struct net_device *dev,
++ 			      const struct switchdev_obj *obj,
++ 			      struct switchdev_trans *trans)
++@@ -327,6 +349,17 @@ static int dsa_slave_vlan_add(struct net_device *dev,
++ 
++ 	vlan = *SWITCHDEV_OBJ_PORT_VLAN(obj);
++ 
+++	/* Deny adding a bridge VLAN when there is already an 802.1Q upper with
+++	 * the same VID.
+++	 */
+++	if (trans->ph_prepare) {
+++		rcu_read_lock();
+++		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan);
+++		rcu_read_unlock();
+++		if (err)
+++			return err;
+++	}
+++
++ 	err = dsa_port_vlan_add(dp, &vlan, trans);
++ 	if (err)
++ 		return err;
++diff --git a/net/dsa/switch.c b/net/dsa/switch.c
++index f517d6d7efa2..ef762de85f0e 100644
++--- a/net/dsa/switch.c
+++++ b/net/dsa/switch.c
++@@ -204,43 +204,6 @@ static int dsa_switch_mdb_del(struct dsa_switch *ds,
++ 	return 0;
++ }
++ 
++-static int dsa_port_vlan_device_check(struct net_device *vlan_dev,
++-				      int vlan_dev_vid,
++-				      void *arg)
++-{
++-	struct switchdev_obj_port_vlan *vlan = arg;
++-	u16 vid;
++-
++-	for (vid = vlan->vid_begin; vid <= vlan->vid_end; ++vid) {
++-		if (vid == vlan_dev_vid)
++-			return -EBUSY;
++-	}
++-
++-	return 0;
++-}
++-
++-static int dsa_port_vlan_check(struct dsa_switch *ds, int port,
++-			       const struct switchdev_obj_port_vlan *vlan)
++-{
++-	const struct dsa_port *dp = dsa_to_port(ds, port);
++-	int err = 0;
++-
++-	/* Device is not bridged, let it proceed with the VLAN device
++-	 * creation.
++-	 */
++-	if (!dp->bridge_dev)
++-		return err;
++-
++-	/* dsa_slave_vlan_rx_{add,kill}_vid() cannot use the prepare phase and
++-	 * already checks whether there is an overlapping bridge VLAN entry
++-	 * with the same VID, so here we only need to check that if we are
++-	 * adding a bridge VLAN entry there is not an overlapping VLAN device
++-	 * claiming that VID.
++-	 */
++-	return vlan_for_each(dp->slave, dsa_port_vlan_device_check,
++-			     (void *)vlan);
++-}
++-
++ static bool dsa_switch_vlan_match(struct dsa_switch *ds, int port,
++ 				  struct dsa_notifier_vlan_info *info)
++ {
++@@ -263,10 +226,6 @@ static int dsa_switch_vlan_prepare(struct dsa_switch *ds,
++ 
++ 	for (port = 0; port < ds->num_ports; port++) {
++ 		if (dsa_switch_vlan_match(ds, port, info)) {
++-			err = dsa_port_vlan_check(ds, port, info->vlan);
++-			if (err)
++-				return err;
++-
++ 			err = ds->ops->port_vlan_prepare(ds, port, info->vlan);
++ 			if (err)
++ 				return err;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-5-net-dsa-refuse-configuration-in-prepare-phase-of-dsa.patch b/target/linux/generic/backport-5.4/777-v5.10-5-net-dsa-refuse-configuration-in-prepare-phase-of-dsa.patch
+new file mode 100644
+index 0000000000..d128684af7
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-5-net-dsa-refuse-configuration-in-prepare-phase-of-dsa.patch
+@@ -0,0 +1,79 @@
++From f7bdea5940ff5300ea27707236231aed8f238858 Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:27 +0300
++Subject: [PATCH 5/6] net: dsa: refuse configuration in prepare phase of
++ dsa_port_vlan_filtering()
++
++The current logic beats me a little bit. The comment that "bridge skips
++-EOPNOTSUPP, so skip the prepare phase" was introduced in commit
++fb2dabad69f0 ("net: dsa: support VLAN filtering switchdev attr").
++
++I'm not sure:
++(a) ok, the bridge skips -EOPNOTSUPP, but, so what, where are we
++    returning -EOPNOTSUPP?
++(b) even if we are, and I'm just not seeing it, what is the causality
++    relationship between the bridge skipping -EOPNOTSUPP and DSA
++    skipping the prepare phase, and just returning zero?
++
++One thing is certain beyond doubt though, and that is that DSA currently
++refuses VLAN filtering from the "commit" phase instead of "prepare", and
++that this is not a good thing:
++
++ip link add br0 type bridge
++ip link add br1 type bridge vlan_filtering 1
++ip link set swp2 master br0
++ip link set swp3 master br1
++[ 3790.379389] 001: sja1105 spi0.1: VLAN filtering is a global setting
++[ 3790.379399] 001: ------------[ cut here ]------------
++[ 3790.379403] 001: WARNING: CPU: 1 PID: 515 at net/switchdev/switchdev.c:157 switchdev_port_attr_set_now+0x9c/0xa4
++[ 3790.379420] 001: swp3: Commit of attribute (id=6) failed.
++[ 3790.379533] 001: [<c11ff588>] (switchdev_port_attr_set_now) from [<c11b62e4>] (nbp_vlan_init+0x84/0x148)
++[ 3790.379544] 001: [<c11b62e4>] (nbp_vlan_init) from [<c11a2ff0>] (br_add_if+0x514/0x670)
++[ 3790.379554] 001: [<c11a2ff0>] (br_add_if) from [<c1031b5c>] (do_setlink+0x38c/0xab0)
++[ 3790.379565] 001: [<c1031b5c>] (do_setlink) from [<c1036fe8>] (__rtnl_newlink+0x44c/0x748)
++[ 3790.379573] 001: [<c1036fe8>] (__rtnl_newlink) from [<c1037328>] (rtnl_newlink+0x44/0x60)
++[ 3790.379580] 001: [<c1037328>] (rtnl_newlink) from [<c10315fc>] (rtnetlink_rcv_msg+0x124/0x2f8)
++[ 3790.379590] 001: [<c10315fc>] (rtnetlink_rcv_msg) from [<c10926b8>] (netlink_rcv_skb+0xb8/0x110)
++[ 3790.379806] 001: ---[ end trace 0000000000000002 ]---
++[ 3790.379819] 001: sja1105 spi0.1 swp3: failed to initialize vlan filtering on this port
++
++So move the current logic that may fail (except ds->ops->port_vlan_filtering,
++that is way harder) into the prepare stage of the switchdev transaction.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/port.c | 14 +++++++-------
++ 1 file changed, 7 insertions(+), 7 deletions(-)
++
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index 14872a92285e..1dd09bab906b 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -213,15 +213,15 @@ int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
++ 	struct dsa_switch *ds = dp->ds;
++ 	int err;
++ 
++-	/* bridge skips -EOPNOTSUPP, so skip the prepare phase */
++-	if (switchdev_trans_ph_prepare(trans))
++-		return 0;
+++	if (switchdev_trans_ph_prepare(trans)) {
+++		if (!ds->ops->port_vlan_filtering)
+++			return -EOPNOTSUPP;
++ 
++-	if (!ds->ops->port_vlan_filtering)
++-		return 0;
+++		if (!dsa_port_can_apply_vlan_filtering(dp, vlan_filtering))
+++			return -EINVAL;
++ 
++-	if (!dsa_port_can_apply_vlan_filtering(dp, vlan_filtering))
++-		return -EINVAL;
+++		return 0;
+++	}
++ 
++ 	if (dsa_port_is_vlan_filtering(dp) == vlan_filtering)
++ 		return 0;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/backport-5.4/777-v5.10-6-net-dsa-allow-8021q-uppers-while-the-bridge-has-vlan.patch b/target/linux/generic/backport-5.4/777-v5.10-6-net-dsa-allow-8021q-uppers-while-the-bridge-has-vlan.patch
+new file mode 100644
+index 0000000000..6c9cc17ecb
+--- /dev/null
++++ b/target/linux/generic/backport-5.4/777-v5.10-6-net-dsa-allow-8021q-uppers-while-the-bridge-has-vlan.patch
+@@ -0,0 +1,119 @@
++From 0802f19907669010eca601f021a7b52aabd73a4b Mon Sep 17 00:00:00 2001
++From: Vladimir Oltean <vladimir.oltean@nxp.com>
++Date: Mon, 21 Sep 2020 03:10:28 +0300
++Subject: [PATCH 6/6] net: dsa: allow 8021q uppers while the bridge has
++ vlan_filtering=0
++
++When the bridge has VLAN awareness disabled there isn't any duplication
++of functionality, since the bridge does not process VLAN. Don't deny
++adding 8021q uppers to DSA switch ports in that case. The switch is
++supposed to simply pass traffic leaving the VLAN tag as-is, and the
++stack will happily strip the VLAN tag for all 8021q uppers that exist.
++
++We need to ensure that there are no 8021q uppers when the user attempts
++to enable bridge vlan_filtering.
++
++Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ net/dsa/port.c  | 46 ++++++++++++++++++++++++++++++++++++++++++++--
++ net/dsa/slave.c |  4 ++--
++ 2 files changed, 46 insertions(+), 4 deletions(-)
++
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index 1dd09bab906b..65d4ab8971cc 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -174,11 +174,44 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
++ 	dsa_port_set_state_now(dp, BR_STATE_FORWARDING);
++ }
++ 
+++/* Must be called under rcu_read_lock() */
++ static bool dsa_port_can_apply_vlan_filtering(struct dsa_port *dp,
++ 					      bool vlan_filtering)
++ {
++ 	struct dsa_switch *ds = dp->ds;
++-	int i;
+++	int err, i;
+++
+++	/* VLAN awareness was off, so the question is "can we turn it on".
+++	 * We may have had 8021q uppers, those need to go. Make sure we don't
+++	 * enter an inconsistent state: deny changing the VLAN awareness state
+++	 * as long as we have 8021q uppers.
+++	 */
+++	if (vlan_filtering && dsa_is_user_port(ds, dp->index)) {
+++		struct net_device *upper_dev, *slave = dp->slave;
+++		struct net_device *br = dp->bridge_dev;
+++		struct list_head *iter;
+++
+++		netdev_for_each_upper_dev_rcu(slave, upper_dev, iter) {
+++			struct bridge_vlan_info br_info;
+++			u16 vid;
+++
+++			if (!is_vlan_dev(upper_dev))
+++				continue;
+++
+++			vid = vlan_dev_vlan_id(upper_dev);
+++
+++			/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
+++			 * device, respectively the VID is not found, returning
+++			 * 0 means success, which is a failure for us here.
+++			 */
+++			err = br_vlan_get_info(br, vid, &br_info);
+++			if (err == 0) {
+++				dev_err(ds->dev, "Must remove upper %s first\n",
+++					upper_dev->name);
+++				return false;
+++			}
+++		}
+++	}
++ 
++ 	if (!ds->vlan_filtering_is_global)
++ 		return true;
++@@ -214,10 +247,19 @@ int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
++ 	int err;
++ 
++ 	if (switchdev_trans_ph_prepare(trans)) {
+++		bool apply;
+++
++ 		if (!ds->ops->port_vlan_filtering)
++ 			return -EOPNOTSUPP;
++ 
++-		if (!dsa_port_can_apply_vlan_filtering(dp, vlan_filtering))
+++		/* We are called from dsa_slave_switchdev_blocking_event(),
+++		 * which is not under rcu_read_lock(), unlike
+++		 * dsa_slave_switchdev_event().
+++		 */
+++		rcu_read_lock();
+++		apply = dsa_port_can_apply_vlan_filtering(dp, vlan_filtering);
+++		rcu_read_unlock();
+++		if (!apply)
++ 			return -EINVAL;
++ 
++ 		return 0;
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index 958d64c7b8a5..6bae4c7f463e 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -352,7 +352,7 @@ static int dsa_slave_vlan_add(struct net_device *dev,
++ 	/* Deny adding a bridge VLAN when there is already an 802.1Q upper with
++ 	 * the same VID.
++ 	 */
++-	if (trans->ph_prepare) {
+++	if (trans->ph_prepare && br_vlan_enabled(dp->bridge_dev)) {
++ 		rcu_read_lock();
++ 		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan);
++ 		rcu_read_unlock();
++@@ -1562,7 +1562,7 @@ dsa_slave_check_8021q_upper(struct net_device *dev,
++ 	int err = NOTIFY_DONE;
++ 	u16 vid;
++ 
++-	if (!br)
+++	if (!br || !br_vlan_enabled(br))
++ 		return NOTIFY_DONE;
++ 
++ 	extack = netdev_notifier_info_to_extack(&info->info);
++-- 
++2.34.1
++
+-- 
+2.34.1
+
