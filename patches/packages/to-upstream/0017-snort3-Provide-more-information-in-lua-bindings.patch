@@ -1,39 +1,40 @@
-From 1baf89d9e6c581359dc179684bccf0c3efbb4f9b Mon Sep 17 00:00:00 2001
+From 16bfc10809a560c2fc90cfbed1901b9fdd691a91 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@turris.com>
 Date: Tue, 20 Jul 2021 10:01:00 +0200
-Subject: [PATCH] snort3: Provide more information in lua bindings
+Subject: [PATCH 1/3] snort3: Provide more information in lua bindings
 
 Making more information available in lua bindings, patches sent
 upstream.
 
 https://github.com/snort3/snort3/pull/180
 ---
- ..._luajit-Make-MAC-addresses-available.patch | 68 +++++++++++++++++++
- ...ake-destination-IP-address-available.patch | 59 ++++++++++++++++
- 3 files changed, 128 insertions(+), 1 deletion(-)
+ ..._luajit-Make-MAC-addresses-available.patch | 86 +++++++++++++++++++
+ ...ake-destination-IP-address-available.patch | 77 +++++++++++++++++
+ 3 files changed, 164 insertions(+), 1 deletion(-)
  create mode 100644 net/snort3/patches/0001-alert_luajit-Make-MAC-addresses-available.patch
  create mode 100644 net/snort3/patches/0002-alert_luajit-Make-destination-IP-address-available.patch
 
 diff --git a/net/snort3/patches/0001-alert_luajit-Make-MAC-addresses-available.patch b/net/snort3/patches/0001-alert_luajit-Make-MAC-addresses-available.patch
 new file mode 100644
-index 000000000..5e7812f76
+index 0000000..7ed700e
 --- /dev/null
 +++ b/net/snort3/patches/0001-alert_luajit-Make-MAC-addresses-available.patch
-@@ -0,0 +1,68 @@
-+From 24e2c411189f77224846571469aa6c010e3bf0dc Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,86 @@
++From 48b46c65087f38fe941dc925bd5cf8cea2dc6d21 Mon Sep 17 00:00:00 2001
 +From: Michal Hrusecky <michal.hrusecky@turris.com>
 +Date: Thu, 6 May 2021 22:25:03 +0200
-+Subject: [PATCH 1/2] alert_luajit: Make MAC addresses available
++Subject: [PATCH] alert_luajit: Make MAC addresses available
 +
 +Add ether_src and ether_dst to the packet information in LUA to allow
 +better alerting.
 +---
-+ src/loggers/alert_luajit.cc    | 22 ++++++++++++++++++++++
++ src/loggers/alert_luajit.cc    | 30 ++++++++++++++++++++++++++++++
 + src/managers/lua_plugin_defs.h |  2 ++
-+ 2 files changed, 24 insertions(+)
++ src/protocols/eth.h            |  1 +
++ 3 files changed, 33 insertions(+)
 +
 +diff --git a/src/loggers/alert_luajit.cc b/src/loggers/alert_luajit.cc
-+index a4ad98d49..52ac081e8 100644
++index 0783e2fd5..a6fb19d96 100644
 +--- a/src/loggers/alert_luajit.cc
 ++++ b/src/loggers/alert_luajit.cc
 +@@ -21,6 +21,7 @@
@@ -44,7 +45,7 @@ index 000000000..5e7812f76
 + #include "detection/ips_context.h"
 + #include "detection/signature.h"
 + #include "events/event.h"
-+@@ -82,6 +83,27 @@ SO_PUBLIC const SnortPacket* get_packet()
++@@ -82,6 +83,35 @@ SO_PUBLIC const SnortPacket* get_packet()
 +     lua_packet.sp = packet->ptrs.sp;
 +     lua_packet.dp = packet->ptrs.dp;
 + 
@@ -53,21 +54,29 @@ index 000000000..5e7812f76
 ++        return &lua_packet;
 ++    }
 ++
-++    static char eth_src[20], eth_dst[20];
+++    static THREAD_LOCAL char eth_src[eth::ETH_ADDR_STR_LEN], eth_dst[eth::ETH_ADDR_STR_LEN];
 ++
 ++    const eth::EtherHdr* eh = layer::get_eth_layer( packet );
 ++
-++    snprintf(eth_src, 20, "%02X:%02X:%02X:%02X:%02X:%02X", eh->ether_src[0],
-++        eh->ether_src[1], eh->ether_src[2], eh->ether_src[3],
-++        eh->ether_src[4], eh->ether_src[5]);
+++    if(eh && eh->ether_src) {
+++        snprintf(eth_src, eth::ETH_ADDR_STR_LEN, "%02X:%02X:%02X:%02X:%02X:%02X", eh->ether_src[0],
+++            eh->ether_src[1], eh->ether_src[2], eh->ether_src[3],
+++            eh->ether_src[4], eh->ether_src[5]);
 ++
-++    lua_packet.ether_src = (const char*)eth_src;
+++        lua_packet.ether_src = (const char*)eth_src;
+++    } else {
+++        lua_packet.ether_src = "";
+++    }
 ++
-++    snprintf(eth_dst, 20, "%02X:%02X:%02X:%02X:%02X:%02X", eh->ether_dst[0],
-++        eh->ether_dst[1], eh->ether_dst[2], eh->ether_dst[3],
-++        eh->ether_dst[4], eh->ether_dst[5]);
+++    if(eh && eh->ether_dst) {
+++        snprintf(eth_dst, eth::ETH_ADDR_STR_LEN, "%02X:%02X:%02X:%02X:%02X:%02X", eh->ether_dst[0],
+++            eh->ether_dst[1], eh->ether_dst[2], eh->ether_dst[3],
+++            eh->ether_dst[4], eh->ether_dst[5]);
 ++
-++    lua_packet.ether_dst = (const char*)eth_dst;
+++        lua_packet.ether_dst = (const char*)eth_dst;
+++    } else {
+++        lua_packet.ether_dst = "";
+++    }
 ++
 +     return &lua_packet;
 + }
@@ -85,32 +94,50 @@ index 000000000..5e7812f76
 + };
 + 
 + extern "C"
-+-- 
-+2.31.1
-+
++diff --git a/src/protocols/eth.h b/src/protocols/eth.h
++index 5565468f0..d87ecf146 100644
++--- a/src/protocols/eth.h
+++++ b/src/protocols/eth.h
++@@ -33,6 +33,7 @@ namespace eth
++ constexpr uint16_t MTU_LEN = 1500;
++ constexpr uint16_t MAX_FRAME_LENGTH = 1500;
++ constexpr uint16_t ETH_HEADER_LEN = 14;
+++constexpr uint16_t ETH_ADDR_STR_LEN = 18;
++ 
++ struct EtherHdr
++ {
 diff --git a/net/snort3/patches/0002-alert_luajit-Make-destination-IP-address-available.patch b/net/snort3/patches/0002-alert_luajit-Make-destination-IP-address-available.patch
 new file mode 100644
-index 000000000..2a2dee652
+index 0000000..39214b3
 --- /dev/null
 +++ b/net/snort3/patches/0002-alert_luajit-Make-destination-IP-address-available.patch
-@@ -0,0 +1,59 @@
-+From 29bd324a313be710aa6dd2a929c71a95b4ccb685 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,77 @@
++From e090c599ef76f4eb696c38b3a210d32e65c57fdb Mon Sep 17 00:00:00 2001
 +From: Michal Hrusecky <michal.hrusecky@turris.com>
 +Date: Thu, 6 May 2021 22:37:56 +0200
-+Subject: [PATCH 2/2] alert_luajit: Make destination IP address available
++Subject: [PATCH] alert_luajit: Make destination IP address available
 +
 +Make sure we have destination IP address available at hand in lua
 +alerting modules.
 +---
-+ src/loggers/alert_luajit.cc    | 7 +++++++
++ src/loggers/alert_luajit.cc    | 8 ++++++++
 + src/managers/lua_plugin_defs.h | 2 +-
-+ 2 files changed, 8 insertions(+), 1 deletion(-)
++ src/protocols/ipv6.h           | 1 +
++ 3 files changed, 10 insertions(+), 1 deletion(-)
 +
 +diff --git a/src/loggers/alert_luajit.cc b/src/loggers/alert_luajit.cc
-+index 52ac081e8..c1edd7d24 100644
++index a6fb19d96..6e1797056 100644
 +--- a/src/loggers/alert_luajit.cc
 ++++ b/src/loggers/alert_luajit.cc
-+@@ -82,6 +82,7 @@ SO_PUBLIC const SnortPacket* get_packet()
++@@ -22,6 +22,7 @@
++ #endif
++ 
++ #include "protocols/eth.h"
+++#include "protocols/ipv6.h"
++ #include "detection/ips_context.h"
++ #include "detection/signature.h"
++ #include "events/event.h"
++@@ -82,6 +83,7 @@ SO_PUBLIC const SnortPacket* get_packet()
 +     lua_packet.num = packet->context->packet_number;
 +     lua_packet.sp = packet->ptrs.sp;
 +     lua_packet.dp = packet->ptrs.dp;
@@ -118,13 +145,13 @@ index 000000000..2a2dee652
 + 
 +     if ( !(packet->proto_bits & PROTO_BIT__ETH) ) {
 +         lua_packet.ether_dst = lua_packet.ether_src = "";
-+@@ -104,6 +105,12 @@ SO_PUBLIC const SnortPacket* get_packet()
-+ 
-+     lua_packet.ether_dst = (const char*)eth_dst;
++@@ -112,6 +114,12 @@ SO_PUBLIC const SnortPacket* get_packet()
++         lua_packet.ether_dst = "";
++     }
 + 
 ++    if ( packet->has_ip() or packet->is_data() ) {
-++        static char ip[50];
-++        packet->ptrs.ip_api.get_dst()->ntop(ip, 50);
+++        static THREAD_LOCAL char ip[ip::IP6_MAX_STR_LEN];
+++        packet->ptrs.ip_api.get_dst()->ntop(ip, ip::IP6_MAX_STR_LEN);
 ++        lua_packet.dst_addr = ip;
 ++    }
 ++
@@ -150,9 +177,18 @@ index 000000000..2a2dee652
 + };
 + 
 + extern "C"
-+-- 
-+2.31.1
-+
++diff --git a/src/protocols/ipv6.h b/src/protocols/ipv6.h
++index 8003ad472..ecd965c68 100644
++--- a/src/protocols/ipv6.h
+++++ b/src/protocols/ipv6.h
++@@ -29,6 +29,7 @@ namespace snort
++ namespace ip
++ {
++ constexpr uint8_t IP6_HEADER_LEN = 40;
+++constexpr uint8_t IP6_MAX_STR_LEN = 40; // 16 bytes in hexa = 32 + : delimiter every two bytes 7 + terminating 0 = 40
++ constexpr uint32_t MIN_EXT_LEN = 8;
++ constexpr uint8_t IP6_MULTICAST = 0xFF;  // first/most significant octet
++ 
 -- 
-2.32.0
+2.35.1
 
