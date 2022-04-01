@@ -14,6 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+[[ "${BASH_VERSINFO[0]}" -ge 5 ]] || {
+	echo "Please use Bash version 5.0 or newer!" >&2
+	exit 1
+}
+
 ## Common printing functions ############
 
 # Detect tty if IS_TTY not already set
