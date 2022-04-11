@@ -1,4 +1,4 @@
-From 68687d38a4b29363a76e46b7ed5cd0cfd783eb62 Mon Sep 17 00:00:00 2001
+From 92703b2054a9a8add4ceea89728a800c74b438a4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 29 May 2018 16:13:18 +0200
 Subject: [PATCH] base-files: do not automatically activate services and
@@ -16,15 +16,15 @@ Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
 ---
  package/base-files/Makefile                  | 11 ++++
  package/base-files/files/etc/services_wanted | 60 ++++++++++++++++++++
- package/base-files/files/lib/functions.sh    | 18 +++---
- 3 files changed, 81 insertions(+), 8 deletions(-)
+ package/base-files/files/lib/functions.sh    | 14 +++--
+ 3 files changed, 79 insertions(+), 6 deletions(-)
  create mode 100644 package/base-files/files/etc/services_wanted
 
 diff --git a/package/base-files/Makefile b/package/base-files/Makefile
-index 914f0598ff..2c1b14b505 100644
+index 8a1ddf96f5..3b3a22c4da 100644
 --- a/package/base-files/Makefile
 +++ b/package/base-files/Makefile
-@@ -228,6 +228,17 @@ endif
+@@ -207,6 +207,17 @@ define Package/base-files/install
  		rm -f $(1)/etc/banner.failsafe,)
  endef
  
@@ -109,10 +109,10 @@ index 0000000000..116a83a18c
 +wpad
 +zram
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
-index ee0c33845c..8b9fcca62c 100644
+index 2bad45324f..2680951cc4 100644
 --- a/package/base-files/files/lib/functions.sh
 +++ b/package/base-files/files/lib/functions.sh
-@@ -294,14 +294,16 @@ default_postinst() {
+@@ -277,13 +277,15 @@ default_postinst() {
  
  	local shell="$(command -v bash)"
  	for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
@@ -121,22 +121,19 @@ index ee0c33845c..8b9fcca62c 100644
 -		else
 -			if [ "$PKG_UPGRADE" != "1" ]; then
 -				"$i" enable
--			fi
--			"$i" start
--		fi
 +		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
 +			if [ -n "$root" ]; then
 +				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 +			else
 +				[ "$PKG_UPGRADE" = "1" ] || "$i" enable
-+ 			fi
-+ 		fi
+ 			fi
+-			"$i" start
++		fi
 +		if [ -z "$root" ] && "$i" enabled; then
 +			"$i" restart
-+ 		fi
+ 		fi
  	done
  
- 	return $ret
 -- 
 2.32.0
 
