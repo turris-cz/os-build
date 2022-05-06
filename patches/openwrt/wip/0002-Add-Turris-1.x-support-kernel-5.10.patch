@@ -1,4 +1,4 @@
-From ef5c703fa26cfc1a723d43d63ee0561022fd601e Mon Sep 17 00:00:00 2001
+From 4ed9c8646750a7d52e5d0f649ff584ab51a77b55 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Thu, 3 Feb 2022 13:52:13 +0100
 Subject: [PATCH] Add support for Turris 1.x routers
@@ -6,11 +6,11 @@ Subject: [PATCH] Add support for Turris 1.x routers
 ---
  package/boot/uboot-tools/files/mpc85xx     |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.10              |  64 +++-
- .../files/arch/powerpc/boot/dts/turris1x.dts  | 304 ++++++++++++++++++
+ target/linux/mpc85xx/config-5.10              |  64 ++-
+ .../files/arch/powerpc/boot/dts/turris1x.dts  | 474 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
- target/linux/mpc85xx/p2020/config-default     |  27 ++
- 6 files changed, 406 insertions(+), 5 deletions(-)
+ target/linux/mpc85xx/p2020/config-default     |  27 +
+ 6 files changed, 576 insertions(+), 5 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
@@ -43,7 +43,7 @@ index 03153b73d0..4d133965dd 100644
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.10 b/target/linux/mpc85xx/config-5.10
-index e140239fc0..ed54d2dfd8 100644
+index 022fc75dac..321db54219 100644
 --- a/target/linux/mpc85xx/config-5.10
 +++ b/target/linux/mpc85xx/config-5.10
 @@ -24,6 +24,15 @@ CONFIG_BOOKE=y
@@ -199,7 +199,7 @@ index e140239fc0..ed54d2dfd8 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -268,3 +315,10 @@ CONFIG_WATCHDOG_CORE=y
+@@ -269,3 +316,10 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -212,27 +212,25 @@ index e140239fc0..ed54d2dfd8 100644
 +CONFIG_MTD_NAND_ECC_SW_BCH=y
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000000..2e5a8d801f
+index 0000000000..67f9c95cdf
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,474 @@
++// SPDX-License-Identifier: GPL-2.0+
 +/*
-+ * Turris RDB Device Tree Source
++ * Turris 1.x Device Tree Source
 + *
-+ * Copyright 2013 CZ.NIC z.s.p.o. (http://www.nic.cz/)
-+ *
-+ * This program is free software; you can redistribute  it and/or modify it
-+ * under  the terms of  the GNU General  Public License as published by the
-+ * Free Software Foundation;  either version 2 of the  License, or (at your
-+ * option) any later version.
++ * Copyright 2013 - 2022 CZ.NIC z.s.p.o. (http://www.nic.cz/)
 + */
 +
 +#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/leds/common.h>
 +/include/ "fsl/p2020si-pre.dtsi"
 +
 +/ {
-+	model = "Turris";
-+	compatible = "fsl,P2020RDB";
++	model = "Turris 1.x";
++	compatible = "cznic,turris1x", "fsl,P2020RDB-PC";
 +
 +	aliases {
 +		ethernet0 = &enet0;
@@ -250,134 +248,100 @@ index 0000000000..2e5a8d801f
 +		device_type = "memory";
 +	};
 +
-+	lbc: localbus@ffe05000 {
-+		reg = <0 0xffe05000 0 0x1000>;
-+
-+		/* NOR and NAND Flashes */
-+		ranges = <0x0 0x0 0x0 0xef000000 0x01000000
-+			  0x1 0x0 0x0 0xff800000 0x00040000
-+			  0x2 0x0 0x0 0xffb00000 0x00020000>;
-+
-+		nor@0,0 {
-+			#address-cells = <1>;
-+			#size-cells = <1>;
-+			compatible = "cfi-flash";
-+			reg = <0x0 0x0 0x1000000>;
-+			bank-width = <2>;
-+			device-width = <1>;
-+
-+			partitions {
-+				compatible = "fixed-partitions";
-+				#address-cells = <1>;
-+				#size-cells = <1>;
-+
-+				partition@0 {
-+					/* 128KB for DTB Image */
-+					reg = <0x0 0x00020000>;
-+					label = "NOR (RO) DTB Image";
-+				};
-+
-+				partition@20000 {
-+					/* 1.7 MB for Linux Kernel Image */
-+					reg = <0x00020000 0x1A0000>;
-+					label = "NOR (RO) Linux Kernel Image";
-+				};
-+
-+				partition@1C0000 {
-+					/* 1.5 MB for JFFS2 based Root file System */
-+					reg = <0x001C0000 0x180000>;
-+					label = "NOR (RO) JFFS2 Root File System";
-+				};
-+
-+				partition@340000 {
-+					/* for nand fw backup */
-+					reg = <0x00340000 0xb00000>;
-+					label = "NOR (RO) NAND FW backup";
-+				};
-+
-+				partition@E40000 {
-+					/* 128KB for Certificates backup */
-+					reg = <0xE40000 0x000C0000>;
-+					label = "NOR (RW) Cert backup";
-+				};
-+
-+				partition@f00000 {
-+					/* This location must not be altered  */
-+					/* 512KB for u-boot Bootloader Image */
-+					/* 512KB for u-boot Environment Variables */
-+					reg = <0x00f00000 0x00100000>;
-+					label = "NOR (RO) U-Boot Image";
-+				};
-+			};
-+		};
-+
-+		nand@1,0 {
-+			#address-cells = <1>;
-+			#size-cells = <1>;
-+			compatible = "fsl,p2020-fcm-nand",
-+				     "fsl,elbc-fcm-nand";
-+			reg = <0x1 0x0 0x00040000>;
-+			nand-ecc-mode = "soft";
-+			nand-ecc-algo = "bch";
-+
-+			partitions {
-+				compatible = "fixed-partitions";
-+				#address-cells = <1>;
-+				#size-cells = <1>;
-+
-+				partition@0 {
-+					/* 2MB for DTB Image */
-+					reg = <0x00000000 0x00200000>;
-+					label = "NAND (RW) DTB Image";
-+				};
-+
-+				partition@200000 {
-+					/* 5MB for Linux Kernel Image */
-+					reg = <0x00200000 0x00500000>;
-+					label = "NAND (RW) Linux Kernel Image";
-+				};
-+
-+				partition@700000 {
-+					/* 249MB for JFFS2 based Root file System */
-+					reg = <0x00700000 0xF900000>;
-+					label = "NAND (RW) JFFS2 Root File System";
-+				};
-+
-+				partition@00 {
-+					reg = <0x00000000 0x10000000>;
-+					label = "rootfs-ubifs";
-+				};
-+			};
-+		};
-+	};
-+
 +	soc: soc@ffe00000 {
-+		ranges = <0x0 0x0 0xffe00000 0x100000>;
++		ranges = <0x0 0x0 0xffe00000 0x00100000>;
 +
 +		i2c@3000 {
++			/* PCA9557PW GPIO controller for boot config */
++			gpio-controller@18 {
++				compatible = "nxp,pca9557";
++				label = "bootcfg";
++				reg = <0x18>;
++				#gpio-cells = <2>;
++				gpio-controller;
++				polarity = <0x00>;
++			};
++
++			/* STM32F030R8T6 MCU for power control */
++			power-control@32 {
++				/*
++				 * Turris Power Control firmware runs on STM32F0 MCU.
++				 * This firmware is open source and available at:
++				 * https://gitlab.nic.cz/turris/hw/turris_power_control
++				 */
++				reg = <0x32>;
++			};
++
++			/* SA56004ED temperature control */
++			temperature-sensor@4c {
++				compatible = "nxp,sa56004";
++				reg = <0x4c>;
++				interrupt-parent = <&gpio>;
++				interrupts = <12 IRQ_TYPE_LEVEL_LOW>, /* GPIO12 - ALERT pin */
++					     <13 IRQ_TYPE_LEVEL_LOW>; /* GPIO13 - CRIT pin */
++			};
++
++			/* DDR3 SPD/EEPROM */
++			eeprom@52 {
++				compatible = "atmel,spd";
++				reg = <0x52>;
++			};
++
++			/* ATSHA204-TH-DA-T crypto module */
++			crypto@64 {
++				compatible = "atmel,atsha204";
++				reg = <0x64>;
++			};
++
++			/* IDT6V49205BNLGI clock generator */
++			clock-generator@69 {
++				compatible = "idt,6v49205b";
++				reg = <0x69>;
++			};
++
++			/* MCP79402-I/ST Protected EEPROM */
++			eeprom@57 {
++				reg = <0x57>;
++			};
++
++			/* MCP79402-I/ST RTC */
 +			rtc@6f {
 +				compatible = "microchip,mcp7940x";
 +				reg = <0x6f>;
-+			};
-+			lm90@4c {
-+				compatible = "sa56004";
-+				reg = <0x4c>;
++				interrupt-parent = <&gpio>;
++				interrupts = <14 0>; /* GPIO14 - MFP pin */
 +			};
 +		};
 +
-+		gpio0: gpio-controller@fc00 {
++		/* SPI on connector P1 */
++		spi0: spi@7000 {
 +		};
 +
++		gpio: gpio-controller@fc00 {
++			#interrupt-cells = <2>;
++			interrupt-controller;
++		};
++
++		/* Connected to SMSC USB2412-DZK 2-Port USB 2.0 Hub Controller */
 +		usb@22000 {
 +			phy_type = "ulpi";
 +			dr_mode = "host";
 +		};
 +
++		enet0: ethernet@24000 {
++			/* Connected to port 6 of QCA8337N-AL3C switch */
++			phy-connection-type = "rgmii-id";
++
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
++			};
++		};
++
 +		mdio@24520 {
-+			switch0@10 {
++			/* QCA8337N-AL3C switch with integrated ethernet PHYs for LAN ports */
++			switch@10 {
 +				compatible = "qca,qca8337";
-+				#size-cells = <0>;
-+				#address-cells = <1>;
 +				interrupts = <2 1 0 0>;
 +				reg = <0x10>;
 +
@@ -387,9 +351,10 @@ index 0000000000..2e5a8d801f
 +
 +					port@0 {
 +						reg = <0>;
-+						label = "cpu";
++						label = "cpu1";
 +						ethernet = <&enet1>;
 +						phy-mode = "rgmii-id";
++
 +						fixed-link {
 +							speed = <1000>;
 +							full-duplex;
@@ -420,12 +385,44 @@ index 0000000000..2e5a8d801f
 +						reg = <5>;
 +						label = "lan1";
 +					};
++
++					port@6 {
++						reg = <6>;
++						label = "cpu0";
++						ethernet = <&enet0>;
++						phy-mode = "rgmii-id";
++
++						fixed-link {
++							speed = <1000>;
++							full-duplex;
++						};
++					};
 +				};
 +			};
 +
-+			phy7: ethernet-phy@7 {
++			/* KSZ9031RNXCA ethernet phy for WAN port */
++			phy: ethernet-phy@7 {
 +				interrupts = <3 1 0 0>;
 +				reg = <0x7>;
++			};
++		};
++
++		ptp_clock@24e00 {
++			fsl,tclk-period = <5>;
++			fsl,tmr-prsc = <200>;
++			fsl,tmr-add = <0xcccccccd>;
++			fsl,tmr-fiper1 = <0x3b9ac9fb>;
++			fsl,tmr-fiper2 = <0x0001869b>;
++			fsl,max-adj = <249999999>;
++		};
++
++		enet1: ethernet@25000 {
++			/* Connected to port 0 of QCA8337N-AL3C switch */
++			phy-connection-type = "rgmii-id";
++
++			fixed-link {
++				speed = <1000>;
++				full-duplex;
 +			};
 +		};
 +
@@ -433,90 +430,263 @@ index 0000000000..2e5a8d801f
 +			status = "disabled";
 +		};
 +
++		enet2: ethernet@26000 {
++			/* Connected to KSZ9031RNXCA ethernet phy (WAN port) */
++			label = "wan";
++			phy-handle = <&phy>;
++			phy-connection-type = "rgmii-id";
++		};
++
 +		mdio@26520 {
 +			status = "disabled";
 +		};
 +
-+
-+		ptp_clock@24e00 {
-+			fsl,tclk-period = <5>;
-+			fsl,tmr-prsc = <200>;
-+			fsl,tmr-add = <0xCCCCCCCD>;
-+			fsl,tmr-fiper1 = <0x3B9AC9FB>;
-+			fsl,tmr-fiper2 = <0x0001869B>;
-+			fsl,max-adj = <249999999>;
-+		};
-+
-+		enet0: ethernet@24000 {
-+			phy-connection-type = "rgmii-id";
-+			fixed-link {
-+				speed = <1000>;
-+				full-duplex;
-+			};
-+		};
-+
-+		enet1: ethernet@25000 {
-+			phy-connection-type = "rgmii-id";
-+			fixed-link {
-+				speed = <1000>;
-+				full-duplex;
-+			};
-+		};
-+
-+		enet2: ethernet@26000 {
-+			phy-handle = <&phy7>;
-+			phy-connection-type = "rgmii-id";
-+		};
-+
 +		sdhc@2e000 {
-+			cd-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
++			cd-gpios = <&gpio 8 GPIO_ACTIVE_LOW>;
 +		};
 +	};
-+	pci2: pcie@ffe08000 {
-+		ranges = <0x2000000 0x0 0xc0000000 0 0xc0000000 0x0 0x20000000
-+			  0x1000000 0x0 0x00000000 0 0xffc20000 0x0 0x10000>;
-+		reg = <0 0xffe08000 0 0x1000>;
-+		pcie@0 {
-+			ranges = <0x2000000 0x0 0xc0000000
-+				  0x2000000 0x0 0xc0000000
-+				  0x0 0x20000000
 +
-+				  0x1000000 0x0 0x0
-+				  0x1000000 0x0 0x0
-+				  0x0 0x10000>;
++	lbc: localbus@ffe05000 {
++		reg = <0 0xffe05000 0 0x1000>;
++
++		ranges = <0x0 0x0 0x0 0xef000000 0x01000000>, /* NOR */
++			 <0x1 0x0 0x0 0xff800000 0x00040000>, /* NAND */
++			 <0x3 0x0 0x0 0xffa00000 0x00020000>; /* CPLD */
++
++		/* S29GL128P90TFIR10 NOR */
++		nor@0,0 {
++			compatible = "cfi-flash";
++			reg = <0x0 0x0 0x01000000>;
++			bank-width = <2>;
++			device-width = <1>;
++
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				partition@0 {
++					/* 128 kB for Device Tree Blob */
++					reg = <0x00000000 0x00020000>;
++					label = "dtb";
++					read-only;
++				};
++
++				partition@20000 {
++					/* 1.7 MB for Rescue Linux Kernel Image */
++					reg = <0x00020000 0x001a0000>;
++					label = "rescue-kernel";
++					read-only;
++				};
++
++				partition@1c0000 {
++					/* 1.5 MB for Rescue JFFS2 Root File System */
++					reg = <0x001c0000 0x00180000>;
++					label = "rescue-rootfs";
++					read-only;
++				};
++
++				partition@340000 {
++					/* 11 MB for TAR.XZ Backup with content of NAND Root File System */
++					reg = <0x00340000 0x00b00000>;
++					label = "backup-rootfs";
++					read-only;
++				};
++
++				partition@e40000 {
++					/* 768 kB for Certificates JFFS2 File System */
++					reg = <0x00e40000 0x000c0000>;
++					label = "certificates";
++				};
++
++				/* free unused space 0x00f00000-0x00f20000 */
++
++				partition@f20000 {
++					/* 128 kB for U-Boot Environment Variables */
++					reg = <0x00f20000 0x00020000>;
++					label = "u-boot-env";
++				};
++
++				partition@f40000 {
++					/* 768 kB for U-Boot Bootloader Image */
++					reg = <0x00f40000 0x000c0000>;
++					label = "u-boot";
++					read-only;
++				};
++			};
++		};
++
++		/* MT29F2G08ABAEAWP:E NAND */
++		nand@1,0 {
++			compatible = "fsl,p2020-fcm-nand", "fsl,elbc-fcm-nand";
++			reg = <0x1 0x0 0x00040000>;
++			nand-ecc-mode = "soft";
++			nand-ecc-algo = "bch";
++
++			partitions {
++				compatible = "fixed-partitions";
++				#address-cells = <1>;
++				#size-cells = <1>;
++
++				partition@0 {
++					/* 256 MB for UBI with one volume: UBIFS Root File System */
++					reg = <0x00000000 0x10000000>;
++					label = "rootfs";
++				};
++			};
++		};
++
++		/* LCMXO1200C-3FTN256C FPGA */
++		cpld: cpld@3,0 {
++			/*
++			 * Turris CPLD firmware which runs on this Lattice FPGA,
++			 * is extended version of P1021RDB-PC CPLD v4.1 firmware.
++			 * It is backward compatible with its original version
++			 * and the only extension is support for Turris LEDs.
++			 * Turris CPLD firmware is open source and available at:
++			 * https://gitlab.nic.cz/turris/hw/turris_cpld/-/blob/master/CZ_NIC_Router_CPLD.v
++			 */
++			compatible = "cznic,turris1x-cpld", "fsl,p1021rdb-pc-cpld", "simple-bus";
++			reg = <0x3 0x0 0x30>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			ranges = <0x0 0x3 0x0 0x00020000>;
++
++			/* MAX6370KA+T watchdog */
++			watchdog@2 {
++				/*
++				 * CPLD firmware maps SET0, SET1 and SET2
++				 * input logic of MAX6370KA+T chip to CPLD
++				 * memory space at byte offset 0x2. WDI
++				 * input logic is outside of the CPLD and
++				 * connected via external GPIO.
++				 */
++				compatible = "maxim,max6370";
++				reg = <0x02 0x01>;
++				gpios = <&gpio 11 GPIO_ACTIVE_LOW>;
++			};
++
++			led-controller@13 {
++				/*
++				 * LEDs are controlled by CPLD firmware.
++				 * All five LAN LEDs share common RGB settings
++				 * and so it is not possible to set different
++				 * colors on different LAN ports.
++				 */
++				compatible = "cznic,turris1x-leds";
++				reg = <0x13 0x1d>;
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				multi-led@0 {
++					reg = <0x0>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_WAN;
++				};
++
++				multi-led@1 {
++					reg = <0x1>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_LAN;
++					function-enumerator = <5>;
++				};
++
++				multi-led@2 {
++					reg = <0x2>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_LAN;
++					function-enumerator = <4>;
++				};
++
++				multi-led@3 {
++					reg = <0x3>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_LAN;
++					function-enumerator = <3>;
++				};
++
++				multi-led@4 {
++					reg = <0x4>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_LAN;
++					function-enumerator = <2>;
++				};
++
++				multi-led@5 {
++					reg = <0x5>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_LAN;
++					function-enumerator = <1>;
++				};
++
++				multi-led@6 {
++					reg = <0x6>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_WLAN;
++				};
++
++				multi-led@7 {
++					reg = <0x7>;
++					color = <LED_COLOR_ID_RGB>;
++					function = LED_FUNCTION_POWER;
++				};
++			};
++		};
++	};
++
++	pci2: pcie@ffe08000 {
++		/*
++		 * PCIe bus for on-board TUSB7340RKM USB 3.0 xHCI controller.
++		 * This xHCI controller is available only on Turris 1.1 boards.
++		 * Turris 1.0 boards have nothing connected to this PCIe bus,
++		 * so system would see only PCIe Root Port of this PCIe Root
++		 * Complex. TUSB7340RKM xHCI controller has four SuperSpeed
++		 * channels. Channel 0 is connected to the front USB 3.0 port,
++		 * channel 1 (but only USB 2.0 subset) to USB 2.0 pins on mPCIe
++		 * slot 1 (CN5), channels 2 and 3 to connector P600.
++		 *
++		 * P2020 PCIe Root Port uses 1MB of PCIe MEM and xHCI controller
++		 * uses 64kB + 8kB of PCIe MEM. No PCIe IO is used or required.
++		 * Therefore minimally 2MB of PCIe MEM needs to be allocated for
++		 * this PCIe bus. But e500 core on P2020 does not support MMU
++		 * MAS1 translation page size of 2MB, so assign next available
++		 * unit size, which is 4MB of PCIe MEM to this PCIe bus.
++		 */
++		reg = <0 0xffe08000 0 0x1000>;
++		ranges = <0x02000000 0x0 0xc0000000 0 0xc0000000 0x0 0x00400000>, /* MEM */
++			 <0x01000000 0x0 0x00000000 0 0xffc20000 0x0 0x00010000>; /* IO */
++
++		pcie@0 {
++			ranges;
 +		};
 +	};
 +
 +	pci1: pcie@ffe09000 {
-+		ranges = <0x2000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000
-+			  0x1000000 0x0 0x00000000 0 0xffc10000 0x0 0x10000>;
++		/* PCIe bus on mPCIe slot 2 (CN6) for expansion mPCIe card */
 +		reg = <0 0xffe09000 0 0x1000>;
-+		pcie@0 {
-+			ranges = <0x2000000 0x0 0xa0000000
-+				  0x2000000 0x0 0xa0000000
-+				  0x0 0x20000000
++		ranges = <0x02000000 0x0 0xa0000000 0 0xa0000000 0x0 0x20000000>, /* MEM */
++			 <0x01000000 0x0 0x00000000 0 0xffc10000 0x0 0x00010000>; /* IO */
 +
-+				  0x1000000 0x0 0x0
-+				  0x1000000 0x0 0x0
-+				  0x0 0x10000>;
++		pcie@0 {
++			ranges;
 +		};
 +	};
 +
 +	pci0: pcie@ffe0a000 {
-+		ranges = <0x2000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000
-+			  0x1000000 0x0 0x00000000 0 0xffc00000 0x0 0x10000>;
++		/*
++		 * PCIe bus on mPCIe slot 1 (CN5) for expansion mPCIe card.
++		 * Turris 1.1 boards have in this mPCIe slot additional USB 2.0
++		 * pins via channel 1 of TUSB7340RKM xHCI controller and also
++		 * additional SIM card slot, both for USB-based WWAN cards.
++		 */
 +		reg = <0 0xffe0a000 0 0x1000>;
-+		pcie@0 {
-+			ranges = <0x2000000 0x0 0x80000000
-+				  0x2000000 0x0 0x80000000
-+				  0x0 0x20000000
++		ranges = <0x02000000 0x0 0x80000000 0 0x80000000 0x0 0x20000000>, /* MEM */
++			 <0x01000000 0x0 0x00000000 0 0xffc00000 0x0 0x00010000>; /* IO */
 +
-+				  0x1000000 0x0 0x0
-+				  0x1000000 0x0 0x0
-+				  0x0 0x10000>;
++		pcie@0 {
++			ranges;
 +		};
 +	};
-+
 +};
 +
 +/include/ "fsl/p2020si-post.dtsi"
@@ -591,5 +761,5 @@ index de7f09e1f3..1a8095f9f7 100644
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
 -- 
-2.32.0
+2.34.1
 
