@@ -1,4 +1,4 @@
-From 84e03ff56d8eb87a3b8f04b83ee9b7b93692eac8 Mon Sep 17 00:00:00 2001
+From 8761424aea5f51b843f336ef035ef1196ad1420a Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 5.4)
@@ -12,10 +12,10 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
  package/boot/uboot-tools/files/mpc85xx     |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
  target/linux/mpc85xx/config-5.4               |  65 ++-
- .../files/arch/powerpc/boot/dts/turris1x.dts  | 474 ++++++++++++++++++
+ .../files/arch/powerpc/boot/dts/turris1x.dts  | 466 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 +
- 6 files changed, 576 insertions(+), 6 deletions(-)
+ 6 files changed, 568 insertions(+), 6 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
@@ -212,10 +212,10 @@ index d6683dab35..0c177d5e8f 100644
 +CONFIG_MTD_NAND_ECC_SW_BCH=y
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000000..67f9c95cdf
+index 0000000000..a347ab72e6
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
-@@ -0,0 +1,474 @@
+@@ -0,0 +1,466 @@
 +// SPDX-License-Identifier: GPL-2.0+
 +/*
 + * Turris 1.x Device Tree Source
@@ -230,7 +230,7 @@ index 0000000000..67f9c95cdf
 +
 +/ {
 +	model = "Turris 1.x";
-+	compatible = "cznic,turris1x", "fsl,P2020RDB-PC";
++	compatible = "cznic,turris1x", "fsl,P2020RDB-PC"; /* fsl,P2020RDB-PC is required for booting Linux */
 +
 +	aliases {
 +		ethernet0 = &enet0;
@@ -469,28 +469,24 @@ index 0000000000..67f9c95cdf
 +					/* 128 kB for Device Tree Blob */
 +					reg = <0x00000000 0x00020000>;
 +					label = "dtb";
-+					read-only;
 +				};
 +
 +				partition@20000 {
 +					/* 1.7 MB for Rescue Linux Kernel Image */
 +					reg = <0x00020000 0x001a0000>;
 +					label = "rescue-kernel";
-+					read-only;
 +				};
 +
 +				partition@1c0000 {
 +					/* 1.5 MB for Rescue JFFS2 Root File System */
 +					reg = <0x001c0000 0x00180000>;
 +					label = "rescue-rootfs";
-+					read-only;
 +				};
 +
 +				partition@340000 {
 +					/* 11 MB for TAR.XZ Backup with content of NAND Root File System */
 +					reg = <0x00340000 0x00b00000>;
 +					label = "backup-rootfs";
-+					read-only;
 +				};
 +
 +				partition@e40000 {
@@ -511,7 +507,6 @@ index 0000000000..67f9c95cdf
 +					/* 768 kB for U-Boot Bootloader Image */
 +					reg = <0x00f40000 0x000c0000>;
 +					label = "u-boot";
-+					read-only;
 +				};
 +			};
 +		};
@@ -647,13 +642,10 @@ index 0000000000..67f9c95cdf
 +		 *
 +		 * P2020 PCIe Root Port uses 1MB of PCIe MEM and xHCI controller
 +		 * uses 64kB + 8kB of PCIe MEM. No PCIe IO is used or required.
-+		 * Therefore minimally 2MB of PCIe MEM needs to be allocated for
-+		 * this PCIe bus. But e500 core on P2020 does not support MMU
-+		 * MAS1 translation page size of 2MB, so assign next available
-+		 * unit size, which is 4MB of PCIe MEM to this PCIe bus.
++		 * So allocate 2MB of PCIe MEM for this PCIe bus.
 +		 */
 +		reg = <0 0xffe08000 0 0x1000>;
-+		ranges = <0x02000000 0x0 0xc0000000 0 0xc0000000 0x0 0x00400000>, /* MEM */
++		ranges = <0x02000000 0x0 0xc0000000 0 0xc0000000 0x0 0x00200000>, /* MEM */
 +			 <0x01000000 0x0 0x00000000 0 0xffc20000 0x0 0x00010000>; /* IO */
 +
 +		pcie@0 {
