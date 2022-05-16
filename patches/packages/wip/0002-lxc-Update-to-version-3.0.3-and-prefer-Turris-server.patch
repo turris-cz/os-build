@@ -1,4 +1,4 @@
-From ea79110151a03882b2f8e3e64812a5a130a7799e Mon Sep 17 00:00:00 2001
+From f9f6c9307338764373ce802b1d4b883433816a30 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Fri, 3 May 2019 16:38:11 +0200
 Subject: [PATCH] lxc: Update to version 3.0.3 and prefer Turris servers
@@ -14,7 +14,6 @@ Backport patch which fixes CVE-2019-5736
 
 12/07/21 Changed:
 - Added fix for GPG change
-
 ---
  utils/lxc/Makefile                            |  90 +---
  utils/lxc/files/systemd-workaround            |   4 +
@@ -23,12 +22,11 @@ Backport patch which fixes CVE-2019-5736
  utils/lxc/patches/003-compile.patch           |  11 -
  utils/lxc/patches/010-compile.patch           |  37 --
  utils/lxc/patches/020-lxc-checkconfig.patch   |   4 +-
- .../025-remove-unsupported-option.patch       |  20 +-
+ .../025-remove-unsupported-option.patch       |  19 +-
  utils/lxc/patches/030-prlimit.patch           |  95 -----
- utils/lxc/patches/030-turris-servers.patch    |  38 ++
  ...-GPG-server.patch => 035-GPG-change.patch} |  18 +-
  utils/lxc/patches/040-fix-CVE-2019-5736.patch | 398 ++++++++++++++++++
- 12 files changed, 482 insertions(+), 280 deletions(-)
+ 11 files changed, 443 insertions(+), 280 deletions(-)
  create mode 100644 utils/lxc/files/systemd-workaround
  delete mode 100644 utils/lxc/patches/001-nl-avoid-NULL-pointer-dereference.patch
  delete mode 100644 utils/lxc/patches/002-compile.patch
@@ -39,7 +37,7 @@ Backport patch which fixes CVE-2019-5736
  create mode 100644 utils/lxc/patches/040-fix-CVE-2019-5736.patch
 
 diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
-index 6970c5a67..8c1e2128e 100644
+index 8cca78274..29e504096 100644
 --- a/utils/lxc/Makefile
 +++ b/utils/lxc/Makefile
 @@ -8,17 +8,16 @@
@@ -47,7 +45,7 @@ index 6970c5a67..8c1e2128e 100644
  
  PKG_NAME:=lxc
 -PKG_VERSION:=2.1.1
--PKG_RELEASE:=5
+-PKG_RELEASE:=6
 +PKG_VERSION:=3.0.3
 +PKG_RELEASE:=3
  
@@ -136,7 +134,7 @@ index 6970c5a67..8c1e2128e 100644
  define Package/lxc/install
  	true
  endef
-@@ -196,72 +176,44 @@ endef
+@@ -200,72 +180,44 @@ endef
  
  define Package/lxc-common/install
  	$(INSTALL_DIR) $(1)/usr/lib/lxc/rootfs
@@ -219,7 +217,7 @@ index 6970c5a67..8c1e2128e 100644
  endef
  
  define GenPlugin
-@@ -281,14 +233,12 @@ define GenPlugin
+@@ -285,14 +237,12 @@ define GenPlugin
    $$(eval $$(call BuildPackage,lxc-$(1)))
  endef
  
@@ -376,7 +374,7 @@ index 0e644ea47..79fb6821d 100644
   # Allow environment variables to override config
   : ${CONFIG:=/proc/config.gz}
 diff --git a/utils/lxc/patches/025-remove-unsupported-option.patch b/utils/lxc/patches/025-remove-unsupported-option.patch
-index b20870890..4e7b58492 100644
+index b20870890..d4f0a6ad8 100644
 --- a/utils/lxc/patches/025-remove-unsupported-option.patch
 +++ b/utils/lxc/patches/025-remove-unsupported-option.patch
 @@ -1,15 +1,17 @@
@@ -403,7 +401,7 @@ index b20870890..4e7b58492 100644
  -fi
  -
  -# Do not surround ${EXCLUDES} by quotes. This does not work. The solution could
-@@ -17,8 +19,8 @@
+@@ -17,8 +19,7 @@
  -# is to use a function wrapper, but the latter can't be used here as the args
  -# are dynamic. We thus need to ignore the warning brought by shellcheck.
  -# shellcheck disable=SC2086
@@ -414,7 +412,6 @@ index b20870890..4e7b58492 100644
 ++tar --numeric-owner -xpJf "${LXC_CACHE_PATH}/rootfs.tar.xz" -C "${LXC_ROOTFS}"
   
   mkdir -p "${LXC_ROOTFS}/dev/pts/"
-+ 
 diff --git a/utils/lxc/patches/030-prlimit.patch b/utils/lxc/patches/030-prlimit.patch
 deleted file mode 100644
 index 88f17aa2b..000000000
@@ -556,7 +553,7 @@ index cdf0b1db0..70bbe6b9c 100644
  -- 
 diff --git a/utils/lxc/patches/040-fix-CVE-2019-5736.patch b/utils/lxc/patches/040-fix-CVE-2019-5736.patch
 new file mode 100644
-index 000000000..d6cc71c42
+index 000000000..d50bd5c6d
 --- /dev/null
 +++ b/utils/lxc/patches/040-fix-CVE-2019-5736.patch
 @@ -0,0 +1,398 @@
@@ -639,9 +636,9 @@ index 000000000..d6cc71c42
 +--- a/configure.ac
 ++++ b/configure.ac
 +@@ -706,6 +706,17 @@ AC_ARG_ENABLE([thread-safety],
-+ 	[], [enable_thread_safety=yes])
++	[], [enable_thread_safety=yes])
 + AM_CONDITIONAL([ENFORCE_THREAD_SAFETY], [test "x$enable_thread_safety" = "xyes"])
-+ 
++
 ++AC_ARG_ENABLE([memfd-rexec],
 ++	[AC_HELP_STRING([--enable-memfd-rexec], [enforce liblxc as a memfd to protect against certain symlink attacks [default=yes]])],
 ++	[], [enable_memfd_rexec=yes])
@@ -655,13 +652,13 @@ index 000000000..d6cc71c42
 ++
 + # Files requiring some variable expansion
 + AC_CONFIG_FILES([
-+ 	Makefile
++	Makefile
 +@@ -934,6 +945,7 @@ Security features:
 +  - Linux capabilities: $enable_capabilities
 +  - seccomp: $enable_seccomp
 +  - SELinux: $enable_selinux
 ++ - memfd rexec: $enable_memfd_rexec
-+ 
++
 + PAM:
 +  - PAM module: $enable_pam
 +diff --git a/src/lxc/Makefile.am b/src/lxc/Makefile.am
@@ -671,14 +668,14 @@ index 000000000..d6cc71c42
 +@@ -173,6 +173,10 @@ if !HAVE_STRLCAT
 + liblxc_la_SOURCES += ../include/strlcat.c ../include/strlcat.h
 + endif
-+ 
++
 ++if ENFORCE_MEMFD_REXEC
 ++liblxc_la_SOURCES += rexec.c
 ++endif
 ++
 + AM_CFLAGS = -DLXCROOTFSMOUNT=\"$(LXCROOTFSMOUNT)\" \
-+ 	    -DLXCPATH=\"$(LXCPATH)\" \
-+ 	    -DLXC_GLOBAL_CONF=\"$(LXC_GLOBAL_CONF)\" \
++	    -DLXCPATH=\"$(LXCPATH)\" \
++	    -DLXC_GLOBAL_CONF=\"$(LXC_GLOBAL_CONF)\" \
 +diff --git a/src/lxc/file_utils.c b/src/lxc/file_utils.c
 +index f89aa638d1..930fd738a9 100644
 +--- a/src/lxc/file_utils.c
@@ -689,12 +686,12 @@ index 000000000..d6cc71c42
 + #include "macro.h"
 +-#include "string.h"
 ++#include "string_utils.h"
-+ 
++
 + int lxc_write_to_file(const char *filename, const void *buf, size_t count,
-+ 		      bool add_newline, mode_t mode)
++		      bool add_newline, mode_t mode)
 +@@ -327,3 +327,42 @@ ssize_t lxc_sendfile_nointr(int out_fd, int in_fd, off_t *offset, size_t count)
-+ 
-+ 	return ret;
++
++	return ret;
 + }
 ++
 ++char *file_to_buf(char *path, size_t *length)
@@ -742,9 +739,9 @@ index 000000000..d6cc71c42
 +@@ -55,5 +55,6 @@ extern bool is_fs_type(const struct statfs *fs, fs_type_magic magic_val);
 + extern FILE *fopen_cloexec(const char *path, const char *mode);
 + extern ssize_t lxc_sendfile_nointr(int out_fd, int in_fd, off_t *offset,
-+ 				   size_t count);
++				   size_t count);
 ++extern char *file_to_buf(char *path, size_t *length);
-+ 
++
 + #endif /* __LXC_FILE_UTILS_H */
 +diff --git a/src/lxc/rexec.c b/src/lxc/rexec.c
 +new file mode 100644
@@ -940,7 +937,7 @@ index 000000000..d6cc71c42
 +@@ -58,6 +58,20 @@ static inline long __keyctl(int cmd, unsigned long arg2, unsigned long arg3,
 + #define keyctl __keyctl
 + #endif
-+ 
++
 ++#ifndef F_LINUX_SPECIFIC_BASE
 ++#define F_LINUX_SPECIFIC_BASE 1024
 ++#endif
@@ -957,7 +954,7 @@ index 000000000..d6cc71c42
 ++
 + #ifndef HAVE_MEMFD_CREATE
 + static inline int memfd_create(const char *name, unsigned int flags) {
-+ 	#ifndef __NR_memfd_create
++	#ifndef __NR_memfd_create
 -- 
-2.30.2
+2.34.1
 
