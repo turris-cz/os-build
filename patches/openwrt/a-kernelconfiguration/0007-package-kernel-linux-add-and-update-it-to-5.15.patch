@@ -1,0 +1,2162 @@
+From 62aa200783c80533cae440606a28014bbc83ce1f Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 17 May 2022 14:25:09 +0200
+Subject: [PATCH] package/kernel/linux: add and update it to 5.15
+
+---
+ package/kernel/linux/modules/block.mk        |  20 ++-
+ package/kernel/linux/modules/can.mk          |   2 +-
+ package/kernel/linux/modules/crypto.mk       |  84 ++++-----
+ package/kernel/linux/modules/fs.mk           | 109 ++++++++++--
+ package/kernel/linux/modules/gpio-cascade.mk |  20 +++
+ package/kernel/linux/modules/hwmon.mk        |  61 +++++--
+ package/kernel/linux/modules/i2c.mk          |  29 +++
+ package/kernel/linux/modules/iio.mk          |  15 ++
+ package/kernel/linux/modules/input.mk        |   6 +-
+ package/kernel/linux/modules/leds.mk         |  66 +++++++
+ package/kernel/linux/modules/lib.mk          |  23 ++-
+ package/kernel/linux/modules/multiplexer.mk  |  34 ++++
+ package/kernel/linux/modules/netdevices.mk   | 174 ++++++++++++++++--
+ package/kernel/linux/modules/netfilter.mk    | 109 +++++++++++-
+ package/kernel/linux/modules/netsupport.mk   |  66 ++++++-
+ package/kernel/linux/modules/other.mk        | 177 ++++++++++++-------
+ package/kernel/linux/modules/sound.mk        |  12 +-
+ package/kernel/linux/modules/usb.mk          | 153 ++++++++++++++--
+ package/kernel/linux/modules/video.mk        |  33 ++--
+ package/kernel/linux/modules/virt.mk         |   5 +-
+ package/kernel/linux/modules/w1.mk           |   2 +-
+ 21 files changed, 1003 insertions(+), 197 deletions(-)
+ create mode 100644 package/kernel/linux/modules/gpio-cascade.mk
+ create mode 100644 package/kernel/linux/modules/multiplexer.mk
+
+diff --git a/package/kernel/linux/modules/block.mk b/package/kernel/linux/modules/block.mk
+index 593955560e..72f670b603 100644
+--- a/package/kernel/linux/modules/block.mk
++++ b/package/kernel/linux/modules/block.mk
+@@ -218,7 +218,7 @@ $(eval $(call KernelPackage,dax))
+ define KernelPackage/dm
+   SUBMENU:=$(BLOCK_MENU)
+   TITLE:=Device Mapper
+-  DEPENDS:=+kmod-crypto-manager +kmod-dax
++  DEPENDS:=+kmod-crypto-manager +kmod-dax +KERNEL_KEYS:kmod-keys-encrypted
+   # All the "=n" are unnecessary, they're only there
+   # to stop the config from asking the question.
+   # MIRROR is M because I've needed it for pvmove.
+@@ -243,7 +243,7 @@ define KernelPackage/dm
+     $(LINUX_DIR)/drivers/md/dm-log.ko \
+     $(LINUX_DIR)/drivers/md/dm-mirror.ko \
+     $(LINUX_DIR)/drivers/md/dm-region-hash.ko
+-  AUTOLOAD:=$(call AutoLoad,30,dm-mod dm-log dm-region-hash dm-mirror dm-crypt)
++  AUTOLOAD:=$(call AutoLoad,30,dm-mod dm-log dm-region-hash dm-mirror dm-crypt,1)
+ endef
+ 
+ define KernelPackage/dm/description
+@@ -539,16 +539,24 @@ endef
+ $(eval $(call KernelPackage,scsi-generic))
+ 
+ 
++define KernelPackage/cdrom
++  TITLE:=Kernel library module for CD / DVD drives
++  KCONFIG:=CONFIG_CDROM
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/cdrom/cdrom.ko
++endef
++
++$(eval $(call KernelPackage,cdrom))
++
++
+ define KernelPackage/scsi-cdrom
+   SUBMENU:=$(BLOCK_MENU)
+   TITLE:=Kernel support for CD / DVD drives
+-  DEPENDS:=+kmod-scsi-core
++  DEPENDS:=+kmod-scsi-core +kmod-cdrom
+   KCONFIG:= \
+     CONFIG_BLK_DEV_SR \
+     CONFIG_BLK_DEV_SR_VENDOR=n
+-  FILES:= \
+-    $(LINUX_DIR)/drivers/cdrom/cdrom.ko \
+-    $(LINUX_DIR)/drivers/scsi/sr_mod.ko
++  FILES:=$(LINUX_DIR)/drivers/scsi/sr_mod.ko
+   AUTOLOAD:=$(call AutoLoad,45,sr_mod)
+ endef
+ 
+diff --git a/package/kernel/linux/modules/can.mk b/package/kernel/linux/modules/can.mk
+index 3060fc0966..9cdebb9091 100644
+--- a/package/kernel/linux/modules/can.mk
++++ b/package/kernel/linux/modules/can.mk
+@@ -121,7 +121,7 @@ define KernelPackage/can-flexcan
+   KCONFIG:=CONFIG_CAN_FLEXCAN
+   FILES:=$(LINUX_DIR)/drivers/net/can/flexcan.ko
+   AUTOLOAD:=$(call AutoProbe,flexcan)
+-  $(call AddDepends/can,@TARGET_imx6)
++  $(call AddDepends/can,@TARGET_imx)
+ endef
+ 
+ define KernelPackage/can-flexcan/description
+diff --git a/package/kernel/linux/modules/crypto.mk b/package/kernel/linux/modules/crypto.mk
+index b50ed06824..6fd53f6080 100644
+--- a/package/kernel/linux/modules/crypto.mk
++++ b/package/kernel/linux/modules/crypto.mk
+@@ -40,7 +40,9 @@ define KernelPackage/crypto-aead
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_AEAD \
+ 	CONFIG_CRYPTO_AEAD2
+-  FILES:=$(LINUX_DIR)/crypto/aead.ko
++  FILES:= \
++	  $(LINUX_DIR)/crypto/aead.ko \
++	  $(LINUX_DIR)/crypto/geniv.ko@ge5.10
+   AUTOLOAD:=$(call AutoLoad,09,aead,1)
+   $(call AddDepends/crypto, +kmod-crypto-null)
+ endef
+@@ -50,8 +52,12 @@ $(eval $(call KernelPackage,crypto-aead))
+ 
+ define KernelPackage/crypto-arc4
+   TITLE:=ARC4 cipher CryptoAPI module
+-  KCONFIG:=CONFIG_CRYPTO_ARC4
+-  FILES:=$(LINUX_DIR)/crypto/arc4.ko
++  KCONFIG:= \
++	  CONFIG_CRYPTO_ARC4 \
++	  CONFIG_CRYPTO_USER_API_ENABLE_OBSOLETE=y
++  FILES:= \
++	  $(LINUX_DIR)/crypto/arc4.ko \
++	  $(LINUX_DIR)/lib/crypto/libarc4.ko
+   AUTOLOAD:=$(call AutoLoad,09,arc4)
+   $(call AddDepends/crypto)
+ endef
+@@ -281,7 +287,7 @@ define KernelPackage/crypto-ghash/arm-ce
+   AUTOLOAD+=$(call AutoLoad,09,ghash-arm-ce)
+ endef
+ 
+-KernelPackage/crypto-ghash/imx6=$(KernelPackage/crypto-ghash/arm-ce)
++KernelPackage/crypto-ghash/imx=$(KernelPackage/crypto-ghash/arm-ce)
+ KernelPackage/crypto-ghash/ipq40xx=$(KernelPackage/crypto-ghash/arm-ce)
+ KernelPackage/crypto-ghash/mvebu/cortexa9=$(KernelPackage/crypto-ghash/arm-ce)
+ 
+@@ -340,7 +346,7 @@ $(eval $(call KernelPackage,crypto-hw-ccp))
+ 
+ define KernelPackage/crypto-hw-geode
+   TITLE:=AMD Geode hardware crypto module
+-  DEPENDS:=+kmod-crypto-manager
++  DEPENDS:=@TARGET_x86_geode +kmod-crypto-manager
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_HW=y \
+ 	CONFIG_CRYPTO_DEV_GEODE
+@@ -354,7 +360,7 @@ $(eval $(call KernelPackage,crypto-hw-geode))
+ 
+ define KernelPackage/crypto-hw-hifn-795x
+   TITLE:=HIFN 795x crypto accelerator
+-  DEPENDS:=+kmod-random-core +kmod-crypto-manager
++  DEPENDS:=@PCI_SUPPORT +kmod-random-core +kmod-crypto-manager
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_HW=y \
+ 	CONFIG_CRYPTO_DEV_HIFN_795X \
+@@ -414,7 +420,8 @@ $(eval $(call KernelPackage,crypto-hw-safexcel))
+ 
+ define KernelPackage/crypto-hw-talitos
+   TITLE:=Freescale integrated security engine (SEC) driver
+-  DEPENDS:=+kmod-crypto-manager +kmod-crypto-hash +kmod-random-core +kmod-crypto-authenc +kmod-crypto-des
++  DEPENDS:=@(TARGET_mpc85xx||TARGET_layerscape) +kmod-crypto-manager \
++	+kmod-crypto-hash +kmod-random-core +kmod-crypto-authenc +kmod-crypto-des
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_HW=y \
+ 	CONFIG_CRYPTO_DEV_TALITOS \
+@@ -444,9 +451,7 @@ define KernelPackage/crypto-lib-blake2s
+   TITLE:=BLAKE2s hash function library
+   KCONFIG:=CONFIG_CRYPTO_LIB_BLAKE2S
+   HIDDEN:=1
+-  FILES:= \
+-	$(LINUX_DIR)/lib/crypto/libblake2s.ko \
+-	$(LINUX_DIR)/lib/crypto/libblake2s-generic.ko
++  FILES:=$(LINUX_DIR)/lib/crypto/libblake2s.ko
+   $(call AddDepends/crypto,+PACKAGE_kmod-crypto-hash:kmod-crypto-hash)
+ endef
+ 
+@@ -456,9 +461,30 @@ endef
+ 
+ define KernelPackage/crypto-lib-blake2s/x86/64
+   KCONFIG+=CONFIG_CRYPTO_BLAKE2S_X86
+-  FILES+=$(LINUX_DIR)/arch/x86/crypto/blake2s-x86_64.ko
++  FILES+=\
++	  $(LINUX_DIR)/lib/crypto/libblake2s-generic.ko \
++	  $(LINUX_DIR)/arch/x86/crypto/blake2s-x86_64.ko
+ endef
+ 
++define KernelPackage/crypto-lib-blake2s/arm
++  KCONFIG+=CONFIG_CRYPTO_BLAKE2S_ARM
++  FILES+=\
++	  $(LINUX_DIR)/lib/crypto/libblake2s-generic.ko@lt5.12 \
++	  $(LINUX_DIR)/arch/arm/crypto/blake2s-arm.ko@ge5.12
++endef
++
++ifndef KernelPackage/crypto-lib-blake2s/$(CRYPTO_TARGET)
++  define KernelPackage/crypto-lib-blake2s/$(CRYPTO_TARGET)
++    KCONFIG+=CONFIG_CRYPTO_LIB_BLAKE2S_GENERIC
++    FILES+=$(LINUX_DIR)/lib/crypto/libblake2s-generic.ko
++  endef
++endif
++
++ifdef KernelPackage/crypto-lib-blake2s/$(ARCH)
++  KernelPackage/crypto-lib-blake2s/$(CRYPTO_TARGET)=\
++	  $(KernelPackage/crypto-lib-blake2s/$(ARCH))
++endif
++
+ $(eval $(call KernelPackage,crypto-lib-blake2s))
+ 
+ 
+@@ -594,7 +620,7 @@ $(eval $(call KernelPackage,crypto-lib-poly1305))
+ 
+ define KernelPackage/crypto-manager
+   TITLE:=CryptoAPI algorithm manager
+-  DEPENDS:=+kmod-crypto-aead +kmod-crypto-hash +kmod-crypto-pcompress
++  DEPENDS:=+kmod-crypto-aead +kmod-crypto-hash
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_MANAGER \
+ 	CONFIG_CRYPTO_MANAGER2
+@@ -653,6 +679,7 @@ define KernelPackage/crypto-misc
+   TITLE:=Other CryptoAPI modules
+   DEPENDS:=+kmod-crypto-xts
+   KCONFIG:= \
++	CONFIG_CRYPTO_USER_API_ENABLE_OBSOLETE=y \
+ 	CONFIG_CRYPTO_CAMELLIA_X86_64 \
+ 	CONFIG_CRYPTO_BLOWFISH_X86_64 \
+ 	CONFIG_CRYPTO_TWOFISH_X86_64 \
+@@ -675,7 +702,7 @@ define KernelPackage/crypto-misc
+ 	CONFIG_CRYPTO_KHAZAD \
+ 	CONFIG_CRYPTO_SERPENT \
+ 	CONFIG_CRYPTO_TEA \
+-	CONFIG_CRYPTO_TGR192 \
++	CONFIG_CRYPTO_TGR192@lt5.12 \
+ 	CONFIG_CRYPTO_TWOFISH \
+ 	CONFIG_CRYPTO_TWOFISH_COMMON \
+ 	CONFIG_CRYPTO_TWOFISH_586 \
+@@ -688,7 +715,7 @@ define KernelPackage/crypto-misc
+ 	$(LINUX_DIR)/crypto/cast6_generic.ko \
+ 	$(LINUX_DIR)/crypto/khazad.ko \
+ 	$(LINUX_DIR)/crypto/tea.ko \
+-	$(LINUX_DIR)/crypto/tgr192.ko \
++	$(LINUX_DIR)/crypto/tgr192.ko@lt5.12 \
+ 	$(LINUX_DIR)/crypto/twofish_common.ko \
+ 	$(LINUX_DIR)/crypto/wp512.ko \
+ 	$(LINUX_DIR)/crypto/twofish_generic.ko \
+@@ -696,7 +723,7 @@ define KernelPackage/crypto-misc
+ 	$(LINUX_DIR)/crypto/blowfish_generic.ko \
+ 	$(LINUX_DIR)/crypto/serpent_generic.ko
+   AUTOLOAD:=$(call AutoLoad,10,anubis camellia_generic cast_common \
+-	cast5_generic cast6_generic khazad tea tgr192 twofish_common \
++	cast5_generic cast6_generic khazad tea tgr192@lt5.12 twofish_common \
+ 	wp512 blowfish_common serpent_generic)
+   ifndef CONFIG_TARGET_x86
+ 	AUTOLOAD+= $(call AutoLoad,10,twofish_generic blowfish_generic)
+@@ -763,19 +790,6 @@ endef
+ $(eval $(call KernelPackage,crypto-pcbc))
+ 
+ 
+-define KernelPackage/crypto-pcompress
+-  TITLE:=CryptoAPI Partial (de)compression operations
+-  KCONFIG:= \
+-	CONFIG_CRYPTO_PCOMP=y \
+-	CONFIG_CRYPTO_PCOMP2
+-  FILES:=$(LINUX_DIR)/crypto/pcompress.ko
+-  AUTOLOAD:=$(call AutoLoad,09,pcompress)
+-  $(call AddDepends/crypto)
+-endef
+-
+-$(eval $(call KernelPackage,crypto-pcompress))
+-
+-
+ define KernelPackage/crypto-rsa
+   TITLE:=RSA algorithm
+   DEPENDS:=+kmod-crypto-manager +kmod-asn1-decoder
+@@ -862,7 +876,7 @@ define KernelPackage/crypto-sha1/arm-neon
+   AUTOLOAD+=$(call AutoLoad,09,sha1-arm-neon)
+ endef
+ 
+-KernelPackage/crypto-sha1/imx6=$(KernelPackage/crypto-sha1/arm-neon)
++KernelPackage/crypto-sha1/imx=$(KernelPackage/crypto-sha1/arm-neon)
+ KernelPackage/crypto-sha1/ipq40xx=$(KernelPackage/crypto-sha1/arm-neon)
+ KernelPackage/crypto-sha1/mvebu/cortexa9=$(KernelPackage/crypto-sha1/arm-neon)
+ 
+@@ -926,7 +940,7 @@ define KernelPackage/crypto-sha512/arm
+   AUTOLOAD+=$(call AutoLoad,09,sha512-arm)
+ endef
+ 
+-KernelPackage/crypto-sha512/imx6=$(KernelPackage/crypto-sha512/arm)
++KernelPackage/crypto-sha512/imx=$(KernelPackage/crypto-sha512/arm)
+ KernelPackage/crypto-sha512/ipq40xx=$(KernelPackage/crypto-sha512/arm)
+ KernelPackage/crypto-sha512/mvebu/cortexa9=$(KernelPackage/crypto-sha512/arm)
+ 
+@@ -979,16 +993,6 @@ endef
+ $(eval $(call KernelPackage,crypto-user))
+ 
+ 
+-define KernelPackage/crypto-wq
+-  TITLE:=CryptoAPI work queue handling
+-  KCONFIG:=CONFIG_CRYPTO_WORKQUEUE
+-  FILES:=$(LINUX_DIR)/crypto/crypto_wq.ko
+-  AUTOLOAD:=$(call AutoLoad,09,crypto_wq)
+-  $(call AddDepends/crypto)
+-endef
+-$(eval $(call KernelPackage,crypto-wq))
+-
+-
+ define KernelPackage/crypto-xts
+   TITLE:=XTS cipher CryptoAPI module
+   DEPENDS:=+kmod-crypto-gf128 +kmod-crypto-manager
+diff --git a/package/kernel/linux/modules/fs.mk b/package/kernel/linux/modules/fs.mk
+index d43542b17e..0bc98dc110 100644
+--- a/package/kernel/linux/modules/fs.mk
++++ b/package/kernel/linux/modules/fs.mk
+@@ -88,24 +88,31 @@ define KernelPackage/fs-cifs
+   SUBMENU:=$(FS_MENU)
+   TITLE:=CIFS support
+   KCONFIG:= \
++	CONFIG_SMBFS_COMMON@ge5.15 \
+ 	CONFIG_CIFS \
+ 	CONFIG_CIFS_DFS_UPCALL=n \
+ 	CONFIG_CIFS_UPCALL=n
+-  FILES:=$(LINUX_DIR)/fs/cifs/cifs.ko
++  FILES:= \
++	$(LINUX_DIR)/fs/smbfs_common/cifs_arc4.ko@ge5.15 \
++	$(LINUX_DIR)/fs/smbfs_common/cifs_md4.ko@ge5.15 \
++	$(LINUX_DIR)/fs/cifs/cifs.ko
+   AUTOLOAD:=$(call AutoLoad,30,cifs)
+   $(call AddDepends/nls)
+   DEPENDS+= \
+-    +kmod-crypto-md4 \
++    +(LINUX_5_4||LINUX_5_10):kmod-crypto-md4\
+     +kmod-crypto-md5 \
+     +kmod-crypto-sha256 \
+     +kmod-crypto-sha512 \
+     +kmod-crypto-cmac \
+     +kmod-crypto-hmac \
+-    +kmod-crypto-arc4 \
++    +(LINUX_5_4||LINUX_5_10):kmod-crypto-arc4 \
+     +kmod-crypto-aead \
+     +kmod-crypto-ccm \
+     +kmod-crypto-ecb \
+-    +kmod-crypto-des
++    +kmod-crypto-des \
++    +(LINUX_5_15):kmod-asn1-decoder \
++    +(LINUX_5_15):kmod-oid-registry \
++    +(LINUX_5_15):kmod-dnsresolver
+ endef
+ 
+ define KernelPackage/fs-cifs/description
+@@ -164,6 +171,26 @@ endef
+ $(eval $(call KernelPackage,fs-efivarfs))
+ 
+ 
++define KernelPackage/fs-exfat
++  SUBMENU:=$(FS_MENU)
++  TITLE:=exFAT filesystem support
++  KCONFIG:= \
++	CONFIG_EXFAT_FS \
++	CONFIG_EXFAT_DEFAULT_IOCHARSET="utf8"
++  FILES:= \
++	$(LINUX_DIR)/drivers/staging/exfat/exfat.ko@lt5.7 \
++	$(LINUX_DIR)/fs/exfat/exfat.ko@ge5.7
++  AUTOLOAD:=$(call AutoLoad,30,exfat,1)
++  DEPENDS:=+kmod-nls-base
++endef
++
++define KernelPackage/fs-exfat/description
++ Kernel module for exFAT filesystem support
++endef
++
++$(eval $(call KernelPackage,fs-exfat))
++
++
+ define KernelPackage/fs-exportfs
+   SUBMENU:=$(FS_MENU)
+   TITLE:=exportfs kernel server support
+@@ -220,10 +247,21 @@ endef
+ $(eval $(call KernelPackage,fs-f2fs))
+ 
+ 
++define KernelPackage/fs-netfs
++  SUBMENU:=$(FS_MENU)
++  TITLE:=Network Filesystems support
++  DEPENDS:=@LINUX_5_15
++  KCONFIG:= CONFIG_NETFS_SUPPORT
++  FILES:=$(LINUX_DIR)/fs/netfs/netfs.ko
++  AUTOLOAD:=$(call AutoLoad,28,netfs)
++endef
++
++$(eval $(call KernelPackage,fs-netfs))
++
+ define KernelPackage/fs-fscache
+   SUBMENU:=$(FS_MENU)
+   TITLE:=General filesystem local cache manager
+-  DEPENDS:=
++  DEPENDS:=+kmod-fs-netfs
+   KCONFIG:=\
+ 	CONFIG_FSCACHE=m \
+ 	CONFIG_FSCACHE_STATS=y \
+@@ -243,6 +281,7 @@ $(eval $(call KernelPackage,fs-fscache))
+ define KernelPackage/fs-hfs
+   SUBMENU:=$(FS_MENU)
+   TITLE:=HFS filesystem support
++  DEPENDS:=+kmod-cdrom
+   KCONFIG:=CONFIG_HFS_FS
+   FILES:=$(LINUX_DIR)/fs/hfs/hfs.ko
+   AUTOLOAD:=$(call AutoLoad,30,hfs)
+@@ -259,6 +298,7 @@ $(eval $(call KernelPackage,fs-hfs))
+ define KernelPackage/fs-hfsplus
+   SUBMENU:=$(FS_MENU)
+   TITLE:=HFS+ filesystem support
++  DEPENDS:=+kmod-cdrom
+   KCONFIG:=CONFIG_HFSPLUS_FS
+   FILES:=$(LINUX_DIR)/fs/hfsplus/hfsplus.ko
+   AUTOLOAD:=$(call AutoLoad,30,hfsplus)
+@@ -275,7 +315,7 @@ $(eval $(call KernelPackage,fs-hfsplus))
+ define KernelPackage/fs-isofs
+   SUBMENU:=$(FS_MENU)
+   TITLE:=ISO9660 filesystem support
+-  DEPENDS:=+kmod-lib-zlib-inflate
++  DEPENDS:=+kmod-lib-zlib-inflate +kmod-cdrom
+   KCONFIG:=CONFIG_ISO9660_FS CONFIG_JOLIET=y CONFIG_ZISOFS=n
+   FILES:=$(LINUX_DIR)/fs/isofs/isofs.ko
+   AUTOLOAD:=$(call AutoLoad,30,isofs)
+@@ -359,14 +399,22 @@ $(eval $(call KernelPackage,fs-nfs))
+ define KernelPackage/fs-nfs-common
+   SUBMENU:=$(FS_MENU)
+   TITLE:=Common NFS filesystem modules
++  DEPENDS:=+kmod-oid-registry
+   KCONFIG:= \
+ 	CONFIG_LOCKD \
+ 	CONFIG_SUNRPC \
+-	CONFIG_GRACE_PERIOD
++	CONFIG_GRACE_PERIOD \
++	CONFIG_NFS_V4=y \
++	CONFIG_NFS_V4_1=y \
++	CONFIG_NFS_V4_1_IMPLEMENTATION_ID_DOMAIN="kernel.org" \
++	CONFIG_NFS_V4_1_MIGRATION=n \
++	CONFIG_NFS_V4_2=y \
++	CONFIG_NFS_V4_2_READ_PLUS=n
+   FILES:= \
+ 	$(LINUX_DIR)/fs/lockd/lockd.ko \
+ 	$(LINUX_DIR)/net/sunrpc/sunrpc.ko \
+-	$(LINUX_DIR)/fs/nfs_common/grace.ko
++	$(LINUX_DIR)/fs/nfs_common/grace.ko \
++	$(LINUX_DIR)/fs/nfs_common/nfs_ssc.ko@ge5.10
+   AUTOLOAD:=$(call AutoLoad,30,grace sunrpc lockd)
+ endef
+ 
+@@ -390,10 +438,9 @@ define KernelPackage/fs-nfs-common-rpcsec
+ 	CONFIG_SUNRPC_GSS \
+ 	CONFIG_RPCSEC_GSS_KRB5
+   FILES:= \
+-	$(LINUX_DIR)/lib/oid_registry.ko \
+ 	$(LINUX_DIR)/net/sunrpc/auth_gss/auth_rpcgss.ko \
+ 	$(LINUX_DIR)/net/sunrpc/auth_gss/rpcsec_gss_krb5.ko
+-  AUTOLOAD:=$(call AutoLoad,31,oid_registry auth_rpcgss rpcsec_gss_krb5)
++  AUTOLOAD:=$(call AutoLoad,31,auth_rpcgss rpcsec_gss_krb5)
+ endef
+ 
+ define KernelPackage/fs-nfs-common-rpcsec/description
+@@ -448,7 +495,8 @@ define KernelPackage/fs-nfsd
+ 	CONFIG_NFSD_BLOCKLAYOUT=n \
+ 	CONFIG_NFSD_SCSILAYOUT=n \
+ 	CONFIG_NFSD_FLEXFILELAYOUT=n \
+-	CONFIG_NFSD_FAULT_INJECTION=n
++	CONFIG_NFSD_FAULT_INJECTION=n \
++	CONFIG_NFSD_V4_2_INTER_SSC=n
+   FILES:=$(LINUX_DIR)/fs/nfsd/nfsd.ko
+   AUTOLOAD:=$(call AutoLoad,40,nfsd)
+ endef
+@@ -476,6 +524,27 @@ endef
+ $(eval $(call KernelPackage,fs-ntfs))
+ 
+ 
++define KernelPackage/pstore
++  SUBMENU:=$(FS_MENU)
++  TITLE:=Pstore file system
++  DEFAULT:=m if ALL_KMODS
++  KCONFIG:= \
++	CONFIG_PSTORE \
++	CONFIG_PSTORE_COMPRESS=y \
++	CONFIG_PSTORE_COMPRESS_DEFAULT="deflate" \
++	CONFIG_PSTORE_DEFLATE_COMPRESS=y \
++	CONFIG_PSTORE_DEFLATE_COMPRESS_DEFAULT=y
++  FILES:= $(LINUX_DIR)/fs/pstore/pstore.ko
++  AUTOLOAD:=$(call AutoLoad,30,pstore,1)
++endef
++
++define KernelPackage/pstore/description
++ Kernel module for pstore filesystem support
++endef
++
++$(eval $(call KernelPackage,pstore))
++
++
+ define KernelPackage/fs-reiserfs
+   SUBMENU:=$(FS_MENU)
+   TITLE:=ReiserFS filesystem support
+@@ -513,7 +582,7 @@ define KernelPackage/fs-udf
+   KCONFIG:=CONFIG_UDF_FS
+   FILES:=$(LINUX_DIR)/fs/udf/udf.ko
+   AUTOLOAD:=$(call AutoLoad,30,udf)
+-  DEPENDS:=+kmod-lib-crc-itu-t
++  DEPENDS:=+kmod-lib-crc-itu-t +kmod-cdrom
+   $(call AddDepends/nls)
+ endef
+ 
+@@ -573,3 +642,19 @@ define KernelPackage/fuse/description
+ endef
+ 
+ $(eval $(call KernelPackage,fuse))
++
++
++define KernelPackage/fs-ntfs3
++  SUBMENU:=$(FS_MENU)
++  TITLE:=Ntfs3 support
++  KCONFIG:= CONFIG_NTFS3_FS CONFIG_NTFS3_FS_POSIX_ACL=y
++  FILES:=$(LINUX_DIR)/fs/ntfs3/ntfs3.ko
++  $(call AddDepends/nls)
++  AUTOLOAD:=$(call AutoLoad,80,ntfs3)
++endef
++
++define KernelPackage/fuse/description
++ Kernel module for new NTFS3 filesystem support
++endef
++
++$(eval $(call KernelPackage,fs-ntfs3))
+diff --git a/package/kernel/linux/modules/gpio-cascade.mk b/package/kernel/linux/modules/gpio-cascade.mk
+new file mode 100644
+index 0000000000..3a559f19ef
+--- /dev/null
++++ b/package/kernel/linux/modules/gpio-cascade.mk
+@@ -0,0 +1,20 @@
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++MENU_TITLE:=GPIO support
++
++define KernelPackage/gpio-cascade
++  SUBMENU:=$(MENU_TITLE)
++  TITLE:=Generic GPIO cascade
++  KCONFIG:=CONFIG_GPIO_CASCADE
++  DEPENDS:=@GPIO_SUPPORT +kmod-mux-core
++  FILES:=$(LINUX_DIR)/drivers/gpio/gpio-cascade.ko
++  AUTOLOAD:=$(call AutoLoad,29,gpio-cascade,1)
++endef
++
++define KernelPackage/gpio-cascade/description
++  Kernel module for Generic GPIO cascade
++endef
++
++$(eval $(call KernelPackage,gpio-cascade))
+diff --git a/package/kernel/linux/modules/hwmon.mk b/package/kernel/linux/modules/hwmon.mk
+index a39a8910f0..b75c741ba0 100644
+--- a/package/kernel/linux/modules/hwmon.mk
++++ b/package/kernel/linux/modules/hwmon.mk
+@@ -43,20 +43,6 @@ endef
+ 
+ $(eval $(call KernelPackage,hwmon-ad7418))
+ 
+-define KernelPackage/hwmon-ads1015
+-  TITLE:=Texas Instruments ADS1015
+-  KCONFIG:= CONFIG_SENSORS_ADS1015
+-  FILES:= $(LINUX_DIR)/drivers/hwmon/ads1015.ko
+-  AUTOLOAD:=$(call AutoLoad,60,ads1015)
+-  $(call AddDepends/hwmon,+kmod-i2c-core)
+-endef
+-
+-define KernelPackage/hwmon-ads1015/description
+- Kernel module for Texas Instruments ADS1015 Analog-to-Digital converter
+-endef
+-
+-$(eval $(call KernelPackage,hwmon-ads1015))
+-
+ define KernelPackage/hwmon-adt7410
+   TITLE:=ADT7410 monitoring support
+   KCONFIG:= \
+@@ -152,6 +138,21 @@ endef
+ $(eval $(call KernelPackage,hwmon-f71882fg))
+ 
+ 
++define KernelPackage/hwmon-g762
++  TITLE:=G762/G763 fan speed PWM controller support
++  KCONFIG:=CONFIG_SENSORS_G762
++  FILES:=$(LINUX_DIR)/drivers/hwmon/g762.ko
++  AUTOLOAD:=$(call AutoProbe,g762)
++  $(call AddDepends/hwmon,+kmod-i2c-core)
++endef
++
++define KernelPackage/hwmon-g762/description
++ Kernel module for Global Mixed-mode Technology Inc G762 and G763 fan speed PWM controller chips.
++endef
++
++$(eval $(call KernelPackage,hwmon-g762))
++
++
+ define KernelPackage/hwmon-ina209
+   TITLE:=INA209 monitoring support
+   KCONFIG:=CONFIG_SENSORS_INA209
+@@ -212,6 +213,23 @@ endef
+ $(eval $(call KernelPackage,hwmon-lm63))
+ 
+ 
++define KernelPackage/hwmon-lm70
++  TITLE:=LM70 monitoring support
++  KCONFIG:=CONFIG_SENSORS_LM70 \
++        CONFIG_SPI=y \
++        CONFIG_SPI_MASTER=y
++  FILES:=$(LINUX_DIR)/drivers/hwmon/lm70.ko
++  AUTOLOAD:=$(call AutoProbe,lm70)
++  $(call AddDepends/hwmon)
++endef
++
++define KernelPackage/hwmon-lm70/description
++ Kernel module for lm70 and compatible thermal monitor chip
++endef
++
++$(eval $(call KernelPackage,hwmon-lm70))
++
++
+ define KernelPackage/hwmon-lm75
+   TITLE:=LM75 monitoring support
+   KCONFIG:=CONFIG_SENSORS_LM75
+@@ -347,6 +365,21 @@ endef
+ $(eval $(call KernelPackage,hwmon-nct6775))
+ 
+ 
++define KernelPackage/hwmon-nct7802
++  TITLE:=NCT7802Y and compatibles monitoring support
++  KCONFIG:=CONFIG_SENSORS_NCT7802
++  FILES:=$(LINUX_DIR)/drivers/hwmon/nct7802.ko
++  AUTOLOAD:=$(call AutoProbe,nct7802)
++  $(call AddDepends/hwmon,+kmod-regmap-i2c)
++endef
++
++define KernelPackage/hwmon-nct7802/description
++ Kernel module for NCT7802Y thermal monitor chip
++endef
++
++$(eval $(call KernelPackage,hwmon-nct7802))
++
++
+ define KernelPackage/hwmon-pc87360
+   TITLE:=PC87360 monitoring support
+   KCONFIG:=CONFIG_SENSORS_PC87360
+diff --git a/package/kernel/linux/modules/i2c.mk b/package/kernel/linux/modules/i2c.mk
+index ca6463c81b..f429763227 100644
+--- a/package/kernel/linux/modules/i2c.mk
++++ b/package/kernel/linux/modules/i2c.mk
+@@ -84,6 +84,35 @@ endef
+ $(eval $(call KernelPackage,i2c-algo-pcf))
+ 
+ 
++I2C_DWCORE_MODULES:= \
++  CONFIG_I2C_DESIGNWARE_CORE:drivers/i2c/busses/i2c-designware-core
++
++define KernelPackage/i2c-designware-core
++  $(call i2c_defaults,$(I2C_DWCORE_MODULES),58)
++  TITLE:=Synopsys DesignWare I2C core
++  DEPENDS:=+kmod-i2c-core +!LINUX_5_4:kmod-regmap-core
++  HIDDEN:=y
++endef
++
++$(eval $(call KernelPackage,i2c-designware-core))
++
++
++I2C_DWPCI_MODULES:= \
++  CONFIG_I2C_DESIGNWARE_PCI:drivers/i2c/busses/i2c-designware-pci
++
++define KernelPackage/i2c-designware-pci
++  $(call i2c_defaults,$(I2C_DWPCI_MODULES),59)
++  TITLE:=Synopsys DesignWare PCI
++  DEPENDS:=+kmod-i2c-designware-core
++endef
++
++define KernelPackage/i2c-designware-pci/description
++ Support for Synopsys DesignWare I2C controller. Only master mode is supported.
++endef
++
++$(eval $(call KernelPackage,i2c-designware-pci))
++
++
+ I2C_GPIO_MODULES:= \
+   CONFIG_I2C_GPIO:drivers/i2c/busses/i2c-gpio
+ 
+diff --git a/package/kernel/linux/modules/iio.mk b/package/kernel/linux/modules/iio.mk
+index 7bfbd38079..6a2e040377 100644
+--- a/package/kernel/linux/modules/iio.mk
++++ b/package/kernel/linux/modules/iio.mk
+@@ -78,6 +78,21 @@ endef
+ 
+ $(eval $(call KernelPackage,iio-ad799x))
+ 
++define KernelPackage/iio-ads1015
++  SUBMENU:=$(IIO_MENU)
++  DEPENDS:=+kmod-i2c-core +kmod-iio-core +kmod-regmap-i2c +kmod-industrialio-triggered-buffer
++  TITLE:=Texas Instruments ADS1015 ADC driver
++  KCONFIG:= CONFIG_TI_ADS1015
++  FILES:=$(LINUX_DIR)/drivers/iio/adc/ti-ads1015.ko
++  AUTOLOAD:=$(call AutoLoad,56,ti-ads1015)
++endef
++
++define KernelPackage/iio-ads1015/description
++ This driver adds support for Texas Instruments ADS1015 and ADS1115 ADCs.
++endef
++
++$(eval $(call KernelPackage,iio-ads1015))
++
+ define KernelPackage/iio-hmc5843
+   SUBMENU:=$(IIO_MENU)
+   DEPENDS:=+kmod-i2c-core +kmod-iio-core +kmod-regmap-i2c +kmod-industrialio-triggered-buffer
+diff --git a/package/kernel/linux/modules/input.mk b/package/kernel/linux/modules/input.mk
+index c2f39ddd90..e052a7afac 100644
+--- a/package/kernel/linux/modules/input.mk
++++ b/package/kernel/linux/modules/input.mk
+@@ -179,10 +179,10 @@ define KernelPackage/input-touchscreen-ads7846
+   DEPENDS:=+kmod-hwmon-core +kmod-input-core +kmod-spi-bitbang
+   KCONFIG:= \
+ 	CONFIG_INPUT_TOUCHSCREEN=y \
+-	CONFIG_TOUCHSCREEN_PROPERTIES=y \
++	CONFIG_TOUCHSCREEN_PROPERTIES=y@lt5.13 \
+ 	CONFIG_TOUCHSCREEN_ADS7846
+   FILES:=$(LINUX_DIR)/drivers/input/touchscreen/ads7846.ko \
+-	$(LINUX_DIR)/drivers/input/touchscreen/of_touchscreen.ko
++	$(LINUX_DIR)/drivers/input/touchscreen/of_touchscreen.ko@lt5.13
+   AUTOLOAD:=$(call AutoProbe,ads7846)
+ endef
+ 
+@@ -196,7 +196,7 @@ $(eval $(call KernelPackage,input-touchscreen-ads7846))
+ define KernelPackage/keyboard-imx
+   SUBMENU:=$(INPUT_MODULES_MENU)
+   TITLE:=IMX keypad support
+-  DEPENDS:=@(TARGET_mxs||TARGET_imx6) +kmod-input-matrixkmap
++  DEPENDS:=@(TARGET_mxs||TARGET_imx) +kmod-input-matrixkmap
+   KCONFIG:= \
+ 	CONFIG_KEYBOARD_IMX \
+ 	CONFIG_INPUT_KEYBOARD=y
+diff --git a/package/kernel/linux/modules/leds.mk b/package/kernel/linux/modules/leds.mk
+index a22ea1e5f4..33b9f612ae 100644
+--- a/package/kernel/linux/modules/leds.mk
++++ b/package/kernel/linux/modules/leds.mk
+@@ -38,6 +38,21 @@ endef
+ 
+ $(eval $(call KernelPackage,ledtrig-activity))
+ 
++define KernelPackage/ledtrig-audio
++  SUBMENU:=$(LEDS_MENU)
++  TITLE:=LED Audio Mute Trigger
++  KCONFIG:=CONFIG_LEDS_TRIGGER_AUDIO
++  FILES:=$(LED_TRIGGER_DIR)/ledtrig-audio.ko
++  AUTOLOAD:=$(call AutoLoad,50,ledtrig-audio)
++endef
++
++define KernelPackage/ledtrig-audio/description
++ Kernel module that allows LEDs to be controlled by audio drivers
++ to follow audio mute and mic-mute changes.
++endef
++
++$(eval $(call KernelPackage,ledtrig-audio))
++
+ define KernelPackage/ledtrig-gpio
+   SUBMENU:=$(LEDS_MENU)
+   TITLE:=LED GPIO Trigger
+@@ -100,6 +115,22 @@ endef
+ $(eval $(call KernelPackage,ledtrig-pattern))
+ 
+ 
++define KernelPackage/leds-apu
++  SUBMENU:=$(LEDS_MENU)
++  TITLE:=PC Engines APU1 LED support
++  DEPENDS:= @GPIO_SUPPORT @TARGET_x86
++  KCONFIG:=CONFIG_LEDS_APU
++  FILES:=$(LINUX_DIR)/drivers/leds/leds-apu.ko
++  AUTOLOAD:=$(call AutoLoad,60,leds-apu,1)
++endef
++
++define KernelPackage/leds-apu/description
++  Driver for the PC Engines APU1 LEDs.
++endef
++
++$(eval $(call KernelPackage,leds-apu))
++
++
+ define KernelPackage/leds-pca963x
+   SUBMENU:=$(LEDS_MENU)
+   TITLE:=PCA963x LED support
+@@ -131,6 +162,24 @@ endef
+ 
+ $(eval $(call KernelPackage,leds-pwm))
+ 
++
++define KernelPackage/leds-tlc591xx
++  SUBMENU:=$(LEDS_MENU)
++  TITLE:=LED driver for TLC59108 and TLC59116 controllers
++  DEPENDS:=+kmod-i2c-core +kmod-regmap-i2c
++  KCONFIG:=CONFIG_LEDS_TLC591XX
++  FILES:=$(LINUX_DIR)/drivers/leds/leds-tlc591xx.ko
++  AUTOLOAD:=$(call AutoLoad,60,leds-tlc591xx,1)
++endef
++
++define KernelPackage/leds-tlc591xx/description
++ This option enables support for Texas Instruments TLC59108
++ and TLC59116 LED controllers.
++endef
++
++$(eval $(call KernelPackage,leds-tlc591xx))
++
++
+ define KernelPackage/leds-uleds
+   SUBMENU:=$(LEDS_MENU)
+   TITLE:=Userspace LEDs
+@@ -144,3 +193,20 @@ define KernelPackage/leds-uleds/description
+ endef
+ 
+ $(eval $(call KernelPackage,leds-uleds))
++
++
++define KernelPackage/input-leds
++  SUBMENU:=$(LEDS_MENU)
++  TITLE:=Input device LED support
++  DEPENDS:=+kmod-input-core
++  KCONFIG:=CONFIG_INPUT_LEDS
++  FILES:=$(LINUX_DIR)/drivers/input/input-leds.ko
++  AUTOLOAD:=$(call AutoLoad,50,input-leds,1)
++endef
++
++define KernelPackage/input-leds/description
++ Provides support for LEDs on input devices- for example,
++ keyboard num/caps/scroll lock.
++endef
++
++$(eval $(call KernelPackage,input-leds))
+diff --git a/package/kernel/linux/modules/lib.mk b/package/kernel/linux/modules/lib.mk
+index 9a341932bd..81ceb1f76c 100644
+--- a/package/kernel/linux/modules/lib.mk
++++ b/package/kernel/linux/modules/lib.mk
+@@ -109,9 +109,10 @@ define KernelPackage/lib-lzo
+   HIDDEN:=1
+   FILES:= \
+ 	$(LINUX_DIR)/crypto/lzo.ko \
++	$(LINUX_DIR)/crypto/lzo-rle.ko \
+ 	$(LINUX_DIR)/lib/lzo/lzo_compress.ko \
+ 	$(LINUX_DIR)/lib/lzo/lzo_decompress.ko
+-  AUTOLOAD:=$(call AutoProbe,lzo lzo_compress lzo_decompress)
++  AUTOLOAD:=$(call AutoProbe,lzo lzo-rle lzo_compress lzo_decompress)
+ endef
+ 
+ define KernelPackage/lib-lzo/description
+@@ -272,3 +273,23 @@ define KernelPackage/asn1-decoder
+ endef
+ 
+ $(eval $(call KernelPackage,asn1-decoder))
++
++define KernelPackage/asn1-encoder
++  SUBMENU:=$(LIB_MENU)
++  TITLE:=Simple ASN1 encoder
++  KCONFIG:= CONFIG_ASN1_ENCODER
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/lib/asn1_encoder.ko
++endef
++
++$(eval $(call KernelPackage,asn1-encoder))
++
++define KernelPackage/oid-registry
++  SUBMENU:=$(LIB_MENU)
++  TITLE:=Object identifier registry
++  KCONFIG:= CONFIG_OID_REGISTRY
++  FILES:=$(LINUX_DIR)/lib/oid_registry.ko
++  AUTOLOAD:=$(call AutoLoad,31,oid_registry)
++endef
++
++$(eval $(call KernelPackage,oid-registry))
+diff --git a/package/kernel/linux/modules/multiplexer.mk b/package/kernel/linux/modules/multiplexer.mk
+new file mode 100644
+index 0000000000..135fc62c6d
+--- /dev/null
++++ b/package/kernel/linux/modules/multiplexer.mk
+@@ -0,0 +1,34 @@
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++MENU_TITLE:=Multiplexer Support
++
++define KernelPackage/mux-core
++  SUBMENU:=$(MENU_TITLE)
++  TITLE:=Multiplexer Support
++  KCONFIG:=CONFIG_MULTIPLEXER
++  FILES:=$(LINUX_DIR)/drivers/mux/mux-core.ko
++  AUTOLOAD:=$(call AutoLoad,25,mux-core,1)
++endef
++
++define KernelPackage/mux-core/description
++  Kernel module for multiplexer support
++endef
++
++$(eval $(call KernelPackage,mux-core))
++
++define KernelPackage/mux-gpio
++  SUBMENU:=$(MENU_TITLE)
++  TITLE:=GPIO-controlled Multiplexer controller
++  KCONFIG:=CONFIG_MUX_GPIO
++  DEPENDS:=@GPIO_SUPPORT kmod-mux-core
++  FILES:=$(LINUX_DIR)/drivers/mux/mux-gpio.ko
++  AUTOLOAD:=$(call AutoLoad,25,mux-gpio,1)
++endef
++
++define KernelPackage/mux-gpio/description
++  Kernel modules for GPIO-controlled Multiplexer controller
++endef
++
++$(eval $(call KernelPackage,mux-gpio))
+diff --git a/package/kernel/linux/modules/netdevices.mk b/package/kernel/linux/modules/netdevices.mk
+index 901bddddea..ec470be5ee 100644
+--- a/package/kernel/linux/modules/netdevices.mk
++++ b/package/kernel/linux/modules/netdevices.mk
+@@ -138,6 +138,23 @@ endef
+ $(eval $(call KernelPackage,mii))
+ 
+ 
++define KernelPackage/mdio-devres
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=Supports MDIO device registration
++  DEPENDS:=@(LINUX_5_10||LINUX_5_15) +kmod-libphy +(TARGET_armvirt||TARGET_bcm27xx_bcm2708||TARGET_tegra):kmod-of-mdio
++  KCONFIG:=CONFIG_MDIO_DEVRES
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/net/phy/mdio_devres.ko
++  AUTOLOAD:=$(call AutoProbe,mdio-devres)
++endef
++
++define KernelPackage/mdio-devres/description
++ Supports MDIO device registration
++endef
++
++$(eval $(call KernelPackage,mdio-devres))
++
++
+ define KernelPackage/mdio-gpio
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:= Supports GPIO lib-based MDIO busses
+@@ -146,8 +163,10 @@ define KernelPackage/mdio-gpio
+ 	CONFIG_MDIO_BITBANG \
+ 	CONFIG_MDIO_GPIO
+   FILES:= \
+-	$(LINUX_DIR)/drivers/net/phy/mdio-gpio.ko \
+-	$(LINUX_DIR)/drivers/net/phy/mdio-bitbang.ko
++	$(LINUX_DIR)/drivers/net/phy/mdio-gpio.ko@lt5.10 \
++	$(LINUX_DIR)/drivers/net/phy/mdio-bitbang.ko@lt5.10 \
++	$(LINUX_DIR)/drivers/net/mdio/mdio-gpio.ko@ge5.10 \
++	$(LINUX_DIR)/drivers/net/mdio/mdio-bitbang.ko@ge5.10
+   AUTOLOAD:=$(call AutoProbe,mdio-gpio)
+ endef
+ 
+@@ -177,6 +196,21 @@ endef
+ 
+ $(eval $(call KernelPackage,et131x))
+ 
++define KernelPackage/phy-microchip
++   SUBMENU:=$(NETWORK_DEVICES_MENU)
++   TITLE:=Microchip Ethernet PHY driver
++   KCONFIG:=CONFIG_MICROCHIP_PHY
++   DEPENDS:=+kmod-libphy
++   FILES:=$(LINUX_DIR)/drivers/net/phy/microchip.ko
++   AUTOLOAD:=$(call AutoLoad,18,microchip,1)
++endef
++
++define KernelPackage/phy-microchip/description
++   Supports the LAN88XX PHYs.
++endef
++
++$(eval $(call KernelPackage,phy-microchip))
++
+ 
+ define KernelPackage/phylib-broadcom
+    SUBMENU:=$(NETWORK_DEVICES_MENU)
+@@ -543,8 +577,9 @@ $(eval $(call KernelPackage,8139cp))
+ define KernelPackage/r8169
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:=RealTek RTL-8169 PCI Gigabit Ethernet Adapter kernel support
+-  DEPENDS:=@PCI_SUPPORT +kmod-mii +r8169-firmware +kmod-phy-realtek
+-  KCONFIG:=CONFIG_R8169 \
++  DEPENDS:=@PCI_SUPPORT +kmod-mii +r8169-firmware +kmod-phy-realtek +(LINUX_5_10||LINUX_5_15):kmod-mdio-devres
++  KCONFIG:= \
++    CONFIG_R8169 \
+     CONFIG_R8169_NAPI=y \
+     CONFIG_R8169_VLAN=n
+   FILES:=$(LINUX_DIR)/drivers/net/ethernet/realtek/r8169.ko
+@@ -637,7 +672,7 @@ define KernelPackage/igb
+     CONFIG_IGB_HWMON=y \
+     CONFIG_IGB_DCA=n
+   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/igb/igb.ko
+-  AUTOLOAD:=$(call AutoLoad,35,igb)
++  AUTOLOAD:=$(call AutoLoad,35,igb,1)
+ endef
+ 
+ define KernelPackage/igb/description
+@@ -668,7 +703,7 @@ $(eval $(call KernelPackage,igbvf))
+ define KernelPackage/ixgbe
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:=Intel(R) 82598/82599 PCI-Express 10 Gigabit Ethernet support
+-  DEPENDS:=@PCI_SUPPORT +kmod-mdio +kmod-ptp +kmod-hwmon-core +kmod-libphy
++  DEPENDS:=@PCI_SUPPORT +kmod-mdio +kmod-ptp +kmod-hwmon-core +kmod-libphy +(LINUX_5_10||LINUX_5_15):kmod-mdio-devres
+   KCONFIG:=CONFIG_IXGBE \
+     CONFIG_IXGBE_VXLAN=n \
+     CONFIG_IXGBE_HWMON=y \
+@@ -865,6 +900,22 @@ endef
+ $(eval $(call KernelPackage,macvlan))
+ 
+ 
++define KernelPackage/ipvlan
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=IP-VLAN support
++  KCONFIG:=CONFIG_IPVLAN
++  FILES:=$(LINUX_DIR)/drivers/net/ipvlan/ipvlan.ko
++  AUTOLOAD:=$(call AutoProbe,ipvlan)
++endef
++
++define KernelPackage/ipvlan/description
++ A kernel module which allows one to create virtual interfaces that
++ map packets to or from specific IP addresses to a particular interface
++endef
++
++$(eval $(call KernelPackage,ipvlan))
++
++
+ define KernelPackage/tulip
+   TITLE:=Tulip family network device support
+   DEPENDS:=@PCI_SUPPORT +kmod-mii
+@@ -983,14 +1034,31 @@ endef
+ 
+ $(eval $(call KernelPackage,forcedeth))
+ 
++define KernelPackage/fixed-phy
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MDIO Bus/PHY emulation with fixed speed/link PHYs
++  DEPENDS:=+kmod-libphy
++  KCONFIG:=CONFIG_FIXED_PHY
++  FILES:=$(LINUX_DIR)/drivers/net/phy/fixed_phy.ko
++  AUTOLOAD:=$(call AutoProbe,fixed_phy)
++endef
++
++define KernelPackage/fixed-phy/description
++ Kernel driver for "fixed" MDIO Bus to cover the boards
++ and devices that use PHYs that are not connected to the real MDIO bus.
++endef
++
++$(eval $(call KernelPackage,fixed-phy))
++
+ define KernelPackage/of-mdio
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:=OpenFirmware MDIO support
+-  DEPENDS:=+kmod-libphy
++  DEPENDS:=+kmod-libphy +kmod-fixed-phy @!TARGET_x86
+   KCONFIG:=CONFIG_OF_MDIO
+   FILES:= \
+-	$(LINUX_DIR)/drivers/net/phy/fixed_phy.ko \
+-	$(LINUX_DIR)/drivers/of/of_mdio.ko
++	$(LINUX_DIR)/drivers/of/of_mdio.ko@lt5.10 \
++	$(LINUX_DIR)/drivers/net/mdio/of_mdio.ko@ge5.10 \
++	$(LINUX_DIR)/drivers/net/mdio/fwnode_mdio.ko@ge5.15
+   AUTOLOAD:=$(call AutoLoad,41,of_mdio)
+ endef
+ 
+@@ -1156,6 +1224,42 @@ endef
+ $(eval $(call KernelPackage,mlx5-core))
+ 
+ 
++define KernelPackage/net-selftests
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  DEPENDS:=+kmod-libphy
++  TITLE:=Network generic selftest support
++  KCONFIG:=CONFIG_NET_SELFTESTS
++  FILES:=$(LINUX_DIR)/net/core/selftests.ko
++  AUTOLOAD:=$(call AutoLoad,99,selftests)
++endef
++
++define KernelPackage/net-selftests/description
++  Kernel modules for the generic selftest support
++endef
++
++$(eval $(call KernelPackage,net-selftests))
++
++
++define KernelPackage/qlcnic
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  DEPENDS:=@PCI_SUPPORT +kmod-hwmon-core
++  TITLE:=QLogic QLE8240 and QLE8242 device support
++  KCONFIG:= \
++	CONFIG_QLCNIC \
++	CONFIG_QLCNIC_HWMON=y \
++	CONFIG_QLCNIC_SRIOV=y
++  FILES:=$(LINUX_DIR)/drivers/net/ethernet/qlogic/qlcnic/qlcnic.ko
++  AUTOLOAD:=$(call AutoProbe,qlcnic)
++endef
++
++define KernelPackage/qlcnic/description
++  This driver supports QLogic QLE8240 and QLE8242 Converged Ethernet
++  devices.
++endef
++
++$(eval $(call KernelPackage,qlcnic))
++
++
+ define KernelPackage/sfp
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:=SFP cage support
+@@ -1165,7 +1269,8 @@ define KernelPackage/sfp
+ 	CONFIG_MDIO_I2C
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/net/phy/sfp.ko \
+-	$(LINUX_DIR)/drivers/net/phy/mdio-i2c.ko
++	$(LINUX_DIR)/drivers/net/phy/mdio-i2c.ko@lt5.10 \
++	$(LINUX_DIR)/drivers/net/mdio/mdio-i2c.ko@ge5.10
+   AUTOLOAD:=$(call AutoProbe,mdio-i2c sfp)
+ endef
+ 
+@@ -1178,7 +1283,7 @@ $(eval $(call KernelPackage,sfp))
+ define KernelPackage/igc
+   SUBMENU:=$(NETWORK_DEVICES_MENU)
+   TITLE:=Intel(R) Ethernet Controller I225 Series support
+-  DEPENDS:=@PCI_SUPPORT
++  DEPENDS:=@PCI_SUPPORT +kmod-ptp
+   KCONFIG:=CONFIG_IGC
+   FILES:=$(LINUX_DIR)/drivers/net/ethernet/intel/igc/igc.ko
+   AUTOLOAD:=$(call AutoProbe,igc)
+@@ -1227,3 +1332,50 @@ define KernelPackage/sfc-falcon/description
+ endef
+ 
+ $(eval $(call KernelPackage,sfc-falcon))
++
++define KernelPackage/mhi-net
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MHI Network Device
++  DEPENDS:=@LINUX_5_15 @PCI_SUPPORT +kmod-mhi-bus
++  KCONFIG:=CONFIG_MHI_NET
++  FILES:=$(LINUX_DIR)/drivers/net/mhi_net.ko
++  AUTOLOAD:=$(call AutoProbe,mhi_net)
++endef
++
++define KernelPackage/mhi-net/description
++ Driver for MHI network interface
++endef
++
++$(eval $(call KernelPackage,mhi-net))
++
++define KernelPackage/mhi-wwan-ctrl
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MHI WWAN Control
++  DEPENDS:=@LINUX_5_15 @PCI_SUPPORT +kmod-mhi-bus
++  KCONFIG:=CONFIG_MHI_WWAN_CTRL
++  FILES:=$(LINUX_DIR)/drivers/net/mhi_wwan_ctrl.ko
++  AUTOLOAD:=$(call AutoProbe,mhi_wwan_ctrl)
++endef
++
++define KernelPackage/mhi-wwan-ctrl/description
++ Driver for MHI WWAN Control
++ This exposes all modem control ports like AT, MBIM, QMI, DIAG, ..
++endef
++
++$(eval $(call KernelPackage,mhi-wwan-ctrl))
++
++define KernelPackage/mhi-wwan-mbim
++  SUBMENU:=$(NETWORK_DEVICES_MENU)
++  TITLE:=MHI MBIM
++  DEPENDS:=@LINUX_5_15 @PCI_SUPPORT +kmod-mhi-bus
++  KCONFIG:=CONFIG_MHI_WWAN_MBIM
++  FILES:=$(LINUX_DIR)/drivers/net/mhi_wwan_mbim.ko
++  AUTOLOAD:=$(call AutoProbe,mhi_wwan_mbim)
++endef
++
++define KernelPackage/mhi-wwan-mbim/description
++ Driver for MHI MBIM
++ This implements MBIM over MHI
++endef
++
++$(eval $(call KernelPackage,mhi-wwan-mbim))
+diff --git a/package/kernel/linux/modules/netfilter.mk b/package/kernel/linux/modules/netfilter.mk
+index b46fcebc08..cf2fccec05 100644
+--- a/package/kernel/linux/modules/netfilter.mk
++++ b/package/kernel/linux/modules/netfilter.mk
+@@ -57,7 +57,7 @@ define KernelPackage/nf-ipt6
+   KCONFIG:=$(KCONFIG_NF_IPT6)
+   FILES:=$(foreach mod,$(NF_IPT6-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_IPT6-m)))
+-  DEPENDS:=+kmod-nf-ipt
++  DEPENDS:=+kmod-nf-ipt +kmod-nf-log6
+ endef
+ 
+ $(eval $(call KernelPackage,nf-ipt6))
+@@ -70,7 +70,7 @@ define KernelPackage/ipt-core
+   KCONFIG:=$(KCONFIG_IPT_CORE)
+   FILES:=$(foreach mod,$(IPT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_CORE-m)))
+-  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt
++  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt +kmod-nf-log
+ endef
+ 
+ define KernelPackage/ipt-core/description
+@@ -121,6 +121,29 @@ endef
+ $(eval $(call KernelPackage,nf-conntrack6))
+ 
+ 
++define KernelPackage/nf-log
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter Logging
++  KCONFIG:=$(KCONFIG_NF_LOG)
++  FILES:=$(foreach mod,$(NF_LOG-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG-m)))
++endef
++
++$(eval $(call KernelPackage,nf-log))
++
++
++define KernelPackage/nf-log6
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter IPV6 Logging
++  KCONFIG:=$(KCONFIG_NF_LOG6)
++  DEPENDS:=@IPV6 +kmod-nf-log
++  FILES:=$(foreach mod,$(NF_LOG6-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG6-m)))
++endef
++
++$(eval $(call KernelPackage,nf-log6))
++
++
+ define KernelPackage/nf-nat
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter NAT
+@@ -155,13 +178,35 @@ define KernelPackage/nf-flow
+   DEPENDS:=+kmod-nf-conntrack
+   FILES:= \
+ 	$(LINUX_DIR)/net/netfilter/nf_flow_table.ko \
+-	$(LINUX_DIR)/net/netfilter/nf_flow_table_hw.ko
++	$(if $(CONFIG_LINUX_5_4),$(LINUX_DIR)/net/netfilter/nf_flow_table_hw.ko)
+   AUTOLOAD:=$(call AutoProbe,nf_flow_table nf_flow_table_hw)
+ endef
+ 
+ $(eval $(call KernelPackage,nf-flow))
+ 
+ 
++define KernelPackage/nf-socket
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter socket lookup support
++  KCONFIG:= $(KCOFNIG_NF_SOCKET)
++  FILES:=$(foreach mod,$(NF_SOCKET-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_SOCKET-m)))
++endef
++
++$(eval $(call KernelPackage,nf-socket))
++
++
++define KernelPackage/nf-tproxy
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter tproxy support
++  KCONFIG:= $(KCOFNIG_NF_TPROXY)
++  FILES:=$(foreach mod,$(NF_TPROXY-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_TPROXY-m)))
++endef
++
++$(eval $(call KernelPackage,nf-tproxy))
++
++
+ define AddDepends/ipt
+   SUBMENU:=$(NF_MENU)
+   DEPENDS+= +kmod-ipt-core $(1)
+@@ -542,7 +587,7 @@ define KernelPackage/nf-nathelper-extra
+   KCONFIG:=$(KCONFIG_NF_NATHELPER_EXTRA)
+   FILES:=$(foreach mod,$(NF_NATHELPER_EXTRA-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_NATHELPER_EXTRA-m)))
+-  DEPENDS:=+kmod-nf-nat +kmod-lib-textsearch +kmod-ipt-raw +kmod-asn1-decoder
++  DEPENDS:=+kmod-nf-nat +kmod-lib-textsearch +kmod-asn1-decoder
+ endef
+ 
+ define KernelPackage/nf-nathelper-extra/description
+@@ -645,9 +690,24 @@ endef
+ 
+ $(eval $(call KernelPackage,ipt-led))
+ 
++define KernelPackage/ipt-socket
++  TITLE:=Iptables socket matching support
++  DEPENDS+=+kmod-nf-socket +kmod-nf-conntrack
++  KCONFIG:=$(KCONFIG_IPT_SOCKET)
++  FILES:=$(foreach mod,$(IPT_SOCKET-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_SOCKET-m)))
++  $(call AddDepends/ipt)
++endef
++
++define KernelPackage/ipt-socket/description
++  Kernel modules for socket matching
++endef
++
++$(eval $(call KernelPackage,ipt-socket))
++
+ define KernelPackage/ipt-tproxy
+   TITLE:=Transparent proxying support
+-  DEPENDS+=+kmod-ipt-conntrack +IPV6:kmod-nf-conntrack6 +IPV6:kmod-ip6tables
++  DEPENDS+=+kmod-nf-tproxy +kmod-nf-conntrack
+   KCONFIG:=$(KCONFIG_IPT_TPROXY)
+   FILES:=$(foreach mod,$(IPT_TPROXY-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_TPROXY-m)))
+@@ -1004,7 +1064,7 @@ define KernelPackage/nf-conntrack-netlink
+   FILES:=$(LINUX_DIR)/net/netfilter/nf_conntrack_netlink.ko
+   KCONFIG:=CONFIG_NF_CT_NETLINK CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NETFILTER_NETLINK_GLUE_CT=y
+   AUTOLOAD:=$(call AutoProbe,nf_conntrack_netlink)
+-  $(call AddDepends/nfnetlink,+kmod-ipt-conntrack)
++  $(call AddDepends/nfnetlink,+kmod-nf-conntrack)
+ endef
+ 
+ define KernelPackage/nf-conntrack-netlink/description
+@@ -1052,7 +1112,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
+ define KernelPackage/nft-core
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter nf_tables support
+-  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat
++  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat +kmod-nf-log +IPV6:kmod-nf-log6 +kmod-lib-crc32c
+   FILES:=$(foreach mod,$(NFT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE-m)))
+   KCONFIG:= \
+@@ -1087,7 +1147,7 @@ define KernelPackage/nft-bridge
+   FILES:=$(foreach mod,$(NFT_BRIDGE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_BRIDGE-m)))
+   KCONFIG:= \
+-	CONFIG_NF_LOG_BRIDGE=n \
++	CONFIG_NF_LOG_BRIDGE=n@lt5.13 \
+ 	$(KCONFIG_NFT_BRIDGE)
+ endef
+ 
+@@ -1179,3 +1239,36 @@ define KernelPackage/nft-queue
+ endef
+ 
+ $(eval $(call KernelPackage,nft-queue))
++
++define KernelPackage/nft-socket
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter nf_tables socket support
++  DEPENDS:=+kmod-nft-core +kmod-nf-socket
++  FILES:=$(foreach mod,$(NFT_SOCKET-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_SOCKET-m)))
++  KCONFIG:=$(KCONFIG_NFT_SOCKET)
++endef
++
++$(eval $(call KernelPackage,nft-socket))
++
++define KernelPackage/nft-tproxy
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter nf_tables tproxy support
++  DEPENDS:=+kmod-nft-core +kmod-nf-tproxy +kmod-nf-conntrack
++  FILES:=$(foreach mod,$(NFT_TPROXY-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_TPROXY-m)))
++  KCONFIG:=$(KCONFIG_NFT_TPROXY)
++endef
++
++$(eval $(call KernelPackage,nft-tproxy))
++
++define KernelPackage/nft-compat
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter nf_tables compat support
++  DEPENDS:=+kmod-nft-core +kmod-nf-ipt
++  FILES:=$(foreach mod,$(NFT_COMPAT-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_COMPAT-m)))
++  KCONFIG:=$(KCONFIG_NFT_COMPAT)
++endef
++
++$(eval $(call KernelPackage,nft-compat))
+diff --git a/package/kernel/linux/modules/netsupport.mk b/package/kernel/linux/modules/netsupport.mk
+index 1eec9f9b63..76187df50f 100644
+--- a/package/kernel/linux/modules/netsupport.mk
++++ b/package/kernel/linux/modules/netsupport.mk
+@@ -48,6 +48,7 @@ define KernelPackage/bonding
+   KCONFIG:=CONFIG_BONDING
+   FILES:=$(LINUX_DIR)/drivers/net/bonding/bonding.ko
+   AUTOLOAD:=$(call AutoLoad,40,bonding)
++  MODPARAMS.bonding:=max_bonds=0
+ endef
+ 
+ define KernelPackage/bonding/description
+@@ -375,7 +376,7 @@ $(eval $(call KernelPackage,ip6-vti))
+ define KernelPackage/xfrm-interface
+   SUBMENU:=$(NETWORK_SUPPORT_MENU)
+   TITLE:=IPsec XFRM Interface
+-  DEPENDS:=+kmod-ipsec4 +IPV6:kmod-ipsec6
++  DEPENDS:=@IPV6 +kmod-ipsec4 +kmod-ipsec6
+   KCONFIG:=CONFIG_XFRM_INTERFACE
+   FILES:=$(LINUX_DIR)/net/xfrm/xfrm_interface.ko
+   AUTOLOAD:=$(call AutoProbe,xfrm_interface)
+@@ -563,6 +564,23 @@ endef
+ $(eval $(call KernelPackage,veth))
+ 
+ 
++define KernelPackage/vrf
++  SUBMENU:=$(NETWORK_SUPPORT_MENU)
++  TITLE:=Virtual Routing and Forwarding (Lite)
++  DEPENDS:=@KERNEL_NET_L3_MASTER_DEV
++  KCONFIG:=CONFIG_NET_VRF
++  FILES:=$(LINUX_DIR)/drivers/net/vrf.ko
++  AUTOLOAD:=$(call AutoLoad,30,vrf)
++endef
++
++define KernelPackage/vrf/description
++ This option enables the support for mapping interfaces into VRF's. The
++ support enables VRF devices.
++endef
++
++$(eval $(call KernelPackage,vrf))
++
++
+ define KernelPackage/slhc
+   SUBMENU:=$(NETWORK_SUPPORT_MENU)
+   HIDDEN:=1
+@@ -968,6 +986,24 @@ endef
+ $(eval $(call KernelPackage,tcp-hybla))
+ 
+ 
++define KernelPackage/tcp-scalable
++  SUBMENU:=$(NETWORK_SUPPORT_MENU)
++  TITLE:=TCP-Scalable congestion control algorithm
++  KCONFIG:=CONFIG_TCP_CONG_SCALABLE
++  FILES:=$(LINUX_DIR)/net/ipv4/tcp_scalable.ko
++  AUTOLOAD:=$(call AutoProbe,tcp-scalable)
++endef
++
++define KernelPackage/tcp-scalable/description
++  Scalable TCP is a sender-side only change to TCP which uses a
++	MIMD congestion control algorithm which has some nice scaling
++	properties, though is known to have fairness issues.
++	See http://www.deneholme.net/tom/scalable/
++endef
++
++$(eval $(call KernelPackage,tcp-scalable))
++
++
+ define KernelPackage/ax25
+   SUBMENU:=$(NETWORK_SUPPORT_MENU)
+   TITLE:=AX25 support
+@@ -1075,7 +1111,8 @@ define KernelPackage/sctp
+      CONFIG_SCTP_DEFAULT_COOKIE_HMAC_MD5=y
+   FILES:= $(LINUX_DIR)/net/sctp/sctp.ko
+   AUTOLOAD:= $(call AutoLoad,32,sctp)
+-  DEPENDS:=+kmod-lib-crc32c +kmod-crypto-md5 +kmod-crypto-hmac
++  DEPENDS:=+kmod-lib-crc32c +kmod-crypto-md5 +kmod-crypto-hmac \
++    +LINUX_5_15:kmod-udptunnel4 +LINUX_5_15:kmod-udptunnel6
+ endef
+ 
+ define KernelPackage/sctp/description
+@@ -1259,6 +1296,31 @@ endef
+ $(eval $(call KernelPackage,netlink-diag))
+ 
+ 
++define KernelPackage/inet-diag
++  SUBMENU:=$(NETWORK_SUPPORT_MENU)
++  TITLE:=INET diag support for ss utility
++  KCONFIG:= \
++	CONFIG_INET_DIAG \
++	CONFIG_INET_TCP_DIAG \
++	CONFIG_INET_UDP_DIAG \
++	CONFIG_INET_RAW_DIAG \
++	CONFIG_INET_DIAG_DESTROY=n
++  FILES:= \
++	$(LINUX_DIR)/net/ipv4/inet_diag.ko \
++	$(LINUX_DIR)/net/ipv4/tcp_diag.ko \
++	$(LINUX_DIR)/net/ipv4/udp_diag.ko \
++	$(LINUX_DIR)/net/ipv4/raw_diag.ko
++  AUTOLOAD:=$(call AutoLoad,31,inet_diag tcp_diag udp_diag raw_diag)
++endef
++
++define KernelPackage/inet-diag/description
++Support for INET (TCP, DCCP, etc) socket monitoring interface used by
++native Linux tools such as ss.
++endef
++
++$(eval $(call KernelPackage,inet-diag))
++
++
+ define KernelPackage/wireguard
+   SUBMENU:=$(NETWORK_SUPPORT_MENU)
+   TITLE:=WireGuard secure network tunnel
+diff --git a/package/kernel/linux/modules/other.mk b/package/kernel/linux/modules/other.mk
+index 83d998c83a..802dd81bed 100644
+--- a/package/kernel/linux/modules/other.mk
++++ b/package/kernel/linux/modules/other.mk
+@@ -71,7 +71,6 @@ define KernelPackage/ath3k
+   KCONFIG:= \
+ 	CONFIG_BT_ATH3K \
+ 	CONFIG_BT_HCIUART_ATH3K=y
+-  $(call AddDepends/bluetooth)
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/bluetooth/ath3k.ko
+   AUTOLOAD:=$(call AutoProbe,ath3k)
+@@ -107,7 +106,6 @@ define KernelPackage/btmrvl
+   KCONFIG:= \
+ 	CONFIG_BT_MRVL \
+ 	CONFIG_BT_MRVL_SDIO
+-  $(call AddDepends/bluetooth)
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/bluetooth/btmrvl.ko \
+ 	$(LINUX_DIR)/drivers/bluetooth/btmrvl_sdio.ko
+@@ -182,20 +180,30 @@ endef
+ $(eval $(call KernelPackage,eeprom-at25))
+ 
+ 
+-define KernelPackage/gpio-dev
++define KernelPackage/google-firmware
+   SUBMENU:=$(OTHER_MENU)
+-  TITLE:=Generic GPIO char device support
+-  DEPENDS:=@GPIO_SUPPORT
+-  KCONFIG:=CONFIG_GPIO_DEVICE
+-  FILES:=$(LINUX_DIR)/drivers/char/gpio_dev.ko
+-  AUTOLOAD:=$(call AutoLoad,40,gpio_dev)
++  TITLE:=Google firmware drivers (Coreboot, VPD, Memconsole)
++  KCONFIG:= \
++	CONFIG_GOOGLE_FIRMWARE=y \
++	CONFIG_GOOGLE_COREBOOT_TABLE \
++	CONFIG_GOOGLE_MEMCONSOLE \
++	CONFIG_GOOGLE_MEMCONSOLE_COREBOOT \
++	CONFIG_GOOGLE_VPD
++  FILES:= \
++	  $(LINUX_DIR)/drivers/firmware/google/coreboot_table.ko \
++	  $(LINUX_DIR)/drivers/firmware/google/memconsole.ko \
++	  $(LINUX_DIR)/drivers/firmware/google/memconsole-coreboot.ko \
++	  $(LINUX_DIR)/drivers/firmware/google/vpd-sysfs.ko
++  AUTOLOAD:=$(call AutoProbe,coreboot_table memconsole-coreboot vpd-sysfs)
+ endef
+ 
+-define KernelPackage/gpio-dev/description
+- Kernel module to allows control of GPIO pins using a character device.
++define KernelPackage/google-firmware/description
++  Kernel modules for Google firmware drivers. Useful for examining firmware and
++  boot details on devices using a Google bootloader based on Coreboot. Provides
++  files like /sys/firmware/log and /sys/firmware/vpd.
+ endef
+ 
+-$(eval $(call KernelPackage,gpio-dev))
++$(eval $(call KernelPackage,google-firmware))
+ 
+ 
+ define KernelPackage/gpio-f7188x
+@@ -786,6 +794,41 @@ endef
+ $(eval $(call KernelPackage,mtdram))
+ 
+ 
++define KernelPackage/ramoops
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=Ramoops (pstore-ram)
++  DEFAULT:=m if ALL_KMODS
++  KCONFIG:=CONFIG_PSTORE_RAM
++  DEPENDS:=+kmod-pstore +kmod-reed-solomon
++  FILES:= $(LINUX_DIR)/fs/pstore/ramoops.ko
++  AUTOLOAD:=$(call AutoLoad,30,ramoops,1)
++endef
++
++define KernelPackage/ramoops/description
++ Kernel module for pstore-ram (ramoops) crash log storage
++endef
++
++$(eval $(call KernelPackage,ramoops))
++
++
++define KernelPackage/reed-solomon
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=Reed-Solomon error correction
++  DEFAULT:=m if ALL_KMODS
++  KCONFIG:=CONFIG_REED_SOLOMON \
++	CONFIG_REED_SOLOMON_DEC8=y \
++	CONFIG_REED_SOLOMON_ENC8=y
++  FILES:= $(LINUX_DIR)/lib/reed_solomon/reed_solomon.ko
++  AUTOLOAD:=$(call AutoLoad,30,reed_solomon,1)
++endef
++
++define KernelPackage/reed-solomon/description
++ Kernel module for Reed-Solomon error correction
++endef
++
++$(eval $(call KernelPackage,reed-solomon))
++
++
+ define KernelPackage/serial-8250
+   SUBMENU:=$(OTHER_MENU)
+   TITLE:=8250 UARTs
+@@ -914,12 +957,10 @@ $(eval $(call KernelPackage,ikconfig))
+ define KernelPackage/zram
+   SUBMENU:=$(OTHER_MENU)
+   TITLE:=ZRAM
+-  DEPENDS:=+kmod-lib-lzo
+   KCONFIG:= \
+ 	CONFIG_ZSMALLOC \
+ 	CONFIG_ZRAM \
+ 	CONFIG_ZRAM_DEBUG=n \
+-	CONFIG_PGTABLE_MAPPING=n \
+ 	CONFIG_ZRAM_WRITEBACK=n \
+ 	CONFIG_ZSMALLOC_STAT=n
+   FILES:= \
+@@ -932,8 +973,31 @@ define KernelPackage/zram/description
+  Compressed RAM block device support
+ endef
+ 
+-$(eval $(call KernelPackage,zram))
++define KernelPackage/zram/config
++  choice
++    prompt "ZRAM Default compressor"
++    default ZRAM_DEF_COMP_LZORLE
+ 
++  config ZRAM_DEF_COMP_LZORLE
++            bool "lzo-rle"
++            select PACKAGE_kmod-lib-lzo
++
++  config ZRAM_DEF_COMP_LZO
++            bool "lzo"
++            select PACKAGE_kmod-lib-lzo
++
++  config ZRAM_DEF_COMP_LZ4
++            bool "lz4"
++            select PACKAGE_kmod-lib-lz4
++
++  config ZRAM_DEF_COMP_ZSTD
++            bool "zstd"
++            select PACKAGE_kmod-lib-zstd
++
++  endchoice
++endef
++
++$(eval $(call KernelPackage,zram))
+ 
+ define KernelPackage/pps
+   SUBMENU:=$(OTHER_MENU)
+@@ -1009,7 +1073,7 @@ $(eval $(call KernelPackage,ptp))
+ define KernelPackage/ptp-qoriq
+   SUBMENU:=$(OTHER_MENU)
+   TITLE:=Freescale QorIQ PTP support
+-  DEPENDS:=@TARGET_mpc85xx +kmod-ptp
++  DEPENDS:=@(TARGET_mpc85xx||TARGET_qoriq) +kmod-ptp
+   KCONFIG:=CONFIG_PTP_1588_CLOCK_QORIQ
+   FILES:=$(LINUX_DIR)/drivers/ptp/ptp-qoriq.ko
+   AUTOLOAD:=$(call AutoProbe,ptp-qoriq)
+@@ -1126,7 +1190,9 @@ define KernelPackage/keys-trusted
+   TITLE:=TPM trusted keys on kernel keyring
+   DEPENDS:=@KERNEL_KEYS +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-sha1 +kmod-tpm
+   KCONFIG:=CONFIG_TRUSTED_KEYS
+-  FILES:=$(LINUX_DIR)/security/keys/trusted.ko
++  FILES:= \
++	  $(LINUX_DIR)/security/keys/trusted.ko@lt5.10 \
++	  $(LINUX_DIR)/security/keys/trusted-keys/trusted.ko@ge5.10
+   AUTOLOAD:=$(call AutoLoad,01,trusted-keys,1)
+ endef
+ 
+@@ -1144,7 +1210,8 @@ $(eval $(call KernelPackage,keys-trusted))
+ define KernelPackage/tpm
+   SUBMENU:=$(OTHER_MENU)
+   TITLE:=TPM Hardware Support
+-  DEPENDS:= +kmod-random-core
++  DEPENDS:= +kmod-random-core +(LINUX_5_15):kmod-asn1-decoder \
++	  +(LINUX_5_15):kmod-asn1-encoder +(LINUX_5_15):kmod-oid-registry
+   KCONFIG:= CONFIG_TCG_TPM
+   FILES:= $(LINUX_DIR)/drivers/char/tpm/tpm.ko
+   AUTOLOAD:=$(call AutoLoad,10,tpm,1)
+@@ -1207,67 +1274,51 @@ endef
+ $(eval $(call KernelPackage,tpm-i2c-infineon))
+ 
+ 
+-define KernelPackage/w83627hf-wdt
++define KernelPackage/i6300esb-wdt
+   SUBMENU:=$(OTHER_MENU)
+-  TITLE:=Winbond 83627HF Watchdog Timer
+-  KCONFIG:=CONFIG_W83627HF_WDT
+-  FILES:=$(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/w83627hf_wdt.ko
+-  AUTOLOAD:=$(call AutoLoad,50,w83627hf-wdt,1)
++  TITLE:=Intel 6300ESB Timer/Watchdog
++  DEPENDS:=@PCI_SUPPORT @!SMALL_FLASH
++  KCONFIG:=CONFIG_I6300ESB_WDT \
++	   CONFIG_WATCHDOG_CORE=y
++  FILES:=$(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/i6300esb.ko
++  AUTOLOAD:=$(call AutoLoad,50,i6300esb,1)
+ endef
+ 
+-define KernelPackage/w83627hf-wdt/description
+-  Kernel module for Winbond 83627HF Watchdog Timer
++define KernelPackage/i6300esb-wdt/description
++  Kernel module for the watchdog timer built into the Intel
++  6300ESB controller hub. Also used by QEMU/libvirt.
+ endef
+ 
+-$(eval $(call KernelPackage,w83627hf-wdt))
++$(eval $(call KernelPackage,i6300esb-wdt))
+ 
+ 
+-define KernelPackage/itco-wdt
++define KernelPackage/mhi-bus
+   SUBMENU:=$(OTHER_MENU)
+-  TITLE:=Intel iTCO Watchdog Timer
+-  KCONFIG:=CONFIG_ITCO_WDT \
+-           CONFIG_ITCO_VENDOR_SUPPORT=y
+-  FILES:=$(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/iTCO_wdt.ko \
+-         $(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/iTCO_vendor_support.ko
+-  AUTOLOAD:=$(call AutoLoad,50,iTCO_vendor_support iTCO_wdt,1)
++  TITLE:=MHI bus
++  DEPENDS:=@LINUX_5_15
++  KCONFIG:=CONFIG_MHI_BUS \
++           CONFIG_MHI_BUS_DEBUG=y
++  FILES:=$(LINUX_DIR)/drivers/bus/mhi/core/mhi.ko
++  AUTOLOAD:=$(call AutoProbe,mhi)
+ endef
+ 
+-define KernelPackage/itco-wdt/description
+-  Kernel module for Intel iTCO Watchdog Timer
++define KernelPackage/mhi-bus/description
++  Kernel module for the Qualcomm MHI bus.
+ endef
+ 
+-$(eval $(call KernelPackage,itco-wdt))
+-
+-
+-define KernelPackage/it87-wdt
+-  SUBMENU:=$(OTHER_MENU)
+-  TITLE:=ITE IT87 Watchdog Timer
+-  KCONFIG:=CONFIG_IT87_WDT
+-  FILES:=$(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/it87_wdt.ko
+-  AUTOLOAD:=$(call AutoLoad,50,it87-wdt,1)
+-  MODPARAMS.it87-wdt:= \
+-	nogameport=1 \
+-	nocir=1
+-endef
+-
+-define KernelPackage/it87-wdt/description
+-  Kernel module for ITE IT87 Watchdog Timer
+-endef
+-
+-$(eval $(call KernelPackage,it87-wdt))
+-
++$(eval $(call KernelPackage,mhi-bus))
+ 
+-define KernelPackage/f71808e-wdt
++define KernelPackage/mhi-pci-generic
+   SUBMENU:=$(OTHER_MENU)
+-  TITLE:=Fintek F718xx/F818xx Watchdog Timer
+-  DEPENDS:=@TARGET_x86
+-  KCONFIG:=CONFIG_F71808E_WDT
+-  FILES:=$(LINUX_DIR)/drivers/$(WATCHDOG_DIR)/f71808e_wdt.ko
+-  AUTOLOAD:=$(call AutoProbe,f71808e-wdt,1)
++  TITLE:=MHI PCI controller driver
++  DEPENDS:=@LINUX_5_15 +kmod-mhi-bus
++  KCONFIG:=CONFIG_MHI_BUS_PCI_GENERIC
++  FILES:=$(LINUX_DIR)/drivers/bus/mhi/mhi_pci_generic.ko
++  AUTOLOAD:=$(call AutoProbe,mhi_pci_generic)
+ endef
+ 
+-define KernelPackage/f71808e-wdt/description
+-  Kernel module for the watchdog timer found on many Fintek Super-IO chips.
++define KernelPackage/mhi-pci-generic/description
++  Kernel module for the MHI PCI controller driver.
+ endef
+ 
+-$(eval $(call KernelPackage,f71808e-wdt))
++$(eval $(call KernelPackage,mhi-pci-generic))
+diff --git a/package/kernel/linux/modules/sound.mk b/package/kernel/linux/modules/sound.mk
+index 66194a5a73..83b3355f3f 100644
+--- a/package/kernel/linux/modules/sound.mk
++++ b/package/kernel/linux/modules/sound.mk
+@@ -225,12 +225,12 @@ define KernelPackage/sound-soc-imx
+ 	$(LINUX_DIR)/sound/soc/fsl/snd-soc-fsl-ssi.ko \
+ 	$(LINUX_DIR)/sound/soc/fsl/imx-pcm-dma.ko
+   AUTOLOAD:=$(call AutoLoad,56,snd-soc-imx-audmux snd-soc-fsl-ssi snd-soc-imx-pcm)
+-  DEPENDS:=@TARGET_imx6 +kmod-sound-soc-core
++  DEPENDS:=@TARGET_imx +kmod-sound-soc-core
+   $(call AddDepends/sound)
+ endef
+ 
+ define KernelPackage/sound-soc-imx/description
+- Support for i.MX6 Platform sound (ssi/audmux/pcm)
++ Support for i.MX Platform sound (ssi/audmux/pcm)
+ endef
+ 
+ $(eval $(call KernelPackage,sound-soc-imx))
+@@ -243,12 +243,12 @@ define KernelPackage/sound-soc-imx-sgtl5000
+ 	$(LINUX_DIR)/sound/soc/codecs/snd-soc-sgtl5000.ko \
+ 	$(LINUX_DIR)/sound/soc/fsl/snd-soc-imx-sgtl5000.ko
+   AUTOLOAD:=$(call AutoLoad,57,snd-soc-sgtl5000 snd-soc-imx-sgtl5000)
+-  DEPENDS:=@TARGET_imx6 +kmod-sound-soc-imx
++  DEPENDS:=@TARGET_imx +kmod-sound-soc-imx +kmod-regmap-i2c
+   $(call AddDepends/sound)
+ endef
+ 
+ define KernelPackage/sound-soc-imx-sgtl5000/description
+- Support for i.MX6 Platform sound SGTL5000 codec
++ Support for i.MX Platform sound SGTL5000 codec
+ endef
+ 
+ $(eval $(call KernelPackage,sound-soc-imx-sgtl5000))
+@@ -304,6 +304,7 @@ $(eval $(call KernelPackage,sound-dummy))
+ define KernelPackage/sound-hda-core
+   SUBMENU:=$(SOUND_MENU)
+   TITLE:=HD Audio Sound Core Support
++  DEPENDS:=+kmod-ledtrig-audio
+   KCONFIG:= \
+ 	CONFIG_SND_HDA_CORE \
+ 	CONFIG_SND_HDA_HWDEP=y \
+@@ -522,7 +523,8 @@ define KernelPackage/sound-hda-intel
+ 	CONFIG_SND_HDA_INTEL
+   FILES:= \
+ 	$(LINUX_DIR)/sound/pci/hda/snd-hda-intel.ko \
+-	$(LINUX_DIR)/sound/hda/snd-intel-nhlt.ko
++	$(LINUX_DIR)/sound/hda/snd-intel-nhlt.ko@lt5.5 \
++	$(LINUX_DIR)/sound/hda/snd-intel-dspcfg.ko@ge5.5
+   AUTOLOAD:=$(call AutoProbe,snd-hda-intel)
+   $(call AddDepends/sound,kmod-sound-hda-core)
+ endef
+diff --git a/package/kernel/linux/modules/usb.mk b/package/kernel/linux/modules/usb.mk
+index 93f99f7cbe..0bc578e5a7 100644
+--- a/package/kernel/linux/modules/usb.mk
++++ b/package/kernel/linux/modules/usb.mk
+@@ -179,6 +179,23 @@ endef
+ 
+ $(eval $(call KernelPackage,usb-gadget-eth))
+ 
++define KernelPackage/usb-gadget-ncm
++  TITLE:=USB Network Control Model (NCM) Gadget support
++  KCONFIG:=CONFIG_USB_G_NCM
++  DEPENDS:=+kmod-usb-gadget +kmod-usb-lib-composite \
++	+kmod-usb-gadget-eth
++  FILES:= \
++	$(LINUX_DIR)/drivers/usb/gadget/function/usb_f_ncm.ko \
++	$(LINUX_DIR)/drivers/usb/gadget/legacy/g_ncm.ko
++  AUTOLOAD:=$(call AutoLoad,52,usb_f_ncm)
++  $(call AddDepends/usb)
++endef
++
++define KernelPackage/usb-gadget-ncm/description
++  Kernel support for USB Network Control Model (NCM) Gadget
++endef
++
++$(eval $(call KernelPackage,usb-gadget-ncm))
+ 
+ define KernelPackage/usb-gadget-serial
+   TITLE:=USB Serial Gadget support
+@@ -412,7 +429,7 @@ $(eval $(call KernelPackage,usb2-pci))
+ 
+ define KernelPackage/usb-dwc2
+   TITLE:=DWC2 USB controller driver
+-  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget
++  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget +kmod-usb-roles
+   KCONFIG:= \
+ 	CONFIG_USB_PCI=y \
+ 	CONFIG_USB_DWC2 \
+@@ -1121,7 +1138,7 @@ $(eval $(call KernelPackage,usb-net-aqc111))
+ 
+ define KernelPackage/usb-net-asix
+   TITLE:=Kernel module for USB-to-Ethernet Asix convertors
+-  DEPENDS:=+kmod-libphy
++  DEPENDS:=+kmod-libphy +LINUX_5_15:kmod-net-selftests +LINUX_5_15:kmod-mdio-devres
+   KCONFIG:=CONFIG_USB_NET_AX8817X
+   FILES:=$(LINUX_DIR)/drivers/$(USBNET_DIR)/asix.ko
+   AUTOLOAD:=$(call AutoProbe,asix)
+@@ -1184,6 +1201,23 @@ endef
+ $(eval $(call KernelPackage,usb-net-kaweth))
+ 
+ 
++define KernelPackage/usb-net-lan78xx
++  TITLE:=USB-To-Ethernet Microchip LAN78XX convertors
++  DEPENDS:=+kmod-fixed-phy +kmod-phy-microchip +PACKAGE_kmod-of-mdio:kmod-of-mdio
++  KCONFIG:=CONFIG_USB_LAN78XX
++  FILES:=$(LINUX_DIR)/drivers/$(USBNET_DIR)/lan78xx.ko
++  AUTOLOAD:=$(call AutoProbe,lan78xx)
++  $(call AddDepends/usb-net)
++endef
++
++define KernelPackage/usb-net-lan78xx/description
++ Kernel module for Microchip LAN78XX based USB 2 & USB 3
++ 10/100/1000 Ethernet adapters.
++endef
++
++$(eval $(call KernelPackage,usb-net-lan78xx))
++
++
+ define KernelPackage/usb-net-pegasus
+   TITLE:=Kernel module for USB-to-Ethernet Pegasus convertors
+   KCONFIG:=CONFIG_USB_PEGASUS
+@@ -1214,8 +1248,25 @@ endef
+ $(eval $(call KernelPackage,usb-net-mcs7830))
+ 
+ 
++define KernelPackage/usb-net-smsc75xx
++  TITLE:=SMSC LAN75XX based USB 2.0 Gigabit ethernet devices
++  DEPENDS:=+!LINUX_5_4:kmod-libphy
++  KCONFIG:=CONFIG_USB_NET_SMSC75XX
++  FILES:=$(LINUX_DIR)/drivers/$(USBNET_DIR)/smsc75xx.ko
++  AUTOLOAD:=$(call AutoProbe,smsc75xx)
++  $(call AddDepends/usb-net, +kmod-lib-crc16)
++endef
++
++define KernelPackage/usb-net-smsc75xx/description
++ Kernel module for SMSC LAN75XX based devices
++endef
++
++$(eval $(call KernelPackage,usb-net-smsc75xx))
++
++
+ define KernelPackage/usb-net-smsc95xx
+   TITLE:=SMSC LAN95XX based USB 2.0 10/100 ethernet devices
++  DEPENDS:=+(LINUX_5_10||LINUX_5_15):kmod-libphy
+   KCONFIG:=CONFIG_USB_NET_SMSC95XX
+   FILES:=$(LINUX_DIR)/drivers/$(USBNET_DIR)/smsc95xx.ko
+   AUTOLOAD:=$(call AutoProbe,smsc95xx)
+@@ -1322,10 +1373,11 @@ $(eval $(call KernelPackage,usb-net-rtl8150))
+ 
+ define KernelPackage/usb-net-rtl8152
+   TITLE:=Kernel module for USB-to-Ethernet Realtek convertors
++  DEPENDS:=+r8152-firmware +kmod-crypto-sha256 +kmod-usb-net-cdc-ncm
+   KCONFIG:=CONFIG_USB_RTL8152
+   FILES:=$(LINUX_DIR)/drivers/$(USBNET_DIR)/r8152.ko
+   AUTOLOAD:=$(call AutoProbe,r8152)
+-  $(call AddDepends/usb-net)
++  $(call AddDepends/usb-net, +LINUX_5_10:kmod-crypto-hash)
+ endef
+ 
+ define KernelPackage/usb-net-rtl8152/description
+@@ -1387,7 +1439,7 @@ define KernelPackage/usb-net-cdc-ncm
+   KCONFIG:=CONFIG_USB_NET_CDC_NCM
+   FILES:= $(LINUX_DIR)/drivers/$(USBNET_DIR)/cdc_ncm.ko
+   AUTOLOAD:=$(call AutoProbe,cdc_ncm)
+-  $(call AddDepends/usb-net)
++  $(call AddDepends/usb-net,+!LINUX_5_4:kmod-usb-net-cdc-ether)
+ endef
+ 
+ define KernelPackage/usb-net-cdc-ncm/description
+@@ -1587,21 +1639,20 @@ endef
+ 
+ $(eval $(call KernelPackage,usbip-server))
+ 
+-
+ define KernelPackage/usb-chipidea
+   TITLE:=Host and device support for Chipidea controllers
+-  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget @TARGET_ath79 +kmod-usb-ehci +kmod-usb-phy-nop
++  DEPENDS:=+USB_GADGET_SUPPORT:kmod-usb-gadget @TARGET_ath79 +kmod-usb-ehci +kmod-usb-phy-nop +kmod-usb-roles
+   KCONFIG:= \
+ 	CONFIG_EXTCON \
+ 	CONFIG_USB_CHIPIDEA \
++	CONFIG_USB_CHIPIDEA_GENERIC \
+ 	CONFIG_USB_CHIPIDEA_HOST=y \
+ 	CONFIG_USB_CHIPIDEA_UDC=y \
+ 	CONFIG_USB_CHIPIDEA_DEBUG=y
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/extcon/extcon-core.ko \
+ 	$(LINUX_DIR)/drivers/usb/chipidea/ci_hdrc.ko \
+-	$(LINUX_DIR)/drivers/usb/common/ulpi.ko \
+-	$(LINUX_DIR)/drivers/usb/roles/roles.ko
++	$(LINUX_DIR)/drivers/usb/common/ulpi.ko
+   AUTOLOAD:=$(call AutoLoad,39,ci_hdrc,1)
+   $(call AddDepends/usb)
+ endef
+@@ -1650,25 +1701,23 @@ endef
+ 
+ $(eval $(call KernelPackage,usbmon))
+ 
+-XHCI_MODULES := xhci-hcd xhci-pci xhci-plat-hcd
+-ifdef CONFIG_TARGET_ramips_mt7621
+-  XHCI_MODULES += xhci-mtk
+-endif
++XHCI_MODULES := xhci-pci xhci-plat-hcd
+ XHCI_FILES := $(wildcard $(patsubst %,$(LINUX_DIR)/drivers/usb/host/%.ko,$(XHCI_MODULES)))
+ XHCI_AUTOLOAD := $(patsubst $(LINUX_DIR)/drivers/usb/host/%.ko,%,$(XHCI_FILES))
+ 
+ define KernelPackage/usb3
+   TITLE:=Support for USB3 controllers
+   DEPENDS:= \
++	+kmod-usb-xhci-hcd \
+ 	+TARGET_bcm53xx:kmod-usb-bcma \
+-	+TARGET_bcm53xx:kmod-phy-bcm-ns-usb3
++	+TARGET_bcm53xx:kmod-phy-bcm-ns-usb3 \
++	+TARGET_ramips_mt7621:kmod-usb-xhci-mtk \
++	+TARGET_apm821xx_nand:kmod-usb-xhci-pci-renesas \
++	+TARGET_mvebu_cortexa9:kmod-usb-xhci-pci-renesas
+   KCONFIG:= \
+ 	CONFIG_USB_PCI=y \
+-	CONFIG_USB_XHCI_HCD \
+ 	CONFIG_USB_XHCI_PCI \
+-	CONFIG_USB_XHCI_PLATFORM \
+-	CONFIG_USB_XHCI_MTK \
+-	CONFIG_USB_XHCI_HCD_DEBUGGING=n
++	CONFIG_USB_XHCI_PLATFORM
+   FILES:= \
+ 	$(XHCI_FILES)
+   AUTOLOAD:=$(call AutoLoad,54,$(XHCI_AUTOLOAD),1)
+@@ -1699,6 +1748,76 @@ endef
+ 
+ $(eval $(call KernelPackage,usb-net2280))
+ 
++define KernelPackage/usb-roles
++  TITLE:=USB Role Switch Library Module
++  KCONFIG:=CONFIG_USB_ROLE_SWITCH
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/usb/roles/roles.ko
++  $(call AddDepends/usb)
++endef
++
++define KernelPackage/usb-roles/description
++  Support for USB Role Switch
++endef
++
++$(eval $(call KernelPackage,usb-roles))
++
++
++define KernelPackage/usb-xhci-hcd
++  TITLE:=xHCI HCD (USB 3.0) support
++  KCONFIG:= \
++	  CONFIG_USB_XHCI_HCD \
++	  CONFIG_USB_XHCI_HCD_DEBUGGING=n
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/usb/host/xhci-hcd.ko
++  AUTOLOAD:=$(call AutoLoad,54,xhci-hcd,1)
++  $(call AddDepends/usb)
++endef
++
++define KernelPackage/usb-xhci-hcd/description
++  The eXtensible Host Controller Interface (xHCI) is standard for USB 3.0
++  "SuperSpeed" host controller hardware.
++endef
++
++$(eval $(call KernelPackage,usb-xhci-hcd))
++
++
++define KernelPackage/usb-xhci-mtk
++  TITLE:=xHCI support for MediaTek SoCs
++  DEPENDS:=+kmod-usb-xhci-hcd
++  KCONFIG:=CONFIG_USB_XHCI_MTK
++  HIDDEN:=1
++  FILES:= \
++	 $(LINUX_DIR)/drivers/usb/host/xhci-mtk.ko@lt5.13 \
++	 $(LINUX_DIR)/drivers/usb/host/xhci-mtk-hcd.ko@ge5.13
++  AUTOLOAD:=$(call AutoLoad,54,xhci-mtk@lt5.13 xhci-mtk-hcd@gt5.13,1)
++  $(call AddDepends/usb)
++endef
++
++define KernelPackage/usb-xhci-mtk/description
++  Kernel support for the xHCI host controller found in MediaTek SoCs.
++endef
++
++$(eval $(call KernelPackage,usb-xhci-mtk))
++
++
++define KernelPackage/usb-xhci-pci-renesas
++  TITLE:=Support for additional Renesas xHCI controller with firmware
++  KCONFIG:=CONFIG_USB_XHCI_PCI_RENESAS
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/usb/host/xhci-pci-renesas.ko
++  AUTOLOAD:=$(call AutoLoad,54,xhci-pci-renesas,1)
++  $(call AddDepends/usb)
++endef
++
++define KernelPackage/usb-xhci-pci-renesas/description
++  Kernel support for the Renesas xHCI controller with firmware. Make sure you have
++  the firwmare for the device and installed on your system for this device to work.
++endef
++
++$(eval $(call KernelPackage,usb-xhci-pci-renesas))
++
++
+ define KernelPackage/chaoskey
+   SUBMENU:=$(USB_MENU)
+   TITLE:=Chaoskey hardware RNG support
+diff --git a/package/kernel/linux/modules/video.mk b/package/kernel/linux/modules/video.mk
+index c71f0760a6..258414df45 100644
+--- a/package/kernel/linux/modules/video.mk
++++ b/package/kernel/linux/modules/video.mk
+@@ -225,7 +225,8 @@ define KernelPackage/drm
+   SUBMENU:=$(VIDEO_MENU)
+   TITLE:=Direct Rendering Manager (DRM) support
+   HIDDEN:=1
+-  DEPENDS:=+kmod-dma-buf +kmod-i2c-core
++  DEPENDS:=+kmod-dma-buf +kmod-i2c-core +PACKAGE_kmod-backlight:kmod-backlight \
++	+(LINUX_5_15):kmod-fb
+   KCONFIG:=CONFIG_DRM
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/gpu/drm/drm.ko \
+@@ -298,7 +299,7 @@ $(eval $(call KernelPackage,drm-amdgpu))
+ define KernelPackage/drm-imx
+   SUBMENU:=$(VIDEO_MENU)
+   TITLE:=Freescale i.MX DRM support
+-  DEPENDS:=@TARGET_imx6 +kmod-drm-kms-helper
++  DEPENDS:=@TARGET_imx +kmod-drm-kms-helper
+   KCONFIG:=CONFIG_DRM_IMX \
+ 	CONFIG_DRM_FBDEV_EMULATION=y \
+ 	CONFIG_DRM_FBDEV_OVERALLOC=100 \
+@@ -360,7 +361,8 @@ define KernelPackage/drm-imx-ldb
+ 	CONFIG_DRM_PANEL_S6E8AA0=n \
+ 	CONFIG_DRM_PANEL_SITRONIX_ST7789V=n
+   FILES:=$(LINUX_DIR)/drivers/gpu/drm/imx/imx-ldb.ko \
+-	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko
++	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko \
++	$(LINUX_DIR)/drivers/gpu/drm/drm_dp_aux_bus.ko@gt5.10
+   AUTOLOAD:=$(call AutoLoad,08,imx-ldb)
+ endef
+ 
+@@ -393,18 +395,12 @@ $(eval $(call KernelPackage,drm-radeon))
+ define KernelPackage/video-core
+   SUBMENU:=$(VIDEO_MENU)
+   TITLE=Video4Linux support
+-  DEPENDS:=@PCI_SUPPORT||USB_SUPPORT +PACKAGE_kmod-i2c-core:kmod-i2c-core
++  DEPENDS:=+PACKAGE_kmod-i2c-core:kmod-i2c-core
+   KCONFIG:= \
+ 	CONFIG_MEDIA_SUPPORT \
+ 	CONFIG_MEDIA_CAMERA_SUPPORT=y \
+ 	CONFIG_VIDEO_DEV \
+-	CONFIG_VIDEO_V4L1=y \
+-	CONFIG_VIDEO_ALLOW_V4L1=y \
+-	CONFIG_VIDEO_CAPTURE_DRIVERS=y \
+-	CONFIG_V4L_USB_DRIVERS=y \
+-	CONFIG_V4L_PCI_DRIVERS=y \
+-	CONFIG_V4L_PLATFORM_DRIVERS=y \
+-	CONFIG_V4L_ISA_PARPORT_DRIVERS=y
++	CONFIG_V4L_PLATFORM_DRIVERS=y
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko
+   AUTOLOAD:=$(call AutoLoad,60, videodev v4l2-common)
+@@ -856,6 +852,21 @@ endef
+ $(eval $(call KernelPackage,video-gspca-sq905c))
+ 
+ 
++define KernelPackage/video-gspca-sq930x
++  TITLE:=sq930x webcam support
++  KCONFIG:=CONFIG_USB_GSPCA_SQ930X
++  FILES:=$(LINUX_DIR)/drivers/media/$(V4L2_USB_DIR)/gspca/gspca_sq930x.ko
++  AUTOLOAD:=$(call AutoProbe,gspca_sq930x)
++  $(call AddDepends/camera-gspca)
++endef
++
++define KernelPackage/video-gspca-sq930x/description
++ The SQ Technologies SQ930X based USB Camera Driver (sq930x) kernel module
++endef
++
++$(eval $(call KernelPackage,video-gspca-sq930x))
++
++
+ define KernelPackage/video-gspca-stk014
+   TITLE:=stk014 webcam support
+   KCONFIG:=CONFIG_USB_GSPCA_STK014
+diff --git a/package/kernel/linux/modules/virt.mk b/package/kernel/linux/modules/virt.mk
+index a9a0b538ff..5ed0d5dbbf 100644
+--- a/package/kernel/linux/modules/virt.mk
++++ b/package/kernel/linux/modules/virt.mk
+@@ -20,8 +20,9 @@ define KernelPackage/kvm-x86
+   TITLE:=Kernel-based Virtual Machine (KVM) support
+   DEPENDS:=@TARGET_x86_generic||TARGET_x86_64 +kmod-irqbypass
+   KCONFIG:=\
+-	  CONFIG_VIRTUALIZATION=y \
+-	  CONFIG_KVM
++	  CONFIG_KVM \
++	  CONFIG_KVM_MMU_AUDIT=n \
++	  CONFIG_VIRTUALIZATION=y
+   FILES:= $(LINUX_DIR)/arch/$(LINUX_KARCH)/kvm/kvm.ko
+   AUTOLOAD:=$(call AutoProbe,kvm.ko)
+ endef
+diff --git a/package/kernel/linux/modules/w1.mk b/package/kernel/linux/modules/w1.mk
+index 6ac7458e42..e0f7eecb6e 100644
+--- a/package/kernel/linux/modules/w1.mk
++++ b/package/kernel/linux/modules/w1.mk
+@@ -83,7 +83,7 @@ $(eval $(call KernelPackage,w1-master-ds2490))
+ 
+ define KernelPackage/w1-master-mxc
+   TITLE:=Freescale MXC 1-wire busmaster
+-  DEPENDS:=@TARGET_imx6
++  DEPENDS:=@TARGET_imx
+   KCONFIG:=CONFIG_W1_MASTER_MXC
+   FILES:=$(W1_MASTERS_DIR)/mxc_w1.ko
+   AUTOLOAD:=$(call AutoProbe,mxc_w1)
+-- 
+2.34.1
+
