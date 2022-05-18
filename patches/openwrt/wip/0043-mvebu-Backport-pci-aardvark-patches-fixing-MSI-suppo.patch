@@ -24,10 +24,8 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  ...mul-Add-description-for-class_revisi.patch |  47 +++++
  ...mul-Add-definitions-for-missing-capa.patch |  84 ++++++++
  ...-support-for-DEVCAP2-DEVCTL2-LNKCAP2.patch |  64 +++++++
- ...PCI-aardvark-Clear-all-MSIs-at-setup.patch |  62 ++++++
  ...rite-IRQ-code-to-chained-IRQ-handler.patch | 119 ++++++++++++
  ...dvark-Fix-support-for-MSI-interrupts.patch |  98 ++++++++++
- ...ark-Fix-reading-MSI-interrupt-number.patch |  63 ++++++
  ...actor-unmasking-summary-MSI-interrup.patch |  49 +++++
  ...d-support-for-masking-MSI-interrupts.patch | 119 ++++++++++++
  ...PCI-aardvark-Fix-setting-MSI-address.patch |  99 ++++++++++
@@ -47,10 +45,8 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  create mode 100644 target/linux/mvebu/patches-5.4/035-PCI-pci-bridge-emul-Add-description-for-class_revisi.patch
  create mode 100644 target/linux/mvebu/patches-5.4/036-PCI-pci-bridge-emul-Add-definitions-for-missing-capa.patch
  create mode 100644 target/linux/mvebu/patches-5.4/037-PCI-aardvark-Add-support-for-DEVCAP2-DEVCTL2-LNKCAP2.patch
- create mode 100644 target/linux/mvebu/patches-5.4/038-PCI-aardvark-Clear-all-MSIs-at-setup.patch
  create mode 100644 target/linux/mvebu/patches-5.4/039-PCI-aardvark-Rewrite-IRQ-code-to-chained-IRQ-handler.patch
  create mode 100644 target/linux/mvebu/patches-5.4/040-PCI-aardvark-Fix-support-for-MSI-interrupts.patch
- create mode 100644 target/linux/mvebu/patches-5.4/041-PCI-aardvark-Fix-reading-MSI-interrupt-number.patch
  create mode 100644 target/linux/mvebu/patches-5.4/042-PCI-aardvark-Refactor-unmasking-summary-MSI-interrup.patch
  create mode 100644 target/linux/mvebu/patches-5.4/043-PCI-aardvark-Add-support-for-masking-MSI-interrupts.patch
  create mode 100644 target/linux/mvebu/patches-5.4/044-PCI-aardvark-Fix-setting-MSI-address.patch
@@ -279,74 +275,6 @@ index 0000000000..605f612db7
 +-- 
 +2.34.1
 +
-diff --git a/target/linux/mvebu/patches-5.4/038-PCI-aardvark-Clear-all-MSIs-at-setup.patch b/target/linux/mvebu/patches-5.4/038-PCI-aardvark-Clear-all-MSIs-at-setup.patch
-new file mode 100644
-index 0000000000..cdf2e9148b
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.4/038-PCI-aardvark-Clear-all-MSIs-at-setup.patch
-@@ -0,0 +1,62 @@
-+From 290cb4c80bd482f2aaf29bc52602ad402bd4b61f Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
-+Date: Sun, 28 Mar 2021 14:34:49 +0200
-+Subject: [PATCH 38/55] PCI: aardvark: Clear all MSIs at setup
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+We already clear all the other interrupts (ISR0, ISR1, HOST_CTRL_INT).
-+
-+Define a new macro PCIE_MSI_ALL_MASK and do the same clearing for MSIs,
-+to ensure that we don't start receiving spurious interrupts.
-+
-+Use this new mask in advk_pcie_handle_msi();
-+
-+Signed-off-by: Pali Rohár <pali@kernel.org>
-+Signed-off-by: Marek Behún <kabel@kernel.org>
-+---
-+ drivers/pci/controller/pci-aardvark.c | 6 ++++--
-+ 1 file changed, 4 insertions(+), 2 deletions(-)
-+
-+diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
-+index 69ed432a7278..6fd0e248f85a 100644
-+--- a/drivers/pci/controller/pci-aardvark.c
-++++ b/drivers/pci/controller/pci-aardvark.c
-+@@ -111,6 +111,7 @@
-+ #define PCIE_MSI_ADDR_HIGH_REG			(CONTROL_BASE_ADDR + 0x54)
-+ #define PCIE_MSI_STATUS_REG			(CONTROL_BASE_ADDR + 0x58)
-+ #define PCIE_MSI_MASK_REG			(CONTROL_BASE_ADDR + 0x5C)
-++#define     PCIE_MSI_ALL_MASK			GENMASK(31, 0)
-+ #define PCIE_MSI_PAYLOAD_REG			(CONTROL_BASE_ADDR + 0x9C)
-+ #define     PCIE_MSI_DATA_MASK			GENMASK(15, 0)
-+ 
-+@@ -570,6 +571,7 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ 	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
-+ 
-+ 	/* Clear all interrupts */
-++	advk_writel(pcie, PCIE_MSI_ALL_MASK, PCIE_MSI_STATUS_REG);
-+ 	advk_writel(pcie, PCIE_ISR0_ALL_MASK, PCIE_ISR0_REG);
-+ 	advk_writel(pcie, PCIE_ISR1_ALL_MASK, PCIE_ISR1_REG);
-+ 	advk_writel(pcie, PCIE_IRQ_ALL_MASK, HOST_CTRL_INT_STATUS_REG);
-+@@ -582,7 +584,7 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
-+ 	advk_writel(pcie, PCIE_ISR1_ALL_MASK, PCIE_ISR1_MASK_REG);
-+ 
-+ 	/* Unmask all MSIs */
-+-	advk_writel(pcie, 0, PCIE_MSI_MASK_REG);
-++	advk_writel(pcie, ~(u32)PCIE_MSI_ALL_MASK, PCIE_MSI_MASK_REG);
-+ 
-+ 	/* Enable summary interrupt for GIC SPI source */
-+ 	reg = PCIE_IRQ_ALL_MASK & (~PCIE_IRQ_ENABLE_INTS_MASK);
-+@@ -1390,7 +1392,7 @@ static void advk_pcie_handle_msi(struct advk_pcie *pcie)
-+ 
-+ 	msi_mask = advk_readl(pcie, PCIE_MSI_MASK_REG);
-+ 	msi_val = advk_readl(pcie, PCIE_MSI_STATUS_REG);
-+-	msi_status = msi_val & ~msi_mask;
-++	msi_status = msi_val & ((~msi_mask) & PCIE_MSI_ALL_MASK);
-+ 
-+ 	for (msi_idx = 0; msi_idx < MSI_IRQ_NUM; msi_idx++) {
-+ 		if (!(BIT(msi_idx) & msi_status))
-+-- 
-+2.34.1
-+
 diff --git a/target/linux/mvebu/patches-5.4/039-PCI-aardvark-Rewrite-IRQ-code-to-chained-IRQ-handler.patch b/target/linux/mvebu/patches-5.4/039-PCI-aardvark-Rewrite-IRQ-code-to-chained-IRQ-handler.patch
 new file mode 100644
 index 0000000000..81af4b6898
@@ -570,75 +498,6 @@ index 0000000000..a90b68bebc
 ++			generic_handle_irq(virq);
 ++		else
 ++			dev_err_ratelimited(&pcie->pdev->dev, "unexpected MSI 0x%04hx\n", msi_data);
-+ 	}
-+ 
-+ 	advk_writel(pcie, PCIE_ISR0_MSI_INT_PENDING,
-+-- 
-+2.34.1
-+
-diff --git a/target/linux/mvebu/patches-5.4/041-PCI-aardvark-Fix-reading-MSI-interrupt-number.patch b/target/linux/mvebu/patches-5.4/041-PCI-aardvark-Fix-reading-MSI-interrupt-number.patch
-new file mode 100644
-index 0000000000..46f81936a9
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.4/041-PCI-aardvark-Fix-reading-MSI-interrupt-number.patch
-@@ -0,0 +1,63 @@
-+From 36bbe878e1afb9d883358465376529e5665f6bbe Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
-+Date: Fri, 2 Jul 2021 16:39:47 +0200
-+Subject: [PATCH 41/55] PCI: aardvark: Fix reading MSI interrupt number
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+In advk_pcie_handle_msi() the authors expect that when bit i in the W1C
-+register PCIE_MSI_STATUS_REG is cleared, the PCIE_MSI_PAYLOAD_REG is
-+updated to contain the MSI number corresponding to index i.
-+
-+Experiments show that this is not so, and instead PCIE_MSI_PAYLOAD_REG
-+always contains the number of the last received MSI, overall.
-+
-+Do not read PCIE_MSI_PAYLOAD_REG register for determining MSI interrupt
-+number. Since Aardvark already forbids more than 32 interrupts and uses
-+own allocated hwirq numbers, the msi_idx already corresponds to the
-+received MSI number.
-+
-+Fixes: 8c39d710363c ("PCI: aardvark: Add Aardvark PCI host controller driver")
-+Signed-off-by: Pali Rohár <pali@kernel.org>
-+Signed-off-by: Marek Behún <kabel@kernel.org>
-+---
-+ drivers/pci/controller/pci-aardvark.c | 11 +++--------
-+ 1 file changed, 3 insertions(+), 8 deletions(-)
-+
-+diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
-+index 5bd7f1543325..9f4b5f5777e2 100644
-+--- a/drivers/pci/controller/pci-aardvark.c
-++++ b/drivers/pci/controller/pci-aardvark.c
-+@@ -1385,7 +1385,6 @@ static void advk_pcie_remove_irq_domain(struct advk_pcie *pcie)
-+ static void advk_pcie_handle_msi(struct advk_pcie *pcie)
-+ {
-+ 	u32 msi_val, msi_mask, msi_status, msi_idx;
-+-	u16 msi_data;
-+ 	int virq;
-+ 
-+ 	msi_mask = advk_readl(pcie, PCIE_MSI_MASK_REG);
-+@@ -1396,17 +1395,13 @@ static void advk_pcie_handle_msi(struct advk_pcie *pcie)
-+ 		if (!(BIT(msi_idx) & msi_status))
-+ 			continue;
-+ 
-+-		/*
-+-		 * msi_idx contains bits [4:0] of the msi_data and msi_data
-+-		 * contains 16bit MSI interrupt number
-+-		 */
-+ 		advk_writel(pcie, BIT(msi_idx), PCIE_MSI_STATUS_REG);
-+-		msi_data = advk_readl(pcie, PCIE_MSI_PAYLOAD_REG) & PCIE_MSI_DATA_MASK;
-+-		virq = irq_find_mapping(pcie->msi_inner_domain, msi_data);
-++
-++		virq = irq_find_mapping(pcie->msi_inner_domain, msi_idx);
-+ 		if (virq)
-+ 			generic_handle_irq(virq);
-+ 		else
-+-			dev_err_ratelimited(&pcie->pdev->dev, "unexpected MSI 0x%04hx\n", msi_data);
-++			dev_err_ratelimited(&pcie->pdev->dev, "unexpected MSI 0x%02x\n", msi_idx);
 + 	}
 + 
 + 	advk_writel(pcie, PCIE_ISR0_MSI_INT_PENDING,
