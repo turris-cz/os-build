@@ -1,8 +1,15 @@
-From 62aa200783c80533cae440606a28014bbc83ce1f Mon Sep 17 00:00:00 2001
+From ae62bc09704db38a4850066837c165b29173367c Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Tue, 17 May 2022 14:25:09 +0200
 Subject: [PATCH] package/kernel/linux: add and update it to 5.15
 
+Taken:
+https://github.com/openwrt/openwrt/commit/bd0db6017b1921c935785cdccdf0243fddf0b949
+together with other commits from OpenWrt related to kernel 5.15
+
+Reverted:
+https://github.com/openwrt/openwrt/commit/bea01fa57f5c9c333138bbbc5c9f83b9d7553fb5
+as we don't switch to nftables and we don't ship fw4 in OpenWrt 21.02
 ---
  package/kernel/linux/modules/block.mk        |  20 ++-
  package/kernel/linux/modules/can.mk          |   2 +-
@@ -17,7 +24,7 @@ Subject: [PATCH] package/kernel/linux: add and update it to 5.15
  package/kernel/linux/modules/lib.mk          |  23 ++-
  package/kernel/linux/modules/multiplexer.mk  |  34 ++++
  package/kernel/linux/modules/netdevices.mk   | 174 ++++++++++++++++--
- package/kernel/linux/modules/netfilter.mk    | 109 +++++++++++-
+ package/kernel/linux/modules/netfilter.mk    |  82 ++++++++-
  package/kernel/linux/modules/netsupport.mk   |  66 ++++++-
  package/kernel/linux/modules/other.mk        | 177 ++++++++++++-------
  package/kernel/linux/modules/sound.mk        |  12 +-
@@ -25,7 +32,7 @@ Subject: [PATCH] package/kernel/linux: add and update it to 5.15
  package/kernel/linux/modules/video.mk        |  33 ++--
  package/kernel/linux/modules/virt.mk         |   5 +-
  package/kernel/linux/modules/w1.mk           |   2 +-
- 21 files changed, 1003 insertions(+), 197 deletions(-)
+ 21 files changed, 978 insertions(+), 195 deletions(-)
  create mode 100644 package/kernel/linux/modules/gpio-cascade.mk
  create mode 100644 package/kernel/linux/modules/multiplexer.mk
 
@@ -1172,58 +1179,10 @@ index 901bddddea..ec470be5ee 100644
 +
 +$(eval $(call KernelPackage,mhi-wwan-mbim))
 diff --git a/package/kernel/linux/modules/netfilter.mk b/package/kernel/linux/modules/netfilter.mk
-index b46fcebc08..cf2fccec05 100644
+index b46fcebc08..6427d07c94 100644
 --- a/package/kernel/linux/modules/netfilter.mk
 +++ b/package/kernel/linux/modules/netfilter.mk
-@@ -57,7 +57,7 @@ define KernelPackage/nf-ipt6
-   KCONFIG:=$(KCONFIG_NF_IPT6)
-   FILES:=$(foreach mod,$(NF_IPT6-m),$(LINUX_DIR)/net/$(mod).ko)
-   AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_IPT6-m)))
--  DEPENDS:=+kmod-nf-ipt
-+  DEPENDS:=+kmod-nf-ipt +kmod-nf-log6
- endef
- 
- $(eval $(call KernelPackage,nf-ipt6))
-@@ -70,7 +70,7 @@ define KernelPackage/ipt-core
-   KCONFIG:=$(KCONFIG_IPT_CORE)
-   FILES:=$(foreach mod,$(IPT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
-   AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_CORE-m)))
--  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt
-+  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt +kmod-nf-log
- endef
- 
- define KernelPackage/ipt-core/description
-@@ -121,6 +121,29 @@ endef
- $(eval $(call KernelPackage,nf-conntrack6))
- 
- 
-+define KernelPackage/nf-log
-+  SUBMENU:=$(NF_MENU)
-+  TITLE:=Netfilter Logging
-+  KCONFIG:=$(KCONFIG_NF_LOG)
-+  FILES:=$(foreach mod,$(NF_LOG-m),$(LINUX_DIR)/net/$(mod).ko)
-+  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG-m)))
-+endef
-+
-+$(eval $(call KernelPackage,nf-log))
-+
-+
-+define KernelPackage/nf-log6
-+  SUBMENU:=$(NF_MENU)
-+  TITLE:=Netfilter IPV6 Logging
-+  KCONFIG:=$(KCONFIG_NF_LOG6)
-+  DEPENDS:=@IPV6 +kmod-nf-log
-+  FILES:=$(foreach mod,$(NF_LOG6-m),$(LINUX_DIR)/net/$(mod).ko)
-+  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG6-m)))
-+endef
-+
-+$(eval $(call KernelPackage,nf-log6))
-+
-+
- define KernelPackage/nf-nat
-   SUBMENU:=$(NF_MENU)
-   TITLE:=Netfilter NAT
-@@ -155,13 +178,35 @@ define KernelPackage/nf-flow
+@@ -155,13 +155,35 @@ define KernelPackage/nf-flow
    DEPENDS:=+kmod-nf-conntrack
    FILES:= \
  	$(LINUX_DIR)/net/netfilter/nf_flow_table.ko \
@@ -1260,7 +1219,7 @@ index b46fcebc08..cf2fccec05 100644
  define AddDepends/ipt
    SUBMENU:=$(NF_MENU)
    DEPENDS+= +kmod-ipt-core $(1)
-@@ -542,7 +587,7 @@ define KernelPackage/nf-nathelper-extra
+@@ -542,7 +564,7 @@ define KernelPackage/nf-nathelper-extra
    KCONFIG:=$(KCONFIG_NF_NATHELPER_EXTRA)
    FILES:=$(foreach mod,$(NF_NATHELPER_EXTRA-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_NATHELPER_EXTRA-m)))
@@ -1269,7 +1228,7 @@ index b46fcebc08..cf2fccec05 100644
  endef
  
  define KernelPackage/nf-nathelper-extra/description
-@@ -645,9 +690,24 @@ endef
+@@ -645,9 +667,24 @@ endef
  
  $(eval $(call KernelPackage,ipt-led))
  
@@ -1295,7 +1254,7 @@ index b46fcebc08..cf2fccec05 100644
    KCONFIG:=$(KCONFIG_IPT_TPROXY)
    FILES:=$(foreach mod,$(IPT_TPROXY-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_TPROXY-m)))
-@@ -1004,7 +1064,7 @@ define KernelPackage/nf-conntrack-netlink
+@@ -1004,7 +1041,7 @@ define KernelPackage/nf-conntrack-netlink
    FILES:=$(LINUX_DIR)/net/netfilter/nf_conntrack_netlink.ko
    KCONFIG:=CONFIG_NF_CT_NETLINK CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NETFILTER_NETLINK_GLUE_CT=y
    AUTOLOAD:=$(call AutoProbe,nf_conntrack_netlink)
@@ -1304,16 +1263,16 @@ index b46fcebc08..cf2fccec05 100644
  endef
  
  define KernelPackage/nf-conntrack-netlink/description
-@@ -1052,7 +1112,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
+@@ -1052,7 +1089,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
  define KernelPackage/nft-core
    SUBMENU:=$(NF_MENU)
    TITLE:=Netfilter nf_tables support
 -  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat
-+  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat +kmod-nf-log +IPV6:kmod-nf-log6 +kmod-lib-crc32c
++  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat +kmod-lib-crc32c
    FILES:=$(foreach mod,$(NFT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE-m)))
    KCONFIG:= \
-@@ -1087,7 +1147,7 @@ define KernelPackage/nft-bridge
+@@ -1087,7 +1124,7 @@ define KernelPackage/nft-bridge
    FILES:=$(foreach mod,$(NFT_BRIDGE-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_BRIDGE-m)))
    KCONFIG:= \
@@ -1322,7 +1281,7 @@ index b46fcebc08..cf2fccec05 100644
  	$(KCONFIG_NFT_BRIDGE)
  endef
  
-@@ -1179,3 +1239,36 @@ define KernelPackage/nft-queue
+@@ -1179,3 +1216,36 @@ define KernelPackage/nft-queue
  endef
  
  $(eval $(call KernelPackage,nft-queue))
