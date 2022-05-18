@@ -1,0 +1,105 @@
+From 86a08eb5e48b3ce936c9b0f4957fecbcbcadbbbb Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 18 May 2022 09:45:25 +0200
+Subject: [PATCH] Backport change from OpenWrt master related to nf-log and
+ separate pkgs
+
+---
+ include/netfilter.mk                      | 10 ++++----
+ package/kernel/linux/modules/netfilter.mk | 29 ++++++++++++++++++++---
+ 2 files changed, 31 insertions(+), 8 deletions(-)
+
+diff --git a/include/netfilter.mk b/include/netfilter.mk
+index 60f031e9a7..d632349942 100644
+--- a/include/netfilter.mk
++++ b/include/netfilter.mk
+@@ -46,10 +46,6 @@ $(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_MATCH_COMMENT, $(P_XT)xt_comme
+ 
+ #cluster
+ $(eval $(call nf_add,IPT_CLUSTER,CONFIG_NETFILTER_XT_MATCH_CLUSTER, $(P_XT)xt_cluster))
+-
+-$(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_TARGET_LOG, $(P_XT)xt_LOG))
+-$(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_TARGET_LOG, $(P_XT)nf_log_common))
+-$(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_TARGET_LOG, $(P_V4)nf_log_ipv4))
+ $(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_TARGET_TCPMSS, $(P_XT)xt_TCPMSS))
+ $(eval $(call nf_add,IPT_CORE,CONFIG_IP_NF_TARGET_REJECT, $(P_V4)ipt_REJECT))
+ $(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_MATCH_TIME, $(P_XT)xt_time))
+@@ -59,9 +55,13 @@ $(eval $(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_MARK, $(P_XT)xt_mark))
+ # userland: xt_MARK.so
+ $(eval $(if $(NF_KMOD),,$(call nf_add,IPT_CORE,CONFIG_NETFILTER_XT_MARK, $(P_XT)xt_MARK)))
+ 
+-
+ # conntrack
+ 
++$(eval $(call nf_add,NF_LOG,CONFIG_NF_LOG_COMMON, $(P_XT)nf_log_common, lt 5.13))
++$(eval $(call nf_add,NF_LOG,CONFIG_NF_LOG_IPV4, $(P_V4)nf_log_ipv4, lt 5.13))
++$(eval $(call nf_add,NF_LOG,CONFIG_NF_LOG_SYSLOG, $(P_XT)nf_log_syslog, ge 5.13))
++$(eval $(if $(NF_KMOD),$(call nf_add,NF_LOG6,CONFIG_NF_LOG_IPV6, $(P_V6)nf_log_ipv6,lt 5.13),))
++
+ # kernel only
+ $(eval $(if $(NF_KMOD),$(call nf_add,NF_CONNTRACK,CONFIG_NF_CONNTRACK, $(P_XT)nf_conntrack),))
+ $(eval $(if $(NF_KMOD),$(call nf_add,NF_CONNTRACK,CONFIG_NF_CONNTRACK_RTCACHE, $(P_XT)nf_conntrack_rtcache),))
+diff --git a/package/kernel/linux/modules/netfilter.mk b/package/kernel/linux/modules/netfilter.mk
+index 6427d07c94..cf2fccec05 100644
+--- a/package/kernel/linux/modules/netfilter.mk
++++ b/package/kernel/linux/modules/netfilter.mk
+@@ -57,7 +57,7 @@ define KernelPackage/nf-ipt6
+   KCONFIG:=$(KCONFIG_NF_IPT6)
+   FILES:=$(foreach mod,$(NF_IPT6-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_IPT6-m)))
+-  DEPENDS:=+kmod-nf-ipt
++  DEPENDS:=+kmod-nf-ipt +kmod-nf-log6
+ endef
+ 
+ $(eval $(call KernelPackage,nf-ipt6))
+@@ -70,7 +70,7 @@ define KernelPackage/ipt-core
+   KCONFIG:=$(KCONFIG_IPT_CORE)
+   FILES:=$(foreach mod,$(IPT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_CORE-m)))
+-  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt
++  DEPENDS:=+kmod-nf-reject +kmod-nf-ipt +kmod-nf-log
+ endef
+ 
+ define KernelPackage/ipt-core/description
+@@ -121,6 +121,29 @@ endef
+ $(eval $(call KernelPackage,nf-conntrack6))
+ 
+ 
++define KernelPackage/nf-log
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter Logging
++  KCONFIG:=$(KCONFIG_NF_LOG)
++  FILES:=$(foreach mod,$(NF_LOG-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG-m)))
++endef
++
++$(eval $(call KernelPackage,nf-log))
++
++
++define KernelPackage/nf-log6
++  SUBMENU:=$(NF_MENU)
++  TITLE:=Netfilter IPV6 Logging
++  KCONFIG:=$(KCONFIG_NF_LOG6)
++  DEPENDS:=@IPV6 +kmod-nf-log
++  FILES:=$(foreach mod,$(NF_LOG6-m),$(LINUX_DIR)/net/$(mod).ko)
++  AUTOLOAD:=$(call AutoProbe,$(notdir $(NF_LOG6-m)))
++endef
++
++$(eval $(call KernelPackage,nf-log6))
++
++
+ define KernelPackage/nf-nat
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter NAT
+@@ -1089,7 +1112,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
+ define KernelPackage/nft-core
+   SUBMENU:=$(NF_MENU)
+   TITLE:=Netfilter nf_tables support
+-  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat +kmod-lib-crc32c
++  DEPENDS:=+kmod-nfnetlink +kmod-nf-reject +IPV6:kmod-nf-reject6 +IPV6:kmod-nf-conntrack6 +kmod-nf-nat +kmod-nf-log +IPV6:kmod-nf-log6 +kmod-lib-crc32c
+   FILES:=$(foreach mod,$(NFT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
+   AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE-m)))
+   KCONFIG:= \
+-- 
+2.34.1
+
