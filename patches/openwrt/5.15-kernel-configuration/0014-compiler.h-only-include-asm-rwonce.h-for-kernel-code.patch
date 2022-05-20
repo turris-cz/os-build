@@ -1,0 +1,63 @@
+From 41ae7843b6e7a17a05b152ba72aa8b1351632769 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Fri, 20 May 2022 11:50:29 +0200
+Subject: [PATCH] Backport patch from OpenWrt to include rwonce.h
+
+Fixes ppp:
+In file included from ./linux/atm.h:20,
+                 from atm.h:11,
+                 from ans.c:27:
+./linux/compiler.h:255:10: fatal error: asm/rwonce.h: No such file or directory
+ #include <asm/rwonce.h>
+          ^~~~~~~~~~~~~~
+compilation terminated.
+In file included from ./linux/atm.h:20,
+                 from ./atm.h:11,
+                 from pppoatm.c:23:
+./linux/compiler.h:255:10: fatal error: asm/rwonce.h: No such file or directory
+ #include <asm/rwonce.h>
+          ^~~~~~~~~~~~~~
+compilation terminated.
+---
+ ...include-asm-rwonce.h-for-kernel-code.patch | 29 +++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+ create mode 100644 target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
+
+diff --git a/target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch b/target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
+new file mode 100644
+index 0000000000..22f52c1d46
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
+@@ -0,0 +1,29 @@
++From: Felix Fietkau <nbd@nbd.name>
++Date: Thu, 22 Oct 2020 22:00:03 +0200
++Subject: [PATCH] compiler.h: only include asm/rwonce.h for kernel code
++
++This header file is not in uapi, which makes any user space code that includes
++linux/compiler.h to fail with the error 'asm/rwonce.h: No such file or directory'
++
++Fixes: e506ea451254 ("compiler.h: Split {READ,WRITE}_ONCE definitions out into rwonce.h")
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++---
++
++--- a/include/linux/compiler.h
+++++ b/include/linux/compiler.h
++@@ -220,6 +220,8 @@ void ftrace_likely_update(struct ftrace_
++ #define function_nocfi(x) (x)
++ #endif
++ 
+++#include <asm/rwonce.h>
+++
++ #endif /* __KERNEL__ */
++ 
++ /*
++@@ -252,6 +254,4 @@ static inline void *offset_to_ptr(const
++  */
++ #define prevent_tail_call_optimization()	mb()
++ 
++-#include <asm/rwonce.h>
++-
++ #endif /* __LINUX_COMPILER_H */
+-- 
+2.34.1
+
