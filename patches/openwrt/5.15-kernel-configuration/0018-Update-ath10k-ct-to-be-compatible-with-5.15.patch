@@ -1,0 +1,615 @@
+From eea1d5f7fd1ffa5b9799b5ef2c067e63f4554690 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sat, 21 May 2022 12:44:07 +0200
+Subject: [PATCH] Update ath10k-ct to be compatible with 5.15
+
+---
+ package/kernel/ath10k-ct/Makefile             |  10 +-
+ ...calibration-data-via-nvmem-subsystem.patch | 162 ++++++++++++++++++
+ ...rolling-support-for-various-chipsets.patch | 104 +++++------
+ ...02-ath10k-use-tpt-trigger-by-default.patch |  22 +--
+ ...0k-ct-Fix-spectral-scan-NULL-pointer.patch |  32 ++++
+ ...0-0010-ath10k-limit-htt-rx-ring-size.patch |   4 +-
+ ...60-0011-ath10k-limit-pci-buffer-size.patch |   4 +-
+ 7 files changed, 266 insertions(+), 72 deletions(-)
+ create mode 100644 package/kernel/ath10k-ct/patches/120-ath10k-fetch-calibration-data-via-nvmem-subsystem.patch
+ create mode 100644 package/kernel/ath10k-ct/patches/300-ath10k-ct-Fix-spectral-scan-NULL-pointer.patch
+
+diff --git a/package/kernel/ath10k-ct/Makefile b/package/kernel/ath10k-ct/Makefile
+index 25ea3376f0..278f6d737e 100644
+--- a/package/kernel/ath10k-ct/Makefile
++++ b/package/kernel/ath10k-ct/Makefile
+@@ -8,14 +8,14 @@ PKG_LICENSE_FILES:=
+ 
+ PKG_SOURCE_URL:=https://github.com/greearb/ath10k-ct.git
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_DATE:=2021-09-22
+-PKG_SOURCE_VERSION:=e6a7d5b5b834737cd12e357b5efdc2e42d923bf6
+-PKG_MIRROR_HASH:=62a1b97089d3561730656ef73beb3cd77231ec636645115cc1bbb3c6c84a6fe3
++PKG_SOURCE_DATE:=2021-11-28
++PKG_SOURCE_VERSION:=dc350bbf41d987c5b2db54405bcc9ef3cd66d5db
++PKG_MIRROR_HASH:=92422485c7b92be840a40bf8d157bb6731d14d3811907b6cb4e4cfab0777b60d
+ 
+-# Build the 5.10 ath10k-ct driver version.
++# Build the 5.15 ath10k-ct driver version.
+ # Probably this should match as closely as
+ # possible to whatever mac80211 backports version is being used.
+-CT_KVER="-5.10"
++CT_KVER="-5.15"
+ 
+ PKG_MAINTAINER:=Ben Greear <greearb@candelatech.com>
+ PKG_BUILD_PARALLEL:=1
+diff --git a/package/kernel/ath10k-ct/patches/120-ath10k-fetch-calibration-data-via-nvmem-subsystem.patch b/package/kernel/ath10k-ct/patches/120-ath10k-fetch-calibration-data-via-nvmem-subsystem.patch
+new file mode 100644
+index 0000000000..2a4b09ac27
+--- /dev/null
++++ b/package/kernel/ath10k-ct/patches/120-ath10k-fetch-calibration-data-via-nvmem-subsystem.patch
+@@ -0,0 +1,162 @@
++From e2333703373e8b81294da5d1c73c30154f75b082 Mon Sep 17 00:00:00 2001
++From: Christian Lamparter <chunkeey@gmail.com>
++Date: Fri, 15 Oct 2021 18:56:33 +0200
++Subject: [PATCH] ath10k: fetch (pre-)calibration data via nvmem subsystem
++
++On most embedded ath10k devices (like range extenders,
++routers, accesspoints, ...) the calibration data is
++stored in a easily accessible MTD partitions named
++"ART", "caldata", "calibration", etc...
++
++Since commit 4b361cfa8624 ("mtd: core: add OTP nvmem provider support"):
++MTD partitions and portions of them can be specified
++as potential nvmem-cells which are accessible through
++the nvmem subsystem.
++
++This feature - together with an nvmem cell definition either
++in the platform data or via device-tree allows drivers to get
++the (pre-)calibration data which is required for initializing
++the WIFI.
++
++Tested with Netgear EX6150v2 (IPQ4018)
++
++Cc: Robert Marko <robimarko@gmail.com>
++Cc: Thibaut Varene <hacks@slashdirt.org>
++Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
++---
++--- a/ath10k-5.15/core.c
+++++ b/ath10k-5.15/core.c
++@@ -13,6 +13,7 @@
++ #include <linux/dmi.h>
++ #include <linux/ctype.h>
++ #include <linux/pm_qos.h>
+++#include <linux/nvmem-consumer.h>
++ #include <asm/byteorder.h>
++ #include <linux/ctype.h>
++ 
++@@ -988,7 +989,8 @@ static int ath10k_core_get_board_id_from
++ 	}
++ 
++ 	if (ar->cal_mode == ATH10K_PRE_CAL_MODE_DT ||
++-	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE)
+++	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE ||
+++	    ar->cal_mode == ATH10K_PRE_CAL_MODE_NVMEM)
++ 		bmi_board_id_param = BMI_PARAM_GET_FLASH_BOARD_ID;
++ 	else
++ 		bmi_board_id_param = BMI_PARAM_GET_EEPROM_BOARD_ID;
++@@ -2087,7 +2089,8 @@ static int ath10k_download_and_run_otp(s
++ 
++ 	/* As of now pre-cal is valid for 10_4 variants */
++ 	if (ar->cal_mode == ATH10K_PRE_CAL_MODE_DT ||
++-	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE)
+++	    ar->cal_mode == ATH10K_PRE_CAL_MODE_FILE ||
+++	    ar->cal_mode == ATH10K_PRE_CAL_MODE_NVMEM)
++ 		bmi_otp_exe_param = BMI_PARAM_FLASH_SECTION_ALL;
++ 
++ 	ret = ath10k_bmi_execute(ar, address, bmi_otp_exe_param, &result);
++@@ -2221,6 +2224,39 @@ struct ath10k_bss_rom_ie {
++ 	__le32 rom_len;
++ } __packed;
++ 
+++static int ath10k_download_cal_nvmem(struct ath10k *ar, const char *cell_name)
+++{
+++	struct nvmem_cell *cell;
+++	void *buf;
+++	size_t len;
+++	int ret;
+++
+++	cell = devm_nvmem_cell_get(ar->dev, cell_name);
+++	if (IS_ERR(cell)) {
+++		ret = PTR_ERR(cell);
+++		return ret;
+++	}
+++
+++	buf = nvmem_cell_read(cell, &len);
+++	if (IS_ERR(buf))
+++		return PTR_ERR(buf);
+++
+++	if (ar->hw_params.cal_data_len != len) {
+++		kfree(buf);
+++		ath10k_warn(ar, "invalid calibration data length in nvmem-cell '%s': %zu != %u\n",
+++			    cell_name, len, ar->hw_params.cal_data_len);
+++		return -EMSGSIZE;
+++	}
+++
+++	ret = ath10k_download_board_data(ar, buf, len);
+++	kfree(buf);
+++	if (ret)
+++		ath10k_warn(ar, "failed to download calibration data from nvmem-cell '%s': %d\n",
+++			    cell_name, ret);
+++
+++	return ret;
+++}
+++
++ int ath10k_core_fetch_firmware_api_n(struct ath10k *ar, const char *name,
++ 				     struct ath10k_fw_file *fw_file)
++ {
++@@ -2597,6 +2633,18 @@ static int ath10k_core_pre_cal_download(
++ {
++ 	int ret;
++ 
+++	ret = ath10k_download_cal_nvmem(ar, "pre-calibration");
+++	if (ret == 0) {
+++		ar->cal_mode = ATH10K_PRE_CAL_MODE_NVMEM;
+++		goto success;
+++	} else if (ret == -EPROBE_DEFER) {
+++		return ret;
+++	}
+++
+++	ath10k_dbg(ar, ATH10K_DBG_BOOT,
+++		   "boot did not find a pre-calibration nvmem-cell, try file next: %d\n",
+++		   ret);
+++
++ 	ret = ath10k_download_cal_file(ar, ar->pre_cal_file);
++ 	if (ret == 0) {
++ 		ar->cal_mode = ATH10K_PRE_CAL_MODE_FILE;
++@@ -2663,6 +2711,18 @@ static int ath10k_download_cal_data(stru
++ 		   "pre cal download procedure failed, try cal file: %d\n",
++ 		   ret);
++ 
+++	ret = ath10k_download_cal_nvmem(ar, "calibration");
+++	if (ret == 0) {
+++		ar->cal_mode = ATH10K_CAL_MODE_NVMEM;
+++		goto done;
+++	} else if (ret == -EPROBE_DEFER) {
+++		return ret;
+++	}
+++
+++	ath10k_dbg(ar, ATH10K_DBG_BOOT,
+++		   "boot did not find a calibration nvmem-cell, try file next: %d\n",
+++		   ret);
+++
++ 	ret = ath10k_download_cal_file(ar, ar->cal_file);
++ 	if (ret == 0) {
++ 		ar->cal_mode = ATH10K_CAL_MODE_FILE;
++--- a/ath10k-5.15/core.h
+++++ b/ath10k-5.15/core.h
++@@ -1109,8 +1109,10 @@ enum ath10k_cal_mode {
++ 	ATH10K_CAL_MODE_FILE,
++ 	ATH10K_CAL_MODE_OTP,
++ 	ATH10K_CAL_MODE_DT,
+++	ATH10K_CAL_MODE_NVMEM,
++ 	ATH10K_PRE_CAL_MODE_FILE,
++ 	ATH10K_PRE_CAL_MODE_DT,
+++	ATH10K_PRE_CAL_MODE_NVMEM,
++ 	ATH10K_CAL_MODE_EEPROM,
++ };
++ 
++@@ -1130,10 +1132,14 @@ static inline const char *ath10k_cal_mod
++ 		return "otp";
++ 	case ATH10K_CAL_MODE_DT:
++ 		return "dt";
+++	case ATH10K_CAL_MODE_NVMEM:
+++		return "nvmem";
++ 	case ATH10K_PRE_CAL_MODE_FILE:
++ 		return "pre-cal-file";
++ 	case ATH10K_PRE_CAL_MODE_DT:
++ 		return "pre-cal-dt";
+++	case ATH10K_PRE_CAL_MODE_NVMEM:
+++		return "pre-cal-nvmem";
++ 	case ATH10K_CAL_MODE_EEPROM:
++ 		return "eeprom";
++ 	}
+diff --git a/package/kernel/ath10k-ct/patches/201-ath10k-add-LED-and-GPIO-controlling-support-for-various-chipsets.patch b/package/kernel/ath10k-ct/patches/201-ath10k-add-LED-and-GPIO-controlling-support-for-various-chipsets.patch
+index 691b504c0f..0f75c496e7 100644
+--- a/package/kernel/ath10k-ct/patches/201-ath10k-add-LED-and-GPIO-controlling-support-for-various-chipsets.patch
++++ b/package/kernel/ath10k-ct/patches/201-ath10k-add-LED-and-GPIO-controlling-support-for-various-chipsets.patch
+@@ -66,25 +66,25 @@ v13:
+ 
+ * cleanup includes
+ 
+- ath10k-5.10/Kconfig   |  10 +++
+- ath10k-5.10/Makefile  |   1 +
+- ath10k-5.10/core.c    |  22 +++++++
+- ath10k-5.10/core.h    |   9 ++-
+- ath10k-5.10/hw.h      |   1 +
+- ath10k-5.10/leds.c    | 103 ++++++++++++++++++++++++++++++
+- ath10k-5.10/leds.h    |  45 +++++++++++++
+- ath10k-5.10/mac.c     |   1 +
+- ath10k-5.10/wmi-ops.h |  32 ++++++++++
+- ath10k-5.10/wmi-tlv.c |   2 +
+- ath10k-5.10/wmi.c     |  54 ++++++++++++++++
+- ath10k-5.10/wmi.h     |  35 ++++++++++
++ ath10k-5.15/Kconfig   |  10 +++
++ ath10k-5.15/Makefile  |   1 +
++ ath10k-5.15/core.c    |  22 +++++++
++ ath10k-5.15/core.h    |   9 ++-
++ ath10k-5.15/hw.h      |   1 +
++ ath10k-5.15/leds.c    | 103 ++++++++++++++++++++++++++++++
++ ath10k-5.15/leds.h    |  45 +++++++++++++
++ ath10k-5.15/mac.c     |   1 +
++ ath10k-5.15/wmi-ops.h |  32 ++++++++++
++ ath10k-5.15/wmi-tlv.c |   2 +
++ ath10k-5.15/wmi.c     |  54 ++++++++++++++++
++ ath10k-5.15/wmi.h     |  35 ++++++++++
+  12 files changed, 314 insertions(+), 1 deletion(-)
+- create mode 100644 ath10k-5.10/leds.c
+- create mode 100644 ath10k-5.10/leds.h
++ create mode 100644 ath10k-5.15/leds.c
++ create mode 100644 ath10k-5.15/leds.h
+ 
+---- a/ath10k-5.10/Kconfig
+-+++ b/ath10k-5.10/Kconfig
+-@@ -65,6 +65,16 @@ config ATH10K_DEBUGFS
++--- a/ath10k-5.15/Kconfig
+++++ b/ath10k-5.15/Kconfig
++@@ -66,6 +66,16 @@ config ATH10K_DEBUGFS
+  
+  	  If unsure, say Y to make it easier to debug problems.
+  
+@@ -101,8 +101,8 @@ v13:
+  config ATH10K_SPECTRAL
+  	bool "Atheros ath10k spectral scan support"
+  	depends on ATH10K_DEBUGFS
+---- a/ath10k-5.10/Makefile
+-+++ b/ath10k-5.10/Makefile
++--- a/ath10k-5.15/Makefile
+++++ b/ath10k-5.15/Makefile
+ @@ -20,6 +20,7 @@ ath10k_core-$(CONFIG_ATH10K_SPECTRAL) +=
+  ath10k_core-$(CONFIG_NL80211_TESTMODE) += testmode.o
+  ath10k_core-$(CONFIG_ATH10K_TRACING) += trace.o
+@@ -111,9 +111,9 @@ v13:
+  ath10k_core-$(CONFIG_MAC80211_DEBUGFS) += debugfs_sta.o
+  ath10k_core-$(CONFIG_PM) += wow.o
+  ath10k_core-$(CONFIG_ATH10K_CE) += ce.o
+---- a/ath10k-5.10/core.c
+-+++ b/ath10k-5.10/core.c
+-@@ -26,6 +26,7 @@
++--- a/ath10k-5.15/core.c
+++++ b/ath10k-5.15/core.c
++@@ -28,6 +28,7 @@
+  #include "testmode.h"
+  #include "wmi-ops.h"
+  #include "coredump.h"
+@@ -121,7 +121,7 @@ v13:
+  
+  /* Disable ath10k-ct DBGLOG output by default */
+  unsigned int ath10k_debug_mask = ATH10K_DBG_NO_DBGLOG;
+-@@ -68,6 +69,7 @@ static const struct ath10k_hw_params ath
++@@ -70,6 +71,7 @@ static const struct ath10k_hw_params ath
+  		.dev_id = QCA988X_2_0_DEVICE_ID,
+  		.bus = ATH10K_BUS_PCI,
+  		.name = "qca988x hw2.0",
+@@ -129,7 +129,7 @@ v13:
+  		.patch_load_addr = QCA988X_HW_2_0_PATCH_LOAD_ADDR,
+  		.uart_pin = 7,
+  		.cc_wraparound_type = ATH10K_HW_CC_WRAP_SHIFTED_ALL,
+-@@ -137,6 +139,7 @@ static const struct ath10k_hw_params ath
++@@ -141,6 +143,7 @@ static const struct ath10k_hw_params ath
+  		.dev_id = QCA9887_1_0_DEVICE_ID,
+  		.bus = ATH10K_BUS_PCI,
+  		.name = "qca9887 hw1.0",
+@@ -137,7 +137,7 @@ v13:
+  		.patch_load_addr = QCA9887_HW_1_0_PATCH_LOAD_ADDR,
+  		.uart_pin = 7,
+  		.cc_wraparound_type = ATH10K_HW_CC_WRAP_SHIFTED_ALL,
+-@@ -342,6 +345,7 @@ static const struct ath10k_hw_params ath
++@@ -352,6 +355,7 @@ static const struct ath10k_hw_params ath
+  		.dev_id = QCA99X0_2_0_DEVICE_ID,
+  		.bus = ATH10K_BUS_PCI,
+  		.name = "qca99x0 hw2.0",
+@@ -145,7 +145,7 @@ v13:
+  		.patch_load_addr = QCA99X0_HW_2_0_PATCH_LOAD_ADDR,
+  		.uart_pin = 7,
+  		.otp_exe_param = 0x00000700,
+-@@ -382,6 +386,7 @@ static const struct ath10k_hw_params ath
++@@ -393,6 +397,7 @@ static const struct ath10k_hw_params ath
+  		.dev_id = QCA9984_1_0_DEVICE_ID,
+  		.bus = ATH10K_BUS_PCI,
+  		.name = "qca9984/qca9994 hw1.0",
+@@ -153,7 +153,7 @@ v13:
+  		.patch_load_addr = QCA9984_HW_1_0_PATCH_LOAD_ADDR,
+  		.uart_pin = 7,
+  		.cc_wraparound_type = ATH10K_HW_CC_WRAP_SHIFTED_EACH,
+-@@ -429,6 +434,7 @@ static const struct ath10k_hw_params ath
++@@ -441,6 +446,7 @@ static const struct ath10k_hw_params ath
+  		.dev_id = QCA9888_2_0_DEVICE_ID,
+  		.bus = ATH10K_BUS_PCI,
+  		.name = "qca9888 hw2.0",
+@@ -161,7 +161,7 @@ v13:
+  		.patch_load_addr = QCA9888_HW_2_0_PATCH_LOAD_ADDR,
+  		.uart_pin = 7,
+  		.cc_wraparound_type = ATH10K_HW_CC_WRAP_SHIFTED_EACH,
+-@@ -3705,6 +3711,10 @@ int ath10k_core_start(struct ath10k *ar,
++@@ -3942,6 +3948,10 @@ int ath10k_core_start(struct ath10k *ar,
+  			ath10k_wmi_check_apply_board_power_ctl_table(ar);
+  	}
+  
+@@ -172,7 +172,7 @@ v13:
+  	return 0;
+  
+  err_hif_stop:
+-@@ -3963,9 +3973,18 @@ static void ath10k_core_register_work(st
++@@ -4203,9 +4213,18 @@ static void ath10k_core_register_work(st
+  		goto err_spectral_destroy;
+  	}
+  
+@@ -191,7 +191,7 @@ v13:
+  err_spectral_destroy:
+  	ath10k_spectral_destroy(ar);
+  err_debug_destroy:
+-@@ -4025,6 +4044,8 @@ void ath10k_core_unregister(struct ath10
++@@ -4265,6 +4284,8 @@ void ath10k_core_unregister(struct ath10
+  	if (!test_bit(ATH10K_FLAG_CORE_REGISTERED, &ar->dev_flags))
+  		return;
+  
+@@ -200,8 +200,8 @@ v13:
+  	ath10k_thermal_unregister(ar);
+  	/* Stop spectral before unregistering from mac80211 to remove the
+  	 * relayfs debugfs file cleanly. Otherwise the parent debugfs tree
+---- a/ath10k-5.10/core.h
+-+++ b/ath10k-5.10/core.h
++--- a/ath10k-5.15/core.h
+++++ b/ath10k-5.15/core.h
+ @@ -14,6 +14,7 @@
+  #include <linux/pci.h>
+  #include <linux/uuid.h>
+@@ -210,7 +210,7 @@ v13:
+  
+  #include "htt.h"
+  #include "htc.h"
+-@@ -1557,6 +1558,13 @@ struct ath10k {
++@@ -1577,6 +1578,13 @@ struct ath10k {
+  	} testmode;
+  
+  	struct {
+@@ -224,8 +224,8 @@ v13:
+  		/* protected by data_lock */
+  		u32 rx_crc_err_drop;
+  		u32 fw_crash_counter;
+---- a/ath10k-5.10/hw.h
+-+++ b/ath10k-5.10/hw.h
++--- a/ath10k-5.15/hw.h
+++++ b/ath10k-5.15/hw.h
+ @@ -521,6 +521,7 @@ struct ath10k_hw_params {
+  	const char *name;
+  	u32 patch_load_addr;
+@@ -235,7 +235,7 @@ v13:
+  
+  	/* Type of hw cycle counter wraparound logic, for more info
+ --- /dev/null
+-+++ b/ath10k-5.10/leds.c
+++++ b/ath10k-5.15/leds.c
+ @@ -0,0 +1,103 @@
+ +/*
+ + * Copyright (c) 2005-2011 Atheros Communications Inc.
+@@ -341,7 +341,7 @@ v13:
+ +}
+ +
+ --- /dev/null
+-+++ b/ath10k-5.10/leds.h
+++++ b/ath10k-5.15/leds.h
+ @@ -0,0 +1,41 @@
+ +/*
+ + * Copyright (c) 2018, The Linux Foundation. All rights reserved.
+@@ -384,8 +384,8 @@ v13:
+ +
+ +#endif
+ +#endif /* _LEDS_H_ */
+---- a/ath10k-5.10/mac.c
+-+++ b/ath10k-5.10/mac.c
++--- a/ath10k-5.15/mac.c
+++++ b/ath10k-5.15/mac.c
+ @@ -25,6 +25,7 @@
+  #include "wmi-tlv.h"
+  #include "wmi-ops.h"
+@@ -394,8 +394,8 @@ v13:
+  
+  /*********/
+  /* Rates */
+---- a/ath10k-5.10/wmi-ops.h
+-+++ b/ath10k-5.10/wmi-ops.h
++--- a/ath10k-5.15/wmi-ops.h
+++++ b/ath10k-5.15/wmi-ops.h
+ @@ -228,7 +228,10 @@ struct wmi_ops {
+  			 const struct wmi_bb_timing_cfg_arg *arg);
+  	struct sk_buff *(*gen_per_peer_per_tid_cfg)(struct ath10k *ar,
+@@ -443,8 +443,8 @@ v13:
+  static inline int
+  ath10k_wmi_dbglog_cfg(struct ath10k *ar, u64 module_enable, u32 log_level)
+  {
+---- a/ath10k-5.10/wmi-tlv.c
+-+++ b/ath10k-5.10/wmi-tlv.c
++--- a/ath10k-5.15/wmi-tlv.c
+++++ b/ath10k-5.15/wmi-tlv.c
+ @@ -4594,6 +4594,8 @@ static const struct wmi_ops wmi_tlv_ops
+  	.gen_echo = ath10k_wmi_tlv_op_gen_echo,
+  	.gen_vdev_spectral_conf = ath10k_wmi_tlv_op_gen_vdev_spectral_conf,
+@@ -454,8 +454,8 @@ v13:
+  };
+  
+  static const struct wmi_peer_flags_map wmi_tlv_peer_flags_map = {
+---- a/ath10k-5.10/wmi.c
+-+++ b/ath10k-5.10/wmi.c
++--- a/ath10k-5.15/wmi.c
+++++ b/ath10k-5.15/wmi.c
+ @@ -8409,6 +8409,49 @@ ath10k_wmi_op_gen_peer_set_param(struct
+  	return skb;
+  }
+@@ -506,7 +506,7 @@ v13:
+  static struct sk_buff *
+  ath10k_wmi_op_gen_set_psmode(struct ath10k *ar, u32 vdev_id,
+  			     enum wmi_sta_ps_mode psmode)
+-@@ -10238,6 +10281,9 @@ static const struct wmi_ops wmi_ops = {
++@@ -10240,6 +10283,9 @@ static const struct wmi_ops wmi_ops = {
+  	.fw_stats_fill = ath10k_wmi_main_op_fw_stats_fill,
+  	.get_vdev_subtype = ath10k_wmi_op_get_vdev_subtype,
+  	.gen_echo = ath10k_wmi_op_gen_echo,
+@@ -516,7 +516,7 @@ v13:
+  	/* .gen_bcn_tmpl not implemented */
+  	/* .gen_prb_tmpl not implemented */
+  	/* .gen_p2p_go_bcn_ie not implemented */
+-@@ -10308,6 +10354,8 @@ static const struct wmi_ops wmi_10_1_ops
++@@ -10310,6 +10356,8 @@ static const struct wmi_ops wmi_10_1_ops
+  	.fw_stats_fill = ath10k_wmi_10x_op_fw_stats_fill,
+  	.get_vdev_subtype = ath10k_wmi_op_get_vdev_subtype,
+  	.gen_echo = ath10k_wmi_op_gen_echo,
+@@ -525,7 +525,7 @@ v13:
+  	/* .gen_bcn_tmpl not implemented */
+  	/* .gen_prb_tmpl not implemented */
+  	/* .gen_p2p_go_bcn_ie not implemented */
+-@@ -10387,6 +10435,8 @@ static const struct wmi_ops wmi_10_2_ops
++@@ -10389,6 +10437,8 @@ static const struct wmi_ops wmi_10_2_ops
+  	.gen_delba_send = ath10k_wmi_op_gen_delba_send,
+  	.fw_stats_fill = ath10k_wmi_10x_op_fw_stats_fill,
+  	.get_vdev_subtype = ath10k_wmi_op_get_vdev_subtype,
+@@ -534,7 +534,7 @@ v13:
+  	/* .gen_pdev_enable_adaptive_cca not implemented */
+  };
+  
+-@@ -10458,6 +10508,8 @@ static const struct wmi_ops wmi_10_2_4_o
++@@ -10460,6 +10510,8 @@ static const struct wmi_ops wmi_10_2_4_o
+  		ath10k_wmi_op_gen_pdev_enable_adaptive_cca,
+  	.get_vdev_subtype = ath10k_wmi_10_2_4_op_get_vdev_subtype,
+  	.gen_bb_timing = ath10k_wmi_10_2_4_op_gen_bb_timing,
+@@ -543,7 +543,7 @@ v13:
+  	/* .gen_bcn_tmpl not implemented */
+  	/* .gen_prb_tmpl not implemented */
+  	/* .gen_p2p_go_bcn_ie not implemented */
+-@@ -10540,6 +10592,8 @@ static const struct wmi_ops wmi_10_4_ops
++@@ -10542,6 +10594,8 @@ static const struct wmi_ops wmi_10_4_ops
+  	.gen_pdev_bss_chan_info_req = ath10k_wmi_10_2_op_gen_pdev_bss_chan_info,
+  	.gen_echo = ath10k_wmi_op_gen_echo,
+  	.gen_pdev_get_tpc_config = ath10k_wmi_10_2_4_op_gen_pdev_get_tpc_config,
+@@ -552,8 +552,8 @@ v13:
+  };
+  
+  int ath10k_wmi_attach(struct ath10k *ar)
+---- a/ath10k-5.10/wmi.h
+-+++ b/ath10k-5.10/wmi.h
++--- a/ath10k-5.15/wmi.h
+++++ b/ath10k-5.15/wmi.h
+ @@ -3133,6 +3133,41 @@ enum wmi_10_4_feature_mask {
+  
+  };
+diff --git a/package/kernel/ath10k-ct/patches/202-ath10k-use-tpt-trigger-by-default.patch b/package/kernel/ath10k-ct/patches/202-ath10k-use-tpt-trigger-by-default.patch
+index 168c6ab462..4c4a0edd57 100644
+--- a/package/kernel/ath10k-ct/patches/202-ath10k-use-tpt-trigger-by-default.patch
++++ b/package/kernel/ath10k-ct/patches/202-ath10k-use-tpt-trigger-by-default.patch
+@@ -9,14 +9,14 @@ traffic.
+ 
+ Signed-off-by: Mathias Kresin <dev@kresin.me>
+ ---
+- ath10k-5.10/core.h | 4 ++++
+- ath10k-5.10/leds.c | 4 +---
+- ath10k-5.10/mac.c  | 2 +-
++ ath10k-5.15/core.h | 4 ++++
++ ath10k-5.15/leds.c | 4 +---
++ ath10k-5.15/mac.c  | 2 +-
+  3 files changed, 6 insertions(+), 4 deletions(-)
+ 
+---- a/ath10k-5.10/core.h
+-+++ b/ath10k-5.10/core.h
+-@@ -1665,6 +1665,10 @@ struct ath10k {
++--- a/ath10k-5.15/core.h
+++++ b/ath10k-5.15/core.h
++@@ -1692,6 +1692,10 @@ struct ath10k {
+  	u8 csi_data[4096];
+  	u16 csi_data_len;
+  
+@@ -27,8 +27,8 @@ Signed-off-by: Mathias Kresin <dev@kresin.me>
+  	/* must be last */
+  	u8 drv_priv[] __aligned(sizeof(void *));
+  };
+---- a/ath10k-5.10/leds.c
+-+++ b/ath10k-5.10/leds.c
++--- a/ath10k-5.15/leds.c
+++++ b/ath10k-5.15/leds.c
+ @@ -81,9 +81,7 @@ int ath10k_leds_register(struct ath10k *
+  
+  	ar->leds.cdev.name = ar->leds.label;
+@@ -40,9 +40,9 @@ Signed-off-by: Mathias Kresin <dev@kresin.me>
+  
+  	ret = led_classdev_register(wiphy_dev(ar->hw->wiphy), &ar->leds.cdev);
+  	if (ret)
+---- a/ath10k-5.10/mac.c
+-+++ b/ath10k-5.10/mac.c
+-@@ -11405,7 +11405,7 @@ int ath10k_mac_register(struct ath10k *a
++--- a/ath10k-5.15/mac.c
+++++ b/ath10k-5.15/mac.c
++@@ -11521,7 +11521,7 @@ int ath10k_mac_register(struct ath10k *a
+  	ar->hw->weight_multiplier = ATH10K_AIRTIME_WEIGHT_MULTIPLIER;
+  
+  #ifdef CPTCFG_MAC80211_LEDS
+diff --git a/package/kernel/ath10k-ct/patches/300-ath10k-ct-Fix-spectral-scan-NULL-pointer.patch b/package/kernel/ath10k-ct/patches/300-ath10k-ct-Fix-spectral-scan-NULL-pointer.patch
+new file mode 100644
+index 0000000000..a3822a7e49
+--- /dev/null
++++ b/package/kernel/ath10k-ct/patches/300-ath10k-ct-Fix-spectral-scan-NULL-pointer.patch
+@@ -0,0 +1,32 @@
++From 0d2e335d780bda1432a9ba719c8200f796d27854 Mon Sep 17 00:00:00 2001
++From: Robert Marko <robimarko@gmail.com>
++Date: Mon, 29 Nov 2021 12:27:12 +0100
++Subject: [PATCH] ath10k-ct: Fix spectral scan NULL pointer
++
++If spectral scan support is enabled then ath10k-ct will cause a NULL
++pointer due to relay_open() being called with a const callback struct
++which is only supported in kernel 5.11 and later.
++
++So, simply check the kernel version and if 5.11 and newer use the const
++callback struct, otherwise use the regular struct.
++
++Fixes: 553a3ac ("ath10k-ct: use 5.15 version")
++Signed-off-by: Robert Marko <robimarko@gmail.com>
++---
++ ath10k-5.15/spectral.c | 4 ++++
++ 1 file changed, 4 insertions(+)
++
++--- a/ath10k-5.15/spectral.c
+++++ b/ath10k-5.15/spectral.c
++@@ -497,7 +497,11 @@ static int remove_buf_file_handler(struc
++ 	return 0;
++ }
++ 
+++#if LINUX_VERSION_IS_GEQ(5,11,0)
++ static const struct rchan_callbacks rfs_spec_scan_cb = {
+++#else
+++static struct rchan_callbacks rfs_spec_scan_cb = {
+++#endif
++ 	.create_buf_file = create_buf_file_handler,
++ 	.remove_buf_file = remove_buf_file_handler,
++ };
+diff --git a/package/kernel/ath10k-ct/patches/960-0010-ath10k-limit-htt-rx-ring-size.patch b/package/kernel/ath10k-ct/patches/960-0010-ath10k-limit-htt-rx-ring-size.patch
+index af9c3d455b..d50611b970 100644
+--- a/package/kernel/ath10k-ct/patches/960-0010-ath10k-limit-htt-rx-ring-size.patch
++++ b/package/kernel/ath10k-ct/patches/960-0010-ath10k-limit-htt-rx-ring-size.patch
+@@ -1,5 +1,5 @@
+---- a/ath10k-5.10/htt.h
+-+++ b/ath10k-5.10/htt.h
++--- a/ath10k-5.15/htt.h
+++++ b/ath10k-5.15/htt.h
+ @@ -237,7 +237,11 @@ enum htt_rx_ring_flags {
+  };
+  
+diff --git a/package/kernel/ath10k-ct/patches/960-0011-ath10k-limit-pci-buffer-size.patch b/package/kernel/ath10k-ct/patches/960-0011-ath10k-limit-pci-buffer-size.patch
+index 1fc2566f9c..b8c6c35326 100644
+--- a/package/kernel/ath10k-ct/patches/960-0011-ath10k-limit-pci-buffer-size.patch
++++ b/package/kernel/ath10k-ct/patches/960-0011-ath10k-limit-pci-buffer-size.patch
+@@ -1,5 +1,5 @@
+---- a/ath10k-5.10/pci.c
+-+++ b/ath10k-5.10/pci.c
++--- a/ath10k-5.15/pci.c
+++++ b/ath10k-5.15/pci.c
+ @@ -131,7 +131,11 @@ static const struct ce_attr pci_host_ce_
+  		.flags = CE_ATTR_FLAGS,
+  		.src_nentries = 0,
+-- 
+2.34.1
+
