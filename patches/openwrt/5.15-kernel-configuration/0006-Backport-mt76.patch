@@ -1,0 +1,126 @@
+From 522dd739fec52bd8f69b6217659378cdc520b9b2 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Mon, 23 May 2022 09:15:56 +0200
+Subject: [PATCH 6/8] Backport mt76
+
+---
+ package/kernel/mt76/Makefile                  | 29 ++++++++++++++-----
+ ...ss-the-dst-buffer-to-of_get_mac_addr.patch | 26 -----------------
+ 2 files changed, 21 insertions(+), 34 deletions(-)
+ delete mode 100644 package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
+
+diff --git a/package/kernel/mt76/Makefile b/package/kernel/mt76/Makefile
+index 8210478c37..cc66193109 100644
+--- a/package/kernel/mt76/Makefile
++++ b/package/kernel/mt76/Makefile
+@@ -8,9 +8,9 @@ PKG_LICENSE_FILES:=
+ 
+ PKG_SOURCE_URL:=https://github.com/openwrt/mt76
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_DATE:=2021-12-03
+-PKG_SOURCE_VERSION:=678071ef70297b7264661c356ddb3c8cf7f3c87b
+-PKG_MIRROR_HASH:=b1f8613f7c65ca6a893f83ed9efc3f7ce72b9b4904fd11b89264f57f4f2a3b5e
++PKG_SOURCE_DATE:=2022-04-23
++PKG_SOURCE_VERSION:=a666d5637bc3afd3e310be09fac048906560097b
++PKG_MIRROR_HASH:=1a7f7a36e5e376d1b18da98c7939f980855f1981be0c3ad7024360dee702c9f8
+ 
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+ PKG_USE_NINJA:=0
+@@ -221,22 +221,31 @@ endef
+ define KernelPackage/mt7915e
+   $(KernelPackage/mt76-default)
+   TITLE:=MediaTek MT7915e wireless driver
+-  DEPENDS+=@PCI_SUPPORT +kmod-mt7615-common +kmod-hwmon-core +kmod-thermal +@DRIVER_11AX_SUPPORT
++  DEPENDS+=@PCI_SUPPORT +kmod-mt7615-common +kmod-hwmon-core +kmod-thermal +@DRIVER_11AX_SUPPORT +@KERNEL_RELAY
+   FILES:= $(PKG_BUILD_DIR)/mt7915/mt7915e.ko
+   AUTOLOAD:=$(call AutoProbe,mt7915e)
+ endef
+ 
+ define KernelPackage/mt7921-common
++  $(KernelPackage/mt76-default)
+   TITLE:=MediaTek MT7615 wireless driver common code
+   HIDDEN:=1
+-  DEPENDS+=@PCI_SUPPORT +kmod-mt76-core +kmod-mt76-connac
++  DEPENDS+=+kmod-mt76-connac +@DRIVER_11AX_SUPPORT
+   FILES:= $(PKG_BUILD_DIR)/mt7921/mt7921-common.ko
+ endef
+ 
++define KernelPackage/mt7921u
++  $(KernelPackage/mt76-default)
++  TITLE:=MediaTek MT7921U wireless driver
++  DEPENDS+=+kmod-mt76-usb +kmod-mt7921-common
++  FILES:= $(PKG_BUILD_DIR)/mt7921/mt7921u.ko
++  AUTOLOAD:=$(call AutoProbe,mt7921u)
++endef
++
+ define KernelPackage/mt7921s
+   $(KernelPackage/mt76-default)
+-  TITLE:=MediaTek MT7921s wireless driver
+-  DEPENDS+=@PCI_SUPPORT +kmod-mt76-connac +kmod-mt76-sdio +kmod-mt7921-common
++  TITLE:=MediaTek MT7921S wireless driver
++  DEPENDS+=+kmod-mt76-sdio +kmod-mt7921-common
+   FILES:= $(PKG_BUILD_DIR)/mt7921/mt7921s.ko
+   AUTOLOAD:=$(call AutoProbe,mt7921s)
+ endef
+@@ -244,7 +253,7 @@ endef
+ define KernelPackage/mt7921e
+   $(KernelPackage/mt76-default)
+   TITLE:=MediaTek MT7921e wireless driver
+-  DEPENDS+=@PCI_SUPPORT +kmod-mt76-connac +kmod-mt7921-common
++  DEPENDS+=@PCI_SUPPORT +kmod-mt7921-common
+   FILES:= $(PKG_BUILD_DIR)/mt7921/mt7921e.ko
+   AUTOLOAD:=$(call AutoProbe,mt7921e)
+ endef
+@@ -338,6 +347,9 @@ endif
+ ifdef CONFIG_PACKAGE_kmod-mt7921-common
+   PKG_MAKE_FLAGS += CONFIG_MT7921_COMMON=m
+ endif
++ifdef CONFIG_PACKAGE_kmod-mt7921u
++  PKG_MAKE_FLAGS += CONFIG_MT7921U=m
++endif
+ ifdef CONFIG_PACKAGE_kmod-mt7921s
+   PKG_MAKE_FLAGS += CONFIG_MT7921S=m
+ endif
+@@ -474,6 +486,7 @@ $(eval $(call KernelPackage,mt7663u))
+ $(eval $(call KernelPackage,mt7663s))
+ $(eval $(call KernelPackage,mt7915e))
+ $(eval $(call KernelPackage,mt7921-common))
++$(eval $(call KernelPackage,mt7921u))
+ $(eval $(call KernelPackage,mt7921s))
+ $(eval $(call KernelPackage,mt7921e))
+ $(eval $(call KernelPackage,mt76))
+diff --git a/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch b/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
+deleted file mode 100644
+index 24b1240548..0000000000
+--- a/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
++++ /dev/null
+@@ -1,26 +0,0 @@
+-From: Felix Fietkau <nbd@nbd.name>
+-Date: Tue, 23 Nov 2021 17:01:45 +0100
+-Subject: [PATCH] Revert "of: net: pass the dst buffer to of_get_mac_address()"
+-
+-This reverts commit 4932c5d80153c336c77dbe8d7af9f8fdd879d01f.
+----
+-
+---- a/eeprom.c
+-+++ b/eeprom.c
+-@@ -105,9 +105,15 @@ mt76_eeprom_override(struct mt76_phy *ph
+- {
+- 	struct mt76_dev *dev = phy->dev;
+- 
+-+#ifdef CONFIG_OF
+- 	struct device_node *np = dev->dev->of_node;
+-+	const u8 *mac = NULL;
+- 
+--	of_get_mac_address(np, phy->macaddr);
+-+	if (np)
+-+		mac = of_get_mac_address(np);
+-+	if (!IS_ERR_OR_NULL(mac))
+-+		ether_addr_copy(phy->macaddr, mac);
+-+#endif
+- 
+- 	if (!is_valid_ether_addr(phy->macaddr)) {
+- 		eth_random_addr(phy->macaddr);
+-- 
+2.34.1
+
