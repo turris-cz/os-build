@@ -1,4 +1,4 @@
-From b2fe2e9d7b0faaafadbc502f5d372b191ef5aebc Mon Sep 17 00:00:00 2001
+From d7d1ec58e0be11a283c1e058a236a760deb65269 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Thu, 3 Feb 2022 13:52:13 +0100
 Subject: [PATCH] Add support for Turris 1.x routers
@@ -6,11 +6,11 @@ Subject: [PATCH] Add support for Turris 1.x routers
 ---
  package/boot/uboot-tools/files/mpc85xx     |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.10              |  64 ++-
- .../files/arch/powerpc/boot/dts/turris1x.dts  | 467 ++++++++++++++++++
+ target/linux/mpc85xx/config-5.10              |  66 ++-
+ .../files/arch/powerpc/boot/dts/turris1x.dts  | 475 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 +
- 6 files changed, 569 insertions(+), 5 deletions(-)
+ 6 files changed, 579 insertions(+), 5 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
@@ -43,7 +43,7 @@ index 03153b73d0..4d133965dd 100644
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.10 b/target/linux/mpc85xx/config-5.10
-index 022fc75dac..321db54219 100644
+index 7ce8051dc5..de59b8486c 100644
 --- a/target/linux/mpc85xx/config-5.10
 +++ b/target/linux/mpc85xx/config-5.10
 @@ -24,6 +24,15 @@ CONFIG_BOOKE=y
@@ -71,7 +71,7 @@ index 022fc75dac..321db54219 100644
  CONFIG_CRYPTO_LIB_POLY1305_RSIZE=1
  # CONFIG_CRYPTO_MD5_PPC is not set
  CONFIG_CRYPTO_NULL=y
-@@ -112,6 +123,10 @@ CONFIG_IRQ_DOMAIN=y
+@@ -116,6 +127,10 @@ CONFIG_IRQ_DOMAIN=y
  CONFIG_IRQ_FORCED_THREADING=y
  CONFIG_IRQ_WORK=y
  CONFIG_ISA_DMA_API=y
@@ -82,7 +82,7 @@ index 022fc75dac..321db54219 100644
  CONFIG_KERNEL_START=0xc0000000
  # CONFIG_KSI8560 is not set
  CONFIG_LEGACY_PTYS=y
-@@ -122,6 +137,13 @@ CONFIG_LOWMEM_CAM_NUM=3
+@@ -126,6 +141,13 @@ CONFIG_LOWMEM_CAM_NUM=3
  CONFIG_LOWMEM_SIZE=0x30000000
  CONFIG_LXT_PHY=y
  # CONFIG_MATH_EMULATION is not set
@@ -96,7 +96,7 @@ index 022fc75dac..321db54219 100644
  CONFIG_MDIO_BUS=y
  CONFIG_MDIO_DEVICE=y
  CONFIG_MEMFD_CREATE=y
-@@ -132,20 +154,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
+@@ -136,20 +158,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
  # CONFIG_MPC8536_DS is not set
  # CONFIG_MPC8540_ADS is not set
  # CONFIG_MPC8560_ADS is not set
@@ -131,7 +131,7 @@ index 022fc75dac..321db54219 100644
  # CONFIG_MVME2500 is not set
  CONFIG_NEED_PER_CPU_KM=y
  CONFIG_NEED_SG_DMA_LENGTH=y
-@@ -161,10 +193,11 @@ CONFIG_OF_GPIO=y
+@@ -165,10 +197,11 @@ CONFIG_OF_GPIO=y
  CONFIG_OF_IRQ=y
  CONFIG_OF_KOBJ=y
  CONFIG_OF_MDIO=y
@@ -144,7 +144,7 @@ index 022fc75dac..321db54219 100644
  # CONFIG_P1022_DS is not set
  # CONFIG_P1022_RDK is not set
  # CONFIG_P1023_RDB is not set
-@@ -186,6 +219,8 @@ CONFIG_PHYSICAL_START=0x00000000
+@@ -190,6 +223,8 @@ CONFIG_PHYSICAL_START=0x00000000
  # CONFIG_PHYS_64BIT is not set
  # CONFIG_PMU_SYSFS is not set
  # CONFIG_PPA8548 is not set
@@ -153,7 +153,7 @@ index 022fc75dac..321db54219 100644
  CONFIG_PPC=y
  CONFIG_PPC32=y
  # CONFIG_PPC64 is not set
-@@ -197,12 +232,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
+@@ -201,12 +236,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
  CONFIG_PPC_ADV_DEBUG_REGS=y
  CONFIG_PPC_BARRIER_NOSPEC=y
  CONFIG_PPC_BOOK3E_MMU=y
@@ -168,7 +168,7 @@ index 022fc75dac..321db54219 100644
  # CONFIG_PPC_IRQ_SOFT_MASK_DEBUG is not set
  CONFIG_PPC_MMU_NOHASH=y
  CONFIG_PPC_MMU_NOHASH_32=y
-@@ -218,6 +255,7 @@ CONFIG_RAS=y
+@@ -222,6 +259,7 @@ CONFIG_RAS=y
  # CONFIG_RED_15W_REV1 is not set
  CONFIG_RTC_CLASS=y
  CONFIG_RTC_DRV_GENERIC=y
@@ -176,7 +176,7 @@ index 022fc75dac..321db54219 100644
  # CONFIG_RTC_DRV_RV3032 is not set
  CONFIG_RTC_I2C_AND_SPI=y
  CONFIG_RTC_MC146818_LIB=y
-@@ -235,6 +273,7 @@ CONFIG_SPE=y
+@@ -239,6 +277,7 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -184,7 +184,16 @@ index 022fc75dac..321db54219 100644
  CONFIG_SPI_MASTER=y
  CONFIG_SPI_MEM=y
  CONFIG_SRCU=y
-@@ -259,6 +298,14 @@ CONFIG_UCC=y
+@@ -246,6 +285,8 @@ CONFIG_SRCU=y
+ # CONFIG_STX_GP3 is not set
+ CONFIG_SWCONFIG=y
+ CONFIG_SWPHY=y
++CONFIG_MICREL_PHY=y
++CONFIG_AT803X_PHY=y
+ CONFIG_SYSCTL_EXCEPTION_TRACE=y
+ CONFIG_TASK_SIZE=0xc0000000
+ CONFIG_THREAD_INFO_IN_TASK=y
+@@ -263,6 +304,14 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -199,7 +208,7 @@ index 022fc75dac..321db54219 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -269,3 +316,10 @@ CONFIG_WATCHDOG_CORE=y
+@@ -273,3 +322,10 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -212,7 +221,7 @@ index 022fc75dac..321db54219 100644
 +CONFIG_MTD_NAND_ECC_SW_BCH=y
 diff --git a/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 new file mode 100644
-index 0000000000..4aecea0d5a
+index 0000000000..1b27c1b0bb
 --- /dev/null
 +++ b/target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 @@ -0,0 +1,475 @@
