@@ -1,4 +1,4 @@
-From 762e522497f403f8432fae77ce87a0a78132e9aa Mon Sep 17 00:00:00 2001
+From b2bb6bbdaa55bb3610c4adbab299335d2e1e57b0 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Mon, 26 Oct 2020 22:49:05 +0100
 Subject: [PATCH] mvebu: add support for Turris SFP module (kernel 4.14)
@@ -11,20 +11,22 @@ Signed-off-by: Marek Behún <marek.behun@nic.cz>
  target/linux/mvebu/config-4.14                |    1 +
  ...rt-changing-to-from-2500base-x-on-Tu.patch |  222 ++
  ...-support-changing-to-2500base-x-mode.patch |   28 +
+ ...-improve-Turris-SFP-module-detection.patch |   27 +
  ...upport-changing-between-1000base-x-a.patch |   33 +
  ...3-net-phy-add-support-for-Turris-SFP.patch | 1925 +++++++++++++++++
  ...x-update-code-operating-on-hidden-re.patch |  244 +++
  ...6xxx-support-changing-cmode-on-Topaz.patch |  172 ++
- 7 files changed, 2625 insertions(+)
+ 8 files changed, 2652 insertions(+)
  create mode 100644 target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
+ create mode 100644 target/linux/mvebu/patches-4.14/90204-net-mvneta-improve-Turris-SFP-module-detection.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
  create mode 100644 target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
 
 diff --git a/target/linux/mvebu/config-4.14 b/target/linux/mvebu/config-4.14
-index 7d23074..23a680a 100644
+index ab2e9dfa99..be11708559 100644
 --- a/target/linux/mvebu/config-4.14
 +++ b/target/linux/mvebu/config-4.14
 @@ -305,6 +305,7 @@ CONFIG_MACH_MVEBU_V7=y
@@ -37,7 +39,7 @@ index 7d23074..23a680a 100644
  CONFIG_MDIO_I2C=y
 diff --git a/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch b/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
 new file mode 100644
-index 0000000..26f5b9e
+index 0000000000..26f5b9eaf0
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90200-net-mvneta-support-changing-to-from-2500base-x-on-Tu.patch
 @@ -0,0 +1,222 @@
@@ -265,7 +267,7 @@ index 0000000..26f5b9e
 +
 diff --git a/target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch b/target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
 new file mode 100644
-index 0000000..c1dad81
+index 0000000000..c1dad81f00
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90201-dts-Turris-Omnia-support-changing-to-2500base-x-mode.patch
 @@ -0,0 +1,28 @@
@@ -297,9 +299,42 @@ index 0000000..c1dad81
 +-- 
 +2.26.2
 +
+diff --git a/target/linux/mvebu/patches-4.14/90204-net-mvneta-improve-Turris-SFP-module-detection.patch b/target/linux/mvebu/patches-4.14/90204-net-mvneta-improve-Turris-SFP-module-detection.patch
+new file mode 100644
+index 0000000000..2af106f721
+--- /dev/null
++++ b/target/linux/mvebu/patches-4.14/90204-net-mvneta-improve-Turris-SFP-module-detection.patch
+@@ -0,0 +1,27 @@
++From 93c55038c5a7c56504b3248b8c5428b21c722f51 Mon Sep 17 00:00:00 2001
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Date: Wed, 15 Jun 2022 15:20:50 +0200
++Subject: [PATCH] Add support for more Turris SFP modules
++
++---
++ drivers/net/phy/sfp.c | 4 +++-
++ 1 file changed, 3 insertions(+), 1 deletion(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index b6aa066ef..cd9936f4e 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -718,7 +718,9 @@ static int sfp_sm_mod_probe(struct sfp *sfp)
++ 	rollball = ((!memcmp(id.base.vendor_name, "OEM             ", 16) ||
++ 		     !memcmp(id.base.vendor_name, "Turris          ", 16)) &&
++ 		    (!memcmp(id.base.vendor_pn, "SFP-10G-T       ", 16) ||
++-		     !memcmp(id.base.vendor_pn, "RTSFP-10", 8)));
+++		     !memcmp(id.base.vendor_pn, "RTSFP-10        ", 16) ||
+++		     !memcmp(id.base.vendor_pn, "RTSFP-10G       ", 16) ||
+++		     !memcmp(id.base.vendor_pn, "RTSFP-2.5G      ", 16)));
++ 	if (rollball) {
++ 		sfp_rollball_init_mdio(sfp);
++ 		mdio_i2c_set_type(sfp->i2c_mii, MDIO_I2C_ROLLBALL);
++-- 
++2.34.1
++
 diff --git a/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
 new file mode 100644
-index 0000000..3cd991c
+index 0000000000..3cd991ccf8
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90202-dts-Turris-MOX-support-changing-between-1000base-x-a.patch
 @@ -0,0 +1,33 @@
@@ -338,7 +373,7 @@ index 0000000..3cd991c
 +
 diff --git a/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch b/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
 new file mode 100644
-index 0000000..4b14b19
+index 0000000000..4b14b19e15
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90203-net-phy-add-support-for-Turris-SFP.patch
 @@ -0,0 +1,1925 @@
@@ -2269,7 +2304,7 @@ index 0000000..4b14b19
 +
 diff --git a/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch b/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
 new file mode 100644
-index 0000000..e71643f
+index 0000000000..e71643f8c0
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90204-net-dsa-mv88e6xxx-update-code-operating-on-hidden-re.patch
 @@ -0,0 +1,244 @@
@@ -2519,7 +2554,7 @@ index 0000000..e71643f
 +
 diff --git a/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch b/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
 new file mode 100644
-index 0000000..47bae69
+index 0000000000..47bae69bb3
 --- /dev/null
 +++ b/target/linux/mvebu/patches-4.14/90205-net-dsa-mv88e6xxx-support-changing-cmode-on-Topaz.patch
 @@ -0,0 +1,172 @@
@@ -2696,5 +2731,5 @@ index 0000000..47bae69
 +2.31.1
 +
 -- 
-2.31.1
+2.34.1
 
