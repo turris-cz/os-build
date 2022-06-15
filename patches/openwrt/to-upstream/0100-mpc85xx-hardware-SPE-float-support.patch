@@ -1,0 +1,434 @@
+From 4cc13357962a308916a40bdc606f6061cc317ff7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:31:39 +0200
+Subject: [PATCH 1/6] mpc85xx: add support for cpu type 8548
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+8540 cpu type corresponds to e500v1 core while
+8548 cpu type corresponds to e500v2 core
+
+See https://www.nxp.com/products/processors-and-microcontrollers/legacy-mpu-mcus/powerquicc-processors:POWERQUICC_HOME#powerquicc-iii-mpc85xx
+and https://www.nxp.com/docs/en/application-note/AN2807.pdf .
+
+Co-authored-by: Josef Schlehofer <josef.schlehofer@nic.cz>
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ include/target.mk       | 1 +
+ toolchain/gcc/common.mk | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/include/target.mk b/include/target.mk
+index 7526224972..cc2e26a542 100644
+--- a/include/target.mk
++++ b/include/target.mk
+@@ -218,6 +218,7 @@ ifeq ($(DUMP),1)
+   ifeq ($(ARCH),powerpc)
+     CPU_CFLAGS_603e:=-mcpu=603e
+     CPU_CFLAGS_8540:=-mcpu=8540
++    CPU_CFLAGS_8548:=-mcpu=8548
+     CPU_CFLAGS_405:=-mcpu=405
+     CPU_CFLAGS_440:=-mcpu=440
+     CPU_CFLAGS_464fp:=-mcpu=464fp
+diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
+index 55fad1fcc4..99fd907969 100644
+--- a/toolchain/gcc/common.mk
++++ b/toolchain/gcc/common.mk
+@@ -150,6 +150,10 @@ ifneq ($(GCC_ARCH),)
+   GCC_CONFIGURE+= --with-arch=$(GCC_ARCH)
+ endif
+ 
++ifdef CONFIG_powerpc
++  GCC_CONFIGURE+= --with-cpu=$(CONFIG_CPU_TYPE)
++endif
++
+ ifeq ($(CONFIG_arm),y)
+   GCC_CONFIGURE+= \
+ 	--with-cpu=$(word 1, $(subst +," ,$(CONFIG_CPU_TYPE)))
+-- 
+2.35.3
+
+
+From 0d40aaf04e8eb7610be22170d3ba51173381156e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:38:38 +0200
+Subject: [PATCH 2/6] mpc85xx: set correct cpu type for p1010, p1020, p2020 subtargets
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All these subtargets use e500v2 cores.
+It is therefore correct to set cpu type to 8548.
+(see
+https://www.nxp.com/docs/en/application-note/AN2807.pdf ,
+https://www.nxp.com/docs/en/fact-sheet/QP1010FS.pdf ,
+https://www.nxp.com/docs/en/product-brief/P1020PB.pdf ,
+https://www.nxp.com/docs/en/fact-sheet/QP20XXFS.pdf )
+
+8540 cpu type (using e500v1 core) was left as default for the generic target
+because all the mpc85xx cpus use e500 cores and v1 is the oldest version.
+(see https://www.nxp.com/products/processors-and-microcontrollers/legacy-mpu-mcus/powerquicc-processors:POWERQUICC_HOME#powerquicc-iii-mpc85xx )
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ target/linux/mpc85xx/p1010/target.mk | 1 +
+ target/linux/mpc85xx/p1020/target.mk | 1 +
+ target/linux/mpc85xx/p2020/target.mk | 1 +
+ 3 files changed, 3 insertions(+)
+
+diff --git a/target/linux/mpc85xx/p1010/target.mk b/target/linux/mpc85xx/p1010/target.mk
+index 12ed78ace1..61bfa7791f 100644
+--- a/target/linux/mpc85xx/p1010/target.mk
++++ b/target/linux/mpc85xx/p1010/target.mk
+@@ -1,2 +1,3 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P1010
+ KERNELNAME:=simpleImage.tl-wdr4900-v1
+diff --git a/target/linux/mpc85xx/p1020/target.mk b/target/linux/mpc85xx/p1020/target.mk
+index a25409eebb..05a95936dd 100644
+--- a/target/linux/mpc85xx/p1020/target.mk
++++ b/target/linux/mpc85xx/p1020/target.mk
+@@ -1,2 +1,3 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P1020
+ 
+diff --git a/target/linux/mpc85xx/p2020/target.mk b/target/linux/mpc85xx/p2020/target.mk
+index 23aca656b2..ef9f1d4de6 100644
+--- a/target/linux/mpc85xx/p2020/target.mk
++++ b/target/linux/mpc85xx/p2020/target.mk
+@@ -1,3 +1,4 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P2020
+ 
+ define Target/Description
+-- 
+2.35.3
+
+
+From 9e57704a371a9b7c38e550fc82e0f5caba949877 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:47:50 +0200
+Subject: [PATCH 3/6] mpc85xx: linux-5.{4,10,15}: Fix compilation with gcc e500 compiler
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+gcc e500 compiler does not support -mcpu=powerpc option. When it is
+specified then gcc throws compile error:
+
+  gcc: error: unrecognized argument in option ‘-mcpu=powerpc’
+  gcc: note: valid arguments to ‘-mcpu=’ are: 8540 8548 native
+
+So do not set -mcpu=powerpc option when CONFIG_E500 is set. Correct option
+-mcpu=8540 for CONFIG_E500 is set few lines below in that Makefile.
+
+Signed-off-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ ...x-compilation-with-gcc-e500-compiler.patch | 43 +++++++++++++++++++
+ 3 files changed, 129 insertions(+)
+ create mode 100644 target/linux/mpc85xx/patches-5.4/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.10/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+
+diff --git a/target/linux/mpc85xx/patches-5.4/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch b/target/linux/mpc85xx/patches-5.4/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+new file mode 100644
+index 0000000000..316b21963b
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.4/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+@@ -0,0 +1,43 @@
++From: "Pali Rohár" <pali@kernel.org>
++To: Michael Ellerman <mpe@ellerman.id.au>,
++	Benjamin Herrenschmidt <benh@kernel.crashing.org>,
++	Paul Mackerras <paulus@samba.org>
++Cc: linuxppc-dev@lists.ozlabs.org, linux-kernel@vger.kernel.org
++Subject: [PATCH] powerpc: e500: Fix compilation with gcc e500 compiler
++Date: Tue, 24 May 2022 11:39:39 +0200	[thread overview]
++Message-ID: <20220524093939.30927-1-pali@kernel.org> (raw)
++
++gcc e500 compiler does not support -mcpu=powerpc option. When it is
++specified then gcc throws compile error:
++
++  gcc: error: unrecognized argument in option ‘-mcpu=powerpc’
++  gcc: note: valid arguments to ‘-mcpu=’ are: 8540 8548 native
++
++So do not set -mcpu=powerpc option when CONFIG_E500 is set. Correct option
++-mcpu=8540 for CONFIG_E500 is set few lines below in that Makefile.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Cc: stable@vger.kernel.org
++---
++ arch/powerpc/Makefile | 5 +++++
++ 1 file changed, 5 insertions(+)
++
++--- a/arch/powerpc/Makefile
+++++ b/arch/powerpc/Makefile
++@@ -24,11 +24,16 @@ ifdef CONFIG_PPC32
++ # or platform code sets later on the command line, but they are needed
++ # to set a sane 32-bit cpu target for the 64-bit cross compiler which
++ # may default to the wrong ISA.
+++# Never set -mcpu=powerpc option for gcc e500 compiler because this
+++# option is unsupported and throws error. The correct option for
+++# CONFIG_E500 is -mcpu=8540 and it is set few lines below.
+++ifndef CONFIG_E500
++ KBUILD_CFLAGS		+= -mcpu=powerpc
++ KBUILD_AFLAGS		+= -mcpu=powerpc
++ endif
++ endif
++ endif
+++endif
++ 
++ ifdef CONFIG_PPC_BOOK3S_32
++ KBUILD_CFLAGS		+= -mcpu=powerpc
+diff --git a/target/linux/mpc85xx/patches-5.10/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch b/target/linux/mpc85xx/patches-5.10/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+new file mode 100644
+index 0000000000..316b21963b
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.10/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+@@ -0,0 +1,43 @@
++From: "Pali Rohár" <pali@kernel.org>
++To: Michael Ellerman <mpe@ellerman.id.au>,
++	Benjamin Herrenschmidt <benh@kernel.crashing.org>,
++	Paul Mackerras <paulus@samba.org>
++Cc: linuxppc-dev@lists.ozlabs.org, linux-kernel@vger.kernel.org
++Subject: [PATCH] powerpc: e500: Fix compilation with gcc e500 compiler
++Date: Tue, 24 May 2022 11:39:39 +0200	[thread overview]
++Message-ID: <20220524093939.30927-1-pali@kernel.org> (raw)
++
++gcc e500 compiler does not support -mcpu=powerpc option. When it is
++specified then gcc throws compile error:
++
++  gcc: error: unrecognized argument in option ‘-mcpu=powerpc’
++  gcc: note: valid arguments to ‘-mcpu=’ are: 8540 8548 native
++
++So do not set -mcpu=powerpc option when CONFIG_E500 is set. Correct option
++-mcpu=8540 for CONFIG_E500 is set few lines below in that Makefile.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Cc: stable@vger.kernel.org
++---
++ arch/powerpc/Makefile | 5 +++++
++ 1 file changed, 5 insertions(+)
++
++--- a/arch/powerpc/Makefile
+++++ b/arch/powerpc/Makefile
++@@ -24,11 +24,16 @@ ifdef CONFIG_PPC32
++ # or platform code sets later on the command line, but they are needed
++ # to set a sane 32-bit cpu target for the 64-bit cross compiler which
++ # may default to the wrong ISA.
+++# Never set -mcpu=powerpc option for gcc e500 compiler because this
+++# option is unsupported and throws error. The correct option for
+++# CONFIG_E500 is -mcpu=8540 and it is set few lines below.
+++ifndef CONFIG_E500
++ KBUILD_CFLAGS		+= -mcpu=powerpc
++ KBUILD_AFLAGS		+= -mcpu=powerpc
++ endif
++ endif
++ endif
+++endif
++ 
++ ifdef CONFIG_PPC_BOOK3S_32
++ KBUILD_CFLAGS		+= -mcpu=powerpc
+diff --git a/target/linux/mpc85xx/patches-5.15/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch b/target/linux/mpc85xx/patches-5.15/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+new file mode 100644
+index 0000000000..316b21963b
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/107-powerpc-e500-fix-compilation-with-gcc-e500-compiler.patch
+@@ -0,0 +1,43 @@
++From: "Pali Rohár" <pali@kernel.org>
++To: Michael Ellerman <mpe@ellerman.id.au>,
++	Benjamin Herrenschmidt <benh@kernel.crashing.org>,
++	Paul Mackerras <paulus@samba.org>
++Cc: linuxppc-dev@lists.ozlabs.org, linux-kernel@vger.kernel.org
++Subject: [PATCH] powerpc: e500: Fix compilation with gcc e500 compiler
++Date: Tue, 24 May 2022 11:39:39 +0200	[thread overview]
++Message-ID: <20220524093939.30927-1-pali@kernel.org> (raw)
++
++gcc e500 compiler does not support -mcpu=powerpc option. When it is
++specified then gcc throws compile error:
++
++  gcc: error: unrecognized argument in option ‘-mcpu=powerpc’
++  gcc: note: valid arguments to ‘-mcpu=’ are: 8540 8548 native
++
++So do not set -mcpu=powerpc option when CONFIG_E500 is set. Correct option
++-mcpu=8540 for CONFIG_E500 is set few lines below in that Makefile.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Cc: stable@vger.kernel.org
++---
++ arch/powerpc/Makefile | 5 +++++
++ 1 file changed, 5 insertions(+)
++
++--- a/arch/powerpc/Makefile
+++++ b/arch/powerpc/Makefile
++@@ -24,11 +24,16 @@ ifdef CONFIG_PPC32
++ # or platform code sets later on the command line, but they are needed
++ # to set a sane 32-bit cpu target for the 64-bit cross compiler which
++ # may default to the wrong ISA.
+++# Never set -mcpu=powerpc option for gcc e500 compiler because this
+++# option is unsupported and throws error. The correct option for
+++# CONFIG_E500 is -mcpu=8540 and it is set few lines below.
+++ifndef CONFIG_E500
++ KBUILD_CFLAGS		+= -mcpu=powerpc
++ KBUILD_AFLAGS		+= -mcpu=powerpc
++ endif
++ endif
++ endif
+++endif
++ 
++ ifdef CONFIG_PPC_BOOK3S_32
++ KBUILD_CFLAGS		+= -mcpu=powerpc
+-- 
+2.35.3
+
+
+From 38a92bdd369c37c741c72da13b86a63327182d73 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:54:18 +0200
+Subject: [PATCH 4/6] mpc85xx: define flags for hardware SPE float support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+8548 cpu type (e500v2 core) supports double precision SPE instructions
+while 8540 (e500v1 core) supports single precision SPE instructions only.
+(see https://www.nxp.com/docs/en/reference-manual/E500CORERM.pdf )
+
+Signed-off-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ rules.mk                | 15 +++++++++++++++
+ toolchain/gcc/common.mk | 13 +++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/rules.mk b/rules.mk
+index f31d9bb113..5b2f2465a7 100644
+--- a/rules.mk
++++ b/rules.mk
+@@ -92,8 +92,11 @@ ifneq ($(filter -march=armv%,$(TARGET_OPTIMIZATION)),)
+   GCC_ARCH:=$(patsubst -march=%,%,$(filter -march=armv%,$(TARGET_OPTIMIZATION)))
+ endif
+ ifdef CONFIG_HAS_SPE_FPU
++ifndef CONFIG_SOFT_FLOAT
++  # suffix 'spe' enables hardware floating point support
+   TARGET_SUFFIX:=$(TARGET_SUFFIX)spe
+ endif
++endif
+ ifdef CONFIG_MIPS64_ABI
+   ifneq ($(CONFIG_MIPS64_ABI_O32),y)
+      ARCH_SUFFIX:=$(ARCH_SUFFIX)_$(call qstrip,$(CONFIG_MIPS64_ABI))
+@@ -231,6 +234,18 @@ else
+   ifeq ($(CONFIG_arm),y)
+     TARGET_CFLAGS+= -mfloat-abi=hard
+   endif
++  ifdef CONFIG_HAS_SPE_FPU
++    # -mabi=spe -mspe is required on e500v1 and e500v2 cores for proper hardware floating point support
++    TARGET_CFLAGS+= -mabi=spe -mspe
++  endif
++  ifeq ($(CONFIG_CPU_TYPE),"8540")
++    # cpu type 8540 (e500v1 core) has hardware SPE support only for single precision floats
++    TARGET_CFLAGS+= -mfloat-gprs=single
++  endif
++  ifeq ($(CONFIG_CPU_TYPE),"8548")
++    # cpu type 8548 (e500v2 core) has hardware SPE support also for double precision floats
++    TARGET_CFLAGS+= -mfloat-gprs=double
++  endif
+ endif
+ 
+ export PATH:=$(TARGET_PATH)
+diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
+index 99fd907969..e8736cd819 100644
+--- a/toolchain/gcc/common.mk
++++ b/toolchain/gcc/common.mk
+@@ -152,6 +152,19 @@ endif
+ 
+ ifdef CONFIG_powerpc
+   GCC_CONFIGURE+= --with-cpu=$(CONFIG_CPU_TYPE)
++  ifndef CONFIG_SOFT_FLOAT
++    ifdef CONFIG_HAS_SPE_FPU
++      # --enable-obsolete is required since gcc-8 for cpu type 8540 and 8548 with floating point support
++      GCC_CONFIGURE+= --enable-obsolete
++    endif
++    ifeq ($(CONFIG_CPU_TYPE),"8548")
++      # cpu type 8548 is e500v2 core (e500 with double precision floating point support)
++      GCC_CONFIGURE+= --enable-e500-double
++      # --with-long-double-128 which enables long double support is disabled for now because
++      # musl libc does not support this kind of IBM long double format (mantisa with 106 bits)
++      #GCC_CONFIGURE+= --with-long-double-128
++    endif
++  endif
+ endif
+ 
+ ifeq ($(CONFIG_arm),y)
+-- 
+2.35.3
+
+
+From c585683b65091fdcd7ced98233882781beb227be Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:58:46 +0200
+Subject: [PATCH 5/6] mpc85xx: enable hardware SPE floating point support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This enables use of SPE APU instructions specific to e500 cpu cores
+contained in mpc85xx cpus as described in
+https://www.nxp.com/docs/en/reference-manual/E500CORERM.pdf
+to perform floating point operations.
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ target/linux/mpc85xx/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
+index b1771dfd8e..e88e4f99f0 100644
+--- a/target/linux/mpc85xx/Makefile
++++ b/target/linux/mpc85xx/Makefile
+@@ -8,7 +8,7 @@ ARCH:=powerpc
+ BOARD:=mpc85xx
+ BOARDNAME:=Freescale MPC85xx
+ CPU_TYPE:=8540
+-FEATURES:=squashfs ramdisk nand
++FEATURES:=squashfs ramdisk nand spe_fpu
+ SUBTARGETS:=p1010 p1020 p2020
+ 
+ KERNEL_PATCHVER:=5.10
+-- 
+2.35.3
+
+
+From c8df0c15d6e5c58a9cb367600a895f90526a6777 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Mon, 27 Jun 2022 13:09:21 +0200
+Subject: [PATCH 6/6] package-defaults: use REAL_GNU_TARGET_NAME in CONFIGURE_ARGS where appropriate
+
+This fixes Python build for -muslspe target.
+
+---
+ include/package-defaults.mk | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/package-defaults.mk b/include/package-defaults.mk
+index 3ee3a965f2..d9ceba24b2 100644
+--- a/include/package-defaults.mk
++++ b/include/package-defaults.mk
+@@ -77,8 +77,8 @@ endif
+ 
+ CONFIGURE_PREFIX:=/usr
+ CONFIGURE_ARGS = \
+-		--target=$(GNU_TARGET_NAME) \
+-		--host=$(GNU_TARGET_NAME) \
++		--target=$(REAL_GNU_TARGET_NAME) \
++		--host=$(REAL_GNU_TARGET_NAME) \
+ 		--build=$(GNU_HOST_NAME) \
+ 		--program-prefix="" \
+ 		--program-suffix="" \
+-- 
+2.35.3
+
