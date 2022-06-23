@@ -1,0 +1,70 @@
+From dae02e4a4421656ef9e8663baea70f1d26896052 Mon Sep 17 00:00:00 2001
+From: Michal Vasilek <michal.vasilek@nic.cz>
+Date: Fri, 17 Jun 2022 15:12:41 +0200
+Subject: [PATCH] {procd,base-files}: remove Command failed message
+
+This was caused by stop() calling ubus call service delete every time
+even when the service was not enabled in which case it printed this
+cryptic error message.
+---
+ package/base-files/files/etc/rc.common        |  6 +++-
+ .../procd-empty-list-fix-returncode.patch     | 30 +++++++++++++++++++
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+ create mode 100644 package/system/procd/patches/procd-empty-list-fix-returncode.patch
+
+diff --git a/package/base-files/files/etc/rc.common b/package/base-files/files/etc/rc.common
+index 5d0d3c23f7..01bba47188 100755
+--- a/package/base-files/files/etc/rc.common
++++ b/package/base-files/files/etc/rc.common
+@@ -147,7 +147,11 @@ extra_command "enabled" "Check if service is started on boot"
+ 	stop() {
+ 		procd_lock
+ 		stop_service "$@"
+-		procd_kill "$(basename ${basescript:-$initscript})" "$1"
++		servicename="$(basename ${basescript:-$initscript})"
++		if ubus call service list "{ \"name\": \"$servicename\" }" >/dev/null 2>&1; then
++			procd_kill "$servicename" "$1"
++		fi
++
+ 		if eval "type service_stopped" 2>/dev/null >/dev/null; then
+ 			service_stopped
+ 		fi
+diff --git a/package/system/procd/patches/procd-empty-list-fix-returncode.patch b/package/system/procd/patches/procd-empty-list-fix-returncode.patch
+new file mode 100644
+index 0000000000..b3a6136b11
+--- /dev/null
++++ b/package/system/procd/patches/procd-empty-list-fix-returncode.patch
+@@ -0,0 +1,30 @@
++From 1ddd9d80e622dd86f2c00361f0909c786831c853 Mon Sep 17 00:00:00 2001
++From: Jo-Philipp Wich <jo@mein.io>
++Date: Wed, 22 Jun 2022 10:15:31 +0200
++Subject: [PATCH] Fix return code on empty list
++
++previously when ubus service list '{"name": "<name>"}' wouldn't report anything
++(the service wasn't registered), the command would return an empty json dict
++and exit with return code 0. Now it prints "Command failed: Not found"
++and returns with a non-zero exit status.
++
++--- a/service/service.c
+++++ b/service/service.c
++@@ -486,6 +486,7 @@ service_handle_list(struct ubus_context
++ 	bool verbose = false;
++ 	bool container = is_container_obj(obj);
++ 	const struct avl_tree *tree = container?&containers:&services;
+++	bool found = false;
++ 
++ 	blobmsg_parse(service_list_attrs, __SERVICE_LIST_ATTR_MAX, tb, blobmsg_data(msg), blobmsg_data_len(msg));
++ 
++@@ -499,9 +500,13 @@ service_handle_list(struct ubus_context
++ 		if (name && strcmp(s->name, name) != 0)
++ 			continue;
++ 
+++		found = true;
++ 		service_dump(s, verbose);
++ 	}
++ 
+++	if (name && !found)
+++		return UBUS_STATUS_NOT_FOUND;
+-- 
+2.36.1
+
