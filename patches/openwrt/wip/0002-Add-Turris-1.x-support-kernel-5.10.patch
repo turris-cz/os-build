@@ -1,4 +1,4 @@
-From d7d1ec58e0be11a283c1e058a236a760deb65269 Mon Sep 17 00:00:00 2001
+From acd08cfa4f5d5367023f0f4da785c92d6cc54f28 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Thu, 3 Feb 2022 13:52:13 +0100
 Subject: [PATCH] mpc85xx: Add support for CZ.NIC Turris 1.x routers
@@ -25,15 +25,14 @@ header for 2 USB 3.0 ports
 
 Install:
 wip
-
 ---
- package/boot/uboot-tools/files/mpc85xx     |   3 +
+ package/boot/uboot-tools/files/mpc85xx        |   3 +
  .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.10              |  66 ++-
+ target/linux/mpc85xx/config-5.10              |  64 ++-
  .../files/arch/powerpc/boot/dts/turris1x.dts  | 475 ++++++++++++++++++
  target/linux/mpc85xx/image/p2020.mk           |   9 +
  target/linux/mpc85xx/p2020/config-default     |  27 +
- 6 files changed, 579 insertions(+), 5 deletions(-)
+ 6 files changed, 577 insertions(+), 5 deletions(-)
  create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
@@ -66,7 +65,7 @@ index 03153b73d0..85dd56aa78 100644
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.10 b/target/linux/mpc85xx/config-5.10
-index 7ce8051dc5..de59b8486c 100644
+index 2668a729e8..5258d3e97e 100644
 --- a/target/linux/mpc85xx/config-5.10
 +++ b/target/linux/mpc85xx/config-5.10
 @@ -24,6 +24,15 @@ CONFIG_BOOKE=y
@@ -85,16 +84,15 @@ index 7ce8051dc5..de59b8486c 100644
  # CONFIG_C293_PCIE is not set
  CONFIG_CLONE_BACKWARDS=y
  CONFIG_CLZ_TAB=y
-@@ -40,6 +49,8 @@ CONFIG_CRYPTO_AKCIPHER=y
- CONFIG_CRYPTO_AKCIPHER2=y
+@@ -41,6 +50,7 @@ CONFIG_CRYPTO_AKCIPHER2=y
  CONFIG_CRYPTO_AUTHENC=y
+ CONFIG_CRYPTO_BLAKE2S=y
  CONFIG_CRYPTO_HW=y
 +CONFIG_CRYPTO_LZO=y
-+CONFIG_CRYPTO_XZ=y
+ CONFIG_CRYPTO_LIB_BLAKE2S_GENERIC=y
  CONFIG_CRYPTO_LIB_POLY1305_RSIZE=1
  # CONFIG_CRYPTO_MD5_PPC is not set
- CONFIG_CRYPTO_NULL=y
-@@ -116,6 +127,10 @@ CONFIG_IRQ_DOMAIN=y
+@@ -118,6 +128,10 @@ CONFIG_IRQ_DOMAIN=y
  CONFIG_IRQ_FORCED_THREADING=y
  CONFIG_IRQ_WORK=y
  CONFIG_ISA_DMA_API=y
@@ -105,7 +103,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_KERNEL_START=0xc0000000
  # CONFIG_KSI8560 is not set
  CONFIG_LEGACY_PTYS=y
-@@ -126,6 +141,13 @@ CONFIG_LOWMEM_CAM_NUM=3
+@@ -128,6 +142,13 @@ CONFIG_LOWMEM_CAM_NUM=3
  CONFIG_LOWMEM_SIZE=0x30000000
  CONFIG_LXT_PHY=y
  # CONFIG_MATH_EMULATION is not set
@@ -119,7 +117,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_MDIO_BUS=y
  CONFIG_MDIO_DEVICE=y
  CONFIG_MEMFD_CREATE=y
-@@ -136,20 +158,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
+@@ -138,20 +159,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
  # CONFIG_MPC8536_DS is not set
  # CONFIG_MPC8540_ADS is not set
  # CONFIG_MPC8560_ADS is not set
@@ -154,7 +152,7 @@ index 7ce8051dc5..de59b8486c 100644
  # CONFIG_MVME2500 is not set
  CONFIG_NEED_PER_CPU_KM=y
  CONFIG_NEED_SG_DMA_LENGTH=y
-@@ -165,10 +197,11 @@ CONFIG_OF_GPIO=y
+@@ -167,10 +198,11 @@ CONFIG_OF_GPIO=y
  CONFIG_OF_IRQ=y
  CONFIG_OF_KOBJ=y
  CONFIG_OF_MDIO=y
@@ -167,7 +165,7 @@ index 7ce8051dc5..de59b8486c 100644
  # CONFIG_P1022_DS is not set
  # CONFIG_P1022_RDK is not set
  # CONFIG_P1023_RDB is not set
-@@ -190,6 +223,8 @@ CONFIG_PHYSICAL_START=0x00000000
+@@ -192,6 +224,8 @@ CONFIG_PHYSICAL_START=0x00000000
  # CONFIG_PHYS_64BIT is not set
  # CONFIG_PMU_SYSFS is not set
  # CONFIG_PPA8548 is not set
@@ -176,7 +174,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_PPC=y
  CONFIG_PPC32=y
  # CONFIG_PPC64 is not set
-@@ -201,12 +236,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
+@@ -203,12 +237,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
  CONFIG_PPC_ADV_DEBUG_REGS=y
  CONFIG_PPC_BARRIER_NOSPEC=y
  CONFIG_PPC_BOOK3E_MMU=y
@@ -191,7 +189,7 @@ index 7ce8051dc5..de59b8486c 100644
  # CONFIG_PPC_IRQ_SOFT_MASK_DEBUG is not set
  CONFIG_PPC_MMU_NOHASH=y
  CONFIG_PPC_MMU_NOHASH_32=y
-@@ -239,6 +277,7 @@ CONFIG_SPE=y
+@@ -241,6 +277,7 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -199,7 +197,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_SPI_MASTER=y
  CONFIG_SPI_MEM=y
  CONFIG_SRCU=y
-@@ -246,6 +285,8 @@ CONFIG_SRCU=y
+@@ -248,6 +285,8 @@ CONFIG_SRCU=y
  # CONFIG_STX_GP3 is not set
  CONFIG_SWCONFIG=y
  CONFIG_SWPHY=y
@@ -208,7 +206,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_SYSCTL_EXCEPTION_TRACE=y
  CONFIG_TASK_SIZE=0xc0000000
  CONFIG_THREAD_INFO_IN_TASK=y
-@@ -263,6 +304,14 @@ CONFIG_UCC=y
+@@ -265,6 +304,14 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -223,7 +221,7 @@ index 7ce8051dc5..de59b8486c 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -273,3 +322,10 @@ CONFIG_WATCHDOG_CORE=y
+@@ -275,3 +322,10 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -733,7 +731,7 @@ index 79b5fa660c..33296fe142 100644
 +endef
 +TARGET_DEVICES += cznic_turris1x
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index de7f09e1f3..1a8095f9f7 100644
+index e4ed758d95..05c4621960 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
 @@ -4,6 +4,10 @@ CONFIG_GENERIC_CLOCKEVENTS_BROADCAST=y
@@ -771,7 +769,7 @@ index de7f09e1f3..1a8095f9f7 100644
  CONFIG_NET_FLOW_LIMIT=y
  CONFIG_NR_CPUS=2
  CONFIG_PADATA=y
-@@ -24,6 +24,13 @@ CONFIG_RPS=y
+@@ -24,6 +44,13 @@ CONFIG_RPS=y
  CONFIG_RTC_DRV_DS1307=y
  CONFIG_RWSEM_SPIN_ON_OWNER=y
  CONFIG_SMP=y
@@ -785,6 +783,6 @@ index de7f09e1f3..1a8095f9f7 100644
  CONFIG_XPS=y
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
---
-2.34.1
+-- 
+2.36.1
 
