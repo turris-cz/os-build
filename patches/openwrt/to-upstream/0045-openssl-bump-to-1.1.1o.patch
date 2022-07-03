@@ -1,30 +1,51 @@
-From 05daf96e1d3fea832bd6ce3a7f019d798933f2c1 Mon Sep 17 00:00:00 2001
-From: Eneas U de Queiroz <cotequeiroz@gmail.com>
-Date: Tue, 10 May 2022 20:34:57 -0300
+From ef4e90c81b6f2aadd433df4375a292ee0482251d Mon Sep 17 00:00:00 2001
+From: Andre Heider <a.heider@gmail.com>
+Date: Thu, 23 Jun 2022 09:08:07 +0200
 Subject: [PATCH] openssl: bump to 1.1.1p
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
 
-This release comes with a security fix related to c_rehash.  OpenWrt
-does not ship or use it, so it was not affected by the bug.
+Changes between 1.1.1o and 1.1.1p [21 Jun 2022]
 
-There is a fix for a possible crash in ERR_load_strings() when
-configured with no-err, which OpenWrt does by default.
+  *) In addition to the c_rehash shell command injection identified in
+     CVE-2022-1292, further bugs where the c_rehash script does not
+     properly sanitise shell metacharacters to prevent command injection have been
+     fixed.
 
-Signed-off-by: Eneas U de Queiroz <cotequeiroz@gmail.com>
-(cherry picked from commit 7a5ddc0d06895bde7538d78c8dad2c863d70f946)
+     When the CVE-2022-1292 was fixed it was not discovered that there
+     are other places in the script where the file names of certificates
+     being hashed were possibly passed to a command executed through the shell.
+
+     This script is distributed by some operating systems in a manner where
+     it is automatically executed.  On such operating systems, an attacker
+     could execute arbitrary commands with the privileges of the script.
+
+     Use of the c_rehash script is considered obsolete and should be replaced
+     by the OpenSSL rehash command line tool.
+     (CVE-2022-2068)
+     [Daniel Fiala, Tomáš Mráz]
+
+  *) When OpenSSL TLS client is connecting without any supported elliptic
+     curves and TLS-1.3 protocol is disabled the connection will no longer fail
+     if a ciphersuite that does not use a key exchange based on elliptic
+     curves can be negotiated.
+     [Tomáš Mráz]
+
+Signed-off-by: Andre Heider <a.heider@gmail.com>
 ---
- package/libs/openssl/Makefile                             | 4 ++--
- ...0-e_devcrypto-make-the-dev-crypto-engine-dynamic.patch | 8 ++++----
- 2 files changed, 6 insertions(+), 6 deletions(-)
+ package/libs/openssl/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/package/libs/openssl/Makefile b/package/libs/openssl/Makefile
-index 52a5aeec938f..56626d7cdc47 100644
+index 56626d7cdc47..d0fa086bc2cd 100644
 --- a/package/libs/openssl/Makefile
 +++ b/package/libs/openssl/Makefile
 @@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
  
  PKG_NAME:=openssl
  PKG_BASE:=1.1.1
--PKG_BUGFIX:=n
+-PKG_BUGFIX:=o
 +PKG_BUGFIX:=p
  PKG_VERSION:=$(PKG_BASE)$(PKG_BUGFIX)
  PKG_RELEASE:=1
@@ -33,48 +54,8 @@ index 52a5aeec938f..56626d7cdc47 100644
  	ftp://ftp.pca.dfn.de/pub/tools/net/openssl/source/ \
  	ftp://ftp.pca.dfn.de/pub/tools/net/openssl/source/old/$(PKG_BASE)/
  
--PKG_HASH:=40dceb51a4f6a5275bde0e6bf20ef4b91bfc32ed57c0552e2e8e15463372b17a
+-PKG_HASH:=9384a2b0570dd80358841464677115df785edb941c71211f75076d72fe6b438f
 +PKG_HASH:=bf61b62aaa66c7c7639942a94de4c9ae8280c08f17d4eac2e44644d9fc8ace6f
  
  PKG_LICENSE:=OpenSSL
  PKG_LICENSE_FILES:=LICENSE
-diff --git a/package/libs/openssl/patches/430-e_devcrypto-make-the-dev-crypto-engine-dynamic.patch b/package/libs/openssl/patches/430-e_devcrypto-make-the-dev-crypto-engine-dynamic.patch
-index ea3f8fb8a7f5..0b2f345eefc1 100644
---- a/package/libs/openssl/patches/430-e_devcrypto-make-the-dev-crypto-engine-dynamic.patch
-+++ b/package/libs/openssl/patches/430-e_devcrypto-make-the-dev-crypto-engine-dynamic.patch
-@@ -23,7 +23,7 @@ diff --git a/crypto/init.c b/crypto/init.c
- index 1b0d523bea..ee3e2eb075 100644
- --- a/crypto/init.c
- +++ b/crypto/init.c
--@@ -329,18 +329,6 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_openssl)
-+@@ -328,18 +328,6 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_openssl)
-      engine_load_openssl_int();
-      return 1;
-  }
-@@ -42,7 +42,7 @@ index 1b0d523bea..ee3e2eb075 100644
-  
-  # ifndef OPENSSL_NO_RDRAND
-  static CRYPTO_ONCE engine_rdrand = CRYPTO_ONCE_STATIC_INIT;
--@@ -365,6 +353,18 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_dynamic)
-+@@ -364,6 +352,18 @@ DEFINE_RUN_ONCE_STATIC(ossl_init_engine_dynamic)
-      return 1;
-  }
-  # ifndef OPENSSL_NO_STATIC_ENGINE
-@@ -61,7 +61,7 @@ index 1b0d523bea..ee3e2eb075 100644
-  #  if !defined(OPENSSL_NO_HW) && !defined(OPENSSL_NO_HW_PADLOCK)
-  static CRYPTO_ONCE engine_padlock = CRYPTO_ONCE_STATIC_INIT;
-  DEFINE_RUN_ONCE_STATIC(ossl_init_engine_padlock)
--@@ -713,11 +713,6 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
-+@@ -704,11 +704,6 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
-      if ((opts & OPENSSL_INIT_ENGINE_OPENSSL)
-              && !RUN_ONCE(&engine_openssl, ossl_init_engine_openssl))
-          return 0;
-@@ -73,7 +73,7 @@ index 1b0d523bea..ee3e2eb075 100644
-  # ifndef OPENSSL_NO_RDRAND
-      if ((opts & OPENSSL_INIT_ENGINE_RDRAND)
-              && !RUN_ONCE(&engine_rdrand, ossl_init_engine_rdrand))
--@@ -727,6 +722,11 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
-+@@ -718,6 +713,11 @@ int OPENSSL_init_crypto(uint64_t opts, const OPENSSL_INIT_SETTINGS *settings)
-              && !RUN_ONCE(&engine_dynamic, ossl_init_engine_dynamic))
-          return 0;
-  # ifndef OPENSSL_NO_STATIC_ENGINE
