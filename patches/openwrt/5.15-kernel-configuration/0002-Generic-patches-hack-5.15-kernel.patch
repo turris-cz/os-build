@@ -1,7 +1,7 @@
-From 01d655b38a3759f79e17baffc7c96a2bbeee2972 Mon Sep 17 00:00:00 2001
+From 52752df18724cb76ac0aa4ef45c01e4fac32949a Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Mon, 23 May 2022 09:12:42 +0200
-Subject: [PATCH 2/8] Generic patches hack 5.15 kernel
+Date: Mon, 4 Jul 2022 14:19:35 +0200
+Subject: [PATCH 2/3] Generic hack patches 5.15
 
 ---
  .../generic/hack-5.15/204-module_strip.patch  |  212 ++
@@ -33,12 +33,11 @@ Subject: [PATCH 2/8] Generic patches hack 5.15 kernel
  .../generic/hack-5.15/531-debloat_lzma.patch  | 1040 ++++++
  .../hack-5.15/600-bridge_offload.patch        |  821 +++++
  ...lter-connmark-introduce-set-dscpmark.patch |  212 ++
- ...-netfilter-add-xt_FLOWOFFLOAD-target.patch |  856 +++++
+ ...-netfilter-add-xt_FLOWOFFLOAD-target.patch |  860 +++++
  .../hack-5.15/651-wireless_mesh_header.patch  |   24 +
  .../hack-5.15/660-fq_codel_defaults.patch     |   27 +
  ...t-size-the-hashtable-more-adequately.patch |   25 +
- .../700-swconfig_switch_drivers.patch         |  129 +
- .../710-net-dsa-mv88e6xxx-default-VID-1.patch |   18 +
+ .../700-swconfig_switch_drivers.patch         |  131 +
  ...-dsa-mv88e6xxx-disable-ATU-violation.patch |   12 +
  .../hack-5.15/720-net-phy-add-aqr-phys.patch  |  142 +
  .../721-net-add-packet-mangeling.patch        |  178 +
@@ -57,7 +56,7 @@ Subject: [PATCH 2/8] Generic patches hack 5.15 kernel
  .../hack-5.15/910-kobject_uevent.patch        |   32 +
  .../911-kobject_add_broadcast_uevent.patch    |   76 +
  .../hack-5.15/920-device_tree_cmdline.patch   |   12 +
- 53 files changed, 9864 insertions(+)
+ 52 files changed, 9852 insertions(+)
  create mode 100644 target/linux/generic/hack-5.15/204-module_strip.patch
  create mode 100644 target/linux/generic/hack-5.15/205-kconfig-exit.patch
  create mode 100644 target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
@@ -92,7 +91,6 @@ Subject: [PATCH 2/8] Generic patches hack 5.15 kernel
  create mode 100644 target/linux/generic/hack-5.15/660-fq_codel_defaults.patch
  create mode 100644 target/linux/generic/hack-5.15/661-kernel-ct-size-the-hashtable-more-adequately.patch
  create mode 100644 target/linux/generic/hack-5.15/700-swconfig_switch_drivers.patch
- create mode 100644 target/linux/generic/hack-5.15/710-net-dsa-mv88e6xxx-default-VID-1.patch
  create mode 100644 target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch
  create mode 100644 target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch
  create mode 100644 target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
@@ -114,7 +112,7 @@ Subject: [PATCH 2/8] Generic patches hack 5.15 kernel
 
 diff --git a/target/linux/generic/hack-5.15/204-module_strip.patch b/target/linux/generic/hack-5.15/204-module_strip.patch
 new file mode 100644
-index 0000000000..0968d6a135
+index 0000000000..bd7fc71060
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/204-module_strip.patch
 @@ -0,0 +1,212 @@
@@ -208,7 +206,7 @@ index 0000000000..0968d6a135
 + 
 +--- a/init/Kconfig
 ++++ b/init/Kconfig
-+@@ -2347,6 +2347,13 @@ config UNUSED_KSYMS_WHITELIST
++@@ -2352,6 +2352,13 @@ config UNUSED_KSYMS_WHITELIST
 + 	  one per line. The path can be absolute, or relative to the kernel
 + 	  source tree.
 + 
@@ -263,7 +261,7 @@ index 0000000000..0968d6a135
 + 
 +--- a/scripts/mod/modpost.c
 ++++ b/scripts/mod/modpost.c
-+@@ -2033,7 +2033,9 @@ static void read_symbols(const char *mod
++@@ -2034,7 +2034,9 @@ static void read_symbols(const char *mod
 + 		symname = remove_dot(info.strtab + sym->st_name);
 + 
 + 		handle_symbol(mod, &info, sym, symname);
@@ -273,7 +271,7 @@ index 0000000000..0968d6a135
 + 	}
 + 
 + 	for (sym = info.symtab_start; sym < info.symtab_stop; sym++) {
-+@@ -2212,8 +2214,10 @@ static void add_header(struct buffer *b,
++@@ -2213,8 +2215,10 @@ static void add_header(struct buffer *b,
 + 	buf_printf(b, "BUILD_SALT;\n");
 + 	buf_printf(b, "BUILD_LTO_INFO;\n");
 + 	buf_printf(b, "\n");
@@ -284,7 +282,7 @@ index 0000000000..0968d6a135
 + 	buf_printf(b, "\n");
 + 	buf_printf(b, "__visible struct module __this_module\n");
 + 	buf_printf(b, "__section(\".gnu.linkonce.this_module\") = {\n");
-+@@ -2230,8 +2234,10 @@ static void add_header(struct buffer *b,
++@@ -2231,8 +2235,10 @@ static void add_header(struct buffer *b,
 + 
 + static void add_intree_flag(struct buffer *b, int is_intree)
 + {
@@ -295,7 +293,7 @@ index 0000000000..0968d6a135
 + }
 + 
 + /* Cannot check for assembler */
-+@@ -2244,8 +2250,10 @@ static void add_retpoline(struct buffer
++@@ -2245,8 +2251,10 @@ static void add_retpoline(struct buffer
 + 
 + static void add_staging_flag(struct buffer *b, const char *name)
 + {
@@ -306,7 +304,7 @@ index 0000000000..0968d6a135
 + }
 + 
 + /**
-+@@ -2325,11 +2333,13 @@ static void add_depends(struct buffer *b
++@@ -2326,11 +2334,13 @@ static void add_depends(struct buffer *b
 + 
 + static void add_srcversion(struct buffer *b, struct module *mod)
 + {
@@ -320,7 +318,7 @@ index 0000000000..0968d6a135
 + }
 + 
 + static void write_buf(struct buffer *b, const char *fname)
-+@@ -2578,7 +2588,9 @@ int main(int argc, char **argv)
++@@ -2579,7 +2589,9 @@ int main(int argc, char **argv)
 + 		add_staging_flag(&buf, mod->name);
 + 		add_versions(&buf, mod);
 + 		add_depends(&buf, mod);
@@ -3711,7 +3709,7 @@ index 0000000000..0aa3eb840c
 + 	. = __stubs_lma + SIZEOF(.stubs);				\
 diff --git a/target/linux/generic/hack-5.15/221-module_exports.patch b/target/linux/generic/hack-5.15/221-module_exports.patch
 new file mode 100644
-index 0000000000..0164eabac0
+index 0000000000..95aef8edf8
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/221-module_exports.patch
 @@ -0,0 +1,102 @@
@@ -3784,7 +3782,7 @@ index 0000000000..0164eabac0
 + 	*(.modinfo)							\
 +--- a/include/linux/export.h
 ++++ b/include/linux/export.h
-+@@ -82,6 +82,12 @@ struct kernel_symbol {
++@@ -84,6 +84,12 @@ struct kernel_symbol {
 + 
 + #else
 + 
@@ -3797,7 +3795,7 @@ index 0000000000..0164eabac0
 + /*
 +  * For every exported symbol, do the following:
 +  *
-+@@ -99,7 +105,7 @@ struct kernel_symbol {
++@@ -101,7 +107,7 @@ struct kernel_symbol {
 + 	extern const char __kstrtab_##sym[];					\
 + 	extern const char __kstrtabns_##sym[];					\
 + 	__CRC_SYMBOL(sym, sec);							\
@@ -3909,7 +3907,7 @@ index 0000000000..495c73ffa8
 + 	  This option adds a `TCPMSS' target, which allows you to alter the
 diff --git a/target/linux/generic/hack-5.15/251-kconfig.patch b/target/linux/generic/hack-5.15/251-kconfig.patch
 new file mode 100644
-index 0000000000..3304e9543a
+index 0000000000..5a8a820252
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/251-kconfig.patch
 @@ -0,0 +1,199 @@
@@ -3931,7 +3929,7 @@ index 0000000000..3304e9543a
 +
 +--- a/crypto/Kconfig
 ++++ b/crypto/Kconfig
-+@@ -33,7 +33,7 @@ config CRYPTO_FIPS
++@@ -34,7 +34,7 @@ config CRYPTO_FIPS
 + 	  this is.
 + 
 + config CRYPTO_ALGAPI
@@ -3940,7 +3938,7 @@ index 0000000000..3304e9543a
 + 	select CRYPTO_ALGAPI2
 + 	help
 + 	  This option provides the API for cryptographic algorithms.
-+@@ -42,7 +42,7 @@ config CRYPTO_ALGAPI2
++@@ -43,7 +43,7 @@ config CRYPTO_ALGAPI2
 + 	tristate
 + 
 + config CRYPTO_AEAD
@@ -3949,7 +3947,7 @@ index 0000000000..3304e9543a
 + 	select CRYPTO_AEAD2
 + 	select CRYPTO_ALGAPI
 + 
-+@@ -53,7 +53,7 @@ config CRYPTO_AEAD2
++@@ -54,7 +54,7 @@ config CRYPTO_AEAD2
 + 	select CRYPTO_RNG2
 + 
 + config CRYPTO_SKCIPHER
@@ -3958,7 +3956,7 @@ index 0000000000..3304e9543a
 + 	select CRYPTO_SKCIPHER2
 + 	select CRYPTO_ALGAPI
 + 
-+@@ -63,7 +63,7 @@ config CRYPTO_SKCIPHER2
++@@ -64,7 +64,7 @@ config CRYPTO_SKCIPHER2
 + 	select CRYPTO_RNG2
 + 
 + config CRYPTO_HASH
@@ -3967,7 +3965,7 @@ index 0000000000..3304e9543a
 + 	select CRYPTO_HASH2
 + 	select CRYPTO_ALGAPI
 + 
-+@@ -72,7 +72,7 @@ config CRYPTO_HASH2
++@@ -73,7 +73,7 @@ config CRYPTO_HASH2
 + 	select CRYPTO_ALGAPI2
 + 
 + config CRYPTO_RNG
@@ -4007,7 +4005,7 @@ index 0000000000..3304e9543a
 + 	bool
 +--- a/lib/Kconfig
 ++++ b/lib/Kconfig
-+@@ -438,16 +438,16 @@ config BCH_CONST_T
++@@ -443,16 +443,16 @@ config BCH_CONST_T
 + # Textsearch support is select'ed if needed
 + #
 + config TEXTSEARCH
@@ -4143,13 +4141,13 @@ index 0000000000..6502d1d6ed
 + 	  This option adds support for SATA Port Multipliers
 diff --git a/target/linux/generic/hack-5.15/253-ksmbd-config.patch b/target/linux/generic/hack-5.15/253-ksmbd-config.patch
 new file mode 100644
-index 0000000000..89be6f6c47
+index 0000000000..559898f78d
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/253-ksmbd-config.patch
 @@ -0,0 +1,22 @@
 +--- a/init/Kconfig
 ++++ b/init/Kconfig
-+@@ -2379,7 +2379,7 @@ config PADATA
++@@ -2384,7 +2384,7 @@ config PADATA
 + 	bool
 + 
 + config ASN1
@@ -4160,7 +4158,7 @@ index 0000000000..89be6f6c47
 + 	  that can be interpreted by the ASN.1 stream decoder and used to
 +--- a/lib/Kconfig
 ++++ b/lib/Kconfig
-+@@ -609,7 +609,7 @@ config LIBFDT
++@@ -614,7 +614,7 @@ config LIBFDT
 + 	bool
 + 
 + config OID_REGISTRY
@@ -4321,7 +4319,7 @@ index 0000000000..6be5875177
 + 	/* Unspecified -> 0 -> Backwards compatible default */
 diff --git a/target/linux/generic/hack-5.15/260-crypto_test_dependencies.patch b/target/linux/generic/hack-5.15/260-crypto_test_dependencies.patch
 new file mode 100644
-index 0000000000..c73a1f1f64
+index 0000000000..64daa82743
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/260-crypto_test_dependencies.patch
 @@ -0,0 +1,52 @@
@@ -4341,7 +4339,7 @@ index 0000000000..c73a1f1f64
 +
 +--- a/crypto/Kconfig
 ++++ b/crypto/Kconfig
-+@@ -120,13 +120,13 @@ config CRYPTO_MANAGER
++@@ -121,13 +121,13 @@ config CRYPTO_MANAGER
 + 	  cbc(aes).
 + 
 + config CRYPTO_MANAGER2
@@ -4379,7 +4377,7 @@ index 0000000000..c73a1f1f64
 + 
 diff --git a/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch b/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
 new file mode 100644
-index 0000000000..a7668acfad
+index 0000000000..4ffd8cfa37
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
 @@ -0,0 +1,15 @@
@@ -4397,7 +4395,7 @@ index 0000000000..a7668acfad
 ++	tristate "ARC4 cipher library"
 + 
 + config CRYPTO_ARCH_HAVE_LIB_BLAKE2S
-+ 	tristate
++ 	bool
 diff --git a/target/linux/generic/hack-5.15/280-rfkill-stubs.patch b/target/linux/generic/hack-5.15/280-rfkill-stubs.patch
 new file mode 100644
 index 0000000000..7a650d132e
@@ -4648,7 +4646,7 @@ index 0000000000..215528a90c
 + KBUILD_LDFLAGS	+= -EL
 diff --git a/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch b/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
 new file mode 100644
-index 0000000000..d0f81c485b
+index 0000000000..88ca07f517
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
 @@ -0,0 +1,98 @@
@@ -4731,7 +4729,7 @@ index 0000000000..d0f81c485b
 + 
 + #include "mtdcore.h"
 + 
-+@@ -1002,6 +1003,8 @@ int mtd_device_parse_register(struct mtd
++@@ -1012,6 +1013,8 @@ int mtd_device_parse_register(struct mtd
 + 
 + 	ret = mtd_otp_nvmem_add(mtd);
 + 
@@ -4953,7 +4951,7 @@ index 0000000000..7539bc8627
 + 
 diff --git a/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch b/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
 new file mode 100644
-index 0000000000..8ac1dca238
+index 0000000000..4cefe35e55
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
 @@ -0,0 +1,39 @@
@@ -4979,7 +4977,7 @@ index 0000000000..8ac1dca238
 + #include <linux/nvmem-provider.h>
 + 
 + #include <linux/mtd/mtd.h>
-+@@ -697,6 +698,16 @@ int add_mtd_device(struct mtd_info *mtd)
++@@ -707,6 +708,16 @@ int add_mtd_device(struct mtd_info *mtd)
 + 	   of this try_ nonsense, and no bitching about it
 + 	   either. :) */
 + 	__module_get(THIS_MODULE);
@@ -6199,7 +6197,7 @@ index 0000000000..2f70eee3e9
 +-}
 diff --git a/target/linux/generic/hack-5.15/600-bridge_offload.patch b/target/linux/generic/hack-5.15/600-bridge_offload.patch
 new file mode 100644
-index 0000000000..c7942a0aef
+index 0000000000..5d49d07753
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/600-bridge_offload.patch
 @@ -0,0 +1,821 @@
@@ -6359,7 +6357,7 @@ index 0000000000..c7942a0aef
 + 
 + static int
 + br_netif_receive_skb(struct net *net, struct sock *sk, struct sk_buff *skb)
-+@@ -164,6 +165,7 @@ int br_handle_frame_finish(struct net *n
++@@ -171,6 +172,7 @@ int br_handle_frame_finish(struct net *n
 + 			dst->used = now;
 + 		br_forward(dst->dst, skb, local_rcv, false);
 + 	} else {
@@ -6367,7 +6365,7 @@ index 0000000000..c7942a0aef
 + 		if (!mcast_hit)
 + 			br_flood(br, skb, pkt_type, local_rcv, false);
 + 		else
-+@@ -297,6 +299,9 @@ static rx_handler_result_t br_handle_fra
++@@ -304,6 +306,9 @@ static rx_handler_result_t br_handle_fra
 + 	memset(skb->cb, 0, sizeof(struct br_input_skb_cb));
 + 
 + 	p = br_port_get_rcu(skb->dev);
@@ -6639,13 +6637,13 @@ index 0000000000..c7942a0aef
 ++	vg = nbp_vlan_group_rcu(inp);
 ++	vlan = cb->input_vlan_present ? cb->input_vlan_tag : br_get_pvid(vg);
 ++	fdb_in = br_fdb_find_rcu(p->br, eth_hdr(skb)->h_source, vlan);
-++	if (!fdb_in)
+++	if (!fdb_in || !fdb_in->dst)
 ++		goto out;
 ++
 ++	vg = nbp_vlan_group_rcu(p);
 ++	vlan = skb_vlan_tag_present(skb) ? skb_vlan_tag_get_id(skb) : br_get_pvid(vg);
 ++	fdb_out = br_fdb_find_rcu(p->br, eth_hdr(skb)->h_dest, vlan);
-++	if (!fdb_out)
+++	if (!fdb_out || !fdb_out->dst)
 ++		goto out;
 ++
 ++	br_offload_prepare_key(p, &key, skb);
@@ -6655,7 +6653,7 @@ index 0000000000..c7942a0aef
 ++#endif
 ++
 ++	flow = kmem_cache_alloc(offload_cache, GFP_ATOMIC);
-++	flow->port = fdb_in->dst;
+++	flow->port = inp;
 ++	memcpy(&flow->key, &key, sizeof(key));
 ++
 ++#ifdef CONFIG_BRIDGE_VLAN_FILTERING
@@ -6670,7 +6668,7 @@ index 0000000000..c7942a0aef
 ++	spin_lock_bh(&offload_lock);
 ++	if (!o->enabled ||
 ++	    atomic_read(&p->offload.rht.nelems) >= p->br->offload_cache_size ||
-++	    rhashtable_insert_fast(&flow->port->offload.rht, &flow->node, flow_params)) {
+++	    rhashtable_insert_fast(&inp->offload.rht, &flow->node, flow_params)) {
 ++		kmem_cache_free(offload_cache, flow);
 ++		goto out_unlock;
 ++	}
@@ -6716,8 +6714,8 @@ index 0000000000..c7942a0aef
 ++#ifdef CONFIG_BRIDGE_VLAN_FILTERING
 ++		cb->input_vlan_present = key.vlan_present != 0;
 ++		cb->input_vlan_tag = key.vlan_tag;
-++		cb->input_ifindex = p->dev->ifindex;
 ++#endif
+++		cb->input_ifindex = p->dev->ifindex;
 ++		goto out;
 ++	}
 ++
@@ -7244,10 +7242,10 @@ index 0000000000..2d3fe01a75
 + 
 diff --git a/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch b/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch
 new file mode 100644
-index 0000000000..0eca9f8d8f
+index 0000000000..f826d65a81
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch
-@@ -0,0 +1,856 @@
+@@ -0,0 +1,860 @@
 +From: Felix Fietkau <nbd@nbd.name>
 +Date: Tue, 20 Feb 2018 15:56:02 +0100
 +Subject: [PATCH] netfilter: add xt_FLOWOFFLOAD target
@@ -7348,7 +7346,7 @@ index 0000000000..0eca9f8d8f
 + obj-$(CONFIG_NETFILTER_XT_TARGET_LED) += xt_LED.o
 +--- /dev/null
 ++++ b/net/netfilter/xt_FLOWOFFLOAD.c
-+@@ -0,0 +1,694 @@
++@@ -0,0 +1,697 @@
 ++/*
 ++ * Copyright (C) 2018-2021 Felix Fietkau <nbd@nbd.name>
 ++ *
@@ -7539,12 +7537,15 @@ index 0000000000..0eca9f8d8f
 ++}
 ++
 ++static void
-++xt_flowoffload_check_hook(struct flow_offload *flow, void *data)
+++xt_flowoffload_check_hook(struct nf_flowtable *flowtable,
+++			  struct flow_offload *flow, void *data)
 ++{
-++	struct xt_flowoffload_table *table = data;
+++	struct xt_flowoffload_table *table;
 ++	struct flow_offload_tuple *tuple0 = &flow->tuplehash[0].tuple;
 ++	struct flow_offload_tuple *tuple1 = &flow->tuplehash[1].tuple;
 ++	struct xt_flowoffload_hook *hook;
+++
+++	table = container_of(flowtable, struct xt_flowoffload_table, ft);
 ++
 ++	spin_lock_bh(&hooks_lock);
 ++	hlist_for_each_entry(hook, &table->hooks, list) {
@@ -7573,7 +7574,7 @@ index 0000000000..0eca9f8d8f
 ++	spin_unlock_bh(&hooks_lock);
 ++
 ++	err = nf_flow_table_iterate(&table->ft, xt_flowoffload_check_hook,
-++				    table);
+++				    NULL);
 ++	if (err && err != -EAGAIN)
 ++		goto out;
 ++
@@ -8053,23 +8054,23 @@ index 0000000000..0eca9f8d8f
 + #include <net/netfilter/nf_flow_table.h>
 + #include <net/netfilter/nf_conntrack.h>
 + #include <net/netfilter/nf_conntrack_core.h>
-+@@ -399,8 +398,7 @@ flow_offload_lookup(struct nf_flowtable
++@@ -380,8 +379,7 @@ flow_offload_lookup(struct nf_flowtable
 + }
 + EXPORT_SYMBOL_GPL(flow_offload_lookup);
 + 
 +-static int
 +-nf_flow_table_iterate(struct nf_flowtable *flow_table,
 ++int nf_flow_table_iterate(struct nf_flowtable *flow_table,
-+ 		      void (*iter)(struct flow_offload *flow, void *data),
++ 		      void (*iter)(struct nf_flowtable *flowtable,
++ 				   struct flow_offload *flow, void *data),
 + 		      void *data)
-+ {
-+@@ -432,6 +430,7 @@ nf_flow_table_iterate(struct nf_flowtabl
-+ 
-+ 	return err;
++@@ -435,6 +433,7 @@ static void nf_flow_offload_gc_step(stru
++ 		nf_flow_offload_stats(flow_table, flow);
++ 	}
 + }
 ++EXPORT_SYMBOL_GPL(nf_flow_table_iterate);
 + 
-+ static bool flow_offload_stale_dst(struct flow_offload_tuple *tuple)
++ static void nf_flow_offload_work_gc(struct work_struct *work)
 + {
 +--- /dev/null
 ++++ b/include/uapi/linux/netfilter/xt_FLOWOFFLOAD.h
@@ -8093,13 +8094,14 @@ index 0000000000..0eca9f8d8f
 ++#endif /* _XT_FLOWOFFLOAD_H */
 +--- a/include/net/netfilter/nf_flow_table.h
 ++++ b/include/net/netfilter/nf_flow_table.h
-+@@ -275,6 +275,10 @@ void nf_flow_table_free(struct nf_flowta
++@@ -275,6 +275,11 @@ void nf_flow_table_free(struct nf_flowta
 + 
 + void flow_offload_teardown(struct flow_offload *flow);
 + 
 ++int nf_flow_table_iterate(struct nf_flowtable *flow_table,
-++			  void (*iter)(struct flow_offload *flow, void *data),
-++			  void *data);
+++                      void (*iter)(struct nf_flowtable *flowtable,
+++                                   struct flow_offload *flow, void *data),
+++                      void *data);
 ++
 + void nf_flow_snat_port(const struct flow_offload *flow,
 + 		       struct sk_buff *skb, unsigned int thoff,
@@ -8200,10 +8202,10 @@ index 0000000000..134e2100c8
 + 		    nr_pages > (4 * (1024 * 1024 * 1024 / PAGE_SIZE)))
 diff --git a/target/linux/generic/hack-5.15/700-swconfig_switch_drivers.patch b/target/linux/generic/hack-5.15/700-swconfig_switch_drivers.patch
 new file mode 100644
-index 0000000000..560937a7c1
+index 0000000000..48be440025
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/700-swconfig_switch_drivers.patch
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,131 @@
 +From 36e516290611e613aa92996cb4339561452695b4 Mon Sep 17 00:00:00 2001
 +From: Felix Fietkau <nbd@nbd.name>
 +Date: Fri, 7 Jul 2017 17:24:23 +0200
@@ -8242,8 +8244,9 @@ index 0000000000..560937a7c1
 ++	  Support for FC is very limited.
 ++
 ++config AR8216_PHY
-++	tristate "Driver for Atheros AR8216 switches"
+++	tristate "Driver for Atheros AR8216/8327 switches"
 ++	select SWCONFIG
+++	select ETHERNET_PACKET_MANGLE
 ++
 ++config AR8216_PHY_LEDS
 ++	bool "Atheros AR8216 switch LED support"
@@ -8258,7 +8261,6 @@ index 0000000000..560937a7c1
 ++config PSB6970_PHY
 ++	tristate "Lantiq XWAY Tantos (PSB6970) Ethernet switch"
 ++	select SWCONFIG
-++	select ETHERNET_PACKET_MANGLE
 ++
 ++config RTL8306_PHY
 ++	tristate "Driver for Realtek RTL8306S switches"
@@ -8301,13 +8303,15 @@ index 0000000000..560937a7c1
 + config AMD_PHY
 +--- a/drivers/net/phy/Makefile
 ++++ b/drivers/net/phy/Makefile
-+@@ -24,6 +24,19 @@ libphy-$(CONFIG_LED_TRIGGER_PHY)	+= phy_
++@@ -24,6 +24,21 @@ libphy-$(CONFIG_LED_TRIGGER_PHY)	+= phy_
 + obj-$(CONFIG_PHYLINK)		+= phylink.o
 + obj-$(CONFIG_PHYLIB)		+= libphy.o
 + 
 ++obj-$(CONFIG_SWCONFIG)		+= swconfig.o
 ++obj-$(CONFIG_ADM6996_PHY)	+= adm6996.o
-++obj-$(CONFIG_AR8216_PHY)	+= ar8216.o ar8327.o
+++obj-$(CONFIG_AR8216_PHY)	+= ar8xxx.o
+++ar8xxx-y			+= ar8216.o
+++ar8xxx-y			+= ar8327.o
 ++obj-$(CONFIG_SWCONFIG_B53)	+= b53/
 ++obj-$(CONFIG_IP17XX_PHY)	+= ip17xx.o
 ++obj-$(CONFIG_PSB6970_PHY)	+= psb6970.o
@@ -8333,39 +8337,15 @@ index 0000000000..560937a7c1
 + 	/* only used by MMAP'd driver */
 + 	unsigned big_endian:1;
 + 	void __iomem *regs;
-diff --git a/target/linux/generic/hack-5.15/710-net-dsa-mv88e6xxx-default-VID-1.patch b/target/linux/generic/hack-5.15/710-net-dsa-mv88e6xxx-default-VID-1.patch
-new file mode 100644
-index 0000000000..f85b558fef
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/710-net-dsa-mv88e6xxx-default-VID-1.patch
-@@ -0,0 +1,18 @@
-+--- a/drivers/net/dsa/mv88e6xxx/chip.c
-++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -2321,6 +2321,7 @@ static int mv88e6xxx_port_fdb_add(struct
-+ 	struct mv88e6xxx_chip *chip = ds->priv;
-+ 	int err;
-+ 
-++	vid = vid ? : 1;
-+ 	mv88e6xxx_reg_lock(chip);
-+ 	err = mv88e6xxx_port_db_load_purge(chip, port, addr, vid,
-+ 					   MV88E6XXX_G1_ATU_DATA_STATE_UC_STATIC);
-+@@ -2335,6 +2336,7 @@ static int mv88e6xxx_port_fdb_del(struct
-+ 	struct mv88e6xxx_chip *chip = ds->priv;
-+ 	int err;
-+ 
-++	vid = vid ? : 1;
-+ 	mv88e6xxx_reg_lock(chip);
-+ 	err = mv88e6xxx_port_db_load_purge(chip, port, addr, vid, 0);
-+ 	mv88e6xxx_reg_unlock(chip);
 diff --git a/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch b/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch
 new file mode 100644
-index 0000000000..4e0654f8f3
+index 0000000000..5e2b2910ab
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch
 @@ -0,0 +1,12 @@
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -2983,6 +2983,9 @@ static int mv88e6xxx_setup_port(struct m
++@@ -2981,6 +2981,9 @@ static int mv88e6xxx_setup_port(struct m
 + 	else
 + 		reg = 1 << port;
 + 
@@ -8525,7 +8505,7 @@ index 0000000000..59124990c3
 + 
 diff --git a/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 new file mode 100644
-index 0000000000..57cc4c810b
+index 0000000000..92b27e76d8
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 @@ -0,0 +1,178 @@
@@ -8647,7 +8627,7 @@ index 0000000000..57cc4c810b
 + 	help
 +--- a/net/core/dev.c
 ++++ b/net/core/dev.c
-+@@ -3582,6 +3582,11 @@ static int xmit_one(struct sk_buff *skb,
++@@ -3586,6 +3586,11 @@ static int xmit_one(struct sk_buff *skb,
 + 	if (dev_nit_active(dev))
 + 		dev_queue_xmit_nit(skb, dev);
 + 
@@ -9271,7 +9251,7 @@ index 0000000000..1e4fc446ce
 + struct bgmac *bgmac_alloc(struct device *dev);
 diff --git a/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
 new file mode 100644
-index 0000000000..8affabdab6
+index 0000000000..a4094248cd
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
 @@ -0,0 +1,33 @@
@@ -9296,7 +9276,7 @@ index 0000000000..8affabdab6
 + 
 + #define QUECTEL_VENDOR_ID			0x2c7c
 + /* These Quectel products use Quectel's vendor ID */
-+@@ -1129,6 +1131,11 @@ static const struct usb_device_id option
++@@ -1131,6 +1133,11 @@ static const struct usb_device_id option
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EG95, 0xff, 0, 0) },
 + 	{ USB_DEVICE(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_BG96),
 + 	  .driver_info = RSVD(4) },
@@ -9310,7 +9290,7 @@ index 0000000000..8affabdab6
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0, 0) },
 diff --git a/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch b/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
 new file mode 100644
-index 0000000000..f24fe9d192
+index 0000000000..3d34231b82
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
 @@ -0,0 +1,162 @@
@@ -9331,7 +9311,7 @@ index 0000000000..f24fe9d192
 + 
 + #include "gpiolib.h"
 + #include "gpiolib-of.h"
-+@@ -1052,3 +1054,72 @@ void of_gpio_dev_init(struct gpio_chip *
++@@ -1057,3 +1059,72 @@ void of_gpio_dev_init(struct gpio_chip *
 + 	else
 + 		gc->of_node = gdev->dev.of_node;
 + }
@@ -10060,7 +10040,7 @@ index 0000000000..fef28464bc
 + 
 diff --git a/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch b/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
 new file mode 100644
-index 0000000000..2531e32ff8
+index 0000000000..1f4d2fd394
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
 @@ -0,0 +1,92 @@
@@ -10129,7 +10109,7 @@ index 0000000000..2531e32ff8
 ++dma-shared-buffer-objs :=  $(dma-buf-objs-y)
 +--- a/drivers/dma-buf/dma-buf.c
 ++++ b/drivers/dma-buf/dma-buf.c
-+@@ -1498,4 +1498,5 @@ static void __exit dma_buf_deinit(void)
++@@ -1506,4 +1506,5 @@ static void __exit dma_buf_deinit(void)
 + 	kern_unmount(dma_buf_mnt);
 + 	dma_buf_uninit_sysfs_statistics();
 + }
