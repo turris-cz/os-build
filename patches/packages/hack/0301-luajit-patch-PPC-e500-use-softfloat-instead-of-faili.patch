@@ -1,0 +1,67 @@
+From 167d19500cf1c855083f7003745fa2f8380fcb86 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Sat, 16 Jul 2022 18:56:32 +0200
+Subject: [PATCH] luajit: patch: PPC/e500: use-softfloat-instead-of-failing
+
+---
+ ...e500-with-SPE-enabled-use-soft-float.patch | 48 +++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+ create mode 100644 lang/luajit/patches/300-PPC-e500-with-SPE-enabled-use-soft-float.patch
+
+diff --git a/lang/luajit/patches/300-PPC-e500-with-SPE-enabled-use-soft-float.patch b/lang/luajit/patches/300-PPC-e500-with-SPE-enabled-use-soft-float.patch
+new file mode 100644
+index 000000000..c5048b098
+--- /dev/null
++++ b/lang/luajit/patches/300-PPC-e500-with-SPE-enabled-use-soft-float.patch
+@@ -0,0 +1,48 @@
++From 2c8b9d5807a515a0ff859899065f512beabcbaed Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
++Date: Sat, 16 Jul 2022 18:39:55 +0200
++Subject: [PATCH] PPC/e500 with SPE enabled: use soft float instead of failing
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ src/lj_arch.h | 7 ++-----
++ 1 file changed, 2 insertions(+), 5 deletions(-)
++
++diff --git a/src/lj_arch.h b/src/lj_arch.h
++index 882c99cb..e4e8f9eb 100644
++--- a/src/lj_arch.h
+++++ b/src/lj_arch.h
++@@ -290,7 +290,7 @@
++ #define LJ_ARCH_NAME		"ppc"
++ 
++ #if !defined(LJ_ARCH_HASFPU)
++-#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+++#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE) || defined(__NO_FPRS__)
++ #define LJ_ARCH_HASFPU		0
++ #else
++ #define LJ_ARCH_HASFPU		1
++@@ -298,7 +298,7 @@
++ #endif
++ 
++ #if !defined(LJ_ABI_SOFTFP)
++-#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE)
+++#if defined(_SOFT_FLOAT) || defined(_SOFT_DOUBLE) || defined(__NO_FPRS__)
++ #define LJ_ABI_SOFTFP		1
++ #else
++ #define LJ_ABI_SOFTFP		0
++@@ -493,9 +493,6 @@
++ #if defined(_LITTLE_ENDIAN) && (!defined(_BYTE_ORDER) || (_BYTE_ORDER == _LITTLE_ENDIAN))
++ #error "No support for little-endian PPC32"
++ #endif
++-#if defined(__NO_FPRS__) && !defined(_SOFT_FLOAT)
++-#error "No support for PPC/e500 anymore (use LuaJIT 2.0)"
++-#endif
++ #elif LJ_TARGET_MIPS32
++ #if !((defined(_MIPS_SIM_ABI32) && _MIPS_SIM == _MIPS_SIM_ABI32) || (defined(_ABIO32) && _MIPS_SIM == _ABIO32))
++ #error "Only o32 ABI supported for MIPS32"
++-- 
++2.35.3
++
+-- 
+2.35.3
+
