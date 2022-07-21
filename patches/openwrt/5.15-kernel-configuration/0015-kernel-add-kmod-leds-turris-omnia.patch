@@ -1,0 +1,62 @@
+From a5802b3596370b1d31e14583fb65fc676163e1ba Mon Sep 17 00:00:00 2001
+From: Stefan Kalscheuer <stefan@stklcode.de>
+Date: Thu, 19 May 2022 21:10:34 +0200
+Subject: [PATCH] kernel: add kmod-leds-turris-omnia
+
+Add support for LEDs of the CZ.NIC Turris Omnia using the upstream
+driver.
+
+There is no generic way to control the LEDs in UCI manner, however
+the kernel module is the first step to actually use the RGB LEDs in
+custom logic.
+
+Signed-off-by: Stefan Kalscheuer <stefan@stklcode.de>
+(removed DMARC notice, added driver to Turris Omnia, moved module
+recipe to target/linux/mvebu/modules.mk)
+Signed-off-by: Christian Lamparter <chunkeey@gmail.com>
+(cherry picked from commit f8fa38c13fcc3b4ce9a4dfc56d98e5188353afac)
+---
+ target/linux/mvebu/image/cortexa9.mk |  2 +-
+ target/linux/mvebu/modules.mk        | 16 ++++++++++++++++
+ 2 files changed, 17 insertions(+), 1 deletion(-)
+
+diff --git a/target/linux/mvebu/image/cortexa9.mk b/target/linux/mvebu/image/cortexa9.mk
+index c712ad6a33..2797f7870d 100644
+--- a/target/linux/mvebu/image/cortexa9.mk
++++ b/target/linux/mvebu/image/cortexa9.mk
+@@ -41,7 +41,7 @@ define Device/cznic_turris-omnia
+   DEVICE_PACKAGES :=  \
+     mkf2fs e2fsprogs kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1 \
+     wpad-basic-wolfssl kmod-ath9k kmod-ath10k-ct ath10k-firmware-qca988x-ct \
+-    partx-utils kmod-i2c-mux-pca954x
++    partx-utils kmod-i2c-mux-pca954x kmod-leds-turris-omnia
+   IMAGES := $$(IMAGE_PREFIX)-sysupgrade.img.gz omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz
+   IMAGE/$$(IMAGE_PREFIX)-sysupgrade.img.gz := boot-scr | boot-img | sdcard-img | gzip | append-metadata
+   IMAGE/omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz := omnia-medkit-initramfs | gzip
+diff --git a/target/linux/mvebu/modules.mk b/target/linux/mvebu/modules.mk
+index 3a5e316788..766d1447ef 100644
+--- a/target/linux/mvebu/modules.mk
++++ b/target/linux/mvebu/modules.mk
+@@ -19,3 +19,19 @@ define KernelPackage/linkstation-poweroff/description
+ endef
+ 
+ $(eval $(call KernelPackage,linkstation-poweroff))
++
++
++define KernelPackage/leds-turris-omnia
++   SUBMENU:=$(LEDS_MENU)
++   TITLE:=LED support for CZ.NIC's Turris Omnia
++   DEPENDS:=@TARGET_mvebu_cortexa9
++   KCONFIG:=CONFIG_LEDS_TURRIS_OMNIA
++   FILES:=$(LINUX_DIR)/drivers/leds/leds-turris-omnia.ko
++   AUTOLOAD:=$(call AutoLoad,60,leds-turris-omnia,1)
++endef
++
++define KernelPackage/leds-turris-omnia/description
++   This option enables support for the LEDs of the CZ.NIC Turris Omnia.
++endef
++
++$(eval $(call KernelPackage,leds-turris-omnia))
+-- 
+2.34.1
+
