@@ -1,7 +1,7 @@
-From 84c33b07a9db65a0314981462f0612dd6a0e301c Mon Sep 17 00:00:00 2001
+From 20c1f9271d0ca07239c8676d0f098d424230535e Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Mon, 4 Jul 2022 14:19:08 +0200
-Subject: [PATCH 1/3] Generic backport patches 5.15
+Subject: [PATCH] Generic backport patches 5.15
 
 ---
  .../011-kbuild-export-SUBARCH.patch           |   21 +
@@ -17,7 +17,9 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  ...resolve_btfids-Build-with-host-flags.patch |   49 +
  ...or-setting-affinity-if-no-IRQ-parent.patch |   48 +
  ...ow_offload-handle-netdevice-events-f.patch |  106 +
+ ...platform_populate-for-MTD-partitions.patch |   72 +
  ...s-add-support-for-Sercomm-partitions.patch |  302 ++
+ ...ce-of-support-for-dynamic-partitions.patch |  106 +
  ...x-allow-to-use-on-MediaTek-MIPS-SoCs.patch |   33 +
  ...device-add-support-for-GD5FxGQ4xExxG.patch |   58 +
  ...device-add-support-for-GD5F1GQ5RExxG.patch |   33 +
@@ -58,6 +60,7 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  ..._eth_soc-introduce-support-for-mt798.patch |  138 +
  ..._eth_soc-fix-error-code-in-mtk_flow_.patch |   25 +
  ..._eth_soc-enable-rx-cksum-offload-for.patch |   47 +
+ ...19-34-eth-mtk_ppe-fix-up-after-merge.patch |   28 +
  ...-0001-net-bgmac-improve-handling-PHY.patch |   84 +
  ...t-bgmac-support-MDIO-described-in-DT.patch |   54 +
  ...dd-support-for-qca-8327-internal-phy.patch |   48 +
@@ -137,12 +140,17 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  ...rtl8366rb-Support-disabling-learning.patch |  115 +
  ...net-dsa-rtl8366rb-Support-fast-aging.patch |   57 +
  ...-rtl8366rb-Support-setting-STP-state.patch |  107 +
+ ...s-add-Broadcom-s-BCM63138-controller.patch |  125 +
+ ...-add-support-for-BCM63138-controller.patch |  356 ++
+ ...-leds-bcm63138-unify-full-stops-in-d.patch |   30 +
+ ...help-info-about-BCM63138-module-name.patch |   28 +
+ ...eds-leds-bcm63138-get-rid-of-LED_OFF.patch |   30 +
  ...PS-ath79-drop-_machine_restart-again.patch |   49 +
  ...ext-hwmon-lm70-Add-ti-tmp125-support.patch |   71 +
  ...ether-export-usbnet_cdc_zte_rx_fixup.patch |   58 +
  ...e-the-bogus-MAC-fixup-for-ZTE-device.patch |  118 +
  ...-scope-of-bogus-MAC-address-detectio.patch |   63 +
- 138 files changed, 22581 insertions(+)
+ 146 files changed, 23356 insertions(+)
  create mode 100644 target/linux/generic/backport-5.15/011-kbuild-export-SUBARCH.patch
  create mode 100644 target/linux/generic/backport-5.15/050-v5.16-00-MIPS-uasm-Enable-muhu-opcode-for-MIPS-R6.patch
  create mode 100644 target/linux/generic/backport-5.15/050-v5.16-01-mips-uasm-Add-workaround-for-Loongson-2F-nop-CPU-err.patch
@@ -156,7 +164,9 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  create mode 100644 target/linux/generic/backport-5.15/200-v5.18-tools-resolve_btfids-Build-with-host-flags.patch
  create mode 100644 target/linux/generic/backport-5.15/300-v5.18-pinctrl-qcom-Return--EINVAL-for-setting-affinity-if-no-IRQ-parent.patch
  create mode 100644 target/linux/generic/backport-5.15/343-netfilter-nft_flow_offload-handle-netdevice-events-f.patch
+ create mode 100644 target/linux/generic/backport-5.15/400-v5.19-mtd-call-of_platform_populate-for-MTD-partitions.patch
  create mode 100644 target/linux/generic/backport-5.15/401-v5.20-mtd-parsers-add-support-for-Sercomm-partitions.patch
+ create mode 100644 target/linux/generic/backport-5.15/402-v5.20-mtd-next-mtd-core-introduce-of-support-for-dynamic-partitions.patch
  create mode 100644 target/linux/generic/backport-5.15/410-mtd-next-mtd-parsers-trx-allow-to-use-on-MediaTek-MIPS-SoCs.patch
  create mode 100644 target/linux/generic/backport-5.15/420-v5.19-02-mtd-spinand-gigadevice-add-support-for-GD5FxGQ4xExxG.patch
  create mode 100644 target/linux/generic/backport-5.15/420-v5.19-03-mtd-spinand-gigadevice-add-support-for-GD5F1GQ5RExxG.patch
@@ -197,6 +207,7 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  create mode 100644 target/linux/generic/backport-5.15/702-v5.19-30-net-ethernet-mtk_eth_soc-introduce-support-for-mt798.patch
  create mode 100644 target/linux/generic/backport-5.15/702-v5.19-31-net-ethernet-mtk_eth_soc-fix-error-code-in-mtk_flow_.patch
  create mode 100644 target/linux/generic/backport-5.15/702-v5.19-33-net-ethernet-mtk_eth_soc-enable-rx-cksum-offload-for.patch
+ create mode 100644 target/linux/generic/backport-5.15/702-v5.19-34-eth-mtk_ppe-fix-up-after-merge.patch
  create mode 100644 target/linux/generic/backport-5.15/734-v5.16-0001-net-bgmac-improve-handling-PHY.patch
  create mode 100644 target/linux/generic/backport-5.15/734-v5.16-0002-net-bgmac-support-MDIO-described-in-DT.patch
  create mode 100644 target/linux/generic/backport-5.15/742-v5.16-net-phy-at803x-add-support-for-qca-8327-internal-phy.patch
@@ -276,6 +287,11 @@ Subject: [PATCH 1/3] Generic backport patches 5.15
  create mode 100644 target/linux/generic/backport-5.15/774-v5.16-08-net-dsa-rtl8366rb-Support-disabling-learning.patch
  create mode 100644 target/linux/generic/backport-5.15/774-v5.16-09-net-dsa-rtl8366rb-Support-fast-aging.patch
  create mode 100644 target/linux/generic/backport-5.15/774-v5.16-10-net-dsa-rtl8366rb-Support-setting-STP-state.patch
+ create mode 100644 target/linux/generic/backport-5.15/800-v5.20-0001-dt-bindings-leds-add-Broadcom-s-BCM63138-controller.patch
+ create mode 100644 target/linux/generic/backport-5.15/800-v5.20-0002-leds-bcm63138-add-support-for-BCM63138-controller.patch
+ create mode 100644 target/linux/generic/backport-5.15/801-v5.20-0001-dt-bindings-leds-leds-bcm63138-unify-full-stops-in-d.patch
+ create mode 100644 target/linux/generic/backport-5.15/801-v5.20-0002-leds-add-help-info-about-BCM63138-module-name.patch
+ create mode 100644 target/linux/generic/backport-5.15/801-v5.20-0003-leds-leds-bcm63138-get-rid-of-LED_OFF.patch
  create mode 100644 target/linux/generic/backport-5.15/860-v5.17-MIPS-ath79-drop-_machine_restart-again.patch
  create mode 100644 target/linux/generic/backport-5.15/870-hwmon-next-hwmon-lm70-Add-ti-tmp125-support.patch
  create mode 100644 target/linux/generic/backport-5.15/880-v5.19-cdc_ether-export-usbnet_cdc_zte_rx_fixup.patch
@@ -4640,7 +4656,7 @@ index 0000000000..63553ebe58
 + 
 diff --git a/target/linux/generic/backport-5.15/050-v5.16-05-mips-bpf-Enable-eBPF-JITs.patch b/target/linux/generic/backport-5.15/050-v5.16-05-mips-bpf-Enable-eBPF-JITs.patch
 new file mode 100644
-index 0000000000..00b3536b6d
+index 0000000000..41b3d8139f
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/050-v5.16-05-mips-bpf-Enable-eBPF-JITs.patch
 @@ -0,0 +1,61 @@
@@ -4660,7 +4676,7 @@ index 0000000000..00b3536b6d
 +
 +--- a/MAINTAINERS
 ++++ b/MAINTAINERS
-+@@ -3428,6 +3428,7 @@ S:	Supported
++@@ -3430,6 +3430,7 @@ S:	Supported
 + F:	arch/arm64/net/
 + 
 + BPF JIT for MIPS (32-BIT AND 64-BIT)
@@ -5420,6 +5436,84 @@ index 0000000000..19ec9d9409
 + }
 + 
 + module_init(nft_flow_offload_module_init);
+diff --git a/target/linux/generic/backport-5.15/400-v5.19-mtd-call-of_platform_populate-for-MTD-partitions.patch b/target/linux/generic/backport-5.15/400-v5.19-mtd-call-of_platform_populate-for-MTD-partitions.patch
+new file mode 100644
+index 0000000000..1f3aae13b4
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/400-v5.19-mtd-call-of_platform_populate-for-MTD-partitions.patch
+@@ -0,0 +1,72 @@
++From bcdf0315a61a29eb753a607d3a85a4032de72d94 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Tue, 10 May 2022 15:12:59 +0200
++Subject: [PATCH] mtd: call of_platform_populate() for MTD partitions
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Until this change MTD subsystem supported handling partitions only with
++MTD partitions parsers. That's a specific / limited API designed around
++partitions.
++
++Some MTD partitions may however require different handling. They may
++contain specific data that needs to be parsed and somehow extracted. For
++that purpose MTD subsystem should allow binding of standard platform
++drivers.
++
++An example can be U-Boot (sub)partition with environment variables.
++There exist a "u-boot,env" DT binding for MTD (sub)partition that
++requires an NVMEM driver.
++
++Ref: 5db1c2dbc04c ("dt-bindings: nvmem: add U-Boot environment variables binding")
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
++Link: https://lore.kernel.org/linux-mtd/20220510131259.555-1-zajec5@gmail.com
++---
++ drivers/mtd/mtdpart.c | 9 +++++++++
++ 1 file changed, 9 insertions(+)
++
++--- a/drivers/mtd/mtdpart.c
+++++ b/drivers/mtd/mtdpart.c
++@@ -17,6 +17,7 @@
++ #include <linux/mtd/partitions.h>
++ #include <linux/err.h>
++ #include <linux/of.h>
+++#include <linux/of_platform.h>
++ 
++ #include "mtdcore.h"
++ 
++@@ -577,10 +578,16 @@ static int mtd_part_of_parse(struct mtd_
++ 	struct mtd_part_parser *parser;
++ 	struct device_node *np;
++ 	struct property *prop;
+++	struct device *dev;
++ 	const char *compat;
++ 	const char *fixed = "fixed-partitions";
++ 	int ret, err = 0;
++ 
+++	dev = &master->dev;
+++	/* Use parent device (controller) if the top level MTD is not registered */
+++	if (!IS_ENABLED(CONFIG_MTD_PARTITIONED_MASTER) && !mtd_is_partition(master))
+++		dev = master->dev.parent;
+++
++ 	np = mtd_get_of_node(master);
++ 	if (mtd_is_partition(master))
++ 		of_node_get(np);
++@@ -593,6 +600,7 @@ static int mtd_part_of_parse(struct mtd_
++ 			continue;
++ 		ret = mtd_part_do_parse(parser, master, pparts, NULL);
++ 		if (ret > 0) {
+++			of_platform_populate(np, NULL, NULL, dev);
++ 			of_node_put(np);
++ 			return ret;
++ 		}
++@@ -600,6 +608,7 @@ static int mtd_part_of_parse(struct mtd_
++ 		if (ret < 0 && !err)
++ 			err = ret;
++ 	}
+++	of_platform_populate(np, NULL, NULL, dev);
++ 	of_node_put(np);
++ 
++ 	/*
 diff --git a/target/linux/generic/backport-5.15/401-v5.20-mtd-parsers-add-support-for-Sercomm-partitions.patch b/target/linux/generic/backport-5.15/401-v5.20-mtd-parsers-add-support-for-Sercomm-partitions.patch
 new file mode 100644
 index 0000000000..113a96ad42
@@ -5728,6 +5822,118 @@ index 0000000000..113a96ad42
 ++MODULE_AUTHOR("NOGUCHI Hiroshi <drvlabo@gmail.com>");
 ++MODULE_AUTHOR("Mikhail Zhilkin <csharper2005@gmail.com>");
 ++MODULE_DESCRIPTION("Sercomm partition parser");
+diff --git a/target/linux/generic/backport-5.15/402-v5.20-mtd-next-mtd-core-introduce-of-support-for-dynamic-partitions.patch b/target/linux/generic/backport-5.15/402-v5.20-mtd-next-mtd-core-introduce-of-support-for-dynamic-partitions.patch
+new file mode 100644
+index 0000000000..8b8e478b00
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/402-v5.20-mtd-next-mtd-core-introduce-of-support-for-dynamic-partitions.patch
+@@ -0,0 +1,106 @@
++From ad9b10d1eaada169bd764abcab58f08538877e26 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Wed, 22 Jun 2022 03:06:28 +0200
++Subject: mtd: core: introduce of support for dynamic partitions
++
++We have many parser that register mtd partitions at runtime. One example
++is the cmdlinepart or the smem-part parser where the compatible is defined
++in the dts and the partitions gets detected and registered by the
++parser. This is problematic for the NVMEM subsystem that requires an OF
++node to detect NVMEM cells.
++
++To fix this problem, introduce an additional logic that will try to
++assign an OF node to the MTD if declared.
++
++On MTD addition, it will be checked if the MTD has an OF node and if
++not declared will check if a partition with the same label / node name is
++declared in DTS. If an exact match is found, the partition dynamically
++allocated by the parser will have a connected OF node.
++
++The NVMEM subsystem will detect the OF node and register any NVMEM cells
++declared statically in the DTS.
++
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
++Link: https://lore.kernel.org/linux-mtd/20220622010628.30414-4-ansuelsmth@gmail.com
++---
++ drivers/mtd/mtdcore.c | 61 +++++++++++++++++++++++++++++++++++++++++++
++ 1 file changed, 61 insertions(+)
++
++--- a/drivers/mtd/mtdcore.c
+++++ b/drivers/mtd/mtdcore.c
++@@ -564,6 +564,66 @@ static int mtd_nvmem_add(struct mtd_info
++ 	return 0;
++ }
++ 
+++static void mtd_check_of_node(struct mtd_info *mtd)
+++{
+++	struct device_node *partitions, *parent_dn, *mtd_dn = NULL;
+++	const char *pname, *prefix = "partition-";
+++	int plen, mtd_name_len, offset, prefix_len;
+++	struct mtd_info *parent;
+++	bool found = false;
+++
+++	/* Check if MTD already has a device node */
+++	if (dev_of_node(&mtd->dev))
+++		return;
+++
+++	/* Check if a partitions node exist */
+++	parent = mtd->parent;
+++	parent_dn = dev_of_node(&parent->dev);
+++	if (!parent_dn)
+++		return;
+++
+++	partitions = of_get_child_by_name(parent_dn, "partitions");
+++	if (!partitions)
+++		goto exit_parent;
+++
+++	prefix_len = strlen(prefix);
+++	mtd_name_len = strlen(mtd->name);
+++
+++	/* Search if a partition is defined with the same name */
+++	for_each_child_of_node(partitions, mtd_dn) {
+++		offset = 0;
+++
+++		/* Skip partition with no/wrong prefix */
+++		if (!of_node_name_prefix(mtd_dn, "partition-"))
+++			continue;
+++
+++		/* Label have priority. Check that first */
+++		if (of_property_read_string(mtd_dn, "label", &pname)) {
+++			of_property_read_string(mtd_dn, "name", &pname);
+++			offset = prefix_len;
+++		}
+++
+++		plen = strlen(pname) - offset;
+++		if (plen == mtd_name_len &&
+++		    !strncmp(mtd->name, pname + offset, plen)) {
+++			found = true;
+++			break;
+++		}
+++	}
+++
+++	if (!found)
+++		goto exit_partitions;
+++
+++	/* Set of_node only for nvmem */
+++	if (of_device_is_compatible(mtd_dn, "nvmem-cells"))
+++		mtd_set_of_node(mtd, mtd_dn);
+++
+++exit_partitions:
+++	of_node_put(partitions);
+++exit_parent:
+++	of_node_put(parent_dn);
+++}
+++
++ /**
++  *	add_mtd_device - register an MTD device
++  *	@mtd: pointer to new MTD device info structure
++@@ -669,6 +729,7 @@ int add_mtd_device(struct mtd_info *mtd)
++ 	mtd->dev.devt = MTD_DEVT(i);
++ 	dev_set_name(&mtd->dev, "mtd%d", i);
++ 	dev_set_drvdata(&mtd->dev, mtd);
+++	mtd_check_of_node(mtd);
++ 	of_node_get(mtd_get_of_node(mtd));
++ 	error = device_register(&mtd->dev);
++ 	if (error)
 diff --git a/target/linux/generic/backport-5.15/410-mtd-next-mtd-parsers-trx-allow-to-use-on-MediaTek-MIPS-SoCs.patch b/target/linux/generic/backport-5.15/410-mtd-next-mtd-parsers-trx-allow-to-use-on-MediaTek-MIPS-SoCs.patch
 new file mode 100644
 index 0000000000..5c49841760
@@ -8678,7 +8884,7 @@ index 0000000000..502d1d0e9b
 ++#endif
 diff --git a/target/linux/generic/backport-5.15/702-v5.19-03-net-ethernet-mtk_eth_soc-implement-flow-offloading-t.patch b/target/linux/generic/backport-5.15/702-v5.19-03-net-ethernet-mtk_eth_soc-implement-flow-offloading-t.patch
 new file mode 100644
-index 0000000000..6ceca9306a
+index 0000000000..28b3252104
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/702-v5.19-03-net-ethernet-mtk_eth_soc-implement-flow-offloading-t.patch
 @@ -0,0 +1,269 @@
@@ -8940,7 +9146,7 @@ index 0000000000..6ceca9306a
 + 
 +--- a/net/core/dev.c
 ++++ b/net/core/dev.c
-+@@ -761,6 +761,10 @@ int dev_fill_forward_path(const struct n
++@@ -763,6 +763,10 @@ int dev_fill_forward_path(const struct n
 + 		if (WARN_ON_ONCE(last_dev == ctx.dev))
 + 			return -1;
 + 	}
@@ -13648,6 +13854,40 @@ index 0000000000..2e3ad698b5
 + 		.dma_max_len = MTK_TX_DMA_BUF_LEN_V2,
 + 		.dma_len_offset = 8,
 + 	},
+diff --git a/target/linux/generic/backport-5.15/702-v5.19-34-eth-mtk_ppe-fix-up-after-merge.patch b/target/linux/generic/backport-5.15/702-v5.19-34-eth-mtk_ppe-fix-up-after-merge.patch
+new file mode 100644
+index 0000000000..5303ca48a7
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/702-v5.19-34-eth-mtk_ppe-fix-up-after-merge.patch
+@@ -0,0 +1,28 @@
++From: Jakub Kicinski <kuba@kernel.org>
++Date: Thu, 19 May 2022 18:25:55 -0700
++Subject: [PATCH] eth: mtk_ppe: fix up after merge
++
++I missed this in the barrage of GCC 12 warnings. Commit cf2df74e202d
++("net: fix dev_fill_forward_path with pppoe + bridge") changed
++the pointer into an array.
++
++Fixes: d7e6f5836038 ("Merge git://git.kernel.org/pub/scm/linux/kernel/git/netdev/net")
++Link: https://lore.kernel.org/r/20220520012555.2262461-1-kuba@kernel.org
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++
++--- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
+++++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
++@@ -90,10 +90,11 @@ mtk_flow_get_wdma_info(struct net_device
++ {
++ 	struct net_device_path_ctx ctx = {
++ 		.dev = dev,
++-		.daddr = addr,
++ 	};
++ 	struct net_device_path path = {};
++ 
+++	memcpy(ctx.daddr, addr, sizeof(ctx.daddr));
+++
++ 	if (!IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED))
++ 		return -1;
++ 
 diff --git a/target/linux/generic/backport-5.15/734-v5.16-0001-net-bgmac-improve-handling-PHY.patch b/target/linux/generic/backport-5.15/734-v5.16-0001-net-bgmac-improve-handling-PHY.patch
 new file mode 100644
 index 0000000000..6788a2ec35
@@ -23302,6 +23542,605 @@ index 0000000000..e787ce9481
 + 	.port_fast_age = rtl8366rb_port_fast_age,
 + 	.port_change_mtu = rtl8366rb_change_mtu,
 + 	.port_max_mtu = rtl8366rb_max_mtu,
+diff --git a/target/linux/generic/backport-5.15/800-v5.20-0001-dt-bindings-leds-add-Broadcom-s-BCM63138-controller.patch b/target/linux/generic/backport-5.15/800-v5.20-0001-dt-bindings-leds-add-Broadcom-s-BCM63138-controller.patch
+new file mode 100644
+index 0000000000..b1072ce640
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/800-v5.20-0001-dt-bindings-leds-add-Broadcom-s-BCM63138-controller.patch
+@@ -0,0 +1,125 @@
++From 13344f8ce8a0d98aa7f5d69ce3b47393c73a343b Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Mon, 27 Dec 2021 15:59:04 +0100
++Subject: [PATCH] dt-bindings: leds: add Broadcom's BCM63138 controller
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Broadcom used 2 LEDs hardware blocks for their BCM63xx SoCs:
++1. Older one (BCM6318, BCM6328, BCM6362, BCM63268, BCM6838)
++2. Newer one (BCM6848, BCM6858, BCM63138, BCM63148, BCM63381, BCM68360)
++
++The newer one was also later also used on BCM4908 SoC.
++
++Old block is already documented in the leds-bcm6328.yaml. This binding
++documents the new one which uses different registers & programming. It's
++first used in BCM63138 thus the binding name.
++
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Reviewed-by: Rob Herring <robh@kernel.org>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ .../bindings/leds/leds-bcm63138.yaml          | 95 +++++++++++++++++++
++ 1 file changed, 95 insertions(+)
++ create mode 100644 Documentation/devicetree/bindings/leds/leds-bcm63138.yaml
++
++--- /dev/null
+++++ b/Documentation/devicetree/bindings/leds/leds-bcm63138.yaml
++@@ -0,0 +1,95 @@
+++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+++%YAML 1.2
+++---
+++$id: http://devicetree.org/schemas/leds/leds-bcm63138.yaml#
+++$schema: http://devicetree.org/meta-schemas/core.yaml#
+++
+++title: Broadcom's BCM63138 LEDs controller
+++
+++maintainers:
+++  - Rafał Miłecki <rafal@milecki.pl>
+++
+++description: |
+++  This LEDs controller was first used on BCM63138 and later reused on BCM4908,
+++  BCM6848, BCM6858, BCM63138, BCM63148, BCM63381 and BCM68360 SoCs.
+++
+++  It supports up to 32 LEDs that can be connected parallelly or serially. It
+++  also includes limited support for hardware blinking.
+++
+++  Binding serially connected LEDs isn't documented yet.
+++
+++properties:
+++  compatible:
+++    oneOf:
+++      - items:
+++          - enum:
+++              - brcm,bcm4908-leds
+++              - brcm,bcm6848-leds
+++              - brcm,bcm6858-leds
+++              - brcm,bcm63148-leds
+++              - brcm,bcm63381-leds
+++              - brcm,bcm68360-leds
+++          - const: brcm,bcm63138-leds
+++      - const: brcm,bcm63138-leds
+++
+++  reg:
+++    maxItems: 1
+++
+++  "#address-cells":
+++    const: 1
+++
+++  "#size-cells":
+++    const: 0
+++
+++patternProperties:
+++  "^led@[a-f0-9]+$":
+++    type: object
+++
+++    $ref: common.yaml#
+++
+++    properties:
+++      reg:
+++        maxItems: 1
+++        description: LED pin number
+++
+++      active-low:
+++        type: boolean
+++        description: Makes LED active low.
+++
+++    required:
+++      - reg
+++
+++    unevaluatedProperties: false
+++
+++required:
+++  - reg
+++  - "#address-cells"
+++  - "#size-cells"
+++
+++additionalProperties: false
+++
+++examples:
+++  - |
+++    #include <dt-bindings/leds/common.h>
+++
+++    leds@ff800800 {
+++        compatible = "brcm,bcm4908-leds", "brcm,bcm63138-leds";
+++        reg = <0xff800800 0xdc>;
+++
+++        #address-cells = <1>;
+++        #size-cells = <0>;
+++
+++        led@0 {
+++            reg = <0x0>;
+++            function = LED_FUNCTION_POWER;
+++            color = <LED_COLOR_ID_GREEN>;
+++            default-state = "on";
+++        };
+++
+++        led@3 {
+++            reg = <0x3>;
+++            function = LED_FUNCTION_STATUS;
+++            color = <LED_COLOR_ID_GREEN>;
+++            active-low;
+++        };
+++    };
+diff --git a/target/linux/generic/backport-5.15/800-v5.20-0002-leds-bcm63138-add-support-for-BCM63138-controller.patch b/target/linux/generic/backport-5.15/800-v5.20-0002-leds-bcm63138-add-support-for-BCM63138-controller.patch
+new file mode 100644
+index 0000000000..376584574f
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/800-v5.20-0002-leds-bcm63138-add-support-for-BCM63138-controller.patch
+@@ -0,0 +1,356 @@
++From a0ba692072d89075d0a75c7ad9df31f2c1ee9a1c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Mon, 27 Dec 2021 15:59:05 +0100
++Subject: [PATCH] leds: bcm63138: add support for BCM63138 controller
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++It's a new controller first introduced in BCM63138 SoC. Later it was
++also used in BCM4908, some BCM68xx and some BCM63xxx SoCs.
++
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ drivers/leds/blink/Kconfig         |  12 ++
++ drivers/leds/blink/Makefile        |   1 +
++ drivers/leds/blink/leds-bcm63138.c | 308 +++++++++++++++++++++++++++++
++ 3 files changed, 321 insertions(+)
++ create mode 100644 drivers/leds/blink/leds-bcm63138.c
++
++--- a/drivers/leds/blink/Kconfig
+++++ b/drivers/leds/blink/Kconfig
++@@ -1,3 +1,15 @@
+++config LEDS_BCM63138
+++	tristate "LED Support for Broadcom BCM63138 SoC"
+++	depends on LEDS_CLASS
+++	depends on ARCH_BCM4908 || ARCH_BCM_5301X || BCM63XX || COMPILE_TEST
+++	depends on HAS_IOMEM
+++	depends on OF
+++	default ARCH_BCM4908
+++	help
+++	  This option enables support for LED controller that is part of
+++	  BCM63138 SoC. The same hardware block is known to be also used
+++	  in BCM4908, BCM6848, BCM6858, BCM63148, BCM63381 and BCM68360.
+++
++ config LEDS_LGM
++        tristate "LED support for LGM SoC series"
++        depends on X86 || COMPILE_TEST
++--- a/drivers/leds/blink/Makefile
+++++ b/drivers/leds/blink/Makefile
++@@ -1,2 +1,3 @@
++ # SPDX-License-Identifier: GPL-2.0
+++obj-$(CONFIG_LEDS_BCM63138)	+= leds-bcm63138.o
++ obj-$(CONFIG_LEDS_LGM)	+= leds-lgm-sso.o
++--- /dev/null
+++++ b/drivers/leds/blink/leds-bcm63138.c
++@@ -0,0 +1,308 @@
+++// SPDX-License-Identifier: GPL-2.0-only
+++/*
+++ * Copyright (C) 2021 Rafał Miłecki <rafal@milecki.pl>
+++ */
+++#include <linux/delay.h>
+++#include <linux/io.h>
+++#include <linux/leds.h>
+++#include <linux/module.h>
+++#include <linux/of.h>
+++#include <linux/pinctrl/consumer.h>
+++#include <linux/platform_device.h>
+++#include <linux/spinlock.h>
+++
+++#define BCM63138_MAX_LEDS				32
+++#define BCM63138_MAX_BRIGHTNESS				9
+++
+++#define BCM63138_LED_BITS				4				/* how many bits control a single LED */
+++#define BCM63138_LED_MASK				((1 << BCM63138_LED_BITS) - 1)	/* 0xf */
+++#define BCM63138_LEDS_PER_REG				(32 / BCM63138_LED_BITS)	/* 8 */
+++
+++#define BCM63138_GLB_CTRL				0x00
+++#define  BCM63138_GLB_CTRL_SERIAL_LED_DATA_PPOL		0x00000002
+++#define  BCM63138_GLB_CTRL_SERIAL_LED_EN_POL		0x00000008
+++#define BCM63138_MASK					0x04
+++#define BCM63138_HW_LED_EN				0x08
+++#define BCM63138_SERIAL_LED_SHIFT_SEL			0x0c
+++#define BCM63138_FLASH_RATE_CTRL1			0x10
+++#define BCM63138_FLASH_RATE_CTRL2			0x14
+++#define BCM63138_FLASH_RATE_CTRL3			0x18
+++#define BCM63138_FLASH_RATE_CTRL4			0x1c
+++#define BCM63138_BRIGHT_CTRL1				0x20
+++#define BCM63138_BRIGHT_CTRL2				0x24
+++#define BCM63138_BRIGHT_CTRL3				0x28
+++#define BCM63138_BRIGHT_CTRL4				0x2c
+++#define BCM63138_POWER_LED_CFG				0x30
+++#define BCM63138_HW_POLARITY				0xb4
+++#define BCM63138_SW_DATA				0xb8
+++#define BCM63138_SW_POLARITY				0xbc
+++#define BCM63138_PARALLEL_LED_POLARITY			0xc0
+++#define BCM63138_SERIAL_LED_POLARITY			0xc4
+++#define BCM63138_HW_LED_STATUS				0xc8
+++#define BCM63138_FLASH_CTRL_STATUS			0xcc
+++#define BCM63138_FLASH_BRT_CTRL				0xd0
+++#define BCM63138_FLASH_P_LED_OUT_STATUS			0xd4
+++#define BCM63138_FLASH_S_LED_OUT_STATUS			0xd8
+++
+++struct bcm63138_leds {
+++	struct device *dev;
+++	void __iomem *base;
+++	spinlock_t lock;
+++};
+++
+++struct bcm63138_led {
+++	struct bcm63138_leds *leds;
+++	struct led_classdev cdev;
+++	u32 pin;
+++	bool active_low;
+++};
+++
+++/*
+++ * I/O access
+++ */
+++
+++static void bcm63138_leds_write(struct bcm63138_leds *leds, unsigned int reg,
+++				u32 data)
+++{
+++	writel(data, leds->base + reg);
+++}
+++
+++static unsigned long bcm63138_leds_read(struct bcm63138_leds *leds,
+++					unsigned int reg)
+++{
+++	return readl(leds->base + reg);
+++}
+++
+++static void bcm63138_leds_update_bits(struct bcm63138_leds *leds,
+++				      unsigned int reg, u32 mask, u32 val)
+++{
+++	WARN_ON(val & ~mask);
+++
+++	bcm63138_leds_write(leds, reg, (bcm63138_leds_read(leds, reg) & ~mask) | (val & mask));
+++}
+++
+++/*
+++ * Helpers
+++ */
+++
+++static void bcm63138_leds_set_flash_rate(struct bcm63138_leds *leds,
+++					 struct bcm63138_led *led,
+++					 u8 value)
+++{
+++	int reg_offset = (led->pin >> fls((BCM63138_LEDS_PER_REG - 1))) * 4;
+++	int shift = (led->pin & (BCM63138_LEDS_PER_REG - 1)) * BCM63138_LED_BITS;
+++
+++	bcm63138_leds_update_bits(leds, BCM63138_FLASH_RATE_CTRL1 + reg_offset,
+++				  BCM63138_LED_MASK << shift, value << shift);
+++}
+++
+++static void bcm63138_leds_set_bright(struct bcm63138_leds *leds,
+++				     struct bcm63138_led *led,
+++				     u8 value)
+++{
+++	int reg_offset = (led->pin >> fls((BCM63138_LEDS_PER_REG - 1))) * 4;
+++	int shift = (led->pin & (BCM63138_LEDS_PER_REG - 1)) * BCM63138_LED_BITS;
+++
+++	bcm63138_leds_update_bits(leds, BCM63138_BRIGHT_CTRL1 + reg_offset,
+++				  BCM63138_LED_MASK << shift, value << shift);
+++}
+++
+++static void bcm63138_leds_enable_led(struct bcm63138_leds *leds,
+++				     struct bcm63138_led *led,
+++				     enum led_brightness value)
+++{
+++	u32 bit = BIT(led->pin);
+++
+++	bcm63138_leds_update_bits(leds, BCM63138_SW_DATA, bit,
+++				  value == LED_OFF ? 0 : bit);
+++}
+++
+++/*
+++ * API callbacks
+++ */
+++
+++static void bcm63138_leds_brightness_set(struct led_classdev *led_cdev,
+++					 enum led_brightness value)
+++{
+++	struct bcm63138_led *led = container_of(led_cdev, struct bcm63138_led, cdev);
+++	struct bcm63138_leds *leds = led->leds;
+++	unsigned long flags;
+++
+++	spin_lock_irqsave(&leds->lock, flags);
+++
+++	bcm63138_leds_enable_led(leds, led, value);
+++	if (!value)
+++		bcm63138_leds_set_flash_rate(leds, led, 0);
+++	else
+++		bcm63138_leds_set_bright(leds, led, value);
+++
+++	spin_unlock_irqrestore(&leds->lock, flags);
+++}
+++
+++static int bcm63138_leds_blink_set(struct led_classdev *led_cdev,
+++				   unsigned long *delay_on,
+++				   unsigned long *delay_off)
+++{
+++	struct bcm63138_led *led = container_of(led_cdev, struct bcm63138_led, cdev);
+++	struct bcm63138_leds *leds = led->leds;
+++	unsigned long flags;
+++	u8 value;
+++
+++	if (!*delay_on && !*delay_off) {
+++		*delay_on = 640;
+++		*delay_off = 640;
+++	}
+++
+++	if (*delay_on != *delay_off) {
+++		dev_dbg(led_cdev->dev, "Blinking at unequal delays is not supported\n");
+++		return -EINVAL;
+++	}
+++
+++	switch (*delay_on) {
+++	case 1152 ... 1408: /* 1280 ms ± 10% */
+++		value = 0x7;
+++		break;
+++	case 576 ... 704: /* 640 ms ± 10% */
+++		value = 0x6;
+++		break;
+++	case 288 ... 352: /* 320 ms ± 10% */
+++		value = 0x5;
+++		break;
+++	case 126 ... 154: /* 140 ms ± 10% */
+++		value = 0x4;
+++		break;
+++	case 59 ... 72: /* 65 ms ± 10% */
+++		value = 0x3;
+++		break;
+++	default:
+++		dev_dbg(led_cdev->dev, "Blinking delay value %lu is unsupported\n",
+++			*delay_on);
+++		return -EINVAL;
+++	}
+++
+++	spin_lock_irqsave(&leds->lock, flags);
+++
+++	bcm63138_leds_enable_led(leds, led, BCM63138_MAX_BRIGHTNESS);
+++	bcm63138_leds_set_flash_rate(leds, led, value);
+++
+++	spin_unlock_irqrestore(&leds->lock, flags);
+++
+++	return 0;
+++}
+++
+++/*
+++ * LED driver
+++ */
+++
+++static void bcm63138_leds_create_led(struct bcm63138_leds *leds,
+++				     struct device_node *np)
+++{
+++	struct led_init_data init_data = {
+++		.fwnode = of_fwnode_handle(np),
+++	};
+++	struct device *dev = leds->dev;
+++	struct bcm63138_led *led;
+++	struct pinctrl *pinctrl;
+++	u32 bit;
+++	int err;
+++
+++	led = devm_kzalloc(dev, sizeof(*led), GFP_KERNEL);
+++	if (!led) {
+++		dev_err(dev, "Failed to alloc LED\n");
+++		return;
+++	}
+++
+++	led->leds = leds;
+++
+++	if (of_property_read_u32(np, "reg", &led->pin)) {
+++		dev_err(dev, "Missing \"reg\" property in %pOF\n", np);
+++		goto err_free;
+++	}
+++
+++	if (led->pin >= BCM63138_MAX_LEDS) {
+++		dev_err(dev, "Invalid \"reg\" value %d\n", led->pin);
+++		goto err_free;
+++	}
+++
+++	led->active_low = of_property_read_bool(np, "active-low");
+++
+++	led->cdev.max_brightness = BCM63138_MAX_BRIGHTNESS;
+++	led->cdev.brightness_set = bcm63138_leds_brightness_set;
+++	led->cdev.blink_set = bcm63138_leds_blink_set;
+++
+++	err = devm_led_classdev_register_ext(dev, &led->cdev, &init_data);
+++	if (err) {
+++		dev_err(dev, "Failed to register LED %pOF: %d\n", np, err);
+++		goto err_free;
+++	}
+++
+++	pinctrl = devm_pinctrl_get_select_default(led->cdev.dev);
+++	if (IS_ERR(pinctrl) && PTR_ERR(pinctrl) != -ENODEV) {
+++		dev_warn(led->cdev.dev, "Failed to select %pOF pinctrl: %ld\n",
+++			 np, PTR_ERR(pinctrl));
+++	}
+++
+++	bit = BIT(led->pin);
+++	bcm63138_leds_update_bits(leds, BCM63138_PARALLEL_LED_POLARITY, bit,
+++				  led->active_low ? 0 : bit);
+++	bcm63138_leds_update_bits(leds, BCM63138_HW_LED_EN, bit, 0);
+++	bcm63138_leds_set_flash_rate(leds, led, 0);
+++	bcm63138_leds_enable_led(leds, led, led->cdev.brightness);
+++
+++	return;
+++
+++err_free:
+++	devm_kfree(dev, led);
+++}
+++
+++static int bcm63138_leds_probe(struct platform_device *pdev)
+++{
+++	struct device_node *np = dev_of_node(&pdev->dev);
+++	struct device *dev = &pdev->dev;
+++	struct bcm63138_leds *leds;
+++	struct device_node *child;
+++
+++	leds = devm_kzalloc(dev, sizeof(*leds), GFP_KERNEL);
+++	if (!leds)
+++		return -ENOMEM;
+++
+++	leds->dev = dev;
+++
+++	leds->base = devm_platform_ioremap_resource(pdev, 0);
+++	if (IS_ERR(leds->base))
+++		return PTR_ERR(leds->base);
+++
+++	spin_lock_init(&leds->lock);
+++
+++	bcm63138_leds_write(leds, BCM63138_GLB_CTRL,
+++			    BCM63138_GLB_CTRL_SERIAL_LED_DATA_PPOL |
+++			    BCM63138_GLB_CTRL_SERIAL_LED_EN_POL);
+++	bcm63138_leds_write(leds, BCM63138_HW_LED_EN, 0);
+++	bcm63138_leds_write(leds, BCM63138_SERIAL_LED_POLARITY, 0);
+++	bcm63138_leds_write(leds, BCM63138_PARALLEL_LED_POLARITY, 0);
+++
+++	for_each_available_child_of_node(np, child) {
+++		bcm63138_leds_create_led(leds, child);
+++	}
+++
+++	return 0;
+++}
+++
+++static const struct of_device_id bcm63138_leds_of_match_table[] = {
+++	{ .compatible = "brcm,bcm63138-leds", },
+++	{ },
+++};
+++
+++static struct platform_driver bcm63138_leds_driver = {
+++	.probe = bcm63138_leds_probe,
+++	.driver = {
+++		.name = "leds-bcm63xxx",
+++		.of_match_table = bcm63138_leds_of_match_table,
+++	},
+++};
+++
+++module_platform_driver(bcm63138_leds_driver);
+++
+++MODULE_AUTHOR("Rafał Miłecki");
+++MODULE_LICENSE("GPL");
+++MODULE_DEVICE_TABLE(of, bcm63138_leds_of_match_table);
+diff --git a/target/linux/generic/backport-5.15/801-v5.20-0001-dt-bindings-leds-leds-bcm63138-unify-full-stops-in-d.patch b/target/linux/generic/backport-5.15/801-v5.20-0001-dt-bindings-leds-leds-bcm63138-unify-full-stops-in-d.patch
+new file mode 100644
+index 0000000000..483826abed
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/801-v5.20-0001-dt-bindings-leds-leds-bcm63138-unify-full-stops-in-d.patch
+@@ -0,0 +1,30 @@
++From 13b64a0c19059b38150c79d65d350ae44034c5df Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Sun, 17 Jul 2022 14:42:46 +0200
++Subject: [PATCH] dt-bindings: leds: leds-bcm63138: unify full stops in
++ descriptions
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Description of "reg" doesn't have full stop at the end. It makes sense
++as it's a one-sentence only. Use the same style for "active-low".
++
++Reported-by: Pavel Machek <pavel@ucw.cz>
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ Documentation/devicetree/bindings/leds/leds-bcm63138.yaml | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++--- a/Documentation/devicetree/bindings/leds/leds-bcm63138.yaml
+++++ b/Documentation/devicetree/bindings/leds/leds-bcm63138.yaml
++@@ -54,7 +54,7 @@ patternProperties:
++ 
++       active-low:
++         type: boolean
++-        description: Makes LED active low.
+++        description: Makes LED active low
++ 
++     required:
++       - reg
+diff --git a/target/linux/generic/backport-5.15/801-v5.20-0002-leds-add-help-info-about-BCM63138-module-name.patch b/target/linux/generic/backport-5.15/801-v5.20-0002-leds-add-help-info-about-BCM63138-module-name.patch
+new file mode 100644
+index 0000000000..5430b1f084
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/801-v5.20-0002-leds-add-help-info-about-BCM63138-module-name.patch
+@@ -0,0 +1,28 @@
++From bcc607cdbb1f931111196699426f0cb83bfb296a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Sun, 17 Jul 2022 14:42:47 +0200
++Subject: [PATCH] leds: add help info about BCM63138 module name
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++It's what we do for all other LEDs drivers.
++
++Reported-by: Pavel Machek <pavel@ucw.cz>
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ drivers/leds/blink/Kconfig | 2 ++
++ 1 file changed, 2 insertions(+)
++
++--- a/drivers/leds/blink/Kconfig
+++++ b/drivers/leds/blink/Kconfig
++@@ -10,6 +10,8 @@ config LEDS_BCM63138
++ 	  BCM63138 SoC. The same hardware block is known to be also used
++ 	  in BCM4908, BCM6848, BCM6858, BCM63148, BCM63381 and BCM68360.
++ 
+++	  If compiled as module it will be called leds-bcm63138.
+++
++ config LEDS_LGM
++        tristate "LED support for LGM SoC series"
++        depends on X86 || COMPILE_TEST
+diff --git a/target/linux/generic/backport-5.15/801-v5.20-0003-leds-leds-bcm63138-get-rid-of-LED_OFF.patch b/target/linux/generic/backport-5.15/801-v5.20-0003-leds-leds-bcm63138-get-rid-of-LED_OFF.patch
+new file mode 100644
+index 0000000000..e125a54613
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/801-v5.20-0003-leds-leds-bcm63138-get-rid-of-LED_OFF.patch
+@@ -0,0 +1,30 @@
++From 92cfc71ee2ddfb499ed53e21b28bdf8739bc70bc Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Sun, 17 Jul 2022 14:42:48 +0200
++Subject: [PATCH] leds: leds-bcm63138: get rid of LED_OFF
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The whole "enum led_brightness" is marked as obsolete. Replace it with a
++(non-)zero check.
++
++Reported-by: Pavel Machek <pavel@ucw.cz>
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ drivers/leds/blink/leds-bcm63138.c | 3 +--
++ 1 file changed, 1 insertion(+), 2 deletions(-)
++
++--- a/drivers/leds/blink/leds-bcm63138.c
+++++ b/drivers/leds/blink/leds-bcm63138.c
++@@ -113,8 +113,7 @@ static void bcm63138_leds_enable_led(str
++ {
++ 	u32 bit = BIT(led->pin);
++ 
++-	bcm63138_leds_update_bits(leds, BCM63138_SW_DATA, bit,
++-				  value == LED_OFF ? 0 : bit);
+++	bcm63138_leds_update_bits(leds, BCM63138_SW_DATA, bit, value ? bit : 0);
++ }
++ 
++ /*
 diff --git a/target/linux/generic/backport-5.15/860-v5.17-MIPS-ath79-drop-_machine_restart-again.patch b/target/linux/generic/backport-5.15/860-v5.17-MIPS-ath79-drop-_machine_restart-again.patch
 new file mode 100644
 index 0000000000..e9d692b651
