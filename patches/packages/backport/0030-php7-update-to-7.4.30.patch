@@ -1,0 +1,1676 @@
+From 1eb6572bcca56c7decfb01067d842b27bf25a667 Mon Sep 17 00:00:00 2001
+From: Michael Heimpold <mhei@heimpold.de>
+Date: Tue, 3 Dec 2019 00:08:21 +0100
+Subject: [PATCH 3/5] php7: update to 7.4.30
+
+php7: major upgrade to 7.4.1
+
+- remove obsolete patches and update other ones
+- filter support is now available as an extension module
+- php7-mod-hash: this extension is now part of the core binary
+  and cannot be built as an extension module anymore
+- php7-mod-gd:
+  - do not use bundled libgd, but rely on external one
+  - this also obsoletes dependencies and configuration options
+- php7-mod-zip: requires external libzip now
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update the gd module to depend on libgd-full
+
+The php7-mod-gd package requires that freetype support exist in libgd. The
+libgd-full package provides this, whereas the libgd package does only
+if explicitly configured.
+
+Ref: https://github.com/openwrt/packages/issues/10944
+Signed-off-by: W. Michael Petullo <mike@flyn.org>
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.2
+
+This fixes:
+  - CVE-2020-7059
+  - CVE-2020-7060
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: fix dependencies for mysqlnd (fixes #11113)
+
+When during the build the openssl extension is also selected, then
+the mysqlnd extension depends on it, too.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.3
+
+This fixes:
+  - CVE-2020-7061
+  - CVE-2020-7062
+  - CVE-2020-7063
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.4
+
+This fixes:
+  - CVE-2020-7064
+  - CVE-2020-7065
+  - CVE-2020-7066
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.5
+
+This fixes:
+  - CVE-2020-7067
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.6
+
+This fixes:
+  - CVE-2019-11048
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.7
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.8
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.9
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.10
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.11
+
+This fixes:
+  - CVE-2020-7069
+  - CVE-2020-7070
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.12
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: fix for icu 68.1
+
+https://github.com/openwrt/packages/pull/13883
+https://github.com/php/php-src/commit/8eaaabd
+
+Signed-off-by: Hirokazu MORIKAWA <morikw2@gmail.com>
+
+php7: update to 7.4.13
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: remove obsolete patch for ICU 68.1
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: add CI test script
+
+This adds basic checks for php7 core and module packages.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: fix some whitespace nitpicks
+
+Align some lines with the rest, no functional change.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.14
+
+This fixes:
+    - CVE-2020-7071
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+lang/php7: Don't run phpize7 with QUILT
+
+Allows targets such as prepare, refresh, or update to be run without
+building dependencies for easier patch maintenance.
+
+Signed-off-by: Ilya Lipnitskiy <ilya.lipnitskiy@gmail.com>
+
+php7: update to 7.4.15
+
+This fixes:
+    - CVE-2021-21702
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: fix pecl build with QUILT
+
+Commit d741a64b7 ("lang/php7: Don't run phpize7 with QUILT") changed
+pecl.mk to not run phpize7 during Package/prepare if QUILT is set.  The
+intention was to allow prepare, refresh and update targets to run
+without building dependencies.
+
+As a side-effect, Package/configure and Package/compile fail when QUILT
+is defined because they can't find ./configure or a Makefile.  It also
+impacts the github tests run with pull requests, because QUILT is
+defined there.
+
+To avoid that failure and still keep the prepare, refresh, and update
+speedup, call phpize7 before Package/Configure if QUILT is defined.
+
+Signed-off-by: Eneas U de Queiroz <cotequeiroz@gmail.com>
+(cherry picked from commit 3476816cc8f03dcd7d118bb1faf77a9ef224d66f)
+
+php7: fix build with QUILT
+
+When building with QUILT, unlike the regular build, Build/Prepare does
+not apply the patches.  So when buildconf is called with QUILT on, at
+the end of Build/Prepare, it will not have the patched sources, and
+build will fail.
+
+To fix the problem, run buildconf in Build/Prepare only when QUILT is
+off, and do it in Build/Configure otherwise.
+
+Signed-off-by: Eneas U de Queiroz <cotequeiroz@gmail.com>
+(cherry picked from commit d4979cff06b29ec4c8201d619bbb452b34bb1175)
+
+php7: update to 7.4.16
+
+Also refresh patch.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit 87e852fc7189b6deb390784d1741e0120e09045d)
+
+php7: update to 7.4.18
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit aaaeef8b6374ee1dda58f68e4d0626c3167ddc65)
+
+php7: update to 7.4.19
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit 4e39d9fc7c2a20f04005cdeadddbe1b01b1e57ec)
+
+php7: update to 7.4.22
+
+This fixes:
+    - CVE-2021-21704
+    - CVE-2021-21705
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+(cherry picked from commits
+  - 555d0c9a291cb9ffaefaa22da36095613857e10f
+  - f15aba89f725f31d03edd95e03547670ca994e47
+  - 741d6d6768e4d3d9a85d83fb7a6dce422cefde5a)
+
+php7: update to 7.4.23
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit fb9e05615b40a8015168d8e6d8ab1cb9eb636fd5)
+
+php7: fix config file upgrade issue (fixes #14623)
+
+The addressed issue is related to #6893 as its resolution
+is actually causing the problem.
+
+When changing the priority of the config file it happens
+that after a sysupgrade the previous file is restored
+and the new file is added, ending up in a situation
+like this:
+
+/etc/php7/15_openssl.ini
+/etc/php7/20_openssl.ini
+
+Causing a double extension=openssl.so to be parsed,
+which is not appropriate and leads to error message.
+
+The same problem might also occur for mysqli since there
+was also a priority change - let's take care about this
+at the same time.
+
+The solution is to remove one of the files. Since it is
+a configuration file, the user might have adjusted it, so
+lets just use the previous version to replace the new
+installed version.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit e51a04930153dad8f7bf74fbde4cfd8e8bd4d0f8)
+
+php7: fix module loading with glibc (refs #16642)
+
+Without -ldl linker flag .so extensions are not loaded
+when glibc is used. Fix it by providing adjusted LDFLAGS
+for this case.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit d153c61650c0e5a55f4d9d00fcae6f257992c35f)
+
+php7: update to 7.4.24
+
+This fixes:
+    - CVE-2021-21706
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit 96a04adbf3a3c76360c8be6f7a18c7e9c04561d4)
+
+php7: update to 7.4.25
+
+This fixes:
+    - CVE-2021-21703
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit 1df333bfb0e67fe879fde51b0ca9ab6f2127692e)
+
+php7: Support for icu 70.1
+
+This PR prepares PHP for a few minor changes that cause PHP builds to fail when using --enable-intl with ICU 70.1.
+
+Change UBool to bool for equality operators in ICU >= 70.1
+
+https://github.com/php/php-src/pull/7596
+
+Signed-off-by: Hirokazu MORIKAWA <morikw2@gmail.com>
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit bc13112a7c180dfad51db065c74438017fc8a8c7)
+
+php7: Clean up and update distributed php.ini for php 7.4.25
+
+Details:
+- Cleaned up whitespace and removed comments (refer to official PHP documentation for that)
+- Removed directives that no longer exist as of PHP 7.4.25
+- Added '~E_DEPRECATED' to 'error_reporting'
+
+Directives removed that no longer exist as of PHP 7.4.25:
+- zend.ze1_compatibility_mode
+- y2k_compliance
+- register_globals
+- register_long_arrays
+- magic_quotes_gpc
+- magic_quotes_runtime
+- magic_quotes_sybase
+- always_populate_raw_post_data
+
+Signed-off-by: Giovanni Giacobbi <giovanni@giacobbi.net>
+
+php7: update to 7.4.26
+
+This fixes:
+    - CVE-2021-21707
+
+Also drop upstream patch which is included in the release now.
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+(cherry picked from commit c6f27671a303dad64cb7429377ffddb67760ba6a)
+
+php7: update to 7.4.27
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: update to 7.4.28
+
+This fixes:
+    - CVE-2021-21708
+
+Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+
+php7: fix dep on libgd
+
+php7: refresh patches
+
+php7: update to 7.4.30
+---
+ lang/php7/Makefile                            | 173 +++++++++--------
+ lang/php7/files/php.ini                       |   5 +
+ ...-use-of-the-system-timezone-database.patch |  40 ++--
+ .../patches/0016-dont-gitclean-in-build.patch |  19 --
+ .../patches/0032-Use-system-timezone.patch    |   4 +-
+ ...ove-build-timestamps-from-generated-.patch |  40 ++--
+ ...ation-icon-to-not-expose-the-reader-.patch |   4 +-
+ .../0050-remove-build-timestamps.patch        |  18 +-
+ ...fix_membar_producer_link_error_gcc3x.patch |  11 --
+ ...xt-opcache-fix-detection-of-shm-mmap.patch | 161 +++-------------
+ lang/php7/patches/1002-gd-iconv.patch         |  14 --
+ .../1003-Fix-dl-cross-compiling-issue.patch   |  27 ---
+ .../patches/1004-disable-phar-command.patch   |  12 +-
+ lang/php7/patches/1006-multiline-syslog.patch | 178 ------------------
+ .../patches/1010-pcrelib-NativeMIPS.patch     |  17 --
+ ...12-php_iconv_string-null-out-pointer.patch |  46 -----
+ lang/php7/pecl.mk                             |   9 +-
+ lang/php7/test.sh                             |  23 +++
+ 18 files changed, 199 insertions(+), 602 deletions(-)
+ delete mode 100644 lang/php7/patches/0016-dont-gitclean-in-build.patch
+ delete mode 100644 lang/php7/patches/1000-fix_membar_producer_link_error_gcc3x.patch
+ delete mode 100644 lang/php7/patches/1002-gd-iconv.patch
+ delete mode 100644 lang/php7/patches/1003-Fix-dl-cross-compiling-issue.patch
+ delete mode 100644 lang/php7/patches/1006-multiline-syslog.patch
+ delete mode 100644 lang/php7/patches/1010-pcrelib-NativeMIPS.patch
+ delete mode 100644 lang/php7/patches/1012-php_iconv_string-null-out-pointer.patch
+ create mode 100644 lang/php7/test.sh
+
+diff --git a/lang/php7/Makefile b/lang/php7/Makefile
+index e73e84e47..faab6c998 100644
+--- a/lang/php7/Makefile
++++ b/lang/php7/Makefile
+@@ -6,8 +6,8 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=php
+-PKG_VERSION:=7.2.34
+-PKG_RELEASE:=4
++PKG_VERSION:=7.4.30
++PKG_RELEASE:=1
+ 
+ PKG_MAINTAINER:=Michael Heimpold <mhei@heimpold.de>
+ 
+@@ -16,22 +16,19 @@ PKG_LICENSE_FILES:=LICENSE
+ PKG_CPE_ID:=cpe:/a:php:php
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+-PKG_SOURCE_URL:=http://www.php.net/distributions/
+-PKG_HASH:=409e11bc6a2c18707dfc44bc61c820ddfd81e17481470f3405ee7822d8379903
++PKG_SOURCE_URL:=https://www.php.net/distributions/
++PKG_HASH:=ea72a34f32c67e79ac2da7dfe96177f3c451c3eefae5810ba13312ed398ba70d
+ 
+-PKG_FIXUP:=libtool autoreconf
+ PKG_BUILD_PARALLEL:=1
+ PKG_USE_MIPS16:=0
+ 
+-PHP7_MODULES = \
++PHP7_MODULES= \
+ 	bcmath \
+ 	calendar ctype curl \
+-	fileinfo \
+ 	dom \
+ 	exif \
+-	ftp \
++	fileinfo filter ftp \
+ 	gettext gd gmp \
+-	hash \
+ 	iconv imap intl \
+ 	json \
+ 	ldap \
+@@ -40,11 +37,12 @@ PHP7_MODULES = \
+ 	pcntl pdo pdo-mysql pdo-pgsql pdo-sqlite pgsql phar \
+ 	session shmop simplexml snmp soap sockets sqlite3 sysvmsg sysvsem sysvshm \
+ 	tokenizer \
+-	xml xmlreader xmlwriter zip \
++	xml xmlreader xmlwriter \
++	zip
+ 
+ PKG_CONFIG_DEPENDS:= \
+ 	$(patsubst %,CONFIG_PACKAGE_php7-mod-%,$(PHP7_MODULES)) \
+-	CONFIG_PHP7_FILTER CONFIG_PHP7_LIBXML CONFIG_PHP7_SYSTEMTZDATA CONFIG_PHP7_LIBFREETYPE
++	CONFIG_PHP7_LIBXML CONFIG_PHP7_SYSTEMTZDATA
+ 
+ include $(INCLUDE_DIR)/package.mk
+ include $(INCLUDE_DIR)/nls.mk
+@@ -64,11 +62,6 @@ define Package/php7/Default/description
+ endef
+ 
+ define Package/php7/config
+-	config PHP7_FILTER
+-		bool "PHP7 Filter support"
+-		depends on PACKAGE_php7-cli || PACKAGE_php7-cgi
+-		default y
+-
+ 	config PHP7_LIBXML
+ 		bool "PHP7 LIBXML support"
+ 		depends on PACKAGE_php7-cli || PACKAGE_php7-cgi
+@@ -86,7 +79,7 @@ endef
+ define Package/php7
+   $(call Package/php7/Default)
+ 
+-  DEPENDS:=+libpcre +zlib \
++  DEPENDS:=+libpcre2 +zlib \
+            +PHP7_LIBXML:libxml2 \
+            +PHP7_SYSTEMTZDATA:zoneinfo-core
+ endef
+@@ -144,13 +137,6 @@ define Package/php7-fpm/description
+   This package contains the FastCGI Process Manager of the PHP7 interpreter.
+ endef
+ 
+-define Package/php7-mod-gd/config
+-  config PHP7_LIBFREETYPE
+-	bool "Enable Freetype 2 support in php7-mod-gd"
+-	depends on PACKAGE_php7-mod-gd
+-	default y
+-endef
+-
+ define Package/php7-mod-intl/config
+   config PHP7_FULLICUDATA
+ 	bool "Add dependency to full ICU Data"
+@@ -191,9 +177,12 @@ CONFIGURE_ARGS+= \
+ 	--disable-short-tags \
+ 	\
+ 	--without-valgrind \
+-	--with-pcre-regex="$(STAGING_DIR)/usr" \
+-	--with-zlib="$(STAGING_DIR)/usr" \
+-	  --with-zlib-dir="$(STAGING_DIR)/usr"
++	--with-external-pcre \
++	--with-zlib="$(STAGING_DIR)/usr"
++
++ifeq ($(CONFIG_LIBC_USE_GLIBC),y)
++TARGET_LDFLAGS += -ldl
++endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-bcmath),)
+   CONFIGURE_ARGS+= --enable-bcmath=shared
+@@ -214,23 +203,11 @@ else
+ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-curl),)
+-  CONFIGURE_ARGS+= --with-curl=shared,"$(STAGING_DIR)/usr"
++  CONFIGURE_ARGS+= --with-curl=shared
+ else
+   CONFIGURE_ARGS+= --without-curl
+ endif
+ 
+-ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-fileinfo),)
+-  CONFIGURE_ARGS+= --enable-fileinfo=shared
+-else
+-  CONFIGURE_ARGS+= --disable-fileinfo
+-endif
+-
+-ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-gettext),)
+-  CONFIGURE_ARGS+= --with-gettext=shared,"$(STAGING_DIR)/usr/lib/libintl-full"
+-else
+-  CONFIGURE_ARGS+= --without-gettext
+-endif
+-
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-dom),)
+   CONFIGURE_ARGS+= --enable-dom=shared
+ else
+@@ -243,6 +220,18 @@ else
+   CONFIGURE_ARGS+= --disable-exif
+ endif
+ 
++ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-fileinfo),)
++  CONFIGURE_ARGS+= --enable-fileinfo=shared,"$(STAGING_DIR)/usr"
++else
++  CONFIGURE_ARGS+= --disable-fileinfo
++endif
++
++ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-filter),)
++  CONFIGURE_ARGS+= --enable-filter=shared,"$(STAGING_DIR)/usr"
++else
++  CONFIGURE_ARGS+= --disable-filter
++endif
++
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-ftp),)
+   CONFIGURE_ARGS+= --enable-ftp=shared
+ else
+@@ -251,19 +240,16 @@ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-gd),)
+   CONFIGURE_ARGS+= \
+-	--with-gd=shared \
+-	--with-jpeg-dir="$(STAGING_DIR)/usr" \
+-	--with-png-dir="$(STAGING_DIR)/usr" \
+-	--without-xpm-dir \
+-	--enable-gd-native-ttf \
+-	--disable-gd-jis-conv
++	--enable-gd=shared,"$(STAGING_DIR)/usr" \
++	--with-external-gd
+ else
+-  CONFIGURE_ARGS+= --without-gd
++  CONFIGURE_ARGS+= --disable-gd
+ endif
+-ifneq ($(CONFIG_PHP7_LIBFREETYPE),)
+-  CONFIGURE_ARGS+= --with-freetype-dir="$(STAGING_DIR)"
++
++ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-gettext),)
++  CONFIGURE_ARGS+= --with-gettext=shared,"$(STAGING_DIR)/usr/lib/libintl-full"
+ else
+-  CONFIGURE_ARGS+= --without-freetype-dir
++  CONFIGURE_ARGS+= --without-gettext
+ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-gmp),)
+@@ -272,12 +258,6 @@ else
+   CONFIGURE_ARGS+= --without-gmp
+ endif
+ 
+-ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-hash),)
+-  CONFIGURE_ARGS+= --enable-hash=shared
+-else
+-  CONFIGURE_ARGS+= --disable-hash
+-endif
+-
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-iconv),)
+   CONFIGURE_ARGS+= --with-iconv=shared,"$(ICONV_PREFIX)"
+ else
+@@ -286,9 +266,9 @@ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-imap),)
+   CONFIGURE_ARGS+= \
+-		--with-imap=shared,"$(STAGING_DIR)/usr" \
+-		--with-imap-kerberos=no \
+-		--with-imap-ssl="$(STAGING_DIR)/usr"
++	--with-imap=shared,"$(STAGING_DIR)/usr" \
++	--with-kerberos=no \
++	--with-imap-ssl="$(STAGING_DIR)/usr"
+ else
+   CONFIGURE_ARGS+= --without-imap
+ endif
+@@ -309,13 +289,15 @@ endif
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-ldap),)
+   CONFIGURE_ARGS+= \
+ 	--with-ldap=shared,"$(STAGING_DIR)/usr" \
+-	--with-ldap-sasl="$(STAGING_DIR)/usr"
++	--with-ldap-sasl
+ else
+   CONFIGURE_ARGS+= --without-ldap
+ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-mbstring),)
+-  CONFIGURE_ARGS+= --enable-mbstring=shared --enable-mbregex
++  CONFIGURE_ARGS+= \
++	--enable-mbstring=shared \
++	--enable-mbregex
+ else
+   CONFIGURE_ARGS+= --disable-mbstring
+ endif
+@@ -340,7 +322,7 @@ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-openssl)$(CONFIG_PACKAGE_php7-mod-ftp)$(CONFIG_PACKAGE_php7-mod-imap)$(CONFIG_PACKAGE_php7-mod-snmp),)
+   CONFIGURE_ARGS+= \
+-	--with-openssl=shared,"$(STAGING_DIR)/usr" \
++	--with-openssl=shared \
+ 	--with-kerberos=no \
+ 	--with-openssl-dir="$(STAGING_DIR)/usr"
+ else
+@@ -366,7 +348,7 @@ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-pdo),)
+     CONFIGURE_ARGS+= --without-pdo-pgsql
+   endif
+   ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-pdo-sqlite),)
+-    CONFIGURE_ARGS+= --with-pdo-sqlite=shared,"$(STAGING_DIR)/usr"
++    CONFIGURE_ARGS+= --with-pdo-sqlite=shared
+   else
+     CONFIGURE_ARGS+= --without-pdo-sqlite
+   endif
+@@ -423,7 +405,7 @@ else
+ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-sqlite3),)
+-  CONFIGURE_ARGS+= --with-sqlite3=shared,"$(STAGING_DIR)/usr"
++  CONFIGURE_ARGS+= --with-sqlite3=shared
+ else
+   CONFIGURE_ARGS+= --without-sqlite3
+ endif
+@@ -454,10 +436,8 @@ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php7-mod-xml),)
+   CONFIGURE_ARGS+= --enable-xml=shared,"$(STAGING_DIR)/usr"
+-  ifneq ($(CONFIG_PHP7_LIBXML),)
+-    CONFIGURE_ARGS+= --with-libxml-dir="$(STAGING_DIR)/usr/include/libxml2"
+-  else
+-    CONFIGURE_ARGS+= --with-libexpat-dir="$(STAGING_DIR)/usr"
++  ifneq ($(CONFIG_PHP7_LIBXML),y)
++    CONFIGURE_ARGS+= --with-expat
+   endif
+ else
+   CONFIGURE_ARGS+= --disable-xml
+@@ -476,22 +456,15 @@ else
+ endif
+ 
+ ifneq ($(CONFIG_PACKAGE_php7-mod-zip),)
+-  CONFIGURE_ARGS+= --enable-zip=shared
+-else
+-  CONFIGURE_ARGS+= --disable-zip
+-endif
+-
+-ifneq ($(SDK)$(CONFIG_PHP7_FILTER),)
+-  CONFIGURE_ARGS+= --enable-filter
++  CONFIGURE_ARGS+= --with-zip=shared,"$(STAGING_DIR)/usr"
+ else
+-  CONFIGURE_ARGS+= --disable-filter
++  CONFIGURE_ARGS+= --without-zip
+ endif
+ 
+ ifneq ($(SDK)$(CONFIG_PHP7_LIBXML),)
+-  CONFIGURE_ARGS+= --enable-libxml
+-  CONFIGURE_ARGS+= --with-libxml-dir="$(STAGING_DIR)/usr/include/libxml2"
++  CONFIGURE_ARGS+= --with-libxml
+ else
+-  CONFIGURE_ARGS+= --disable-libxml
++  CONFIGURE_ARGS+= --without-libxml
+ endif
+ 
+ ifneq ($(CONFIG_PHP7_SYSTEMTZDATA),)
+@@ -505,7 +478,8 @@ CONFIGURE_VARS+= \
+ 	php_cv_cc_rpath="no" \
+ 	iconv_impl_name="gnu_libiconv" \
+ 	ac_cv_php_xml2_config_path="$(STAGING_DIR)/host/bin/xml2-config" \
+-	ac_cv_u8t_decompose=yes
++	ac_cv_u8t_decompose=yes \
++	ac_cv_have_pcre2_jit=no
+ 
+ define Package/php7/conffiles
+ /etc/php.ini
+@@ -563,9 +537,34 @@ define Package/php7-fpm/conffiles
+ /etc/config/php7-fpm
+ endef
+ 
++define Package/php7-mod-openssl/postinst
++#!/bin/sh
++[ -n "$$IPKG_INSTROOT" ] || {
++	if [ -e "/etc/php7/20_openssl.ini" ] && [ -e "/etc/php7/15_openssl.ini" ]; then
++		echo "Renaming PHP ini file '/etc/php7/20_openssl.ini' -> '/etc/php7/15_openssl.ini'"
++		mv /etc/php7/20_openssl.ini /etc/php7/15_openssl.ini
++	fi
++}
++endef
++
++define Package/php7-mod-mysqli/postinst
++#!/bin/sh
++[ -n "$$IPKG_INSTROOT" ] || {
++	if [ -e "/etc/php7/20_mysqli.ini" ] && [ -e "/etc/php7/30_mysqli.ini" ]; then
++		echo "Renaming PHP ini file '/etc/php7/20_mysqli.ini' -> '/etc/php7/30_mysqli.ini'"
++		mv /etc/php7/20_mysqli.ini /etc/php7/30_mysqli.ini
++	fi
++}
++endef
++
+ define Build/Prepare
+ 	$(call Build/Prepare/Default)
+-	( cd $(PKG_BUILD_DIR); touch configure.ac; ./buildconf --force )
++	$(if $(QUILT),,( cd $(PKG_BUILD_DIR); touch configure.ac; ./buildconf --force ))
++endef
++
++define Build/Configure
++	$(if $(QUILT),( cd $(PKG_BUILD_DIR); touch configure.ac; ./buildconf --force ))
++	$(call Build/Configure/Default)
+ endef
+ 
+ define Build/InstallDev
+@@ -630,19 +629,19 @@ $(eval $(call BuildModule,curl,cURL,+PACKAGE_php7-mod-curl:libcurl))
+ $(eval $(call BuildModule,dom,DOM,+@PHP7_LIBXML +PACKAGE_php7-mod-dom:libxml2))
+ $(eval $(call BuildModule,exif,EXIF))
+ $(eval $(call BuildModule,fileinfo,Fileinfo))
++$(eval $(call BuildModule,filter,Filter))
+ $(eval $(call BuildModule,ftp,FTP,+PACKAGE_php7-mod-ftp:libopenssl))
+-$(eval $(call BuildModule,gd,GD graphics,+PACKAGE_php7-mod-gd:libjpeg +PACKAGE_php7-mod-gd:libpng +PHP7_LIBFREETYPE:libfreetype))
++$(eval $(call BuildModule,gd,GD graphics,+PACKAGE_php7-mod-gd:libgd))
+ $(eval $(call BuildModule,gettext,Gettext,+PACKAGE_php7-mod-gettext:libintl-full))
+ $(eval $(call BuildModule,gmp,GMP,+PACKAGE_php7-mod-gmp:libgmp))
+-$(eval $(call BuildModule,hash,Hash))
+ $(eval $(call BuildModule,iconv,iConv,$(ICONV_DEPENDS)))
+ $(eval $(call BuildModule,imap,IMAP,+PACKAGE_php7-mod-imap:libopenssl +PACKAGE_libpam:libpam +PACKAGE_php7-mod-imap:uw-imap))
+ $(eval $(call BuildModule,intl,Internationalization Functions,+PACKAGE_php7-mod-intl:icu +PHP7_FULLICUDATA:icu-full-data))
+ $(eval $(call BuildModule,json,JSON))
+ $(eval $(call BuildModule,ldap,LDAP,+PACKAGE_php7-mod-ldap:libopenldap +PACKAGE_php7-mod-ldap:libsasl2))
+-$(eval $(call BuildModule,mbstring,MBString))
++$(eval $(call BuildModule,mbstring,MBString,+PACKAGE_php7-mod-mbstring:oniguruma))
+ $(eval $(call BuildModule,mysqli,MySQL Improved Extension,+PACKAGE_php7-mod-mysqli:php7-mod-mysqlnd,30))
+-$(eval $(call BuildModule,mysqlnd,MySQL Native Driver,+php7-mod-hash +PACKAGE_php7-mod-openssl:php7-mod-openssl))
++$(eval $(call BuildModule,mysqlnd,MySQL Native Driver,+PACKAGE_php7-mod-openssl:php7-mod-openssl))
+ $(eval $(call BuildModule,opcache,OPcache,,,zend))
+ $(eval $(call BuildModule,openssl,OpenSSL,+PACKAGE_php7-mod-openssl:libopenssl,15))
+ $(eval $(call BuildModule,pcntl,PCNTL))
+@@ -651,7 +650,7 @@ $(eval $(call BuildModule,pdo-mysql,PDO driver for MySQL,+php7-mod-pdo +PACKAGE_
+ $(eval $(call BuildModule,pdo-pgsql,PDO driver for PostgreSQL,+php7-mod-pdo +PACKAGE_php7-mod-pdo-pgsql:libpq))
+ $(eval $(call BuildModule,pdo-sqlite,PDO driver for SQLite 3.x,+php7-mod-pdo +PACKAGE_php7-mod-pdo-sqlite:libsqlite3 +PACKAGE_php7-mod-pdo-sqlite:librt))
+ $(eval $(call BuildModule,pgsql,PostgreSQL,+PACKAGE_php7-mod-pgsql:libpq))
+-$(eval $(call BuildModule,phar,Phar Archives,+php7-mod-hash))
++$(eval $(call BuildModule,phar,Phar Archives))
+ $(eval $(call BuildModule,session,Session))
+ $(eval $(call BuildModule,shmop,Shared Memory))
+ $(eval $(call BuildModule,simplexml,SimpleXML,+@PHP7_LIBXML +PACKAGE_php7-mod-simplexml:libxml2))
+@@ -666,4 +665,4 @@ $(eval $(call BuildModule,tokenizer,Tokenizer))
+ $(eval $(call BuildModule,xml,XML,+PHP7_LIBXML:libxml2 +!PHP7_LIBXML:libexpat))
+ $(eval $(call BuildModule,xmlreader,XMLReader,+@PHP7_LIBXML +PACKAGE_php7-mod-dom:php7-mod-dom +PACKAGE_php7-mod-xmlreader:libxml2))
+ $(eval $(call BuildModule,xmlwriter,XMLWriter,+@PHP7_LIBXML +PACKAGE_php7-mod-xmlwriter:libxml2))
+-$(eval $(call BuildModule,zip,ZIP,+PACKAGE_php7-mod-zip:zlib))
++$(eval $(call BuildModule,zip,ZIP,+PACKAGE_php7-mod-zip:libzip))
+diff --git a/lang/php7/files/php.ini b/lang/php7/files/php.ini
+index 136536b02..b387c62e1 100644
+--- a/lang/php7/files/php.ini
++++ b/lang/php7/files/php.ini
+@@ -14,6 +14,7 @@ zlib.output_compression = Off
+ ;zlib.output_handler =
+ implicit_flush = Off
+ unserialize_callback_func =
++;unserialize_max_depth = 4096
+ serialize_precision = 100
+ ;open_basedir =
+ disable_functions =
+@@ -30,6 +31,7 @@ disable_classes =
+ ;zend.enable_gc = On
+ ;zend.multibyte = Off
+ ;zend.script_encoding =
++;zend.exception_ignore_args = On
+ 
+ ;;;;;;;;;;;;;;;;;
+ ; Miscellaneous ;
+@@ -67,6 +69,9 @@ track_errors = Off
+ ;error_prepend_string = "<span style='color: #ff0000'>"
+ ;error_append_string = "</span>"
+ ;error_log = syslog
++;syslog.ident = php
++;syslog.facility = user
++;syslog.filter = ascii
+ 
+ ;;;;;;;;;;;;;;;;;
+ ; Data Handling ;
+diff --git a/lang/php7/patches/0013-Add-support-for-use-of-the-system-timezone-database.patch b/lang/php7/patches/0013-Add-support-for-use-of-the-system-timezone-database.patch
+index c9c7ffb44..f9ef5e4db 100644
+--- a/lang/php7/patches/0013-Add-support-for-use-of-the-system-timezone-database.patch
++++ b/lang/php7/patches/0013-Add-support-for-use-of-the-system-timezone-database.patch
+@@ -1,5 +1,5 @@
+ From: Debian PHP Maintainers <team+pkg-php@tracker.debian.org>
+-Date: Thu, 7 Mar 2019 19:36:30 +0000
++Date: Thu, 7 Mar 2019 19:42:35 +0000
+ Subject: Add-support-for-use-of-the-system-timezone-database
+ 
+ # License: MIT
+@@ -12,7 +12,8 @@ Add support for use of the system timezone database, rather
+ than embedding a copy.  Discussed upstream but was not desired.
+ 
+ History:
+-r17: adapt for autotool change in 7.2.16RC1
++r18: adapt for autotool change in 7.3.3RC1
++r17: adapt for timelib 2018.01 (in 7.3.2RC1)
+ r16: adapt for timelib 2017.06 (in 7.2.3RC1)
+ r15: adapt for timelib 2017.05beta7 (in 7.2.0RC1)
+ r14: improve check for valid tz file
+@@ -36,14 +37,12 @@ r2: add filesystem trawl to set up name alias index
+ r1: initial revision
+ ---
+  ext/date/config0.m4     |  13 ++
+- ext/date/lib/parse_tz.c | 536 +++++++++++++++++++++++++++++++++++++++++++++++-
+- 2 files changed, 546 insertions(+), 3 deletions(-)
++ ext/date/lib/parse_tz.c | 535 +++++++++++++++++++++++++++++++++++++++++++++++-
++ 2 files changed, 545 insertions(+), 3 deletions(-)
+ 
+-diff --git a/ext/date/config0.m4 b/ext/date/config0.m4
+-index e464156..00dae8b 100644
+ --- a/ext/date/config0.m4
+ +++ b/ext/date/config0.m4
+-@@ -10,6 +10,19 @@ io.h
++@@ -4,6 +4,19 @@ AC_CHECK_HEADERS([io.h])
+  dnl Check for strtoll, atoll
+  AC_CHECK_FUNCS(strtoll atoll)
+  
+@@ -63,11 +62,9 @@ index e464156..00dae8b 100644
+  PHP_DATE_CFLAGS="-I@ext_builddir@/lib -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DHAVE_TIMELIB_CONFIG_H=1"
+  timelib_sources="lib/astro.c lib/dow.c lib/parse_date.c lib/parse_tz.c
+                   lib/timelib.c lib/tm2unixtime.c lib/unixtime2tm.c lib/parse_iso_intervals.c lib/interval.c"
+-diff --git a/ext/date/lib/parse_tz.c b/ext/date/lib/parse_tz.c
+-index 960e528..501b09e 100644
+ --- a/ext/date/lib/parse_tz.c
+ +++ b/ext/date/lib/parse_tz.c
+-@@ -25,8 +25,21 @@
++@@ -26,8 +26,21 @@
+  #include "timelib.h"
+  #include "timelib_private.h"
+  
+@@ -89,7 +86,7 @@ index 960e528..501b09e 100644
+  
+  #if (defined(__APPLE__) || defined(__APPLE_CC__)) && (defined(__BIG_ENDIAN__) || defined(__LITTLE_ENDIAN__))
+  # if defined(__LITTLE_ENDIAN__)
+-@@ -67,6 +80,11 @@ static int read_php_preamble(const unsigned char **tzf, timelib_tzinfo *tz)
++@@ -88,6 +101,11 @@ static int read_php_preamble(const unsig
+  {
+  	uint32_t version;
+  
+@@ -101,7 +98,7 @@ index 960e528..501b09e 100644
+  	/* read ID */
+  	version = (*tzf)[3] - '0';
+  	*tzf += 4;
+-@@ -374,7 +392,429 @@ void timelib_dump_tzinfo(timelib_tzinfo *tz)
++@@ -412,7 +430,429 @@ void timelib_dump_tzinfo(timelib_tzinfo
+  	}
+  }
+  
+@@ -532,7 +529,7 @@ index 960e528..501b09e 100644
+  {
+  	int left = 0, right = tzdb->index_size - 1;
+  
+-@@ -400,9 +840,48 @@ static int seek_to_tz_position(const unsigned char **tzf, char *timezone, const
++@@ -438,9 +878,48 @@ static int seek_to_tz_position(const uns
+  	return 0;
+  }
+  
+@@ -581,7 +578,7 @@ index 960e528..501b09e 100644
+  }
+  
+  const timelib_tzdb_index_entry *timelib_timezone_identifiers_list(const timelib_tzdb *tzdb, int *count)
+-@@ -414,7 +893,30 @@ const timelib_tzdb_index_entry *timelib_timezone_identifiers_list(const timelib_
++@@ -452,7 +931,30 @@ const timelib_tzdb_index_entry *timelib_
+  int timelib_timezone_id_is_valid(char *timezone, const timelib_tzdb *tzdb)
+  {
+  	const unsigned char *tzf;
+@@ -613,7 +610,7 @@ index 960e528..501b09e 100644
+  }
+  
+  static int skip_64bit_preamble(const unsigned char **tzf, timelib_tzinfo *tz)
+-@@ -456,12 +958,14 @@ static timelib_tzinfo* timelib_tzinfo_ctor(char *name)
++@@ -494,12 +996,14 @@ static timelib_tzinfo* timelib_tzinfo_ct
+  timelib_tzinfo *timelib_parse_tzfile(char *timezone, const timelib_tzdb *tzdb, int *error_code)
+  {
+  	const unsigned char *tzf;
+@@ -629,11 +626,10 @@ index 960e528..501b09e 100644
+  		tmp = timelib_tzinfo_ctor(timezone);
+  
+  		version = read_preamble(&tzf, tmp, &type);
+-@@ -484,6 +988,29 @@ timelib_tzinfo *timelib_parse_tzfile(char *timezone, const timelib_tzdb *tzdb, i
+- 			timelib_tzinfo_dtor(tmp);
+- 			return NULL;
++@@ -534,11 +1038,36 @@ timelib_tzinfo *timelib_parse_tzfile(cha
+  		}
+-+
++ 		skip_posix_string(&tzf, tmp);
++ 
+ +#ifdef HAVE_SYSTEM_TZDATA
+ +		if (memmap) {
+ +			const struct location_info *li;
+@@ -656,10 +652,8 @@ index 960e528..501b09e 100644
+ +			munmap(memmap, maplen);
+ +		} else {
+ +#endif
+- 		if (version == 2 || version == 3) {
+- 			if (!skip_64bit_preamble(&tzf, tmp)) {
+- 				/* 64 bit preamble is not in place */
+-@@ -501,6 +1028,9 @@ timelib_tzinfo *timelib_parse_tzfile(char *timezone, const timelib_tzdb *tzdb, i
++ 		if (type == TIMELIB_TZINFO_PHP) {
++ 			read_location(&tzf, tmp);
+  		} else {
+  			set_default_location_and_comments(&tzf, tmp);
+  		}
+diff --git a/lang/php7/patches/0016-dont-gitclean-in-build.patch b/lang/php7/patches/0016-dont-gitclean-in-build.patch
+deleted file mode 100644
+index 32de5579f..000000000
+--- a/lang/php7/patches/0016-dont-gitclean-in-build.patch
++++ /dev/null
+@@ -1,19 +0,0 @@
+-From: Debian PHP Maintainers <pkg-php-maint@lists.alioth.debian.org>
+-Date: Sat, 2 May 2015 10:26:53 +0200
+-Subject: dont-gitclean-in-build
+-
+----
+- build/build.mk | 1 -
+- 1 file changed, 1 deletion(-)
+-
+-diff --git a/build/build.mk b/build/build.mk
+-index 9452984..b964def 100644
+---- a/build/build.mk
+-+++ b/build/build.mk
+-@@ -63,6 +63,5 @@ gitclean-work:
+- 	@if (test ! -f '.git/info/exclude' || grep -s "git-ls-files" .git/info/exclude); then \
+- 		(echo "Rebuild .git/info/exclude" && echo '*.o' > .git/info/exclude && git svn propget svn:ignore | grep -v config.nice >> .git/info/exclude); \
+- 	fi; \
+--	git clean -X -f -d;
+- 
+- .PHONY: $(ALWAYS) snapshot
+diff --git a/lang/php7/patches/0032-Use-system-timezone.patch b/lang/php7/patches/0032-Use-system-timezone.patch
+index 0ab03fc7c..588690297 100644
+--- a/lang/php7/patches/0032-Use-system-timezone.patch
++++ b/lang/php7/patches/0032-Use-system-timezone.patch
+@@ -13,11 +13,9 @@ To be used in tandem with use_embedded_timezonedb.patch and use_embedded_timezon
+  ext/date/php_date.c | 17 +++++++++++++++++
+  1 file changed, 17 insertions(+)
+ 
+-diff --git a/ext/date/php_date.c b/ext/date/php_date.c
+-index cbe6e91..1999c83 100644
+ --- a/ext/date/php_date.c
+ +++ b/ext/date/php_date.c
+-@@ -1016,6 +1016,23 @@ static char* guess_timezone(const timelib_tzdb *tzdb)
++@@ -1039,6 +1039,23 @@ static char* guess_timezone(const timeli
+  		DATEG(timezone_valid) = 1;
+  		return DATEG(default_timezone);
+  	}
+diff --git a/lang/php7/patches/0041-Add-patch-to-remove-build-timestamps-from-generated-.patch b/lang/php7/patches/0041-Add-patch-to-remove-build-timestamps-from-generated-.patch
+index 528e0f51a..d39042a48 100644
+--- a/lang/php7/patches/0041-Add-patch-to-remove-build-timestamps-from-generated-.patch
++++ b/lang/php7/patches/0041-Add-patch-to-remove-build-timestamps-from-generated-.patch
+@@ -1,5 +1,5 @@
+ From: Thijs Kinkhorst <thijs@debian.org>
+-Date: Wed, 15 Jun 2016 09:18:03 +0200
++Date: Mon, 2 Dec 2019 22:18:43 +0100
+ Subject: Add patch to remove build timestamps from generated binaries.
+ 
+ ---
+@@ -13,7 +13,7 @@ Subject: Add patch to remove build timestamps from generated binaries.
+ 
+ --- a/ext/standard/info.c
+ +++ b/ext/standard/info.c
+-@@ -830,7 +830,6 @@ PHPAPI void php_print_info(int flag)
++@@ -803,7 +803,6 @@ PHPAPI ZEND_COLD void php_print_info(int
+  		php_info_print_box_end();
+  		php_info_print_table_start();
+  		php_info_print_table_row(2, "System", ZSTR_VAL(php_uname));
+@@ -23,7 +23,7 @@ Subject: Add patch to remove build timestamps from generated binaries.
+  #endif
+ --- a/sapi/apache2handler/config.m4
+ +++ b/sapi/apache2handler/config.m4
+-@@ -67,18 +67,9 @@ if test "$PHP_APXS2" != "no"; then
++@@ -64,18 +64,9 @@ if test "$PHP_APXS2" != "no"; then
+    fi
+  
+    APXS_LIBEXECDIR='$(INSTALL_ROOT)'`$APXS -q LIBEXECDIR`
+@@ -47,42 +47,42 @@ Subject: Add patch to remove build timestamps from generated binaries.
+    *aix*)
+ --- a/sapi/cgi/cgi_main.c
+ +++ b/sapi/cgi/cgi_main.c
+-@@ -2442,9 +2442,9 @@ consult the installation file that came
+- 								SG(request_info).no_headers = 1;
+- 							}
++@@ -2401,9 +2401,9 @@ parent_loop_end:
++ 							SG(headers_sent) = 1;
++ 							SG(request_info).no_headers = 1;
+  #if ZEND_DEBUG
+--							php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+-+							php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-							php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+++							php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name,  get_zend_version());
+  #else
+--							php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+-+							php_printf("PHP %s (%s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-							php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+++							php_printf("PHP %s (%s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
+  #endif
+  							php_request_shutdown((void *) 0);
+  							fcgi_shutdown();
+ --- a/sapi/cli/php_cli.c
+ +++ b/sapi/cli/php_cli.c
+-@@ -697,8 +697,8 @@ static int do_cli(int argc, char **argv)
++@@ -648,8 +648,8 @@ static int do_cli(int argc, char **argv)
+  				goto out;
+  
+  			case 'v': /* show php version & quit */
+--				php_printf("PHP %s (%s) (built: %s %s) ( %s)\nCopyright (c) 1997-2018 The PHP Group\n%s",
++-				php_printf("PHP %s (%s) (built: %s %s) ( %s)\nCopyright (c) The PHP Group\n%s",
+ -					PHP_VERSION, cli_sapi_module.name, __DATE__, __TIME__,
+-+				php_printf("PHP %s (%s) ( %s)\nCopyright (c) 1997-2018 The PHP Group\n%s",
+++				php_printf("PHP %s (%s) ( %s)\nCopyright (c) The PHP Group\n%s",
+ +					PHP_VERSION, cli_sapi_module.name,
+  #if ZTS
+  					"ZTS "
+  #else
+ --- a/sapi/fpm/fpm/fpm_main.c
+ +++ b/sapi/fpm/fpm/fpm_main.c
+-@@ -1755,9 +1755,9 @@ int main(int argc, char *argv[])
++@@ -1718,9 +1718,9 @@ int main(int argc, char *argv[])
+  				SG(request_info).no_headers = 1;
+  
+  #if ZEND_DEBUG
+--				php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__,        __TIME__, get_zend_version());
+-+				php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-				php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__,        __TIME__, get_zend_version());
+++				php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
+  #else
+--				php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__,      get_zend_version());
+-+				php_printf("PHP %s (%s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-				php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__,      get_zend_version());
+++				php_printf("PHP %s (%s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
+  #endif
+  				php_request_shutdown((void *) 0);
+  				fcgi_shutdown();
+@@ -92,8 +92,8 @@ Subject: Add patch to remove build timestamps from generated binaries.
+  				phpdbg_do_help_cmd(exec);
+  			} else if (show_version) {
+  				phpdbg_out(
+--					"phpdbg %s (built: %s %s)\nPHP %s, Copyright (c) 1997-2018 The PHP Group\n%s",
+-+					"phpdbg %s\nPHP %s, Copyright (c) 1997-2018 The PHP Group\n%s",
++-					"phpdbg %s (built: %s %s)\nPHP %s, Copyright (c) The PHP Group\n%s",
+++					"phpdbg %s\nPHP %s, Copyright (c) The PHP Group\n%s",
+  					PHPDBG_VERSION,
+ -					__DATE__,
+ -					__TIME__,
+diff --git a/lang/php7/patches/0042-Remove-W3C-validation-icon-to-not-expose-the-reader-.patch b/lang/php7/patches/0042-Remove-W3C-validation-icon-to-not-expose-the-reader-.patch
+index 78f7dca4b..ed221695b 100644
+--- a/lang/php7/patches/0042-Remove-W3C-validation-icon-to-not-expose-the-reader-.patch
++++ b/lang/php7/patches/0042-Remove-W3C-validation-icon-to-not-expose-the-reader-.patch
+@@ -7,11 +7,9 @@ Subject: Remove W3C validation icon to not expose the reader's IP address to
+  sapi/fpm/status.html.in | 5 -----
+  1 file changed, 5 deletions(-)
+ 
+-diff --git a/sapi/fpm/status.html.in b/sapi/fpm/status.html.in
+-index 86492d7..31c31ff 100644
+ --- a/sapi/fpm/status.html.in
+ +++ b/sapi/fpm/status.html.in
+-@@ -71,11 +71,6 @@
++@@ -70,11 +70,6 @@
+  				<tr class="h"><th>PID&darr;</th><th>Start Time</th><th>Start Since</th><th>Requests Served</th><th>Request Duration</th><th>Request method</th><th>Request URI</th><th>Content Length</th><th>User</th><th>Script</th><th>Last Request %CPU</th><th>Last Request Memory</th></tr>
+  			</table>
+  		</div>
+diff --git a/lang/php7/patches/0050-remove-build-timestamps.patch b/lang/php7/patches/0050-remove-build-timestamps.patch
+index 9632e5762..ec7bb3668 100644
+--- a/lang/php7/patches/0050-remove-build-timestamps.patch
++++ b/lang/php7/patches/0050-remove-build-timestamps.patch
+@@ -1,6 +1,6 @@
+ --- a/ext/opcache/ZendAccelerator.c
+ +++ b/ext/opcache/ZendAccelerator.c
+-@@ -2484,11 +2484,6 @@ static void accel_gen_system_id(void)
++@@ -2670,11 +2670,6 @@ static void accel_gen_system_id(void)
+  	PHP_MD5Update(&context, PHP_VERSION, sizeof(PHP_VERSION)-1);
+  	PHP_MD5Update(&context, ZEND_EXTENSION_BUILD_ID, sizeof(ZEND_EXTENSION_BUILD_ID)-1);
+  	PHP_MD5Update(&context, ZEND_BIN_ID, sizeof(ZEND_BIN_ID)-1);
+@@ -9,20 +9,20 @@
+ -		PHP_MD5Update(&context, __DATE__, sizeof(__DATE__)-1);
+ -		PHP_MD5Update(&context, __TIME__, sizeof(__TIME__)-1);
+ -	}
+- 	PHP_MD5Final(digest, &context);
+- 	for (i = 0; i < 16; i++) {
+- 		c = digest[i] >> 4;
++ 	/* Modules may have changed after restart which can cause dangling pointers from
++      * custom opcode handlers in the second-level cache files
++      */
+ --- a/sapi/litespeed/lsapi_main.c
+ +++ b/sapi/litespeed/lsapi_main.c
+-@@ -1057,9 +1057,9 @@ static int cli_main( int argc, char * ar
++@@ -1288,9 +1288,9 @@ static int cli_main( int argc, char * ar
+              case 'v':
+                  if (php_request_startup() != FAILURE) {
+  #if ZEND_DEBUG
+--                    php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+-+                    php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-                    php_printf("PHP %s (%s) (built: %s %s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+++                    php_printf("PHP %s (%s) (DEBUG)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
+  #else
+--                    php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+-+                    php_printf("PHP %s (%s)\nCopyright (c) 1997-2018 The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
++-                    php_printf("PHP %s (%s) (built: %s %s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, __DATE__, __TIME__, get_zend_version());
+++                    php_printf("PHP %s (%s)\nCopyright (c) The PHP Group\n%s", PHP_VERSION, sapi_module.name, get_zend_version());
+  #endif
+  #ifdef PHP_OUTPUT_NEWAPI
+                      php_output_end_all();
+diff --git a/lang/php7/patches/1000-fix_membar_producer_link_error_gcc3x.patch b/lang/php7/patches/1000-fix_membar_producer_link_error_gcc3x.patch
+deleted file mode 100644
+index 3e81dd6b9..000000000
+--- a/lang/php7/patches/1000-fix_membar_producer_link_error_gcc3x.patch
++++ /dev/null
+@@ -1,11 +0,0 @@
+---- a/ext/standard/php_crypt_r.c
+-+++ b/ext/standard/php_crypt_r.c
+-@@ -96,6 +96,8 @@ void _crypt_extended_init_r(void)
+- 		InterlockedIncrement(&initialized);
+- #elif defined(HAVE_SYNC_FETCH_AND_ADD)
+- 		__sync_fetch_and_add(&initialized, 1);
+-+#elif (defined(__GNUC__) && (__GNUC__ == 3))
+-+		initialized = 1;
+- #elif defined(HAVE_ATOMIC_H) /* Solaris 10 defines atomic API within */
+- 		membar_producer();
+- 		atomic_add_int(&initialized, 1);
+diff --git a/lang/php7/patches/1001-ext-opcache-fix-detection-of-shm-mmap.patch b/lang/php7/patches/1001-ext-opcache-fix-detection-of-shm-mmap.patch
+index 4e50d5ef6..40506f7cc 100644
+--- a/lang/php7/patches/1001-ext-opcache-fix-detection-of-shm-mmap.patch
++++ b/lang/php7/patches/1001-ext-opcache-fix-detection-of-shm-mmap.patch
+@@ -1,6 +1,6 @@
+-From dc8bb6a53bfdfe42d9ae81d4e78c6155ad4bfd6e Mon Sep 17 00:00:00 2001
++From dd6ee0fb6715881b204fb4cb124db9134c1a6c7d Mon Sep 17 00:00:00 2001
+ From: Michael Heimpold <mhei@heimpold.de>
+-Date: Sun, 17 May 2015 16:50:50 +0200
++Date: Mon, 2 Dec 2019 22:42:28 +0100
+ Subject: [PATCH] ext/opcache: fix detection of shm/mmap
+ 
+ The detection of sysvipc and mmap doesn't work well when cross-compiling,
+@@ -15,145 +15,32 @@ and makes opcache usable on OpenWrt.
+ 
+ Signed-off-by: Michael Heimpold <mhei@heimpold.de>
+ ---
+- ext/opcache/config.m4 |  122 ++-----------------------------------------------
+- 1 file changed, 4 insertions(+), 118 deletions(-)
++ ext/opcache/config.m4 | 10 ++++++++--
++ 1 file changed, 8 insertions(+), 2 deletions(-)
+ 
+-diff --git a/ext/opcache/config.m4 b/ext/opcache/config.m4
+-index b7e4835..7b6c0aa 100644
+ --- a/ext/opcache/config.m4
+ +++ b/ext/opcache/config.m4
+-@@ -28,127 +28,13 @@ if test "$PHP_OPCACHE" != "no"; then
+- 
+-   AC_CHECK_HEADERS([unistd.h sys/uio.h])
+- 
+--  AC_MSG_CHECKING(for sysvipc shared memory support)
+--  AC_TRY_RUN([
+--#include <sys/types.h>
+--#include <sys/wait.h>
+--#include <sys/ipc.h>
+--#include <sys/shm.h>
+--#include <unistd.h>
+--#include <string.h>
+--
+--int main() {
+--  pid_t pid;
+--  int status;
+--  int ipc_id;
+--  char *shm;
+--  struct shmid_ds shmbuf;
+--
+--  ipc_id = shmget(IPC_PRIVATE, 4096, (IPC_CREAT | SHM_R | SHM_W));
+--  if (ipc_id == -1) {
+--    return 1;
+--  }
+--
+--  shm = shmat(ipc_id, NULL, 0);
+--  if (shm == (void *)-1) {
+--    shmctl(ipc_id, IPC_RMID, NULL);
+--    return 2;
+--  }
+--
+--  if (shmctl(ipc_id, IPC_STAT, &shmbuf) != 0) {
+--    shmdt(shm);
+--    shmctl(ipc_id, IPC_RMID, NULL);
+--    return 3;
+--  }
+--
+--  shmbuf.shm_perm.uid = getuid();
+--  shmbuf.shm_perm.gid = getgid();
+--  shmbuf.shm_perm.mode = 0600;
+--
+--  if (shmctl(ipc_id, IPC_SET, &shmbuf) != 0) {
+--    shmdt(shm);
+--    shmctl(ipc_id, IPC_RMID, NULL);
+--    return 4;
+--  }
+--
+--  shmctl(ipc_id, IPC_RMID, NULL);
+--
+--  strcpy(shm, "hello");
+--
+--  pid = fork();
+--  if (pid < 0) {
+--    return 5;
+--  } else if (pid == 0) {
+--    strcpy(shm, "bye");
+--    return 6;
+--  }
+--  if (wait(&status) != pid) {
+--    return 7;
+--  }
+--  if (!WIFEXITED(status) || WEXITSTATUS(status) != 6) {
+--    return 8;
+--  }
+--  if (strcmp(shm, "bye") != 0) {
+--    return 9;
+--  }
+--  return 0;
+--}
+--],dnl
+-+  AC_CHECK_FUNC(shmget,[
++@@ -89,7 +89,10 @@ int main() {
++ }
++ ]])],[dnl
+      AC_DEFINE(HAVE_SHM_IPC, 1, [Define if you have SysV IPC SHM support])
+--    msg=yes,msg=no,msg=no)
+--  AC_MSG_RESULT([$msg])
+--
+--  AC_MSG_CHECKING(for mmap() using MAP_ANON shared memory support)
+--  AC_TRY_RUN([
+--#include <sys/types.h>
+--#include <sys/wait.h>
+--#include <sys/mman.h>
+--#include <unistd.h>
+--#include <string.h>
+--
+--#ifndef MAP_ANON
+--# ifdef MAP_ANONYMOUS
+--#  define MAP_ANON MAP_ANONYMOUS
+--# endif
+--#endif
+--#ifndef MAP_FAILED
+--# define MAP_FAILED ((void*)-1)
+--#endif
+--
+--int main() {
+--  pid_t pid;
+--  int status;
+--  char *shm;
+--
+--  shm = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);
+--  if (shm == MAP_FAILED) {
+--    return 1;
+--  }
+--
+--  strcpy(shm, "hello");
+-+  ])
++-    msg=yes],[msg=no],[msg=no])
+++    msg=yes],[msg=no],[dnl
+++    AC_CHECK_FUNC(shmget,[dnl
+++        AC_DEFINE(HAVE_SHM_IPC, 1, [Define if you have SysV IPC SHM support])
+++        msg=yes],[msg=no])])
++   AC_MSG_RESULT([$msg])
+  
+--  pid = fork();
+--  if (pid < 0) {
+--    return 5;
+--  } else if (pid == 0) {
+--    strcpy(shm, "bye");
+--    return 6;
+--  }
+--  if (wait(&status) != pid) {
+--    return 7;
+--  }
+--  if (!WIFEXITED(status) || WEXITSTATUS(status) != 6) {
+--    return 8;
+--  }
+--  if (strcmp(shm, "bye") != 0) {
+--    return 9;
+--  }
+--  return 0;
+--}
+--],dnl
+-+  AC_CHECK_FUNC(mmap,[
++   AC_MSG_CHECKING(for mmap() using MAP_ANON shared memory support)
++@@ -141,7 +144,10 @@ int main() {
++ }
++ ]])],[dnl
+      AC_DEFINE(HAVE_SHM_MMAP_ANON, 1, [Define if you have mmap(MAP_ANON) SHM support])
+--    msg=yes,msg=no,msg=no)
+--  AC_MSG_RESULT([$msg])
+-+  ])
++-    msg=yes],[msg=no],[msg=no])
+++    msg=yes],[msg=no],[dnl
+++    AC_CHECK_FUNC(mmap,[dnl
+++        AC_DEFINE(HAVE_SHM_MMAP_ANON, 1, [Define if you have mmap(MAP_ANON) SHM support])
+++        msg=yes],[msg=no])])
++   AC_MSG_RESULT([$msg])
+  
+-   AC_MSG_CHECKING(for mmap() using /dev/zero shared memory support)
+-   AC_TRY_RUN([
+--- 
+-1.7.10.4
+-
++   PHP_CHECK_FUNC_LIB(shm_open, rt)
+diff --git a/lang/php7/patches/1002-gd-iconv.patch b/lang/php7/patches/1002-gd-iconv.patch
+deleted file mode 100644
+index 1418c276f..000000000
+--- a/lang/php7/patches/1002-gd-iconv.patch
++++ /dev/null
+@@ -1,14 +0,0 @@
+---- a/ext/gd/libgd/gdkanji.c
+-+++ b/ext/gd/libgd/gdkanji.c
+-@@ -9,6 +9,11 @@
+- #include "gdhelpers.h"
+- 
+- #include <stdarg.h>
+-+
+-+/* force usage of internal conversation routine */
+-+#undef HAVE_ICONV_H
+-+#undef HAVE_ICONV
+-+
+- #if defined(HAVE_ICONV_H) || defined(HAVE_ICONV)
+- #include <iconv.h>
+- #ifdef HAVE_ERRNO_H
+diff --git a/lang/php7/patches/1003-Fix-dl-cross-compiling-issue.patch b/lang/php7/patches/1003-Fix-dl-cross-compiling-issue.patch
+deleted file mode 100644
+index bd181b81c..000000000
+--- a/lang/php7/patches/1003-Fix-dl-cross-compiling-issue.patch
++++ /dev/null
+@@ -1,27 +0,0 @@
+---- a/configure.ac
+-+++ b/configure.ac
+-@@ -422,7 +422,10 @@ PHP_CHECK_FUNC(gethostname, nsl)
+- PHP_CHECK_FUNC(gethostbyaddr, nsl)
+- PHP_CHECK_FUNC(yp_get_default_domain, nsl)
+- 
+--PHP_CHECK_FUNC(dlopen, dl)
+-+PHP_ADD_LIBRARY(dl)
+-+PHP_DEF_HAVE(dlopen)
+-+PHP_DEF_HAVE(libdl)
+-+ac_cv_func_dlopen=yes
+- if test "$ac_cv_func_dlopen" = "yes"; then
+-   AC_DEFINE(HAVE_LIBDL, 1, [ ])
+- fi
+---- a/ext/fileinfo/config.m4
+-+++ b/ext/fileinfo/config.m4
+-@@ -46,6 +46,10 @@ int main(void)
+-     AC_MSG_RESULT(no)
+-     AC_MSG_NOTICE(using libmagic strcasestr implementation)
+-     libmagic_sources="$libmagic_sources libmagic/strcasestr.c"
+-+  ],[
+-+    dnl cross-compiling; assume not present
+-+    AC_MSG_NOTICE(using libmagic strcasestr implementation)
+-+    libmagic_sources="$libmagic_sources libmagic/strcasestr.c"
+-   ])
+- 
+-   PHP_NEW_EXTENSION(fileinfo, fileinfo.c $libmagic_sources, $ext_shared,,-I@ext_srcdir@/libmagic)
+diff --git a/lang/php7/patches/1004-disable-phar-command.patch b/lang/php7/patches/1004-disable-phar-command.patch
+index 02ab057aa..6ac952490 100644
+--- a/lang/php7/patches/1004-disable-phar-command.patch
++++ b/lang/php7/patches/1004-disable-phar-command.patch
+@@ -1,6 +1,6 @@
+---- a/ext/phar/config.m4	2016-08-17 21:50:58.000000000 +0200
+-+++ b/ext/phar/config.m4	2016-09-20 22:21:28.494934775 +0200
+-@@ -26,7 +26,7 @@
++--- a/ext/phar/config.m4
+++++ b/ext/phar/config.m4
++@@ -19,7 +19,7 @@ if test "$PHP_PHAR" != "no"; then
+    fi
+    PHP_ADD_EXTENSION_DEP(phar, hash, true)
+    PHP_ADD_EXTENSION_DEP(phar, spl, true)
+@@ -9,9 +9,9 @@
+  
+    PHP_INSTALL_HEADERS([ext/phar], [php_phar.h])
+  
+---- a/configure.ac	2016-09-20 22:26:38.000000000 +0200
+-+++ b/configure.ac	2016-09-20 22:42:30.380101556 +0200
+-@@ -1454,13 +1454,13 @@
++--- a/configure.ac
+++++ b/configure.ac
++@@ -1454,13 +1454,13 @@ CFLAGS="\$(CFLAGS_CLEAN) $standard_libto
+  INLINE_CFLAGS="$INLINE_CFLAGS $standard_libtool_flag"
+  CXXFLAGS="$CXXFLAGS $standard_libtool_flag \$(PROF_FLAGS)"
+  
+diff --git a/lang/php7/patches/1006-multiline-syslog.patch b/lang/php7/patches/1006-multiline-syslog.patch
+deleted file mode 100644
+index 5b105069b..000000000
+--- a/lang/php7/patches/1006-multiline-syslog.patch
++++ /dev/null
+@@ -1,178 +0,0 @@
+-commit f11d40ef88f640fe4764d2731d3061472aefe556
+-Author: Philip Prindeville <philipp@redfish-solutions.com>
+-Date:   Wed Aug 9 20:55:25 2017 -0600
+-
+-    Turn php_syslog() into wrapper for syslog and split lines
+-
+-diff --git a/Zend/zend_smart_string.h b/Zend/zend_smart_string.h
+-index 2282202..12d755e 100644
+---- a/Zend/zend_smart_string.h
+-+++ b/Zend/zend_smart_string.h
+-@@ -136,6 +136,10 @@ static zend_always_inline void smart_string_setl(smart_string *dest, char *src,
+- 	dest->c = src;
+- }
+- 
+-+static zend_always_inline void smart_string_reset(smart_string *str) {
+-+	str->len = 0;
+-+}
+-+
+- #endif
+- 
+- /*
+-diff --git a/configure.ac b/configure.ac
+-index cb95d86..a63354f 100644
+---- a/configure.ac
+-+++ b/configure.ac
+-@@ -1478,7 +1478,7 @@ PHP_ADD_SOURCES(main, main.c snprintf.c spprintf.c php_sprintf.c \
+-        php_ini.c SAPI.c rfc1867.c php_content_types.c strlcpy.c \
+-        strlcat.c explicit_bzero.c mergesort.c reentrancy.c php_variables.c php_ticks.c \
+-        network.c php_open_temporary_file.c \
+--       output.c getopt.c, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+-+       output.c getopt.c php_syslog.c, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1)
+- 
+- PHP_ADD_SOURCES_X(main, fastcgi.c, -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1, PHP_FASTCGI_OBJS, no)
+- 
+-diff --git a/main/php_syslog.c b/main/php_syslog.c
+-new file mode 100644
+-index 0000000..c351951
+---- /dev/null
+-+++ b/main/php_syslog.c
+-@@ -0,0 +1,81 @@
+-+/*
+-+   +----------------------------------------------------------------------+
+-+   | PHP Version 7                                                        |
+-+   +----------------------------------------------------------------------+
+-+   | Copyright (c) 2017 The PHP Group                                |
+-+   +----------------------------------------------------------------------+
+-+   | This source file is subject to version 3.01 of the PHP license,      |
+-+   | that is bundled with this package in the file LICENSE, and is        |
+-+   | available through the world-wide-web at the following url:           |
+-+   | http://www.php.net/license/3_01.txt                                  |
+-+   | If you did not receive a copy of the PHP license and are unable to   |
+-+   | obtain it through the world-wide-web, please send a note to          |
+-+   | license@php.net so we can mail you a copy immediately.               |
+-+   +----------------------------------------------------------------------+
+-+   | Author: Philip Prindeville <philipp@redfish-solutions.com>           |
+-+   +----------------------------------------------------------------------+
+-+*/
+-+
+-+/* $Id$ */
+-+
+-+#include <stdio.h>
+-+#include <string.h>
+-+#include <assert.h>
+-+#include <stdlib.h>
+-+#include "php.h"
+-+#include "php_syslog.h"
+-+
+-+#include "zend.h"
+-+#include "zend_smart_string.h"
+-+
+-+/*
+-+ * The SCO OpenServer 5 Development System (not the UDK)
+-+ * defines syslog to std_syslog.
+-+ */
+-+
+-+#ifdef HAVE_STD_SYSLOG
+-+#define syslog std_syslog
+-+#endif
+-+
+-+PHPAPI void php_syslog(int priority, const char *format, ...) /* {{{ */
+-+{
+-+	const char *ptr;
+-+	unsigned char c;
+-+	smart_string fbuf = {0};
+-+	smart_string sbuf = {0};
+-+	va_list args;
+-+
+-+	va_start(args, format);
+-+	zend_printf_to_smart_string(&fbuf, format, args);
+-+	smart_string_0(&fbuf);
+-+	va_end(args);
+-+
+-+	for (ptr = fbuf.c; ; ++ptr) {
+-+		c = *ptr;
+-+		if (c == '\0') {
+-+			syslog(priority, "%.*s", (int)sbuf.len, sbuf.c);
+-+			break;
+-+		}
+-+
+-+		if (c != '\n')
+-+			smart_string_appendc(&sbuf, c);
+-+		else {
+-+			syslog(priority, "%.*s", (int)sbuf.len, sbuf.c);
+-+			smart_string_reset(&sbuf);
+-+		}
+-+	}
+-+
+-+	smart_string_free(&fbuf);
+-+	smart_string_free(&sbuf);
+-+}
+-+
+-+/* }}} */
+-+
+-+/*
+-+ * Local variables:
+-+ * tab-width: 4
+-+ * c-basic-offset: 4
+-+ * End:
+-+ * vim600: sw=4 ts=4 fdm=marker
+-+ * vim<600: sw=4 ts=4
+-+ */
+-diff --git a/main/php_syslog.h b/main/php_syslog.h
+-index be68cc4..4c4ca4e 100644
+---- a/main/php_syslog.h
+-+++ b/main/php_syslog.h
+-@@ -21,6 +21,8 @@
+- #ifndef PHP_SYSLOG_H
+- #define PHP_SYSLOG_H
+- 
+-+#include "php.h"
+-+
+- #ifdef PHP_WIN32
+- #include "win32/syslog.h"
+- #else
+-@@ -30,26 +32,12 @@
+- #endif
+- #endif
+- 
+--/*
+-- * The SCO OpenServer 5 Development System (not the UDK)
+-- * defines syslog to std_syslog.
+-- */
+--
+--#ifdef syslog
+--
+--#ifdef HAVE_STD_SYSLOG
+--#define php_syslog std_syslog
+--#endif
+--
+--#undef syslog
+-+BEGIN_EXTERN_C()
+-+PHPAPI void php_syslog(int, const char *format, ...);
+-+END_EXTERN_C()
+- 
+- #endif
+- 
+--#ifndef php_syslog
+--#define php_syslog syslog
+--#endif
+--
+--#endif
+- /*
+-  * Local variables:
+-  * tab-width: 4
+-diff --git a/win32/build/config.w32 b/win32/build/config.w32
+-index 6cbb18b..71cf491 100644
+---- a/win32/build/config.w32
+-+++ b/win32/build/config.w32
+-@@ -241,7 +241,8 @@ ADD_FLAG("CFLAGS_BD_ZEND", "/D ZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+- ADD_SOURCES("main", "main.c snprintf.c spprintf.c getopt.c fopen_wrappers.c \
+- 	php_scandir.c php_ini.c SAPI.c rfc1867.c php_content_types.c strlcpy.c \
+- 	strlcat.c mergesort.c reentrancy.c php_variables.c php_ticks.c network.c \
+--	php_open_temporary_file.c output.c internal_functions.c php_sprintf.c");
+-+	php_open_temporary_file.c output.c internal_functions.c php_sprintf.c \
+-+	php_syslog.c");
+- ADD_FLAG("CFLAGS_BD_MAIN", "/D ZEND_ENABLE_STATIC_TSRMLS_CACHE=1");
+- 
+- AC_DEFINE('HAVE_STRNLEN', 1);
+diff --git a/lang/php7/patches/1010-pcrelib-NativeMIPS.patch b/lang/php7/patches/1010-pcrelib-NativeMIPS.patch
+deleted file mode 100644
+index 7a1ac468b..000000000
+--- a/lang/php7/patches/1010-pcrelib-NativeMIPS.patch
++++ /dev/null
+@@ -1,17 +0,0 @@
+---- a/ext/pcre/pcrelib/sljit/sljitNativeMIPS_common.c	2017-11-28 02:22:57.000000000 -0700
+-+++ b/ext/pcre/pcrelib/sljit/sljitNativeMIPS_common.c	2017-12-29 17:35:44.231934114 -0700
+-@@ -498,12 +498,13 @@ SLJIT_API_FUNC_ATTRIBUTE void* sljit_gen
+- 
+- SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
+- {
+-+	sljit_sw fir = 0;
+-+
+- 	switch (feature_type) {
+- 	case SLJIT_HAS_FPU:
+- #ifdef SLJIT_IS_FPU_AVAILABLE
+- 		return SLJIT_IS_FPU_AVAILABLE;
+- #elif defined(__GNUC__)
+--		sljit_sw fir;
+- 		asm ("cfc1 %0, $0" : "=r"(fir));
+- 		return (fir >> 22) & 0x1;
+- #else
+diff --git a/lang/php7/patches/1012-php_iconv_string-null-out-pointer.patch b/lang/php7/patches/1012-php_iconv_string-null-out-pointer.patch
+deleted file mode 100644
+index e2db2d27f..000000000
+--- a/lang/php7/patches/1012-php_iconv_string-null-out-pointer.patch
++++ /dev/null
+@@ -1,46 +0,0 @@
+-commit 3763c8f1645983b5abc37c60597e1ecc1bf89019
+-Author: Philip Prindeville <philipp@redfish-solutions.com>
+-Date:   Thu Jan 25 14:18:00 2018 -0700
+-
+-    Always free out_buf in php_iconv_string()
+-
+-diff --git a/ext/iconv/iconv.c b/ext/iconv/iconv.c
+-index 4289242..807bb14 100644
+---- a/ext/iconv/iconv.c
+-+++ b/ext/iconv/iconv.c
+-@@ -699,6 +699,7 @@ PHP_ICONV_API php_iconv_err_t php_iconv_string(const char *in_p, size_t in_len,
+- 	iconv_close(cd);
+- 
+- 	if (result == (size_t)(-1)) {
+-+		zend_string_free(out_buf);
+- 		switch (errno) {
+- 			case EINVAL:
+- 				retval = PHP_ICONV_ERR_ILLEGAL_CHAR;
+-@@ -715,7 +716,6 @@ PHP_ICONV_API php_iconv_err_t php_iconv_string(const char *in_p, size_t in_len,
+- 
+- 			default:
+- 				/* other error */
+--				zend_string_free(out_buf);
+- 				return PHP_ICONV_ERR_UNKNOWN;
+- 		}
+- 	}
+-@@ -988,9 +988,6 @@ static php_iconv_err_t _php_iconv_strpos(size_t *pretval,
+- 	err = php_iconv_string(ndl, ndl_nbytes, &ndl_buf, GENERIC_SUPERSET_NAME, enc);
+- 
+- 	if (err != PHP_ICONV_ERR_SUCCESS) {
+--		if (ndl_buf != NULL) {
+--			zend_string_free(ndl_buf);
+--		}
+- 		return err;
+- 	}
+- 
+-@@ -2494,9 +2491,6 @@ PHP_NAMED_FUNCTION(php_if_iconv)
+- 	if (err == PHP_ICONV_ERR_SUCCESS && out_buffer != NULL) {
+- 		RETVAL_STR(out_buffer);
+- 	} else {
+--		if (out_buffer != NULL) {
+--			zend_string_free(out_buffer);
+--		}
+- 		RETURN_FALSE;
+- 	}
+- }
+diff --git a/lang/php7/pecl.mk b/lang/php7/pecl.mk
+index caafc66c3..f22c5c5a5 100644
+--- a/lang/php7/pecl.mk
++++ b/lang/php7/pecl.mk
+@@ -13,11 +13,16 @@ endef
+ 
+ define Build/Prepare
+ 	$(Build/Prepare/Default)
+-	( cd $(PKG_BUILD_DIR); $(STAGING_DIR)/usr/bin/phpize7 )
++	$(if $(QUILT),,( cd $(PKG_BUILD_DIR); $(STAGING_DIR)/usr/bin/phpize7 ))
++endef
++
++define Build/Configure
++	$(if $(QUILT),( cd $(PKG_BUILD_DIR); $(STAGING_DIR)/usr/bin/phpize7 ))
++	$(Build/Configure/Default)
+ endef
+ 
+ CONFIGURE_VARS+= \
+-        ac_cv_c_bigendian_php=$(if $(CONFIG_BIG_ENDIAN),yes,no)
++	ac_cv_c_bigendian_php=$(if $(CONFIG_BIG_ENDIAN),yes,no)
+ 
+ CONFIGURE_ARGS+= \
+ 	--with-php-config=$(STAGING_DIR)/usr/bin/php7-config
+diff --git a/lang/php7/test.sh b/lang/php7/test.sh
+new file mode 100644
+index 000000000..273afc7bc
+--- /dev/null
++++ b/lang/php7/test.sh
+@@ -0,0 +1,23 @@
++#!/bin/sh
++
++case "$1" in
++	php7-cgi)
++		php-cgi -v | grep "$2"
++		;;
++	php7-cli)
++		php-cli -v | grep "$2"
++		;;
++	php7-fpm)
++		php-fpm -v | grep "$2"
++		;;
++	php7-mod-*)
++		PHP_MOD="${1#php7-mod-}"
++		PHP_MOD="${PHP_MOD//-/_}"
++
++		opkg install php7-cli
++
++		php-cli -m | grep -i "$PHP_MOD"
++		;;
++	*)
++		;;
++esac
+-- 
+2.36.1
+
