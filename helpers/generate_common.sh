@@ -228,7 +228,7 @@ git_checkout() (
 	if use_git_mirror || feed_ref_is_branch "$url"; then
 		git_mirror_update "$name" "$(feed_url "$url")"
 		_git_mirror_lock \
-			git fetch ${CLONE_DEEP:+--depth 1} origin "$(feed_ref "$url")"
+			git fetch origin "$(feed_ref "$url")"
 	else
 		# If we are downloading directly from server we can't fetch specific
 		# commit so fetch everything

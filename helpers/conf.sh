@@ -51,7 +51,6 @@ SIGN_KEY="" # Path to private signing key
 FORCE="" # Force build
 
 GIT_MIRROR="" # Path to git mirror directory
-CLONE_DEEP="" # Set this variable to clone OpenWRT tree in full depth not just latest commit
 DL_MIRROR="" # Path to downloads mirror directory
 CCACHE_HOST_DIR="" # Path to ccache directory for host compilations
 CCACHE_TARGET_DIR="" # Path to ccache directory for target compilations
