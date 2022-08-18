@@ -1,0 +1,59 @@
+From 5dcf3af3743a918a28cd9674122bc95e4e18eed5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Thu, 18 Aug 2022 15:39:27 +0200
+Subject: [PATCH] base-files: Turris MOX: Support for heartbeat LED
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Make sure that the MOX red led is set to heartbeat.
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@turris.com>
+[change used arguments in heartbeat for Turris MOX to have this working]
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ .../base-files/files/lib/functions/uci-defaults.sh   | 12 ++++++++++++
+ .../mvebu/cortexa53/base-files/etc/board.d/01_leds   |  3 +++
+ 2 files changed, 15 insertions(+)
+
+diff --git a/package/base-files/files/lib/functions/uci-defaults.sh b/package/base-files/files/lib/functions/uci-defaults.sh
+index 02882f43ca..eb9884a14d 100644
+--- a/package/base-files/files/lib/functions/uci-defaults.sh
++++ b/package/base-files/files/lib/functions/uci-defaults.sh
+@@ -418,6 +418,18 @@ ucidef_set_led_default() {
+ 	json_select ..
+ }
+ 
++ucidef_set_led_heartbeat() {
++
++	_ucidef_set_led_common "$1" "$2" "$3"
++
++	json_add_string trigger "heartbeat"
++
++	json_select ..
++
++	json_select ..
++}
++
++
+ ucidef_set_led_gpio() {
+ 	local gpio="$4"
+ 	local inverted="$5"
+diff --git a/target/linux/mvebu/cortexa53/base-files/etc/board.d/01_leds b/target/linux/mvebu/cortexa53/base-files/etc/board.d/01_leds
+index 42f4deb88a..85008b1b4e 100755
+--- a/target/linux/mvebu/cortexa53/base-files/etc/board.d/01_leds
++++ b/target/linux/mvebu/cortexa53/base-files/etc/board.d/01_leds
+@@ -11,6 +11,9 @@ case "$board" in
+ glinet,gl-mv1000)
+ 	ucidef_set_led_netdev "wan" "WAN" "green:wan" "wan"
+ 	;;
++cznic,turris-mox)
++	ucidef_set_led_heartbeat "wan" "MOX A" "mox:red:activity"
++	;;
+ esac
+ 
+ board_config_flush
+-- 
+2.37.2
+
