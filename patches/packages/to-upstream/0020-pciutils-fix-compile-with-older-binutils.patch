@@ -1,0 +1,91 @@
+From f08dadd517e4ecd5c15d4016dd6261d9fee3d41b Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sun, 21 Aug 2022 10:44:33 +0200
+Subject: [PATCH] pciutils: backport patch to fix compilation with older
+ binutils
+
+While building pciutils 3.8.0 for OpenWrt 21.02 includes target
+mvebu/cortex-a9, mvebu/cortex-a53 and powerpc/8540, it fails because of
+this error:
+
+-I<turris1x/ws/build/staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/include>   -c -o filter.o filter.c
+{standard input}: Assembler messages:
+{standard input}:6: Error: multiple versions [`pci_filter_init@@LIBPCI_3.8'|`pci_filter_init@LIBPCI_3.3'] for symbol `pci_filter_init_v38'
+{standard input}:8: Error: multiple versions [`pci_filter_parse_slot@@LIBPCI_3.8'|`pci_filter_parse_slot@LIBPCI_3.3'] for symbol `pci_filter_parse_slot_v38'
+{standard input}:10: Error: multiple versions [`pci_filter_parse_id@@LIBPCI_3.8'|`pci_filter_parse_id@LIBPCI_3.3'] for symbol `pci_filter_parse_id_v38'
+{standard input}:12: Error: multiple versions [`pci_filter_match@@LIBPCI_3.8'|`pci_filter_match@LIBPCI_3.3'] for symbol `pci_filter_match_v38'
+make[4]: *** [<builtin>: filter.o] Error 1
+make[4]: Leaving directory '<turris1x/ws/build/build_dir/target-powerpc_8548_musl/pciutils-3.8.0/lib'>
+make[3]: *** [Makefile:70: lib/libpci.so.3.8.0] Error 2
+make[3]: Leaving directory '<turris1x/ws/build/build_dir/target-powerpc_8548_musl/pciutils-3.8.0'>
+make[2]: *** [Makefile:88: <turris1x/ws/build/build_dir/target-powerpc_8548_musl/pciutils-3.8.0/.built]> Error 2
+make[2]: Leaving directory '<turris1x/ws/build/feeds/packages/utils/pciutils'>
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ utils/pciutils/Makefile                       |  2 +-
+ ...07-avoid-addng-multiple-version-tags.patch | 42 +++++++++++++++++++
+ 2 files changed, 43 insertions(+), 1 deletion(-)
+ create mode 100644 utils/pciutils/patches/107-avoid-addng-multiple-version-tags.patch
+
+diff --git a/utils/pciutils/Makefile b/utils/pciutils/Makefile
+index 104abbd27168..870ffae3ec36 100644
+--- a/utils/pciutils/Makefile
++++ b/utils/pciutils/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=pciutils
+ PKG_VERSION:=3.8.0
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=@KERNEL/software/utils/pciutils
+diff --git a/utils/pciutils/patches/107-avoid-addng-multiple-version-tags.patch b/utils/pciutils/patches/107-avoid-addng-multiple-version-tags.patch
+new file mode 100644
+index 000000000000..74b5782881ac
+--- /dev/null
++++ b/utils/pciutils/patches/107-avoid-addng-multiple-version-tags.patch
+@@ -0,0 +1,42 @@
++From 0478e1f3928bfaa34eb910ba2cbaf1dda8f84aab Mon Sep 17 00:00:00 2001
++From: Martin Mares <mj@ucw.cz>
++Date: Wed, 10 Aug 2022 13:34:28 +0700
++Subject: [PATCH] Avoid adding multiple version tags to the same symbol
++
++This is apparently forbidden in most versions of binutils.
++---
++ lib/filter.c | 12 ++++++++----
++ 1 file changed, 8 insertions(+), 4 deletions(-)
++
++--- a/lib/filter.c
+++++ b/lib/filter.c
++@@ -303,21 +303,25 @@ pci_filter_match_v30(struct pci_filter_v
++ // (their positions in struct pci_filter were declared as RFU).
++ 
++ STATIC_ALIAS(void pci_filter_init(struct pci_access *a, struct pci_filter *f), pci_filter_init_v38(a, f));
+++DEFINE_ALIAS(void pci_filter_init_v33(struct pci_access *a, struct pci_filter *f), pci_filter_init_v38);
++ SYMBOL_VERSION(pci_filter_init_v30, pci_filter_init@LIBPCI_3.0);
++-SYMBOL_VERSION(pci_filter_init_v38, pci_filter_init@LIBPCI_3.3);
+++SYMBOL_VERSION(pci_filter_init_v33, pci_filter_init@LIBPCI_3.3);
++ SYMBOL_VERSION(pci_filter_init_v38, pci_filter_init@@LIBPCI_3.8);
++ 
++ STATIC_ALIAS(char *pci_filter_parse_slot(struct pci_filter *f, char *str), pci_filter_parse_slot_v38(f, str));
+++DEFINE_ALIAS(char *pci_filter_parse_slot_v33(struct pci_filter *f, char *str), pci_filter_parse_slot_v38);
++ SYMBOL_VERSION(pci_filter_parse_slot_v30, pci_filter_parse_slot@LIBPCI_3.0);
++-SYMBOL_VERSION(pci_filter_parse_slot_v38, pci_filter_parse_slot@LIBPCI_3.3);
+++SYMBOL_VERSION(pci_filter_parse_slot_v33, pci_filter_parse_slot@LIBPCI_3.3);
++ SYMBOL_VERSION(pci_filter_parse_slot_v38, pci_filter_parse_slot@@LIBPCI_3.8);
++ 
++ STATIC_ALIAS(char *pci_filter_parse_id(struct pci_filter *f, char *str), pci_filter_parse_id_v38(f, str));
+++DEFINE_ALIAS(char *pci_filter_parse_id_v33(struct pci_filter *f, char *str), pci_filter_parse_id_v38);
++ SYMBOL_VERSION(pci_filter_parse_id_v30, pci_filter_parse_id@LIBPCI_3.0);
++-SYMBOL_VERSION(pci_filter_parse_id_v38, pci_filter_parse_id@LIBPCI_3.3);
+++SYMBOL_VERSION(pci_filter_parse_id_v33, pci_filter_parse_id@LIBPCI_3.3);
++ SYMBOL_VERSION(pci_filter_parse_id_v38, pci_filter_parse_id@@LIBPCI_3.8);
++ 
++ STATIC_ALIAS(int pci_filter_match(struct pci_filter *f, struct pci_dev *d), pci_filter_match_v38(f, d));
+++DEFINE_ALIAS(int pci_filter_match_v33(struct pci_filter *f, struct pci_dev *d), pci_filter_match_v38);
++ SYMBOL_VERSION(pci_filter_match_v30, pci_filter_match@LIBPCI_3.0);
++-SYMBOL_VERSION(pci_filter_match_v38, pci_filter_match@LIBPCI_3.3);
+++SYMBOL_VERSION(pci_filter_match_v33, pci_filter_match@LIBPCI_3.3);
++ SYMBOL_VERSION(pci_filter_match_v38, pci_filter_match@@LIBPCI_3.8);
