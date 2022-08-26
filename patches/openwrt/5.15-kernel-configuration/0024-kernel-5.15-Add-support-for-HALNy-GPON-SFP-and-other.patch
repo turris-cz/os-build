@@ -1,6 +1,6 @@
-From 3d7a37e16aa07cbb8f320a45f31bc8058a27a4c9 Mon Sep 17 00:00:00 2001
+From 99f38b7e61d3cf060db8aa185c2b334987ed62f2 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Wed, 24 Aug 2022 13:00:36 +0200
+Date: Fri, 26 Aug 2022 16:21:44 +0200
 Subject: [PATCH] kernel: 5.15: Add support for HALNy-GPON-SFP and other fixes
 
 It was reported on Turris forum [1] that HALNy-GPON-SFP module does not
@@ -10,14 +10,12 @@ series, which should hopefully fix this issue.
 Before sending this to OpenWrt, it needs to tested with Turris Omnia.
 
 [1] https://forum.turris.cz/t/hbl-turrisos-6-0-alpha2-halny-hl-gsfp-sfp-gpon-stick-problems/17547
-
-Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
 ---
- ...t-sfp-move-quirk-handling-into-sfp.c.patch | 301 ++++++++++++++++++
- ...move-Alcatel-Lucent-3FE46541AA-fixup.patch |  63 ++++
- ...12-net-sfp-move-Huawei-MA5671A-fixup.patch |  50 +++
- ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  28 ++
- 4 files changed, 442 insertions(+)
+ ...t-sfp-move-quirk-handling-into-sfp.c.patch | 299 ++++++++++++++++++
+ ...move-Alcatel-Lucent-3FE46541AA-fixup.patch |  75 +++++
+ ...12-net-sfp-move-Huawei-MA5671A-fixup.patch |  52 +++
+ ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  93 ++++++
+ 4 files changed, 519 insertions(+)
  create mode 100644 target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
  create mode 100644 target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
  create mode 100644 target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
@@ -25,13 +23,13 @@ Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
 
 diff --git a/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch b/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
 new file mode 100644
-index 0000000000..4b52b16c09
+index 0000000000..fa7480458b
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
-@@ -0,0 +1,301 @@
-+From fa192d917c6421ea1636833306d76314ab409a7e Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,299 @@
++From cb3a4e33a0415f84736734e77fb2d6c1a5fab1d7 Mon Sep 17 00:00:00 2001
 +From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
-+Date: Wed, 24 Aug 2022 11:36:32 +0100
++Date: Fri, 26 Aug 2022 08:43:30 +0100
 +Subject: [PATCH 1/4] net: sfp: move quirk handling into sfp.c
 +
 +We need to handle more quirks than just those which affect the link
@@ -41,9 +39,9 @@ index 0000000000..4b52b16c09
 +Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
 +---
 + drivers/net/phy/sfp-bus.c | 98 ++-------------------------------------
-+ drivers/net/phy/sfp.c     | 96 +++++++++++++++++++++++++++++++++++++-
++ drivers/net/phy/sfp.c     | 94 ++++++++++++++++++++++++++++++++++++-
 + drivers/net/phy/sfp.h     |  9 +++-
-+ 3 files changed, 106 insertions(+), 97 deletions(-)
++ 3 files changed, 104 insertions(+), 97 deletions(-)
 +
 +diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
 +index 4369d6249e7b..267182d32bd5 100644
@@ -173,7 +171,7 @@ index 0000000000..4b52b16c09
 + 	if (ops && ops->module_insert)
 + 		ret = ops->module_insert(bus->upstream, id);
 +diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index 028a5df5c538..3dd502db9dd6 100644
++index 028a5df5c538..7be9eb47c40f 100644
 +--- a/drivers/net/phy/sfp.c
 ++++ b/drivers/net/phy/sfp.c
 +@@ -252,6 +252,8 @@ struct sfp {
@@ -279,18 +277,16 @@ index 0000000000..4b52b16c09
 + static unsigned long poll_jiffies;
 + 
 + static unsigned int sfp_gpio_get_state(struct sfp *sfp)
-+@@ -1952,6 +2041,10 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++@@ -1952,6 +2041,8 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
 + 	else
 + 		sfp->tx_fault_ignore = false;
 + 
 ++	sfp->quirk = sfp_lookup_quirk(&id);
-++	if (sfp->quirk && sfp->quirk->fixup)
-++		sfp->quirk->fixup(sfp);
 ++
 + 	return 0;
 + }
 + 
-+@@ -2063,7 +2156,8 @@ static void sfp_sm_module(struct sfp *sfp, unsigned int event)
++@@ -2063,7 +2154,8 @@ static void sfp_sm_module(struct sfp *sfp, unsigned int event)
 + 			break;
 + 
 + 		/* Report the module insertion to the upstream device */
@@ -332,30 +328,33 @@ index 0000000000..4b52b16c09
 +
 diff --git a/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch b/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
 new file mode 100644
-index 0000000000..2fd0654594
+index 0000000000..56716ca2a0
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
-@@ -0,0 +1,63 @@
-+From 2c59df88574b91f46fa59543a40aadb407219080 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,75 @@
++From d189313ed65a21a425889664abc5e7c4646a00ba Mon Sep 17 00:00:00 2001
 +From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
-+Date: Wed, 24 Aug 2022 11:36:37 +0100
++Date: Fri, 26 Aug 2022 08:43:35 +0100
 +Subject: [PATCH 2/4] net: sfp: move Alcatel Lucent 3FE46541AA fixup
++
++Add a new fixup mechanism to the SFP quirks, and use it for this
++module.
 +
 +Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
 +---
-+ drivers/net/phy/sfp.c | 12 +++++++-----
++ drivers/net/phy/sfp.c | 14 +++++++++-----
 + drivers/net/phy/sfp.h |  1 +
-+ 2 files changed, 8 insertions(+), 5 deletions(-)
++ 2 files changed, 10 insertions(+), 5 deletions(-)
 +
 +diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index 3dd502db9dd6..10dae35c4dac 100644
++index 7be9eb47c40f..900b10887c3f 100644
 +--- a/drivers/net/phy/sfp.c
 ++++ b/drivers/net/phy/sfp.c
 +@@ -310,6 +310,11 @@ static const struct of_device_id sfp_of_match[] = {
 + };
 + MODULE_DEVICE_TABLE(of, sfp_of_match);
 + 
-++static void sfp_fixup_3fe46541aa(struct sfp *sfp)
+++static void sfp_fixup_long_startup(struct sfp *sfp)
 ++{
 ++	sfp->module_t_start_up = T_START_UP_BAD_GPON;
 ++}
@@ -367,7 +366,7 @@ index 0000000000..2fd0654594
 + 		.vendor = "ALCATELLUCENT",
 + 		.part = "3FE46541AA",
 + 		.modes = sfp_quirk_2500basex,
-++		.fixup = sfp_fixup_3fe46541aa,
+++		.fixup = sfp_fixup_long_startup,
 + 	}, {
 + 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
 + 		// NRZ in their EEPROM
@@ -384,6 +383,15 @@ index 0000000000..2fd0654594
 + 
 + 	if (!memcmp(id.base.vendor_name, "HUAWEI          ", 16) &&
 + 	    !memcmp(id.base.vendor_pn, "MA5671A         ", 16))
++@@ -2042,6 +2044,8 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 		sfp->tx_fault_ignore = false;
++ 
++ 	sfp->quirk = sfp_lookup_quirk(&id);
+++	if (sfp->quirk && sfp->quirk->fixup)
+++		sfp->quirk->fixup(sfp);
++ 
++ 	return 0;
++ }
 +diff --git a/drivers/net/phy/sfp.h b/drivers/net/phy/sfp.h
 +index 03f1d47fe6ca..7ad06deae76c 100644
 +--- a/drivers/net/phy/sfp.h
@@ -401,14 +409,16 @@ index 0000000000..2fd0654594
 +
 diff --git a/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch b/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
 new file mode 100644
-index 0000000000..de61189e4b
+index 0000000000..416f3a3a6a
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
-@@ -0,0 +1,50 @@
-+From 43c90bc96f5713a60ec8937d33f2d47dcf5f8875 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,52 @@
++From a9e957e4da9f28797663b162e0bdd0147ace7853 Mon Sep 17 00:00:00 2001
 +From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
-+Date: Wed, 24 Aug 2022 11:36:42 +0100
++Date: Fri, 26 Aug 2022 08:43:40 +0100
 +Subject: [PATCH 3/4] net: sfp: move Huawei MA5671A fixup
++
++Move this module over to the new fixup mechanism.
 +
 +Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
 +---
@@ -416,14 +426,14 @@ index 0000000000..de61189e4b
 + 1 file changed, 7 insertions(+), 5 deletions(-)
 +
 +diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
-+index 10dae35c4dac..9bedf974109e 100644
++index 900b10887c3f..db922d27ee79 100644
 +--- a/drivers/net/phy/sfp.c
 ++++ b/drivers/net/phy/sfp.c
-+@@ -315,6 +315,11 @@ static void sfp_fixup_3fe46541aa(struct sfp *sfp)
++@@ -315,6 +315,11 @@ static void sfp_fixup_long_startup(struct sfp *sfp)
 + 	sfp->module_t_start_up = T_START_UP_BAD_GPON;
 + }
 + 
-++static void sfp_fixup_ma5671a(struct sfp *sfp)
+++static void sfp_fixup_ignore_tx_fault(struct sfp *sfp)
 ++{
 ++	sfp->tx_fault_ignore = true;
 ++}
@@ -435,7 +445,7 @@ index 0000000000..de61189e4b
 + 		.vendor = "HUAWEI",
 + 		.part = "MA5671A",
 + 		.modes = sfp_quirk_2500basex,
-++		.fixup = sfp_fixup_ma5671a,
+++		.fixup = sfp_fixup_ignore_tx_fault,
 + 	}, {
 + 		// Lantech 8330-262D-E can operate at 2500base-X, but
 + 		// incorrectly report 2500MBd NRZ in their EEPROM
@@ -457,21 +467,25 @@ index 0000000000..de61189e4b
 +
 diff --git a/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch b/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
 new file mode 100644
-index 0000000000..dcbb920c3e
+index 0000000000..e66bcb7748
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
-@@ -0,0 +1,28 @@
-+From 347ca979b47886dd53fcdc0b0155c6d5823f576f Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,93 @@
++From 9490075c53cec3925039d2b1c5afc4507e772660 Mon Sep 17 00:00:00 2001
 +From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
-+Date: Wed, 24 Aug 2022 11:36:48 +0100
++Date: Fri, 26 Aug 2022 08:43:45 +0100
 +Subject: [PATCH 4/4] net: sfp: add support for HALNy GPON SFP
 +
-+More broken modules...
++Add a quirk for the HALNy HL-GSFP module, which appears to have an
++inverted RX_LOS signal, and possibly uses TX_FAULT as an inverted
++host-link status signal. As we can't be certain about the modules
++use of TX_FAULT, we ignore it.
 +
 +Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
 +---
-+ drivers/net/phy/sfp-bus.c | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
++ drivers/net/phy/sfp-bus.c |  2 +-
++ drivers/net/phy/sfp.c     | 29 ++++++++++++++++++++++++++---
++ 2 files changed, 27 insertions(+), 4 deletions(-)
 +
 +diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
 +index 267182d32bd5..4566348a6d05 100644
@@ -486,6 +500,67 @@ index 0000000000..dcbb920c3e
 + 		bus->sfp_quirk->modes(id, modes);
 + 
 + 	bitmap_or(support, support, modes, __ETHTOOL_LINK_MODE_MASK_NBITS);
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index db922d27ee79..2ebc577bfc56 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -320,6 +320,23 @@ static void sfp_fixup_ignore_tx_fault(struct sfp *sfp)
++ 	sfp->tx_fault_ignore = true;
++ }
++ 
+++static void sfp_fixup_inverted_los(struct sfp *sfp)
+++{
+++	const __be16 los_inverted = cpu_to_be16(SFP_OPTIONS_LOS_INVERTED);
+++	const __be16 los_normal = cpu_to_be16(SFP_OPTIONS_LOS_NORMAL);
+++
+++	sfp->id.ext.options &= ~los_normal;
+++	sfp->id.ext.options |= los_inverted;
+++}
+++
+++static void sfp_fixup_hanly_gsfp(struct sfp *sfp)
+++{
+++	/* LOS is inverted */
+++	sfp_fixup_inverted_los(sfp);
+++	/* TX fault might be inverted, but we don't know for certain. */
+++	sfp_fixup_ignore_tx_fault(sfp);
+++}
+++
++ static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++ 				unsigned long *modes)
++ {
++@@ -351,6 +368,10 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.part = "3FE46541AA",
++ 		.modes = sfp_quirk_2500basex,
++ 		.fixup = sfp_fixup_long_startup,
+++	}, {
+++		.vendor = "HANLy",
+++		.part = "HL-GSFP",
+++		.fixup = sfp_fixup_hanly_gsfp,
++ 	}, {
++ 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++ 		// NRZ in their EEPROM
++@@ -368,16 +389,18 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.vendor = "UBNT",
++ 		.part = "UF-INSTANT",
++ 		.modes = sfp_quirk_ubnt_uf_instant,
++-	},
+++	}
++ };
++ 
++ static size_t sfp_strlen(const char *str, size_t maxlen)
++ {
++ 	size_t size, i;
++ 
++-	/* Trailing characters should be filled with space chars */
+++	/* Trailing characters should be filled with space chars, but
+++	 * some manufacturers can't read SFF-8472 and use NUL.
+++	 */
++ 	for (i = 0, size = 0; i < maxlen; i++)
++-		if (str[i] != ' ')
+++		if (str[i] != ' ' && str[i] != '\0')
++ 			size = i + 1;
++ 
++ 	return size;
 +-- 
 +2.34.1
 +
