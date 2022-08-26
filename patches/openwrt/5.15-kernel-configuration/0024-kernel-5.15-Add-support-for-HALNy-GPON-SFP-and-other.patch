@@ -1,4 +1,4 @@
-From 99f38b7e61d3cf060db8aa185c2b334987ed62f2 Mon Sep 17 00:00:00 2001
+From ff0b52972da8e3049de4066e6d9dab2fbb2d23a6 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Fri, 26 Aug 2022 16:21:44 +0200
 Subject: [PATCH] kernel: 5.15: Add support for HALNy-GPON-SFP and other fixes
@@ -15,11 +15,13 @@ Before sending this to OpenWrt, it needs to tested with Turris Omnia.
  ...move-Alcatel-Lucent-3FE46541AA-fixup.patch |  75 +++++
  ...12-net-sfp-move-Huawei-MA5671A-fixup.patch |  52 +++
  ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  93 ++++++
- 4 files changed, 519 insertions(+)
+ ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  42 +++
+ 5 files changed, 561 insertions(+)
  create mode 100644 target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
  create mode 100644 target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
  create mode 100644 target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
  create mode 100644 target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+ create mode 100644 target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
 
 diff --git a/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch b/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
 new file mode 100644
@@ -561,6 +563,54 @@ index 0000000000..e66bcb7748
 + 			size = i + 1;
 + 
 + 	return size;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch b/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+new file mode 100644
+index 0000000000..99ca247366
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+@@ -0,0 +1,42 @@
++From 6dc810804bb2fa91d9972601c209471fab852509 Mon Sep 17 00:00:00 2001
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Date: Fri, 26 Aug 2022 20:50:51 +0200
++Subject: [PATCH] fixup! net: sfp: add support for HALNy GPON SFP
++
++There are a few typos, which was reported by Orest Worhacz
++(@AreYouLoco), which needs to be fixed.
++
++SFP is detected as
++[    9.607535] sfp sfp: module HALNy HL-GSFP          rev V1.0 sn HALN1010493c     dc 20150525
++---
++ drivers/net/phy/sfp.c | 6 +++---
++ 1 file changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 2ebc577bfc56..277292e2ed35 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -329,7 +329,7 @@ static void sfp_fixup_inverted_los(struct sfp *sfp)
++ 	sfp->id.ext.options |= los_inverted;
++ }
++ 
++-static void sfp_fixup_hanly_gsfp(struct sfp *sfp)
+++static void sfp_fixup_halny_gsfp(struct sfp *sfp)
++ {
++ 	/* LOS is inverted */
++ 	sfp_fixup_inverted_los(sfp);
++@@ -369,9 +369,9 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.modes = sfp_quirk_2500basex,
++ 		.fixup = sfp_fixup_long_startup,
++ 	}, {
++-		.vendor = "HANLy",
+++		.vendor = "HALNy",
++ 		.part = "HL-GSFP",
++-		.fixup = sfp_fixup_hanly_gsfp,
+++		.fixup = sfp_fixup_halny_gsfp,
++ 	}, {
++ 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++ 		// NRZ in their EEPROM
 +-- 
 +2.34.1
 +
