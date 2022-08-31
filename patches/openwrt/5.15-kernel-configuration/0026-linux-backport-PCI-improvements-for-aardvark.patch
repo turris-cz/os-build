@@ -1,0 +1,1035 @@
+From f179ebdc94ad01178452b226ccb7e220ac86c3e4 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 31 Aug 2022 16:12:23 +0200
+Subject: [PATCH] linux: backport PCI improvements for aardvark
+
+---
+ ...-support-for-PCI-Bridge-Subsystem-Ve.patch |  45 +++
+ ...pose-INTx-irqs-prior-to-removing-INT.patch |  44 +++
+ ...-support-for-AER-registers-on-emulat.patch | 139 +++++++++
+ ...-reporting-Slot-capabilities-on-emul.patch |  98 +++++++
+ ...pose-bridge-irq-prior-to-removing-br.patch |  41 +++
+ ...-support-for-DLLSC-and-hotplug-inter.patch | 268 ++++++++++++++++++
+ ...rk-Send-Set_Slot_Power_Limit-message.patch | 148 ++++++++++
+ .../0098-PCI-aardvark-Add-clock-support.patch |  93 ++++++
+ ...-aardvark-Add-suspend-to-RAM-support.patch |  74 +++++
+ ...lace-custom-PCIE_CORE_ERR_CAPCTL_-ma.patch |  51 ++++
+ ...-t-write-read-only-bits-explicitly-i.patch |  39 +++
+ 11 files changed, 1040 insertions(+)
+ create mode 100644 target/linux/generic/pending-5.15/0091-PCI-aardvark-Add-support-for-PCI-Bridge-Subsystem-Ve.patch
+ create mode 100644 target/linux/generic/pending-5.15/0092-PCI-aardvark-Dispose-INTx-irqs-prior-to-removing-INT.patch
+ create mode 100644 target/linux/generic/pending-5.15/0093-PCI-aardvark-Add-support-for-AER-registers-on-emulat.patch
+ create mode 100644 target/linux/generic/pending-5.15/0094-PCI-aardvark-Fix-reporting-Slot-capabilities-on-emul.patch
+ create mode 100644 target/linux/generic/pending-5.15/0095-PCI-aardvark-Dispose-bridge-irq-prior-to-removing-br.patch
+ create mode 100644 target/linux/generic/pending-5.15/0096-PCI-aardvark-Add-support-for-DLLSC-and-hotplug-inter.patch
+ create mode 100644 target/linux/generic/pending-5.15/0097-PCI-aardvark-Send-Set_Slot_Power_Limit-message.patch
+ create mode 100644 target/linux/generic/pending-5.15/0098-PCI-aardvark-Add-clock-support.patch
+ create mode 100644 target/linux/generic/pending-5.15/0099-PCI-aardvark-Add-suspend-to-RAM-support.patch
+ create mode 100644 target/linux/generic/pending-5.15/0100-PCI-aardvark-Replace-custom-PCIE_CORE_ERR_CAPCTL_-ma.patch
+ create mode 100644 target/linux/generic/pending-5.15/0101-PCI-aardvark-Don-t-write-read-only-bits-explicitly-i.patch
+
+diff --git a/target/linux/generic/pending-5.15/0091-PCI-aardvark-Add-support-for-PCI-Bridge-Subsystem-Ve.patch b/target/linux/generic/pending-5.15/0091-PCI-aardvark-Add-support-for-PCI-Bridge-Subsystem-Ve.patch
+new file mode 100644
+index 0000000000..b058048509
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0091-PCI-aardvark-Add-support-for-PCI-Bridge-Subsystem-Ve.patch
+@@ -0,0 +1,45 @@
++From a6e8a5fd098c65dd8608d21d64df48f5cc7c1957 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Tue, 19 Oct 2021 13:54:19 +0200
++Subject: [PATCH 1/9] PCI: aardvark: Add support for PCI Bridge Subsystem
++ Vendor ID on emulated bridge
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Register with Subsystem Device/Vendor ID is at offset 0x2c. Export is via
++emulated bridge.
++
++After this change Subsystem ID is visible in lspci output at line:
++
++  Capabilities: [40] Subsystem
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 4ed1b3ed3d35..8f01bf82a754 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -32,6 +32,7 @@
++ #define PCIE_CORE_DEV_ID_REG					0x0
++ #define PCIE_CORE_CMD_STATUS_REG				0x4
++ #define PCIE_CORE_DEV_REV_REG					0x8
+++#define PCIE_CORE_SSDEV_ID_REG					0x2c
++ #define PCIE_CORE_PCIEXP_CAP					0xc0
++ #define PCIE_CORE_ERR_CAPCTL_REG				0x118
++ #define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX			BIT(5)
++@@ -983,6 +984,8 @@ static int advk_sw_pci_bridge_init(struct advk_pcie *pcie)
++ 	/* Indicates supports for Completion Retry Status */
++ 	bridge->pcie_conf.rootcap = cpu_to_le16(PCI_EXP_RTCAP_CRSVIS);
++ 
+++	bridge->subsystem_vendor_id = advk_readl(pcie, PCIE_CORE_SSDEV_ID_REG) & 0xffff;
+++	bridge->subsystem_id = advk_readl(pcie, PCIE_CORE_SSDEV_ID_REG) >> 16;
++ 	bridge->has_pcie = true;
++ 	bridge->pcie_start = PCIE_CORE_PCIEXP_CAP;
++ 	bridge->data = pcie;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0092-PCI-aardvark-Dispose-INTx-irqs-prior-to-removing-INT.patch b/target/linux/generic/pending-5.15/0092-PCI-aardvark-Dispose-INTx-irqs-prior-to-removing-INT.patch
+new file mode 100644
+index 0000000000..bc21fc18fb
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0092-PCI-aardvark-Dispose-INTx-irqs-prior-to-removing-INT.patch
+@@ -0,0 +1,44 @@
++From dbd2881ab44968823962a14f6de0ed73f916e7b5 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Sat, 9 Jul 2022 16:55:54 +0200
++Subject: [PATCH 2/9] PCI: aardvark: Dispose INTx irqs prior to removing INTx
++ domain
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Documentation for irq_domain_remove() says that all mapping within the
++domain must be disposed prior to domain remove.
++
++Currently INTx irqs are not disposed in pci-aardvark.c device unbind callback
++which cause that kernel crashes after unloading driver and trying to read
++/sys/kernel/debug/irq/irqs/<num> or /proc/interrupts.
++
++Fixes: 526a76991b7b ("PCI: aardvark: Implement driver 'remove' function and allow to build it as module")
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 8 ++++++++
++ 1 file changed, 8 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 8f01bf82a754..5dda72ce4d7e 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -1439,6 +1439,14 @@ static int advk_pcie_init_irq_domain(struct advk_pcie *pcie)
++ 
++ static void advk_pcie_remove_irq_domain(struct advk_pcie *pcie)
++ {
+++	int virq, i;
+++
+++	for (i = 0; i < PCI_NUM_INTX; i++) {
+++		virq = irq_find_mapping(pcie->irq_domain, i);
+++		if (virq > 0)
+++			irq_dispose_mapping(virq);
+++	}
+++
++ 	irq_domain_remove(pcie->irq_domain);
++ }
++ 
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0093-PCI-aardvark-Add-support-for-AER-registers-on-emulat.patch b/target/linux/generic/pending-5.15/0093-PCI-aardvark-Add-support-for-AER-registers-on-emulat.patch
+new file mode 100644
+index 0000000000..008ef8d1c0
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0093-PCI-aardvark-Add-support-for-AER-registers-on-emulat.patch
+@@ -0,0 +1,139 @@
++From b7f4aea2c3b7f25333b8cf086dd7af7e836a1b6a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Tue, 24 May 2022 15:28:26 +0200
++Subject: [PATCH 3/9] PCI: aardvark: Add support for AER registers on emulated
++ bridge
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Aardvark controller supports Advanced Error Reporting configuration
++registers.
++
++Export these registers on the emulated root bridge via new .read_ext() and
++.write_ext() methods.
++
++Note that in the Advanced Error Reporting Capability header the offset to
++the next Extended Capability header is set, but it is not documented in
++Armada 3700 Functional Specification. Since this change adds support only
++for Advanced Error Reporting, explicitly clear PCI_EXT_CAP_NEXT bits in AER
++capability header.
++
++Now the pcieport driver correctly detects AER support and allows PCIe AER
++driver to start receiving ERR interrupts. Kernel log now says:
++
++  pcieport 0000:00:00.0: AER: enabled with IRQ 52
++
++Link: https://lore.kernel.org/r/20220524132827.8837-2-kabel@kernel.org
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
++---
++ drivers/pci/controller/pci-aardvark.c | 79 +++++++++++++++++++++++++++
++ 1 file changed, 79 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 5dda72ce4d7e..73c37164fd44 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -34,6 +34,7 @@
++ #define PCIE_CORE_DEV_REV_REG					0x8
++ #define PCIE_CORE_SSDEV_ID_REG					0x2c
++ #define PCIE_CORE_PCIEXP_CAP					0xc0
+++#define PCIE_CORE_PCIERR_CAP					0x100
++ #define PCIE_CORE_ERR_CAPCTL_REG				0x118
++ #define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX			BIT(5)
++ #define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX_EN			BIT(6)
++@@ -945,11 +946,89 @@ advk_pci_bridge_emul_pcie_conf_write(struct pci_bridge_emul *bridge,
++ 	}
++ }
++ 
+++static pci_bridge_emul_read_status_t
+++advk_pci_bridge_emul_ext_conf_read(struct pci_bridge_emul *bridge,
+++				   int reg, u32 *value)
+++{
+++	struct advk_pcie *pcie = bridge->data;
+++
+++	switch (reg) {
+++	case 0:
+++		*value = advk_readl(pcie, PCIE_CORE_PCIERR_CAP + reg);
+++
+++		/*
+++		 * PCI_EXT_CAP_NEXT bits are set to offset 0x150, but Armada
+++		 * 3700 Functional Specification does not document registers
+++		 * at those addresses.
+++		 *
+++		 * Thus we clear PCI_EXT_CAP_NEXT bits to make Advanced Error
+++		 * Reporting Capability header the last Extended Capability.
+++		 * If we obtain documentation for those registers in the
+++		 * future, this can be changed.
+++		 */
+++		*value &= 0x000fffff;
+++		return PCI_BRIDGE_EMUL_HANDLED;
+++
+++	case PCI_ERR_UNCOR_STATUS:
+++	case PCI_ERR_UNCOR_MASK:
+++	case PCI_ERR_UNCOR_SEVER:
+++	case PCI_ERR_COR_STATUS:
+++	case PCI_ERR_COR_MASK:
+++	case PCI_ERR_CAP:
+++	case PCI_ERR_HEADER_LOG + 0:
+++	case PCI_ERR_HEADER_LOG + 4:
+++	case PCI_ERR_HEADER_LOG + 8:
+++	case PCI_ERR_HEADER_LOG + 12:
+++	case PCI_ERR_ROOT_COMMAND:
+++	case PCI_ERR_ROOT_STATUS:
+++	case PCI_ERR_ROOT_ERR_SRC:
+++		*value = advk_readl(pcie, PCIE_CORE_PCIERR_CAP + reg);
+++		return PCI_BRIDGE_EMUL_HANDLED;
+++
+++	default:
+++		return PCI_BRIDGE_EMUL_NOT_HANDLED;
+++	}
+++}
+++
+++static void
+++advk_pci_bridge_emul_ext_conf_write(struct pci_bridge_emul *bridge,
+++				    int reg, u32 old, u32 new, u32 mask)
+++{
+++	struct advk_pcie *pcie = bridge->data;
+++
+++	switch (reg) {
+++	/* These are W1C registers, so clear other bits */
+++	case PCI_ERR_UNCOR_STATUS:
+++	case PCI_ERR_COR_STATUS:
+++	case PCI_ERR_ROOT_STATUS:
+++		new &= mask;
+++		fallthrough;
+++
+++	case PCI_ERR_UNCOR_MASK:
+++	case PCI_ERR_UNCOR_SEVER:
+++	case PCI_ERR_COR_MASK:
+++	case PCI_ERR_CAP:
+++	case PCI_ERR_HEADER_LOG + 0:
+++	case PCI_ERR_HEADER_LOG + 4:
+++	case PCI_ERR_HEADER_LOG + 8:
+++	case PCI_ERR_HEADER_LOG + 12:
+++	case PCI_ERR_ROOT_COMMAND:
+++	case PCI_ERR_ROOT_ERR_SRC:
+++		advk_writel(pcie, new, PCIE_CORE_PCIERR_CAP + reg);
+++		break;
+++
+++	default:
+++		break;
+++	}
+++}
+++
++ static const struct pci_bridge_emul_ops advk_pci_bridge_emul_ops = {
++ 	.read_base = advk_pci_bridge_emul_base_conf_read,
++ 	.write_base = advk_pci_bridge_emul_base_conf_write,
++ 	.read_pcie = advk_pci_bridge_emul_pcie_conf_read,
++ 	.write_pcie = advk_pci_bridge_emul_pcie_conf_write,
+++	.read_ext = advk_pci_bridge_emul_ext_conf_read,
+++	.write_ext = advk_pci_bridge_emul_ext_conf_write,
++ };
++ 
++ /*
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0095-PCI-aardvark-Dispose-bridge-irq-prior-to-removing-br.patch b/target/linux/generic/pending-5.15/0095-PCI-aardvark-Dispose-bridge-irq-prior-to-removing-br.patch
+new file mode 100644
+index 0000000000..8c31e142a3
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0095-PCI-aardvark-Dispose-bridge-irq-prior-to-removing-br.patch
+@@ -0,0 +1,41 @@
++From 2749ad1d3c854bf6926d2582cc2a7f727d0d53b3 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Wed, 24 Aug 2022 15:59:49 +0200
++Subject: [PATCH 5/9] PCI: aardvark: Dispose bridge irq prior to removing
++ bridge domain
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Documentation for irq_domain_remove() says that all mapping within the
++domain must be disposed prior to domain remove.
++
++Currently bridge irq is not disposed in pci-aardvark.c device unbind callback
++which cause that kernel crashes after unloading driver and trying to read
++/sys/kernel/debug/irq/irqs/<num> or /proc/interrupts.
++
++Fixes: 815bc3136867 ("PCI: aardvark: Use separate INTA interrupt for emulated root bridge")
++Signed-off-by: Pali Rohár <pali@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 5 +++++
++ 1 file changed, 5 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index f2be2ba51217..db97dc0a8ad7 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -1579,6 +1579,11 @@ static int advk_pcie_init_rp_irq_domain(struct advk_pcie *pcie)
++ 
++ static void advk_pcie_remove_rp_irq_domain(struct advk_pcie *pcie)
++ {
+++	int virq;
+++
+++	virq = irq_find_mapping(pcie->emul_irq_domain, 0);
+++	if (virq > 0)
+++		irq_dispose_mapping(virq);
++ 	irq_domain_remove(pcie->rp_irq_domain);
++ }
++ 
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0096-PCI-aardvark-Add-support-for-DLLSC-and-hotplug-inter.patch b/target/linux/generic/pending-5.15/0096-PCI-aardvark-Add-support-for-DLLSC-and-hotplug-inter.patch
+new file mode 100644
+index 0000000000..7d1b9b0911
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0096-PCI-aardvark-Add-support-for-DLLSC-and-hotplug-inter.patch
+@@ -0,0 +1,268 @@
++From f36491f0f18ae6b9018ade51cbfea4fbd14ae2a6 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Wed, 31 Aug 2022 15:55:46 +0200
++Subject: [PATCH 6/9] PCI: aardvark: Add support for DLLSC and hotplug
++ interrupt
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add support for Data Link Layer State Change in the emulated slot
++registers and hotplug interrupt via the emulated root bridge.
++
++This is mainly useful for when an error causes link down event. With
++this change, drivers can try recovery.
++
++Link down state change can be implemented because Aardvark supports Link
++Down event interrupt. Use it for signaling that Data Link Layer Link is
++not active anymore via Hot-Plug Interrupt on emulated root bridge.
++
++Link up interrupt is not available on Aardvark, but we check for whether
++link is up in the advk_pcie_link_up() function. By triggering Hot-Plug
++Interrupt from this function we achieve Link up event, so long as the
++function is called (which it is after probe and when rescanning).
++Although it is not ideal, it is better than nothing.
++
++Since advk_pcie_link_up() is not called from interrupt handler, we
++cannot call generic_handle_domain_irq() from it directly. Instead create
++a TIMER_IRQSAFE timer and trigger it from advk_pcie_link_up().
++
++(We haven't been able to find any documentation for a Link Up interrupt
++ on Aardvark, but it is possible there is one, in some undocumented
++ register. If we manage to find this information, this can be
++ rewritten.)
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/Kconfig        |   3 +
++ drivers/pci/controller/pci-aardvark.c | 101 ++++++++++++++++++++++++--
++ 2 files changed, 99 insertions(+), 5 deletions(-)
++
++diff --git a/drivers/pci/controller/Kconfig b/drivers/pci/controller/Kconfig
++index c217ea3bc703..1a3e123570ed 100644
++--- a/drivers/pci/controller/Kconfig
+++++ b/drivers/pci/controller/Kconfig
++@@ -24,6 +24,9 @@ config PCI_AARDVARK
++ 	depends on OF
++ 	depends on PCI_MSI_IRQ_DOMAIN
++ 	select PCI_BRIDGE_EMUL
+++	select PCIEPORTBUS
+++	select HOTPLUG_PCI
+++	select HOTPLUG_PCI_PCIE
++ 	help
++ 	 Add support for Aardvark 64bit PCIe Host Controller. This
++ 	 controller is part of the South Bridge of the Marvel Armada
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index db97dc0a8ad7..8aa05777da88 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -25,6 +25,7 @@
++ #include <linux/of_address.h>
++ #include <linux/of_gpio.h>
++ #include <linux/of_pci.h>
+++#include <linux/timer.h>
++ 
++ #include "../pci.h"
++ #include "../pci-bridge-emul.h"
++@@ -101,6 +102,7 @@
++ #define PCIE_MSG_PM_PME_MASK			BIT(7)
++ #define PCIE_ISR0_MASK_REG			(CONTROL_BASE_ADDR + 0x44)
++ #define     PCIE_ISR0_MSI_INT_PENDING		BIT(24)
+++#define     PCIE_ISR0_LINK_DOWN			BIT(1)
++ #define     PCIE_ISR0_CORR_ERR			BIT(11)
++ #define     PCIE_ISR0_NFAT_ERR			BIT(12)
++ #define     PCIE_ISR0_FAT_ERR			BIT(13)
++@@ -285,6 +287,8 @@ struct advk_pcie {
++ 	DECLARE_BITMAP(msi_used, MSI_IRQ_NUM);
++ 	struct mutex msi_used_lock;
++ 	int link_gen;
+++	bool link_was_up;
+++	struct timer_list link_irq_timer;
++ 	struct pci_bridge_emul bridge;
++ 	struct gpio_desc *reset_gpio;
++ 	struct phy *phy;
++@@ -314,7 +318,24 @@ static inline bool advk_pcie_link_up(struct advk_pcie *pcie)
++ {
++ 	/* check if LTSSM is in normal operation - some L* state */
++ 	u8 ltssm_state = advk_pcie_ltssm_state(pcie);
++-	return ltssm_state >= LTSSM_L0 && ltssm_state < LTSSM_DISABLED;
+++	bool link_is_up;
+++	u16 slotsta;
+++
+++	link_is_up = ltssm_state >= LTSSM_L0 && ltssm_state < LTSSM_DISABLED;
+++
+++	if (link_is_up && !pcie->link_was_up) {
+++		dev_info(&pcie->pdev->dev, "link up\n");
+++
+++		pcie->link_was_up = true;
+++
+++		slotsta = le16_to_cpu(pcie->bridge.pcie_conf.slotsta);
+++		slotsta |= PCI_EXP_SLTSTA_DLLSC;
+++		pcie->bridge.pcie_conf.slotsta = cpu_to_le16(slotsta);
+++
+++		mod_timer(&pcie->link_irq_timer, jiffies + 1);
+++	}
+++
+++	return link_is_up;
++ }
++ 
++ static inline bool advk_pcie_link_active(struct advk_pcie *pcie)
++@@ -443,8 +464,6 @@ static void advk_pcie_train_link(struct advk_pcie *pcie)
++ 	ret = advk_pcie_wait_for_link(pcie);
++ 	if (ret < 0)
++ 		dev_err(dev, "link never came up\n");
++-	else
++-		dev_info(dev, "link up\n");
++ }
++ 
++ /*
++@@ -593,6 +612,11 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	reg &= ~PCIE_ISR0_MSI_INT_PENDING;
++ 	advk_writel(pcie, reg, PCIE_ISR0_MASK_REG);
++ 
+++	/* Unmask Link Down interrupt */
+++	reg = advk_readl(pcie, PCIE_ISR0_MASK_REG);
+++	reg &= ~PCIE_ISR0_LINK_DOWN;
+++	advk_writel(pcie, reg, PCIE_ISR0_MASK_REG);
+++
++ 	/* Unmask PME interrupt for processing of PME requester */
++ 	reg = advk_readl(pcie, PCIE_ISR0_MASK_REG);
++ 	reg &= ~PCIE_MSG_PM_PME_MASK;
++@@ -919,6 +943,14 @@ advk_pci_bridge_emul_pcie_conf_write(struct pci_bridge_emul *bridge,
++ 			advk_pcie_wait_for_retrain(pcie);
++ 		break;
++ 
+++	case PCI_EXP_SLTCTL: {
+++		u16 slotctl = le16_to_cpu(bridge->pcie_conf.slotctl);
+++		/* Only emulation of HPIE and DLLSCE bits is provided */
+++		slotctl &= PCI_EXP_SLTCTL_HPIE | PCI_EXP_SLTCTL_DLLSCE;
+++		bridge->pcie_conf.slotctl = cpu_to_le16(slotctl);
+++		break;
+++	}
+++
++ 	case PCI_EXP_RTCTL: {
++ 		u16 rootctl = le16_to_cpu(bridge->pcie_conf.rootctl);
++ 		/* Only emulation of PMEIE and CRSSVE bits is provided */
++@@ -1036,6 +1068,7 @@ static const struct pci_bridge_emul_ops advk_pci_bridge_emul_ops = {
++ static int advk_sw_pci_bridge_init(struct advk_pcie *pcie)
++ {
++ 	struct pci_bridge_emul *bridge = &pcie->bridge;
+++	u32 slotcap;
++ 
++ 	bridge->conf.vendor =
++ 		cpu_to_le16(advk_readl(pcie, PCIE_CORE_DEV_ID_REG) & 0xffff);
++@@ -1062,6 +1095,13 @@ static int advk_sw_pci_bridge_init(struct advk_pcie *pcie)
++ 	bridge->pcie_conf.cap = cpu_to_le16(2 | PCI_EXP_FLAGS_SLOT);
++ 
++ 	/*
+++	 * Mark bridge as Hot Plug Capable since this is the way how to enable
+++	 * delivering of Data Link Layer State Change interrupts.
+++	 *
+++	 * Set No Command Completed Support because bridge does not support
+++	 * Command Completed Interrupt. Every command is executed immediately
+++	 * without any delay.
+++	 *
++ 	 * Set Presence Detect State bit permanently since there is no support
++ 	 * for unplugging the card nor detecting whether it is plugged. (If a
++ 	 * platform exists in the future that supports it, via a GPIO for
++@@ -1071,8 +1111,9 @@ static int advk_sw_pci_bridge_init(struct advk_pcie *pcie)
++ 	 * value is reserved for ports within the same silicon as Root Port
++ 	 * which is not our case.
++ 	 */
++-	bridge->pcie_conf.slotcap = cpu_to_le32(FIELD_PREP(PCI_EXP_SLTCAP_PSN,
++-							   1));
+++	slotcap = PCI_EXP_SLTCAP_NCCS | PCI_EXP_SLTCAP_HPC |
+++		  FIELD_PREP(PCI_EXP_SLTCAP_PSN, 1);
+++	bridge->pcie_conf.slotcap = cpu_to_le32(slotcap);
++ 	bridge->pcie_conf.slotsta = cpu_to_le16(PCI_EXP_SLTSTA_PDS);
++ 
++ 	/* Indicates supports for Completion Retry Status */
++@@ -1587,6 +1628,24 @@ static void advk_pcie_remove_rp_irq_domain(struct advk_pcie *pcie)
++ 	irq_domain_remove(pcie->rp_irq_domain);
++ }
++ 
+++static void advk_pcie_link_irq_handler(struct timer_list *timer)
+++{
+++	struct advk_pcie *pcie = from_timer(pcie, timer, link_irq_timer);
+++	u16 slotctl;
+++
+++	slotctl = le16_to_cpu(pcie->bridge.pcie_conf.slotctl);
+++	if (!(slotctl & PCI_EXP_SLTCTL_DLLSCE) ||
+++	    !(slotctl & PCI_EXP_SLTCTL_HPIE))
+++		return;
+++
+++	/*
+++	 * Aardvark HW returns zero for PCI_EXP_FLAGS_IRQ, so use PCIe
+++	 * interrupt 0
+++	 */
+++	if (generic_handle_domain_irq(pcie->rp_irq_domain, 0) == -EINVAL)
+++		dev_err_ratelimited(&pcie->pdev->dev, "unhandled HP IRQ\n");
+++}
+++
++ static void advk_pcie_handle_pme(struct advk_pcie *pcie)
++ {
++ 	u32 requester = advk_readl(pcie, PCIE_MSG_LOG_REG) >> 16;
++@@ -1638,6 +1697,7 @@ static void advk_pcie_handle_int(struct advk_pcie *pcie)
++ {
++ 	u32 isr0_val, isr0_mask, isr0_status;
++ 	u32 isr1_val, isr1_mask, isr1_status;
+++	u16 slotsta;
++ 	int i;
++ 
++ 	isr0_val = advk_readl(pcie, PCIE_ISR0_REG);
++@@ -1664,6 +1724,26 @@ static void advk_pcie_handle_int(struct advk_pcie *pcie)
++ 			dev_err_ratelimited(&pcie->pdev->dev, "unhandled ERR IRQ\n");
++ 	}
++ 
+++	/* Process Link Down interrupt as HP IRQ */
+++	if (isr0_status & PCIE_ISR0_LINK_DOWN) {
+++		advk_writel(pcie, PCIE_ISR0_LINK_DOWN, PCIE_ISR0_REG);
+++
+++		dev_info(&pcie->pdev->dev, "link down\n");
+++
+++		pcie->link_was_up = false;
+++
+++		slotsta = le16_to_cpu(pcie->bridge.pcie_conf.slotsta);
+++		slotsta |= PCI_EXP_SLTSTA_DLLSC;
+++		pcie->bridge.pcie_conf.slotsta = cpu_to_le16(slotsta);
+++
+++		/*
+++		 * Deactivate timer and call advk_pcie_link_irq_handler()
+++		 * function directly as we are in the interrupt context.
+++		 */
+++		del_timer_sync(&pcie->link_irq_timer);
+++		advk_pcie_link_irq_handler(&pcie->link_irq_timer);
+++	}
+++
++ 	/* Process MSI interrupts */
++ 	if (isr0_status & PCIE_ISR0_MSI_INT_PENDING)
++ 		advk_pcie_handle_msi(pcie);
++@@ -1902,6 +1982,14 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 	if (ret)
++ 		return ret;
++ 
+++	/*
+++	 * generic_handle_domain_irq() expects local IRQs to be disabled since
+++	 * normally it is called from interrupt context, so use TIMER_IRQSAFE
+++	 * flag for this link_irq_timer.
+++	 */
+++	timer_setup(&pcie->link_irq_timer, advk_pcie_link_irq_handler,
+++		    TIMER_IRQSAFE);
+++
++ 	advk_pcie_setup_hw(pcie);
++ 
++ 	ret = advk_sw_pci_bridge_init(pcie);
++@@ -1990,6 +2078,9 @@ static int advk_pcie_remove(struct platform_device *pdev)
++ 	advk_pcie_remove_msi_irq_domain(pcie);
++ 	advk_pcie_remove_irq_domain(pcie);
++ 
+++	/* Deactivate link event timer */
+++	del_timer_sync(&pcie->link_irq_timer);
+++
++ 	/* Free config space for emulated root bridge */
++ 	pci_bridge_emul_cleanup(&pcie->bridge);
++ 
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0097-PCI-aardvark-Send-Set_Slot_Power_Limit-message.patch b/target/linux/generic/pending-5.15/0097-PCI-aardvark-Send-Set_Slot_Power_Limit-message.patch
+new file mode 100644
+index 0000000000..fc39f9522b
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0097-PCI-aardvark-Send-Set_Slot_Power_Limit-message.patch
+@@ -0,0 +1,148 @@
++From c60b0ae4a0a225d24993a7d8e8396209a745a7a0 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Wed, 31 Aug 2022 15:57:01 +0200
++Subject: [PATCH 7/9] PCI: aardvark: Send Set_Slot_Power_Limit message
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Emulate Slot PowerLimit Scale and Value bits in the Slot Capabilities
++register of the emulated bridge and if slot power limit value is
++defined, send that Set_Slot_Power_Limit message via Message Generation
++Control Register in Link Up handler on link up event.
++
++Slot power limit value is read from device-tree property
++'slot-power-limit-milliwatt'. If this property is not specified, we
++treat it as "Slot Capabilities register has not yet been initialized".
++
++According to PCIe Base specification 3.0, when transitioning from a
++non-DL_Up Status to a DL_Up Status, the Port must initiate the
++transmission of a Set_Slot_Power_Limit Message to the other component
++on the Link to convey the value programmed in the Slot Power Limit
++Scale and Value fields of the Slot Capabilities register. This
++transmission is optional if the Slot Capabilities register has not
++yet been initialized.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 51 ++++++++++++++++++++++++---
++ 1 file changed, 47 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 8aa05777da88..cf493d62b889 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -214,6 +214,11 @@ enum {
++ };
++ 
++ #define VENDOR_ID_REG				(LMI_BASE_ADDR + 0x44)
+++#define PME_MSG_GEN_CTRL			(LMI_BASE_ADDR + 0x220)
+++#define     SEND_SET_SLOT_POWER_LIMIT		BIT(13)
+++#define     SEND_PME_TURN_OFF			BIT(14)
+++#define     SLOT_POWER_LIMIT_DATA_SHIFT		16
+++#define     SLOT_POWER_LIMIT_DATA_MASK		GENMASK(25, 16)
++ 
++ /* PCIe core controller registers */
++ #define CTRL_CORE_BASE_ADDR			0x18000
++@@ -286,6 +291,8 @@ struct advk_pcie {
++ 	raw_spinlock_t msi_irq_lock;
++ 	DECLARE_BITMAP(msi_used, MSI_IRQ_NUM);
++ 	struct mutex msi_used_lock;
+++	u8 slot_power_limit_value;
+++	u8 slot_power_limit_scale;
++ 	int link_gen;
++ 	bool link_was_up;
++ 	struct timer_list link_irq_timer;
++@@ -318,8 +325,9 @@ static inline bool advk_pcie_link_up(struct advk_pcie *pcie)
++ {
++ 	/* check if LTSSM is in normal operation - some L* state */
++ 	u8 ltssm_state = advk_pcie_ltssm_state(pcie);
+++	u16 slotsta, slotctl;
+++	u32 slotpwr, val;
++ 	bool link_is_up;
++-	u16 slotsta;
++ 
++ 	link_is_up = ltssm_state >= LTSSM_L0 && ltssm_state < LTSSM_DISABLED;
++ 
++@@ -333,6 +341,27 @@ static inline bool advk_pcie_link_up(struct advk_pcie *pcie)
++ 		pcie->bridge.pcie_conf.slotsta = cpu_to_le16(slotsta);
++ 
++ 		mod_timer(&pcie->link_irq_timer, jiffies + 1);
+++
+++		/*
+++		 * According to PCIe Base specification 3.0, when transitioning
+++		 * from a non-DL_Up Status to a DL_Up Status, the Port must
+++		 * initiate the transmission of a Set_Slot_Power_Limit Message
+++		 * to the other component on the Link to convey the value
+++		 * programmed in the Slot Power Limit Scale and Value fields of
+++		 * the Slot Capabilities register. This transmission is optional
+++		 * if the Slot Capabilities register has not yet been
+++		 * initialized.
+++		 */
+++		slotctl = le16_to_cpu(pcie->bridge.pcie_conf.slotctl);
+++		slotpwr = FIELD_GET(PCI_EXP_SLTCAP_SPLV | PCI_EXP_SLTCAP_SPLS,
+++				    le32_to_cpu(pcie->bridge.pcie_conf.slotcap));
+++		if (!(slotctl & PCI_EXP_SLTCTL_ASPL_DISABLE) && slotpwr) {
+++			val = advk_readl(pcie, PME_MSG_GEN_CTRL);
+++			val &= ~SLOT_POWER_LIMIT_DATA_MASK;
+++			val |= slotpwr << SLOT_POWER_LIMIT_DATA_SHIFT;
+++			val |= SEND_SET_SLOT_POWER_LIMIT;
+++			advk_writel(pcie, val, PME_MSG_GEN_CTRL);
+++		}
++ 	}
++ 
++ 	return link_is_up;
++@@ -945,8 +974,9 @@ advk_pci_bridge_emul_pcie_conf_write(struct pci_bridge_emul *bridge,
++ 
++ 	case PCI_EXP_SLTCTL: {
++ 		u16 slotctl = le16_to_cpu(bridge->pcie_conf.slotctl);
++-		/* Only emulation of HPIE and DLLSCE bits is provided */
++-		slotctl &= PCI_EXP_SLTCTL_HPIE | PCI_EXP_SLTCTL_DLLSCE;
+++		/* Only emulation of HPIE, DLLSCE and ASPLD bits is provided */
+++		slotctl &= PCI_EXP_SLTCTL_HPIE | PCI_EXP_SLTCTL_DLLSCE |
+++			   PCI_EXP_SLTCTL_ASPL_DISABLE;
++ 		bridge->pcie_conf.slotctl = cpu_to_le16(slotctl);
++ 		break;
++ 	}
++@@ -1110,9 +1140,13 @@ static int advk_sw_pci_bridge_init(struct advk_pcie *pcie)
++ 	 * Set physical slot number to 1 since there is only one port and zero
++ 	 * value is reserved for ports within the same silicon as Root Port
++ 	 * which is not our case.
+++	 *
+++	 * Set slot power limit.
++ 	 */
++ 	slotcap = PCI_EXP_SLTCAP_NCCS | PCI_EXP_SLTCAP_HPC |
++-		  FIELD_PREP(PCI_EXP_SLTCAP_PSN, 1);
+++		  FIELD_PREP(PCI_EXP_SLTCAP_PSN, 1) |
+++		  FIELD_PREP(PCI_EXP_SLTCAP_SPLV, pcie->slot_power_limit_value) |
+++		  FIELD_PREP(PCI_EXP_SLTCAP_SPLS, pcie->slot_power_limit_scale);
++ 	bridge->pcie_conf.slotcap = cpu_to_le32(slotcap);
++ 	bridge->pcie_conf.slotsta = cpu_to_le16(PCI_EXP_SLTSTA_PDS);
++ 
++@@ -1858,6 +1892,7 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 	struct advk_pcie *pcie;
++ 	struct pci_host_bridge *bridge;
++ 	struct resource_entry *entry;
+++	u32 slot_power_limit;
++ 	int ret, irq;
++ 
++ 	bridge = devm_pci_alloc_host_bridge(dev, sizeof(struct advk_pcie));
++@@ -1978,6 +2013,14 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 	else
++ 		pcie->link_gen = ret;
++ 
+++	slot_power_limit = of_pci_get_slot_power_limit(dev->of_node,
+++						       &pcie->slot_power_limit_value,
+++						       &pcie->slot_power_limit_scale);
+++	if (slot_power_limit)
+++		dev_info(dev, "Slot Power Limit: %u.%uW\n",
+++			 slot_power_limit / 1000,
+++			 (slot_power_limit / 100) % 10);
+++
++ 	ret = advk_pcie_setup_phy(pcie);
++ 	if (ret)
++ 		return ret;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0098-PCI-aardvark-Add-clock-support.patch b/target/linux/generic/pending-5.15/0098-PCI-aardvark-Add-clock-support.patch
+new file mode 100644
+index 0000000000..48d129d7cd
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0098-PCI-aardvark-Add-clock-support.patch
+@@ -0,0 +1,93 @@
++From 336a4404b02b564930725715659ca583b8a58a6b Mon Sep 17 00:00:00 2001
++From: Miquel Raynal <miquel.raynal@bootlin.com>
++Date: Wed, 31 Aug 2022 15:59:39 +0200
++Subject: [PATCH 8/9] PCI: aardvark: Add clock support
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The IP relies on a gated clock. When we will add S2RAM support, this
++clock will need to be resumed before any PCIe registers are
++accessed. Add support for this clock.
++
++Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 32 +++++++++++++++++++++++++++
++ 1 file changed, 32 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index cf493d62b889..17aed65aab91 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -9,6 +9,7 @@
++  */
++ 
++ #include <linux/bitfield.h>
+++#include <linux/clk.h>
++ #include <linux/delay.h>
++ #include <linux/gpio/consumer.h>
++ #include <linux/interrupt.h>
++@@ -298,6 +299,7 @@ struct advk_pcie {
++ 	struct timer_list link_irq_timer;
++ 	struct pci_bridge_emul bridge;
++ 	struct gpio_desc *reset_gpio;
+++	struct clk *clk;
++ 	struct phy *phy;
++ };
++ 
++@@ -1828,6 +1830,29 @@ static int advk_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
++ 		return of_irq_parse_and_map_pci(dev, slot, pin);
++ }
++ 
+++static int advk_pcie_setup_clk(struct advk_pcie *pcie)
+++{
+++	struct device *dev = &pcie->pdev->dev;
+++	int ret;
+++
+++	pcie->clk = devm_clk_get(dev, NULL);
+++	if (IS_ERR(pcie->clk) && (PTR_ERR(pcie->clk) == -EPROBE_DEFER))
+++		return PTR_ERR(pcie->clk);
+++
+++	/* Old bindings miss the clock handle */
+++	if (IS_ERR(pcie->clk)) {
+++		dev_warn(dev, "Clock unavailable (%ld)\n", PTR_ERR(pcie->clk));
+++		pcie->clk = NULL;
+++		return 0;
+++	}
+++
+++	ret = clk_prepare_enable(pcie->clk);
+++	if (ret)
+++		dev_err(dev, "Clock initialization failed (%d)\n", ret);
+++
+++	return ret;
+++}
+++
++ static void advk_pcie_disable_phy(struct advk_pcie *pcie)
++ {
++ 	phy_power_off(pcie->phy);
++@@ -2021,6 +2046,10 @@ static int advk_pcie_probe(struct platform_device *pdev)
++ 			 slot_power_limit / 1000,
++ 			 (slot_power_limit / 100) % 10);
++ 
+++	ret = advk_pcie_setup_clk(pcie);
+++	if (ret)
+++		return ret;
+++
++ 	ret = advk_pcie_setup_phy(pcie);
++ 	if (ret)
++ 		return ret;
++@@ -2143,6 +2172,9 @@ static int advk_pcie_remove(struct platform_device *pdev)
++ 	/* Disable phy */
++ 	advk_pcie_disable_phy(pcie);
++ 
+++	/* Disable clock */
+++	clk_disable_unprepare(pcie->clk);
+++
++ 	return 0;
++ }
++ 
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0099-PCI-aardvark-Add-suspend-to-RAM-support.patch b/target/linux/generic/pending-5.15/0099-PCI-aardvark-Add-suspend-to-RAM-support.patch
+new file mode 100644
+index 0000000000..7b26a1a179
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0099-PCI-aardvark-Add-suspend-to-RAM-support.patch
+@@ -0,0 +1,74 @@
++From 4cfecad11f7a6cebb77a37b7bbd42d7f910cce80 Mon Sep 17 00:00:00 2001
++From: Miquel Raynal <miquel.raynal@bootlin.com>
++Date: Wed, 31 Aug 2022 16:07:27 +0200
++Subject: [PATCH 9/9] PCI: aardvark: Add suspend to RAM support
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add suspend and resume callbacks. We need to use the NOIRQ variants to
++ensure the controller's IRQ handlers are not run during suspend() /
++resume(), which could cause races.
++
++Signed-off-by: Miquel Raynal <miquel.raynal@bootlin.com>
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 34 +++++++++++++++++++++++++++
++ 1 file changed, 34 insertions(+)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index 17aed65aab91..f3984bdf1d96 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -1911,6 +1911,39 @@ static int advk_pcie_setup_phy(struct advk_pcie *pcie)
++ 	return ret;
++ }
++ 
+++static int advk_pcie_suspend(struct device *dev)
+++{
+++	struct advk_pcie *pcie = dev_get_drvdata(dev);
+++
+++	advk_pcie_disable_phy(pcie);
+++
+++	clk_disable_unprepare(pcie->clk);
+++
+++	return 0;
+++}
+++
+++static int advk_pcie_resume(struct device *dev)
+++{
+++	struct advk_pcie *pcie = dev_get_drvdata(dev);
+++	int ret;
+++
+++	ret = clk_prepare_enable(pcie->clk);
+++	if (ret)
+++		return ret;
+++
+++	ret = advk_pcie_enable_phy(pcie);
+++	if (ret)
+++		return ret;
+++
+++	advk_pcie_setup_hw(pcie);
+++
+++	return 0;
+++}
+++
+++static const struct dev_pm_ops advk_pcie_dev_pm_ops = {
+++	NOIRQ_SYSTEM_SLEEP_PM_OPS(advk_pcie_suspend, advk_pcie_resume)
+++};
+++
++ static int advk_pcie_probe(struct platform_device *pdev)
++ {
++ 	struct device *dev = &pdev->dev;
++@@ -2188,6 +2221,7 @@ static struct platform_driver advk_pcie_driver = {
++ 	.driver = {
++ 		.name = "advk-pcie",
++ 		.of_match_table = advk_pcie_of_match_table,
+++		.pm = &advk_pcie_dev_pm_ops,
++ 	},
++ 	.probe = advk_pcie_probe,
++ 	.remove = advk_pcie_remove,
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0100-PCI-aardvark-Replace-custom-PCIE_CORE_ERR_CAPCTL_-ma.patch b/target/linux/generic/pending-5.15/0100-PCI-aardvark-Replace-custom-PCIE_CORE_ERR_CAPCTL_-ma.patch
+new file mode 100644
+index 0000000000..f161bffac8
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0100-PCI-aardvark-Replace-custom-PCIE_CORE_ERR_CAPCTL_-ma.patch
+@@ -0,0 +1,51 @@
++From f589f5a4a08608cf0fc5184b82e1404250632530 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Thu, 1 Sep 2022 11:32:28 +0200
++Subject: [PATCH 1/2] PCI: aardvark: Replace custom PCIE_CORE_ERR_CAPCTL_*
++ macros by linux/pci_regs.h macros
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Kernel already has these macros defined under different names.
++
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 13 +++----------
++ 1 file changed, 3 insertions(+), 10 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index defaf74935a3..a5b1ebfb9520 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -38,11 +38,6 @@
++ #define PCIE_CORE_SSDEV_ID_REG					0x2c
++ #define PCIE_CORE_PCIEXP_CAP					0xc0
++ #define PCIE_CORE_PCIERR_CAP					0x100
++-#define PCIE_CORE_ERR_CAPCTL_REG				0x118
++-#define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX			BIT(5)
++-#define     PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX_EN			BIT(6)
++-#define     PCIE_CORE_ERR_CAPCTL_ECRC_CHCK			BIT(7)
++-#define     PCIE_CORE_ERR_CAPCTL_ECRC_CHCK_RCV			BIT(8)
++ /* PIO registers base address and register offsets */
++ #define PIO_BASE_ADDR				0x4000
++ #define PIO_CTRL				(PIO_BASE_ADDR + 0x0)
++@@ -592,11 +587,9 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	advk_writel(pcie, reg, PCIE_CORE_CMD_STATUS_REG);
++ 
++ 	/* Set Advanced Error Capabilities and Control PF0 register */
++-	reg = PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX |
++-		PCIE_CORE_ERR_CAPCTL_ECRC_CHK_TX_EN |
++-		PCIE_CORE_ERR_CAPCTL_ECRC_CHCK |
++-		PCIE_CORE_ERR_CAPCTL_ECRC_CHCK_RCV;
++-	advk_writel(pcie, reg, PCIE_CORE_ERR_CAPCTL_REG);
+++	reg = PCI_ERR_CAP_ECRC_GENC | PCI_ERR_CAP_ECRC_GENE |
+++	      PCI_ERR_CAP_ECRC_CHKC | PCI_ERR_CAP_ECRC_CHKE;
+++	advk_writel(pcie, reg, PCIE_CORE_PCIERR_CAP + PCI_ERR_CAP);
++ 
++ 	/* Set PCIe Device Control register */
++ 	reg = advk_readl(pcie, PCIE_CORE_PCIEXP_CAP + PCI_EXP_DEVCTL);
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/0101-PCI-aardvark-Don-t-write-read-only-bits-explicitly-i.patch b/target/linux/generic/pending-5.15/0101-PCI-aardvark-Don-t-write-read-only-bits-explicitly-i.patch
+new file mode 100644
+index 0000000000..edce284851
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/0101-PCI-aardvark-Don-t-write-read-only-bits-explicitly-i.patch
+@@ -0,0 +1,39 @@
++From 055c623c268ee0031d05c1346f9f4c24fe3f0846 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Thu, 18 Aug 2022 15:51:38 +0200
++Subject: [PATCH 2/2] PCI: aardvark: Don't write read-only bits explicitly in
++ PCI_ERR_CAP register
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The bits PCI_ERR_CAP_ECRC_GENC and PCI_ERR_CAP_ECRC_CHKC are read only,
++reporting the capability of ECRC. Don't write them explicitly, instead
++read the register (where they are set), and add the bits that enable
++these features.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/pci/controller/pci-aardvark.c | 6 +++---
++ 1 file changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index a5b1ebfb9520..325c22092e16 100644
++--- a/drivers/pci/controller/pci-aardvark.c
+++++ b/drivers/pci/controller/pci-aardvark.c
++@@ -586,9 +586,9 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
++ 	reg &= ~(PCI_COMMAND_IO | PCI_COMMAND_MEMORY | PCI_COMMAND_MASTER);
++ 	advk_writel(pcie, reg, PCIE_CORE_CMD_STATUS_REG);
++ 
++-	/* Set Advanced Error Capabilities and Control PF0 register */
++-	reg = PCI_ERR_CAP_ECRC_GENC | PCI_ERR_CAP_ECRC_GENE |
++-	      PCI_ERR_CAP_ECRC_CHKC | PCI_ERR_CAP_ECRC_CHKE;
+++	/* Enable generation and checking of ECRC on Root Bridge */
+++	reg = advk_readl(pcie, PCIE_CORE_PCIERR_CAP + PCI_ERR_CAP);
+++	reg |= PCI_ERR_CAP_ECRC_GENE | PCI_ERR_CAP_ECRC_CHKE;
++ 	advk_writel(pcie, reg, PCIE_CORE_PCIERR_CAP + PCI_ERR_CAP);
++ 
++ 	/* Set PCIe Device Control register */
++-- 
++2.34.1
++
+-- 
+2.34.1
+
