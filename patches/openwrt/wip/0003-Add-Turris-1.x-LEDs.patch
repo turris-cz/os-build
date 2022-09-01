@@ -1,4 +1,4 @@
-From 75c62a2c55a5de96eb2c8908c41b6d69c975336a Mon Sep 17 00:00:00 2001
+From db70c3805fb64800ad13dc19ca104e52fd049667 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Tue, 26 Jul 2022 14:54:22 +0200
 Subject: [PATCH] mpc85xx: backport Turris 1.x LEDs
@@ -6,22 +6,22 @@ Subject: [PATCH] mpc85xx: backport Turris 1.x LEDs
 Patch series:
 https://lore.kernel.org/linux-leds/20220705155929.25565-2-pali@kernel.org/
 ---
- ...leds-Add-support-for-Turris-1.x-LEDs.patch | 514 ++++++++++++++++++
- ...-Add-cznic-turris1x-leds.yaml-bindin.patch | 141 +++++
- 2 files changed, 655 insertions(+)
+ ...leds-Add-support-for-Turris-1.x-LEDs.patch | 584 ++++++++++++++++++
+ ...-Add-cznic-turris1x-leds.yaml-bindin.patch | 143 +++++
+ 2 files changed, 727 insertions(+)
  create mode 100644 target/linux/mpc85xx/patches-5.10/0001-leds-Add-support-for-Turris-1.x-LEDs.patch
  create mode 100644 target/linux/mpc85xx/patches-5.10/0002-dt-bindings-leds-Add-cznic-turris1x-leds.yaml-bindin.patch
 
 diff --git a/target/linux/mpc85xx/patches-5.10/0001-leds-Add-support-for-Turris-1.x-LEDs.patch b/target/linux/mpc85xx/patches-5.10/0001-leds-Add-support-for-Turris-1.x-LEDs.patch
 new file mode 100644
-index 0000000000..6bdb0db316
+index 0000000000..3db219ad76
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-5.10/0001-leds-Add-support-for-Turris-1.x-LEDs.patch
-@@ -0,0 +1,514 @@
-+From b08d3a49c5ddcd42b2990b5a9cb41fe83c3fa243 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,584 @@
++From 6e751295894f291e13f3cf06ecbd40e3658dd53a Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
-+Date: Tue, 5 Jul 2022 02:04:48 +0200
-+Subject: [PATCH 1/2] leds: Add support for Turris 1.x LEDs
++Date: Tue, 5 Jul 2022 17:59:29 +0200
++Subject: [PATCH 2/2] leds: Add support for Turris 1.x LEDs
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -42,20 +42,20 @@ index 0000000000..6bdb0db316
 +
 +Signed-off-by: Pali Rohár <pali@kernel.org>
 +---
-+ .../testing/sysfs-class-led-driver-turris1x   |  23 +
++ .../testing/sysfs-class-led-driver-turris1x   |  31 ++
 + drivers/leds/Kconfig                          |   9 +
 + drivers/leds/Makefile                         |   1 +
-+ drivers/leds/leds-turris-1x.c                 | 412 ++++++++++++++++++
-+ 4 files changed, 445 insertions(+)
++ drivers/leds/leds-turris-1x.c                 | 474 ++++++++++++++++++
++ 4 files changed, 515 insertions(+)
 + create mode 100644 Documentation/ABI/testing/sysfs-class-led-driver-turris1x
 + create mode 100644 drivers/leds/leds-turris-1x.c
 +
 +diff --git a/Documentation/ABI/testing/sysfs-class-led-driver-turris1x b/Documentation/ABI/testing/sysfs-class-led-driver-turris1x
 +new file mode 100644
-+index 000000000000..02be9197554d
++index 000000000000..bb8b82b43165
 +--- /dev/null
 ++++ b/Documentation/ABI/testing/sysfs-class-led-driver-turris1x
-+@@ -0,0 +1,23 @@
++@@ -0,0 +1,31 @@
 ++What:		/sys/class/leds/<led>/device/brightness
 ++Date:		July 2022
 ++KernelVersion:	5.20
@@ -71,16 +71,24 @@ index 0000000000..6bdb0db316
 ++
 ++		Format: %u
 ++
+++What:		/sys/class/leds/<led>/device/brightness_level
+++Date:		July 2022
+++KernelVersion:	5.20
+++Contact:	Pali Rohár <pali@kernel.org>
+++Description:	(RW) Current brightness level value (0-7).
+++
+++		Format: %u
+++
 ++What:		/sys/class/leds/<led>/device/brightness_values
 ++Date:		July 2022
 ++KernelVersion:	5.20
 ++Contact:	Pali Rohár <pali@kernel.org>
 ++Description:	(RW) Values of all 8 levels between which CPLD firmware cycles
-++		when brightness buffer is pressed.
+++		when brightness button is pressed.
 ++
 ++		Format: %u %u %u %u %u %u %u %u
 +diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
-+index 52f010b8f58e..a167d3aa503f 100644
++index 499d0f215a8b..6f78764e20aa 100644
 +--- a/drivers/leds/Kconfig
 ++++ b/drivers/leds/Kconfig
 +@@ -157,6 +157,15 @@ config LEDS_EL15203000
@@ -100,10 +108,10 @@ index 0000000000..6bdb0db316
 + 	tristate "LED support for CZ.NIC's Turris Omnia"
 + 	depends on LEDS_CLASS_MULTICOLOR
 +diff --git a/drivers/leds/Makefile b/drivers/leds/Makefile
-+index c636ec069612..f80fab65a403 100644
++index 4fd2f92cd198..de08083dbbca 100644
 +--- a/drivers/leds/Makefile
 ++++ b/drivers/leds/Makefile
-+@@ -83,6 +83,7 @@ obj-$(CONFIG_LEDS_TCA6507)		+= leds-tca6507.o
++@@ -82,6 +82,7 @@ obj-$(CONFIG_LEDS_TCA6507)		+= leds-tca6507.o
 + obj-$(CONFIG_LEDS_TI_LMU_COMMON)	+= leds-ti-lmu-common.o
 + obj-$(CONFIG_LEDS_TLC591XX)		+= leds-tlc591xx.o
 + obj-$(CONFIG_LEDS_TPS6105X)		+= leds-tps6105x.o
@@ -113,10 +121,10 @@ index 0000000000..6bdb0db316
 + obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
 +diff --git a/drivers/leds/leds-turris-1x.c b/drivers/leds/leds-turris-1x.c
 +new file mode 100644
-+index 000000000000..bd566f5210c7
++index 000000000000..cf7567b64306
 +--- /dev/null
 ++++ b/drivers/leds/leds-turris-1x.c
-+@@ -0,0 +1,412 @@
++@@ -0,0 +1,474 @@
 ++// SPDX-License-Identifier: GPL-2.0
 ++// (C) 2022 Pali Rohár <pali@kernel.org>
 ++//
@@ -210,15 +218,15 @@ index 0000000000..6bdb0db316
 ++	struct turris1x_led *led = to_turris1x_led(mc_cdev);
 ++
 ++	if (!(readb(leds->regs + TURRIS1X_LED_SW_OVERRIDE_REG) & BIT(led->reg)))
-++		return LED_ON;
+++		return 1;
 ++	else if (!(readb(leds->regs + TURRIS1X_LED_SW_DISABLE_REG) & BIT(led->reg)))
-++		return LED_ON;
+++		return 1;
 ++	else
-++		return LED_OFF;
+++		return 0;
 ++}
 ++
-++static int turris1x_led_brightness_set_blocking(struct led_classdev *cdev,
-++						enum led_brightness brightness)
+++static void turris1x_led_brightness_set(struct led_classdev *cdev,
+++					enum led_brightness brightness)
 ++{
 ++	struct led_classdev_mc *mc_cdev = lcdev_to_mccdev(cdev);
 ++	struct turris1x_leds *leds = dev_get_drvdata(cdev->dev->parent);
@@ -229,7 +237,7 @@ index 0000000000..6bdb0db316
 ++	mutex_lock(&leds->lock);
 ++
 ++	/* Set new brightness value for each color when LED is enabled */
-++	if (brightness == LED_ON) {
+++	if (brightness) {
 ++		led_mc_calc_color_components(mc_cdev, brightness);
 ++		for (i = 0; i < ARRAY_SIZE(led->subled_info); i++)
 ++			writeb(mc_cdev->subled_info[i].brightness,
@@ -256,16 +264,14 @@ index 0000000000..6bdb0db316
 ++
 ++	/* Enable / disable LED for software control */
 ++	val = readb(leds->regs + TURRIS1X_LED_SW_DISABLE_REG);
-++	if (brightness == LED_ON && (val & BIT(led->reg)))
+++	if (brightness && (val & BIT(led->reg)))
 ++		writeb(val & ~BIT(led->reg),
 ++		       leds->regs + TURRIS1X_LED_SW_DISABLE_REG);
-++	else if (brightness == LED_OFF && !(val & BIT(led->reg)))
+++	else if (!brightness && !(val & BIT(led->reg)))
 ++		writeb(val | BIT(led->reg),
 ++		       leds->regs + TURRIS1X_LED_SW_DISABLE_REG);
 ++
 ++	mutex_unlock(&leds->lock);
-++
-++	return 0;
 ++}
 ++
 ++static int turris1x_led_register(struct device *dev, struct turris1x_leds *leds,
@@ -277,12 +283,17 @@ index 0000000000..6bdb0db316
 ++	struct turris1x_led *led;
 ++	int ret, color;
 ++	u32 reg;
+++	int i;
+++
+++	const unsigned int colors[ARRAY_SIZE(led->subled_info)] = {
+++		LED_COLOR_ID_RED, LED_COLOR_ID_GREEN, LED_COLOR_ID_BLUE
+++	};
 ++
 ++	ret = of_property_read_u32(np, "reg", &reg);
 ++	if (ret || reg >= ARRAY_SIZE(leds->leds)) {
 ++		dev_err(dev,
 ++			"Node %pOF: must contain 'reg' property with values between 0 and %u\n",
-++			np, (unsigned int)ARRAY_SIZE(leds->leds)-1);
+++			np, (unsigned int)ARRAY_SIZE(leds->leds) - 1);
 ++		return -EINVAL;
 ++	}
 ++
@@ -305,15 +316,13 @@ index 0000000000..6bdb0db316
 ++	led->registered = true;
 ++	led->reg = reg;
 ++
-++	led->subled_info[0].color_index = LED_COLOR_ID_RED;
-++	led->subled_info[0].intensity = 255;
-++	led->subled_info[0].channel = 0;
-++	led->subled_info[1].color_index = LED_COLOR_ID_GREEN;
-++	led->subled_info[1].intensity = 255;
-++	led->subled_info[1].channel = 1;
-++	led->subled_info[2].color_index = LED_COLOR_ID_BLUE;
-++	led->subled_info[2].intensity = 255;
-++	led->subled_info[2].channel = 2;
+++	/* Set initial colors to what are currently in use */
+++	for (i = 0; i < ARRAY_SIZE(led->subled_info); i++) {
+++		led->subled_info[i].intensity =
+++			readb(leds->regs + TURRIS1X_LED_BRIGHTNESS_REG(reg, i));
+++		led->subled_info[i].color_index = colors[i];
+++		led->subled_info[i].channel = i;
+++	}
 ++
 ++	led->mc_cdev.subled_info = led->subled_info;
 ++	led->mc_cdev.num_colors = ARRAY_SIZE(led->subled_info);
@@ -321,9 +330,9 @@ index 0000000000..6bdb0db316
 ++	init_data.fwnode = &np->fwnode;
 ++
 ++	cdev = &led->mc_cdev.led_cdev;
-++	cdev->max_brightness = LED_ON;
+++	cdev->max_brightness = 1;
 ++	cdev->brightness_get = turris1x_led_brightness_get;
-++	cdev->brightness_set_blocking = turris1x_led_brightness_set_blocking;
+++	cdev->brightness_set = turris1x_led_brightness_set;
 ++
 ++	/* All LEDs except LED 6 (WiFi) can be controller by hardware trigger */
 ++	if (reg != 6)
@@ -345,7 +354,7 @@ index 0000000000..6bdb0db316
 ++		cdev->default_trigger = turris1x_hw_trigger.name;
 ++
 ++	if (!(val_sw_override & BIT(reg)) || !(val_sw_disable & BIT(reg)))
-++		cdev->brightness = LED_ON;
+++		cdev->brightness = 1;
 ++
 ++	ret = devm_led_classdev_multicolor_register_ext(dev, &led->mc_cdev,
 ++							&init_data);
@@ -411,6 +420,36 @@ index 0000000000..6bdb0db316
 ++}
 ++static DEVICE_ATTR_RW(brightness);
 ++
+++static ssize_t brightness_level_show(struct device *dev,
+++				     struct device_attribute *a, char *buf)
+++{
+++	struct turris1x_leds *leds = dev_get_drvdata(dev);
+++	unsigned int level;
+++
+++	level = readb(leds->regs + TURRIS1X_LED_GLOBAL_LEVEL_REG) & 7;
+++
+++	return sprintf(buf, "%u\n", level);
+++}
+++
+++static ssize_t brightness_level_store(struct device *dev,
+++				      struct device_attribute *a,
+++				      const char *buf, size_t count)
+++{
+++	struct turris1x_leds *leds = dev_get_drvdata(dev);
+++	unsigned long level;
+++
+++	if (kstrtoul(buf, 10, &level))
+++		return -EINVAL;
+++
+++	if (level > 7)
+++		return -EINVAL;
+++
+++	writeb(level, leds->regs + TURRIS1X_LED_GLOBAL_LEVEL_REG);
+++
+++	return count;
+++}
+++static DEVICE_ATTR_RW(brightness_level);
+++
 ++static ssize_t brightness_values_show(struct device *dev,
 ++				      struct device_attribute *a, char *buf)
 ++{
@@ -450,6 +489,7 @@ index 0000000000..6bdb0db316
 ++
 ++static struct attribute *turris1x_leds_controller_attrs[] = {
 ++	&dev_attr_brightness.attr,
+++	&dev_attr_brightness_level.attr,
 ++	&dev_attr_brightness_values.attr,
 ++	NULL,
 ++};
@@ -511,6 +551,35 @@ index 0000000000..6bdb0db316
 ++	return 0;
 ++}
 ++
+++static void turris1x_leds_shutdown(struct platform_device *pdev)
+++{
+++	struct turris1x_leds *leds = platform_get_drvdata(pdev);
+++	int i, j;
+++	u8 val;
+++
+++	/*
+++	 * LED registers are persisent across board resets.
+++	 * So reset LEDs to default state before kernel reboots.
+++	 */
+++
+++	/* Disable software control of all LEDs except LED 6 (WiFi) */
+++	writeb(BIT(6), leds->regs + TURRIS1X_LED_SW_OVERRIDE_REG);
+++
+++	/* Turn off LED 6 (WiFi) as there is no hardware trigger for it */
+++	val = readb(leds->regs + TURRIS1X_LED_SW_DISABLE_REG);
+++	writeb(val | BIT(6), leds->regs + TURRIS1X_LED_SW_DISABLE_REG);
+++
+++	/* Reset colors of all LEDs to default values */
+++	for (i = 0; i < ARRAY_SIZE(leds->leds); i++) {
+++		/* Skip LAN2-LAN5 LEDs which share color register with LAN1 */
+++		if (i >= 2 && i <= 5)
+++			continue;
+++		for (j = 0; j < ARRAY_SIZE(leds->leds[i].subled_info); j++)
+++			writeb(0xff,
+++			       leds->regs + TURRIS1X_LED_BRIGHTNESS_REG(i, j));
+++	}
+++}
+++
 ++static const struct of_device_id of_turris1x_leds_match[] = {
 ++	{ .compatible = "cznic,turris1x-leds" },
 ++	{},
@@ -518,6 +587,7 @@ index 0000000000..6bdb0db316
 ++
 ++static struct platform_driver turris1x_leds_driver = {
 ++	.probe = turris1x_leds_probe,
+++	.shutdown = turris1x_leds_shutdown,
 ++	.driver = {
 ++		.name = "turris1x_leds",
 ++		.of_match_table = of_turris1x_leds_match,
@@ -529,19 +599,19 @@ index 0000000000..6bdb0db316
 ++MODULE_DESCRIPTION("CZ.NIC's Turris 1.x LEDs");
 ++MODULE_LICENSE("GPL");
 ++MODULE_ALIAS("platform:turris1x_leds");
-+--
-+2.34.1
++-- 
++2.37.2
 +
 diff --git a/target/linux/mpc85xx/patches-5.10/0002-dt-bindings-leds-Add-cznic-turris1x-leds.yaml-bindin.patch b/target/linux/mpc85xx/patches-5.10/0002-dt-bindings-leds-Add-cznic-turris1x-leds.yaml-bindin.patch
 new file mode 100644
-index 0000000000..a061ac7680
+index 0000000000..47b16b6241
 --- /dev/null
 +++ b/target/linux/mpc85xx/patches-5.10/0002-dt-bindings-leds-Add-cznic-turris1x-leds.yaml-bindin.patch
-@@ -0,0 +1,141 @@
-+From 1d06a9cfdf949996a4d59ca2ea4bd5f0ffbdee7d Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,143 @@
++From e1358d760aca1d83ae71d26c9d8e03aee5e68091 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
-+Date: Tue, 5 Jul 2022 02:04:47 +0200
-+Subject: [PATCH 2/2] dt-bindings: leds: Add cznic,turris1x-leds.yaml binding
++Date: Tue, 5 Jul 2022 17:59:28 +0200
++Subject: [PATCH 1/2] dt-bindings: leds: Add cznic,turris1x-leds.yaml binding
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -550,16 +620,16 @@ index 0000000000..a061ac7680
 +
 +Signed-off-by: Pali Rohár <pali@kernel.org>
 +---
-+ .../bindings/leds/cznic,turris1x-leds.yaml    | 116 ++++++++++++++++++
-+ 1 file changed, 116 insertions(+)
++ .../bindings/leds/cznic,turris1x-leds.yaml    | 118 ++++++++++++++++++
++ 1 file changed, 118 insertions(+)
 + create mode 100644 Documentation/devicetree/bindings/leds/cznic,turris1x-leds.yaml
 +
 +diff --git a/Documentation/devicetree/bindings/leds/cznic,turris1x-leds.yaml b/Documentation/devicetree/bindings/leds/cznic,turris1x-leds.yaml
 +new file mode 100644
-+index 000000000000..fd09613c8d2d
++index 000000000000..bcaab5b03128
 +--- /dev/null
 ++++ b/Documentation/devicetree/bindings/leds/cznic,turris1x-leds.yaml
-+@@ -0,0 +1,116 @@
++@@ -0,0 +1,118 @@
 ++# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
 ++%YAML 1.2
 ++---
@@ -582,7 +652,8 @@ index 0000000000..a061ac7680
 ++    const: cznic,turris1x-leds
 ++
 ++  reg:
-++    maxItems: 2
+++    description: CPLD address range where LED registers are mapped
+++    maxItems: 1
 ++
 ++  "#address-cells":
 ++    const: 1
@@ -594,6 +665,7 @@ index 0000000000..a061ac7680
 ++  "^multi-led@[0-7]$":
 ++    type: object
 ++    $ref: leds-class-multicolor.yaml#
+++    unevaluatedProperties: false
 ++
 ++    properties:
 ++      reg:
@@ -607,12 +679,12 @@ index 0000000000..a061ac7680
 ++
 ++examples:
 ++  - |
-++
 ++    #include <dt-bindings/leds/common.h>
 ++
 ++    cpld@3,0 {
 ++        #address-cells = <1>;
 ++        #size-cells = <1>;
+++        ranges = <0x0 0x3 0x0 0x00020000>;
 ++
 ++        led-controller@13 {
 ++            compatible = "cznic,turris1x-leds";
@@ -676,9 +748,8 @@ index 0000000000..a061ac7680
 ++    };
 ++
 ++...
-+--
-+2.34.1
++-- 
++2.37.2
 +
---
-2.34.1
-
+-- 
+2.37.2
