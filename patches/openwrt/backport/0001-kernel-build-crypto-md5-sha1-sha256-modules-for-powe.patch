@@ -1,0 +1,91 @@
+From ba17df8f3a2b37c9d69895d48fc415cef1faeb9f Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 30 Aug 2022 09:02:32 +0200
+Subject: [PATCH] kernel: build crypto md5/sha1/sha256 modules for powerpc
+
+This builds and enables kernel optimized modules for mpc85xx target:
+- CONFIG_CRYPTO_MD5_PPC [1]
+- CONFIG_CRYPTO_SHA1_PPC_SPE [2]
+- CONFIG_CRYPTO_SHA256_PPC_SPE [3]
+
+Where it was possible, then use Signal Processing Engine, because
+CONFIG_SPE is already enabled in mpc85xx config.
+
+[1] https://cateee.net/lkddb/web-lkddb/CRYPTO_MD5_PPC.html
+[2] https://cateee.net/lkddb/web-lkddb/CRYPTO_SHA1_PPC.html
+[3] https://cateee.net/lkddb/web-lkddb/CRYPTO_SHA256_PPC_SPE.html
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ package/kernel/linux/modules/crypto.mk | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/package/kernel/linux/modules/crypto.mk b/package/kernel/linux/modules/crypto.mk
+index 4e0a73ccf2..68d3e2982b 100644
+--- a/package/kernel/linux/modules/crypto.mk
++++ b/package/kernel/linux/modules/crypto.mk
+@@ -601,7 +601,8 @@ define KernelPackage/crypto-md5
+   DEPENDS:=+kmod-crypto-hash
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_MD5 \
+-	CONFIG_CRYPTO_MD5_OCTEON
++	CONFIG_CRYPTO_MD5_OCTEON \
++	CONFIG_CRYPTO_MD5_PPC
+   FILES:=$(LINUX_DIR)/crypto/md5.ko
+   AUTOLOAD:=$(call AutoLoad,09,md5)
+   $(call AddDepends/crypto)
+@@ -612,6 +613,11 @@ define KernelPackage/crypto-md5/octeon
+   AUTOLOAD+=$(call AutoLoad,09,octeon-md5)
+ endef
+ 
++define KernelPackage/crypto-md5/mpc85xx
++  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/md5-ppc.ko
++  AUTOLOAD+=$(call AutoLoad,09,md5-ppc)
++endef
++
+ $(eval $(call KernelPackage,crypto-md5))
+ 
+ 
+@@ -823,6 +829,7 @@ define KernelPackage/crypto-sha1
+ 	CONFIG_CRYPTO_SHA1_ARM \
+ 	CONFIG_CRYPTO_SHA1_ARM_NEON \
+ 	CONFIG_CRYPTO_SHA1_OCTEON \
++	CONFIG_CRYPTO_SHA1_PPC_SPE \
+ 	CONFIG_CRYPTO_SHA1_SSSE3
+   FILES:=$(LINUX_DIR)/crypto/sha1_generic.ko
+   AUTOLOAD:=$(call AutoLoad,09,sha1_generic)
+@@ -851,6 +858,11 @@ endef
+ 
+ KernelPackage/crypto-sha1/tegra=$(KernelPakcage/crypto-sha1/arm)
+ 
++define KernelPackage/crypto-sha1/mpc85xx
++  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/sha1-ppc-spe.ko
++  AUTOLOAD+=$(call AutoLoad,09,sha1-ppc-spe)
++endef
++
+ define KernelPackage/crypto-sha1/x86/64
+   FILES+=$(LINUX_DIR)/arch/x86/crypto/sha1-ssse3.ko
+   AUTOLOAD+=$(call AutoLoad,09,sha1-ssse3)
+@@ -865,6 +877,7 @@ define KernelPackage/crypto-sha256
+   KCONFIG:= \
+ 	CONFIG_CRYPTO_SHA256 \
+ 	CONFIG_CRYPTO_SHA256_OCTEON \
++	CONFIG_CRYPTO_SHA256_PPC_SPE \
+ 	CONFIG_CRYPTO_SHA256_SSSE3
+   FILES:= \
+ 	$(LINUX_DIR)/crypto/sha256_generic.ko \
+@@ -878,6 +891,11 @@ define KernelPackage/crypto-sha256/octeon
+   AUTOLOAD+=$(call AutoLoad,09,octeon-sha256)
+ endef
+ 
++define KernelPackage/crypto-sha256/mpc85xx
++  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/sha256-ppc-spe.ko
++  AUTOLOAD+=$(call AutoLoad,09,sha256-ppc-spe)
++endef
++
+ define KernelPackage/crypto-sha256/x86/64
+   FILES+=$(LINUX_DIR)/arch/x86/crypto/sha256-ssse3.ko
+   AUTOLOAD+=$(call AutoLoad,09,sha256-ssse3)
+-- 
+2.34.1
+
