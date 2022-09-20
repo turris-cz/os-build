@@ -182,7 +182,14 @@ git_mirror_update() {
 		_git_mirror_lock "$SHELL" -eus "$mirror" "$url" <<-"EOF"
 			git -C "$1" remote set-url origin "$2"
 			git -C "$1" remote update --prune
+			[ "$(git -C "$1" rev-parse HEAD)" = "$(git -C "$1" rev-parse FETCH_HEAD)" ] \
+				|| rm -rf "$1"
 		EOF
+		if [ ! -d "$mirror" ]; then
+			note "Remote head changed. Local mirror removed for re-clone."
+			git_mirror_update "$@"
+			return
+		fi
 	else
 		_git_mirror_lock \
 			git -C "$GIT_MIRROR" clone --mirror "$url" "$mirror"
