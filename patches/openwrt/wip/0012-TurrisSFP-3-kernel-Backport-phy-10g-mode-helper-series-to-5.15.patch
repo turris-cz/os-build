@@ -1,0 +1,223 @@
+From 949dbb2e584cf1b7b790933d36965b306f436e2c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Sep 2022 20:23:32 +0200
+Subject: [PATCH 3/9] kernel: Backport phy-10g-mode-helper series to 5.15
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This backports Russell King's patch series phy-10g-mode-helper from 5.16:
+  14ad41c74f6b ("net: phylink: add phylink_set_10g_modes() helper")
+  a2c27a61b433 ("net: ethernet: use phylink_set_10g_modes()")
+and dependency
+  9eb7b5e7cb50 ("net: dpaa2-mac: add support for more ethtool 10G link modes")
+
+The original cover letter said:
+  Add phylink helper for 10G modes
+
+  During the last cycle, there was discussion about adding a helper
+  to set the 10G link modes for phylink, which resulted in these two
+  patches introduce such a helper.
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...d-support-for-more-ethtool-10G-link-.patch | 45 +++++++++++
+ ...ink-add-phylink_set_10g_modes-helper.patch | 52 +++++++++++++
+ ...t-ethernet-use-phylink_set_10g_modes.patch | 74 +++++++++++++++++++
+ 3 files changed, 171 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/777-v5.16-1-net-dpaa2-mac-add-support-for-more-ethtool-10G-link-.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v5.16-2-net-phylink-add-phylink_set_10g_modes-helper.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v5.16-3-net-ethernet-use-phylink_set_10g_modes.patch
+
+diff --git a/target/linux/generic/backport-5.15/777-v5.16-1-net-dpaa2-mac-add-support-for-more-ethtool-10G-link-.patch b/target/linux/generic/backport-5.15/777-v5.16-1-net-dpaa2-mac-add-support-for-more-ethtool-10G-link-.patch
+new file mode 100644
+index 0000000000..a54e4c57b0
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/777-v5.16-1-net-dpaa2-mac-add-support-for-more-ethtool-10G-link-.patch
+@@ -0,0 +1,45 @@
++From bc4b596770b44bbea030175bb2c48be4b08df543 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Fri, 17 Sep 2021 14:41:17 +0100
++Subject: [PATCH 1/3] net: dpaa2-mac: add support for more ethtool 10G link
++ modes
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Phylink documentation says:
++  Note that the PHY may be able to transform from one connection
++  technology to another, so, eg, don't clear 1000BaseX just
++  because the MAC is unable to BaseX mode. This is more about
++  clearing unsupported speeds and duplex settings. The port modes
++  should not be cleared; phylink_set_port_modes() will help with this.
++
++So add the missing 10G modes.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Acked-by: Marek Behún <kabel@kernel.org>
++Acked-by: Ioana Ciornei <ioana.ciornei@nxp.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c | 5 +++++
++ 1 file changed, 5 insertions(+)
++
++diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
++index ae6d382d8735..543c1f202420 100644
++--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
+++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
++@@ -140,6 +140,11 @@ static void dpaa2_mac_validate(struct phylink_config *config,
++ 	case PHY_INTERFACE_MODE_10GBASER:
++ 	case PHY_INTERFACE_MODE_USXGMII:
++ 		phylink_set(mask, 10000baseT_Full);
+++		phylink_set(mask, 10000baseCR_Full);
+++		phylink_set(mask, 10000baseSR_Full);
+++		phylink_set(mask, 10000baseLR_Full);
+++		phylink_set(mask, 10000baseLRM_Full);
+++		phylink_set(mask, 10000baseER_Full);
++ 		if (state->interface == PHY_INTERFACE_MODE_10GBASER)
++ 			break;
++ 		phylink_set(mask, 5000baseT_Full);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/777-v5.16-2-net-phylink-add-phylink_set_10g_modes-helper.patch b/target/linux/generic/backport-5.15/777-v5.16-2-net-phylink-add-phylink_set_10g_modes-helper.patch
+new file mode 100644
+index 0000000000..83c5a4c92a
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/777-v5.16-2-net-phylink-add-phylink_set_10g_modes-helper.patch
+@@ -0,0 +1,52 @@
++From 429a7a12a7a11fd5df24915934bc4d01d521ae96 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 4 Oct 2021 12:03:28 +0100
++Subject: [PATCH 2/3] net: phylink: add phylink_set_10g_modes() helper
++
++Add a helper for setting 10Gigabit modes, so we have one central
++place that sets all appropriate 10G modes for a driver.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/phy/phylink.c | 11 +++++++++++
++ include/linux/phylink.h   |  1 +
++ 2 files changed, 12 insertions(+)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 4861924303ee..0720f05ecb02 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -133,6 +133,17 @@ void phylink_set_port_modes(unsigned long *mask)
++ }
++ EXPORT_SYMBOL_GPL(phylink_set_port_modes);
++ 
+++void phylink_set_10g_modes(unsigned long *mask)
+++{
+++	phylink_set(mask, 10000baseT_Full);
+++	phylink_set(mask, 10000baseCR_Full);
+++	phylink_set(mask, 10000baseSR_Full);
+++	phylink_set(mask, 10000baseLR_Full);
+++	phylink_set(mask, 10000baseLRM_Full);
+++	phylink_set(mask, 10000baseER_Full);
+++}
+++EXPORT_SYMBOL_GPL(phylink_set_10g_modes);
+++
++ static int phylink_is_empty_linkmode(const unsigned long *linkmode)
++ {
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(tmp) = { 0, };
++diff --git a/include/linux/phylink.h b/include/linux/phylink.h
++index 174343ccd685..f037470b6fb3 100644
++--- a/include/linux/phylink.h
+++++ b/include/linux/phylink.h
++@@ -493,6 +493,7 @@ int phylink_speed_up(struct phylink *pl);
++ #define phylink_test(bm, mode)	__phylink_do_bit(test_bit, bm, mode)
++ 
++ void phylink_set_port_modes(unsigned long *bits);
+++void phylink_set_10g_modes(unsigned long *mask);
++ void phylink_helper_basex_speed(struct phylink_link_state *state);
++ 
++ void phylink_mii_c22_pcs_get_state(struct mdio_device *pcs,
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/777-v5.16-3-net-ethernet-use-phylink_set_10g_modes.patch b/target/linux/generic/backport-5.15/777-v5.16-3-net-ethernet-use-phylink_set_10g_modes.patch
+new file mode 100644
+index 0000000000..0095d649c5
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/777-v5.16-3-net-ethernet-use-phylink_set_10g_modes.patch
+@@ -0,0 +1,74 @@
++From 8259f96b710a2dd78e85bb46f12372dc0a3e75a0 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 4 Oct 2021 12:03:33 +0100
++Subject: [PATCH 3/3] net: ethernet: use phylink_set_10g_modes()
++
++Update three drivers to use the new phylink_set_10g_modes() helper:
++Cadence macb, Freescale DPAA2 and Marvell PP2.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/ethernet/cadence/macb_main.c         | 7 +------
++ drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c | 7 +------
++ drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c  | 7 +------
++ 3 files changed, 3 insertions(+), 18 deletions(-)
++
++diff --git a/drivers/net/ethernet/cadence/macb_main.c b/drivers/net/ethernet/cadence/macb_main.c
++index c6f28b084646..97941cdfe1a1 100644
++--- a/drivers/net/ethernet/cadence/macb_main.c
+++++ b/drivers/net/ethernet/cadence/macb_main.c
++@@ -548,13 +548,8 @@ static void macb_validate(struct phylink_config *config,
++ 	if (bp->caps & MACB_CAPS_GIGABIT_MODE_AVAILABLE &&
++ 	    (state->interface == PHY_INTERFACE_MODE_NA ||
++ 	     state->interface == PHY_INTERFACE_MODE_10GBASER)) {
++-		phylink_set(mask, 10000baseCR_Full);
++-		phylink_set(mask, 10000baseER_Full);
+++		phylink_set_10g_modes(mask);
++ 		phylink_set(mask, 10000baseKR_Full);
++-		phylink_set(mask, 10000baseLR_Full);
++-		phylink_set(mask, 10000baseLRM_Full);
++-		phylink_set(mask, 10000baseSR_Full);
++-		phylink_set(mask, 10000baseT_Full);
++ 		if (state->interface != PHY_INTERFACE_MODE_NA)
++ 			goto out;
++ 	}
++diff --git a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
++index 543c1f202420..ef8f0a055024 100644
++--- a/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
+++++ b/drivers/net/ethernet/freescale/dpaa2/dpaa2-mac.c
++@@ -139,12 +139,7 @@ static void dpaa2_mac_validate(struct phylink_config *config,
++ 	case PHY_INTERFACE_MODE_NA:
++ 	case PHY_INTERFACE_MODE_10GBASER:
++ 	case PHY_INTERFACE_MODE_USXGMII:
++-		phylink_set(mask, 10000baseT_Full);
++-		phylink_set(mask, 10000baseCR_Full);
++-		phylink_set(mask, 10000baseSR_Full);
++-		phylink_set(mask, 10000baseLR_Full);
++-		phylink_set(mask, 10000baseLRM_Full);
++-		phylink_set(mask, 10000baseER_Full);
+++		phylink_set_10g_modes(mask);
++ 		if (state->interface == PHY_INTERFACE_MODE_10GBASER)
++ 			break;
++ 		phylink_set(mask, 5000baseT_Full);
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index c963115558cb..3c267a94f1ca 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -6305,12 +6305,7 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 	case PHY_INTERFACE_MODE_XAUI:
++ 	case PHY_INTERFACE_MODE_NA:
++ 		if (mvpp2_port_supports_xlg(port)) {
++-			phylink_set(mask, 10000baseT_Full);
++-			phylink_set(mask, 10000baseCR_Full);
++-			phylink_set(mask, 10000baseSR_Full);
++-			phylink_set(mask, 10000baseLR_Full);
++-			phylink_set(mask, 10000baseLRM_Full);
++-			phylink_set(mask, 10000baseER_Full);
+++			phylink_set_10g_modes(mask);
++ 			phylink_set(mask, 10000baseKR_Full);
++ 		}
++ 		if (state->interface != PHY_INTERFACE_MODE_NA)
++-- 
++2.35.1
++
+-- 
+2.35.1
+
