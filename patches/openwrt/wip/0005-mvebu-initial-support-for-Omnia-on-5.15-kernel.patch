@@ -1,24 +1,18 @@
-From 8d0314b394c650a5285ec034e481905ca0541fb0 Mon Sep 17 00:00:00 2001
+From cebd6bd7ec0030e12ac7a1724d3de83d50ca08bc Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Tue, 5 May 2020 20:54:33 +0200
 Subject: [PATCH] mvebu: initial support for Omnia on 5.15 kernel
 
 ---
  target/linux/mvebu/image/Config.in            |   4 +
- ...mada-385-turris-omnia-separate-dts-f.patch | 179 ++++++++++++++++++
- ...leds-Add-LED-driver-for-Turris-Omnia.patch | 345 ++++++++++++++++++
- ...net-dsa-allow-for-multiple-CPU-ports.patch | 219 +++++++++++
- ...-ndo-for-setting-the-iflink-property.patch | 101 +++++
- ...t-ndo_set_netlink-for-chaning-port-s.patch |  97 +++++
- ...-dsa-mv88e6xxx-support-multi-CPU-DSA.patch | 116 ++++++
- 10 files changed, 1578 insertions(+)
+ ...mada-385-turris-omnia-separate-dts-f.patch | 213 ++++++++++++++++++
+ 2 files changed, 217 insertions(+)
  create mode 100644 target/linux/mvebu/image/Config.in
  create mode 100644 target/linux/mvebu/patches-5.15/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
- create mode 100644 target/linux/mvebu/patches-5.15/9951-net-add-ndo-for-setting-the-iflink-property.patch
 
 diff --git a/target/linux/mvebu/image/Config.in b/target/linux/mvebu/image/Config.in
 new file mode 100644
-index 0000000..bf1c0de
+index 0000000000..e959a50dad
 --- /dev/null
 +++ b/target/linux/mvebu/image/Config.in
 @@ -0,0 +1,4 @@
@@ -28,7 +22,7 @@ index 0000000..bf1c0de
 +	default n
 diff --git a/target/linux/mvebu/patches-5.15/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch b/target/linux/mvebu/patches-5.15/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
 new file mode 100644
-index 0000000000..995929e0cc
+index 0000000000..3c427cdf1e
 --- /dev/null
 +++ b/target/linux/mvebu/patches-5.15/8800-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
 @@ -0,0 +1,213 @@
@@ -245,113 +239,6 @@ index 0000000000..995929e0cc
 +-- 
 +2.30.2
 +
-diff --git a/target/linux/mvebu/patches-5.15/9951-net-add-ndo-for-setting-the-iflink-property.patch b/target/linux/mvebu/patches-5.15/9951-net-add-ndo-for-setting-the-iflink-property.patch
-new file mode 100644
-index 0000000..3b2482d
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/9951-net-add-ndo-for-setting-the-iflink-property.patch
-@@ -0,0 +1,101 @@
-+From 846d8a31f9cc9048f58358770d20d3153918c93d Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
-+Date: Tue, 5 May 2020 19:28:53 +0200
-+Subject: [PATCH] net: add ndo for setting the iflink property
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+In DSA the iflink value is used to report to which CPU port a given
-+switch port is connected to. Since we want to support multi-CPU DSA, we
-+want the user to be able to change this value.
-+
-+Add ndo_set_iflink method into the ndo strucutre to be a pair to
-+ndo_get_iflink. Also create dev_set_iflink and call this from the
-+netlink code, so that userspace can change the iflink value.
-+
-+Signed-off-by: Marek Behún <marek.behun@nic.cz>
-+---
-+ include/linux/netdevice.h |  5 +++++
-+ net/core/dev.c            | 16 ++++++++++++++++
-+ net/core/rtnetlink.c      |  7 +++++++
-+ 3 files changed, 28 insertions(+)
-+
-+diff --git a/include/linux/netdevice.h b/include/linux/netdevice.h
-+index b580a35f50ea..1a951eca08da 100644
-+--- a/include/linux/netdevice.h
-++++ b/include/linux/netdevice.h
-+@@ -1209,6 +1209,8 @@ struct tlsdev_ops;
-+  *	TX queue.
-+  * int (*ndo_get_iflink)(const struct net_device *dev);
-+  *	Called to get the iflink value of this device.
-++ * int (*ndo_set_iflink)(struct net_device *dev, int iflink);
-++ *	Called to set the iflink value of this device.
-+  * void (*ndo_change_proto_down)(struct net_device *dev,
-+  *				 bool proto_down);
-+  *	This function is used to pass protocol port error state information
-+@@ -1428,6 +1430,8 @@ struct net_device_ops {
-+ 						      int queue_index,
-+ 						      u32 maxrate);
-+ 	int			(*ndo_get_iflink)(const struct net_device *dev);
-++	int			(*ndo_set_iflink)(struct net_device *dev,
-++						  int iflink);
-+ 	int			(*ndo_change_proto_down)(struct net_device *dev,
-+ 							 bool proto_down);
-+ 	int			(*ndo_fill_metadata_dst)(struct net_device *dev,
-+@@ -2617,6 +2621,7 @@ void dev_add_offload(struct packet_offload *po);
-+ void dev_remove_offload(struct packet_offload *po);
-+ 
-+ int dev_get_iflink(const struct net_device *dev);
-++int dev_set_iflink(struct net_device *dev, int iflink);
-+ int dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
-+ struct net_device *__dev_get_by_flags(struct net *net, unsigned short flags,
-+ 				      unsigned short mask);
-+diff --git a/net/core/dev.c b/net/core/dev.c
-+index 8ad1e8f00958..c0bba4ddec21 100644
-+--- a/net/core/dev.c
-++++ b/net/core/dev.c
-+@@ -611,6 +611,22 @@ int dev_get_iflink(const struct net_device *dev)
-+ }
-+ EXPORT_SYMBOL(dev_get_iflink);
-+ 
-++/**
-++ *	dev_set_iflink - set 'iflink' value of an interface
-++ *	@dev: target interface
-++ *	@iflink: new value
-++ *
-++ *	Change the interface to which this interface is linked to.
-++ */
-++int dev_set_iflink(struct net_device *dev, int iflink)
-++{
-++	if (dev->netdev_ops && dev->netdev_ops->ndo_set_iflink)
-++		return dev->netdev_ops->ndo_set_iflink(dev, iflink);
-++
-++	return -EOPNOTSUPP;
-++}
-++EXPORT_SYMBOL(dev_set_iflink);
-++
-+ /**
-+  *	dev_fill_metadata_dst - Retrieve tunnel egress information.
-+  *	@dev: targeted interface
-+diff --git a/net/core/rtnetlink.c b/net/core/rtnetlink.c
-+index 944acb1a9f29..b35fc82f032a 100644
-+--- a/net/core/rtnetlink.c
-++++ b/net/core/rtnetlink.c
-+@@ -2529,6 +2529,13 @@ static int do_setlink(const struct sk_buff *skb,
-+ 		status |= DO_SETLINK_MODIFIED;
-+ 	}
-+ 
-++	if (tb[IFLA_LINK]) {
-++		err = dev_set_iflink(dev, nla_get_u32(tb[IFLA_LINK]));
-++		if (err)
-++			goto errout;
-++		status |= DO_SETLINK_MODIFIED;
-++	}
-++
-+ 	if (tb[IFLA_CARRIER]) {
-+ 		err = dev_change_carrier(dev, nla_get_u8(tb[IFLA_CARRIER]));
-+ 		if (err)
-+-- 
-+2.24.1
-+
 -- 
-2.26.2
+2.35.1
 
