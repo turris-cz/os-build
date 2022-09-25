@@ -1,11 +1,11 @@
-From b8b32dd5e773a2defb66e0563c4763a1c0a9416e Mon Sep 17 00:00:00 2001
+From 4d5c9962e81bbc0254346944bdf464255ba899e0 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Mon, 4 Jul 2022 14:19:35 +0200
+Date: Sun, 25 Sep 2022 14:10:15 +0200
 Subject: [PATCH] Generic hack patches 5.15
 
 ---
  .../generic/hack-5.15/204-module_strip.patch  |  212 ++
- .../generic/hack-5.15/205-kconfig-exit.patch  |   24 +
+ .../generic/hack-5.15/205-kconfig-exit.patch  |   20 +
  .../210-darwin_scripts_include.patch          | 3053 +++++++++++++++++
  .../211-darwin-uuid-typedef-clash.patch       |   22 +
  .../hack-5.15/212-tools_portability.patch     |  110 +
@@ -13,32 +13,32 @@ Subject: [PATCH] Generic hack patches 5.15
  .../hack-5.15/220-arm-gc_sections.patch       |  123 +
  .../hack-5.15/221-module_exports.patch        |  126 +
  .../hack-5.15/230-openwrt_lzma_options.patch  |   34 +
- .../hack-5.15/249-udp-tunnel-selection.patch  |   24 +
+ .../hack-5.15/249-udp-tunnel-selection.patch  |   20 +
  .../hack-5.15/250-netfilter_depends.patch     |   27 +
  .../linux/generic/hack-5.15/251-kconfig.patch |  199 ++
  .../generic/hack-5.15/252-SATA_PMP.patch      |   23 +
- .../generic/hack-5.15/253-ksmbd-config.patch  |   38 +
+ .../generic/hack-5.15/253-ksmbd-config.patch  |   32 +
  .../hack-5.15/259-regmap_dynamic.patch        |  144 +
  .../260-crypto_test_dependencies.patch        |   52 +
- .../hack-5.15/261-lib-arc4-unhide.patch       |   28 +
+ .../hack-5.15/261-lib-arc4-unhide.patch       |   24 +
  .../generic/hack-5.15/280-rfkill-stubs.patch  |   84 +
  ...cache-use-more-efficient-cache-blast.patch |   64 +
  .../301-mips_image_cmdline_hack.patch         |   38 +
  .../321-powerpc_crtsavres_prereq.patch        |   38 +
  ...rans-call-add-disks-after-mtd-device.patch |   98 +
- .../410-block-fit-partition-parser.patch      |  238 ++
+ .../410-block-fit-partition-parser.patch      |  214 ++
  .../420-mtd-set-rootfs-to-be-root-dev.patch   |   39 +
  ...ers-add-nvmem-support-to-cmdlinepart.patch |  120 +
- .../hack-5.15/430-mtk-bmt-support.patch       |   39 +
+ .../hack-5.15/430-mtk-bmt-support.patch       |   33 +
  .../generic/hack-5.15/531-debloat_lzma.patch  | 1040 ++++++
- .../hack-5.15/600-bridge_offload.patch        |  880 +++++
+ .../hack-5.15/600-bridge_offload.patch        |  846 +++++
  ...lter-connmark-introduce-set-dscpmark.patch |  212 ++
  ...-netfilter-add-xt_FLOWOFFLOAD-target.patch |  860 +++++
  .../hack-5.15/651-wireless_mesh_header.patch  |   24 +
  .../hack-5.15/660-fq_codel_defaults.patch     |   27 +
  ...t-size-the-hashtable-more-adequately.patch |   25 +
  .../700-swconfig_switch_drivers.patch         |  131 +
- ...-dsa-mv88e6xxx-disable-ATU-violation.patch |   25 +
+ ...-dsa-mv88e6xxx-disable-ATU-violation.patch |   21 +
  .../hack-5.15/720-net-phy-add-aqr-phys.patch  |  142 +
  .../721-net-add-packet-mangeling.patch        |  178 +
  ...hy-aquantia-enable-AQR112-and-AQR412.patch |  154 +
@@ -48,16 +48,17 @@ Subject: [PATCH] Generic hack patches 5.15
  ...-r8152-add-LED-configuration-from-OF.patch |   74 +
  ...et-add-RTL8152-binding-documentation.patch |   54 +
  .../hack-5.15/773-bgmac-add-srab-switch.patch |   98 +
- .../780-usb-net-MeigLink_modem_support.patch  |   49 +
+ .../780-usb-net-MeigLink_modem_support.patch  |   43 +
  .../800-GPIO-add-named-gpio-exports.patch     |  162 +
+ .../hack-5.15/800-ubnt-ledbar-driver.patch    |   29 +
  .../hack-5.15/901-debloat_sock_diag.patch     |  162 +
  .../generic/hack-5.15/902-debloat_proc.patch  |  408 +++
  .../hack-5.15/904-debloat_dma_buf.patch       |   92 +
  .../hack-5.15/910-kobject_uevent.patch        |   32 +
  .../911-kobject_add_broadcast_uevent.patch    |   76 +
- .../hack-5.15/920-device_tree_cmdline.patch   |   25 +
+ .../hack-5.15/920-device_tree_cmdline.patch   |   21 +
  ...vert-driver-core-Set-fw_devlink-on-b.patch |   30 +
- 53 files changed, 10121 insertions(+)
+ 55 files changed, 10119 insertions(+)
  create mode 100644 target/linux/generic/hack-5.15/204-module_strip.patch
  create mode 100644 target/linux/generic/hack-5.15/205-kconfig-exit.patch
  create mode 100644 target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
@@ -104,6 +105,7 @@ Subject: [PATCH] Generic hack patches 5.15
  create mode 100644 target/linux/generic/hack-5.15/773-bgmac-add-srab-switch.patch
  create mode 100644 target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
  create mode 100644 target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
+ create mode 100644 target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
  create mode 100644 target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
  create mode 100644 target/linux/generic/hack-5.15/902-debloat_proc.patch
  create mode 100644 target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
@@ -114,7 +116,7 @@ Subject: [PATCH] Generic hack patches 5.15
 
 diff --git a/target/linux/generic/hack-5.15/204-module_strip.patch b/target/linux/generic/hack-5.15/204-module_strip.patch
 new file mode 100644
-index 0000000000..bd7fc71060
+index 0000000000..dee240d9f9
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/204-module_strip.patch
 @@ -0,0 +1,212 @@
@@ -240,7 +242,7 @@ index 0000000000..bd7fc71060
 + 
 + #ifdef CONFIG_MODVERSIONS
 + 
-+@@ -3227,9 +3229,11 @@ static int setup_load_info(struct load_i
++@@ -3266,9 +3268,11 @@ static int setup_load_info(struct load_i
 + 
 + static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 + {
@@ -253,7 +255,7 @@ index 0000000000..bd7fc71060
 + 	if (flags & MODULE_INIT_IGNORE_VERMAGIC)
 + 		modmagic = NULL;
 + 
-+@@ -3250,6 +3254,7 @@ static int check_modinfo(struct module *
++@@ -3289,6 +3293,7 @@ static int check_modinfo(struct module *
 + 				mod->name);
 + 		add_taint_module(mod, TAINT_OOT_MODULE, LOCKDEP_STILL_OK);
 + 	}
@@ -332,10 +334,10 @@ index 0000000000..bd7fc71060
 + 		sprintf(fname, "%s.mod.c", mod->name);
 diff --git a/target/linux/generic/hack-5.15/205-kconfig-exit.patch b/target/linux/generic/hack-5.15/205-kconfig-exit.patch
 new file mode 100644
-index 0000000000..9f98c16b07
+index 0000000000..9f3bb8f311
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/205-kconfig-exit.patch
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,20 @@
 +From 300d26562ce4dc427154cb247beb75db4b1f0774 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:29:57 +0200
@@ -345,8 +347,6 @@ index 0000000000..9f98c16b07
 + scripts/kconfig/conf.c | 2 ++
 + 1 file changed, 2 insertions(+)
 +
-+diff --git a/scripts/kconfig/conf.c b/scripts/kconfig/conf.c
-+index 5d84b44a2a2a..d279d95aac92 100644
 +--- a/scripts/kconfig/conf.c
 ++++ b/scripts/kconfig/conf.c
 +@@ -435,6 +435,8 @@ static int conf_sym(struct menu *menu)
@@ -358,8 +358,6 @@ index 0000000000..9f98c16b07
 + 			newval = oldval;
 + 			break;
 + 		case '?':
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/210-darwin_scripts_include.patch b/target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
 new file mode 100644
 index 0000000000..be6adc0d11
@@ -3724,7 +3722,7 @@ index 0000000000..0aa3eb840c
 + 	. = __stubs_lma + SIZEOF(.stubs);				\
 diff --git a/target/linux/generic/hack-5.15/221-module_exports.patch b/target/linux/generic/hack-5.15/221-module_exports.patch
 new file mode 100644
-index 0000000000..47f013de4f
+index 0000000000..204027d769
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/221-module_exports.patch
 @@ -0,0 +1,126 @@
@@ -3821,7 +3819,7 @@ index 0000000000..47f013de4f
 + 	    "__kstrtabns_" #sym ":					\n"	\
 +--- a/include/asm-generic/export.h
 ++++ b/include/asm-generic/export.h
-+@@ -26,6 +26,12 @@ struct kernel_symbol {
++@@ -26,6 +26,12 @@
 + #endif
 + .endm
 + 
@@ -3834,7 +3832,7 @@ index 0000000000..47f013de4f
 + /*
 +  * note on .section use: we specify progbits since usage of the "M" (SHF_MERGE)
 +  * section flag requires it. Use '%progbits' instead of '@progbits' since the
-+@@ -42,7 +42,7 @@ struct kernel_symbol {
++@@ -39,7 +45,7 @@
 + __ksymtab_\name:
 + 	__put \val, __kstrtab_\name
 + 	.previous
@@ -3845,7 +3843,7 @@ index 0000000000..47f013de4f
 + 	.previous
 +--- a/scripts/Makefile.build
 ++++ b/scripts/Makefile.build
-+@@ -396,7 +396,7 @@ targets += $(real-dtb-y) $(lib-y) $(alwa
++@@ -397,7 +397,7 @@ targets += $(real-dtb-y) $(lib-y) $(alwa
 + # Linker scripts preprocessor (.lds.S -> .lds)
 + # ---------------------------------------------------------------------------
 + quiet_cmd_cpp_lds_S = LDS     $@
@@ -3896,10 +3894,10 @@ index 0000000000..f9361b060b
 +       cmd_lzo = { cat $(real-prereqs) | $(KLZOP) -9; $(size_append); } > $@
 diff --git a/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch b/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch
 new file mode 100644
-index 0000000000..6a5d3b3f86
+index 0000000000..5e154004d0
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,20 @@
 +From 4487708144118bfd5e1b1da7003a486951fb9c5a Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:31:51 +0200
@@ -3909,8 +3907,6 @@ index 0000000000..6a5d3b3f86
 + net/ipv4/Kconfig | 2 +-
 + 1 file changed, 1 insertion(+), 1 deletion(-)
 +
-+diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
-+index 87983e70f03f..426b44d39277 100644
 +--- a/net/ipv4/Kconfig
 ++++ b/net/ipv4/Kconfig
 +@@ -315,7 +315,7 @@ config NET_IPVTI
@@ -3922,11 +3918,9 @@ index 0000000000..6a5d3b3f86
 + 	select NET_IP_TUNNEL
 + 	default n
 + 
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/250-netfilter_depends.patch b/target/linux/generic/hack-5.15/250-netfilter_depends.patch
 new file mode 100644
-index 0000000000..495c73ffa8
+index 0000000000..d9a2b81d74
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/250-netfilter_depends.patch
 @@ -0,0 +1,27 @@
@@ -3941,7 +3935,7 @@ index 0000000000..495c73ffa8
 +
 +--- a/net/netfilter/Kconfig
 ++++ b/net/netfilter/Kconfig
-+@@ -243,7 +243,6 @@ config NF_CONNTRACK_FTP
++@@ -242,7 +242,6 @@ config NF_CONNTRACK_FTP
 + 
 + config NF_CONNTRACK_H323
 + 	tristate "H.323 protocol support"
@@ -3949,7 +3943,7 @@ index 0000000000..495c73ffa8
 + 	depends on NETFILTER_ADVANCED
 + 	help
 + 	  H.323 is a VoIP signalling protocol from ITU-T. As one of the most
-+@@ -1106,7 +1105,6 @@ config NETFILTER_XT_TARGET_SECMARK
++@@ -1105,7 +1104,6 @@ config NETFILTER_XT_TARGET_SECMARK
 + 
 + config NETFILTER_XT_TARGET_TCPMSS
 + 	tristate '"TCPMSS" target support'
@@ -4193,10 +4187,10 @@ index 0000000000..6502d1d6ed
 + 	  This option adds support for SATA Port Multipliers
 diff --git a/target/linux/generic/hack-5.15/253-ksmbd-config.patch b/target/linux/generic/hack-5.15/253-ksmbd-config.patch
 new file mode 100644
-index 0000000000..820197bb2b
+index 0000000000..a29cf3bf61
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/253-ksmbd-config.patch
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,32 @@
 +From dcd966fa7ca63f38cf7147e1184d13d66e2ca340 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:33:30 +0200
@@ -4207,8 +4201,6 @@ index 0000000000..820197bb2b
 + lib/Kconfig  | 2 +-
 + 2 files changed, 2 insertions(+), 2 deletions(-)
 +
-+diff --git a/init/Kconfig b/init/Kconfig
-+index 5a2514bbb11d..32ba9490a6e4 100644
 +--- a/init/Kconfig
 ++++ b/init/Kconfig
 +@@ -2384,7 +2384,7 @@ config PADATA
@@ -4220,8 +4212,6 @@ index 0000000000..820197bb2b
 + 	help
 + 	  Build a simple ASN.1 grammar compiler that produces a bytecode output
 + 	  that can be interpreted by the ASN.1 stream decoder and used to
-+diff --git a/lib/Kconfig b/lib/Kconfig
-+index d6c6cfd1fac9..6595c53abd3c 100644
 +--- a/lib/Kconfig
 ++++ b/lib/Kconfig
 +@@ -614,7 +614,7 @@ config LIBFDT
@@ -4233,8 +4223,6 @@ index 0000000000..820197bb2b
 + 	help
 + 	  Enable fast lookup object identifier registry.
 + 
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/259-regmap_dynamic.patch b/target/linux/generic/hack-5.15/259-regmap_dynamic.patch
 new file mode 100644
 index 0000000000..6be5875177
@@ -4445,10 +4433,10 @@ index 0000000000..64daa82743
 + 
 diff --git a/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch b/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
 new file mode 100644
-index 0000000000..65dd7ff126
+index 0000000000..ee923c73f7
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,24 @@
 +From 241e5d3f7b0dd3c01f8c7fa83cbc9a3882286d53 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:35:18 +0200
@@ -4462,8 +4450,6 @@ index 0000000000..65dd7ff126
 + lib/crypto/Kconfig | 2 +-
 + 1 file changed, 1 insertion(+), 1 deletion(-)
 +
-+diff --git a/lib/crypto/Kconfig b/lib/crypto/Kconfig
-+index 5056663c2aff..8a4d4e5bcd7a 100644
 +--- a/lib/crypto/Kconfig
 ++++ b/lib/crypto/Kconfig
 +@@ -6,7 +6,7 @@ config CRYPTO_LIB_AES
@@ -4475,8 +4461,6 @@ index 0000000000..65dd7ff126
 + 
 + config CRYPTO_ARCH_HAVE_LIB_BLAKE2S
 + 	bool
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/280-rfkill-stubs.patch b/target/linux/generic/hack-5.15/280-rfkill-stubs.patch
 new file mode 100644
 index 0000000000..7a650d132e
@@ -4683,7 +4667,7 @@ index 0000000000..15e233aceb
 + NESTED(kernel_entry, 16, sp)			# kernel entry point
 diff --git a/target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch b/target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch
 new file mode 100644
-index 0000000000..215528a90c
+index 0000000000..f1942e2037
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch
 @@ -0,0 +1,38 @@
@@ -4705,7 +4689,7 @@ index 0000000000..215528a90c
 +
 +--- a/arch/powerpc/Makefile
 ++++ b/arch/powerpc/Makefile
-+@@ -61,19 +61,6 @@ machine-$(CONFIG_PPC64) += 64
++@@ -44,19 +44,6 @@ machine-$(CONFIG_PPC64) += 64
 + machine-$(CONFIG_CPU_LITTLE_ENDIAN) += le
 + UTS_MACHINE := $(subst $(space),,$(machine-y))
 + 
@@ -4831,10 +4815,10 @@ index 0000000000..011f790fa7
 +  * module_mtd_blktrans() - Helper macro for registering a mtd blktrans driver
 diff --git a/target/linux/generic/hack-5.15/410-block-fit-partition-parser.patch b/target/linux/generic/hack-5.15/410-block-fit-partition-parser.patch
 new file mode 100644
-index 0000000000..b31479e5ac
+index 0000000000..96c89f41c4
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/410-block-fit-partition-parser.patch
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,214 @@
 +From 69357074558daf6ff24c9f58714935e9e095a865 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:37:33 +0200
@@ -4854,11 +4838,9 @@ index 0000000000..b31479e5ac
 + include/linux/msdos_partition.h |  1 +
 + 11 files changed, 57 insertions(+)
 +
-+diff --git a/block/blk.h b/block/blk.h
-+index aab72194d226..ed23a4fac950 100644
 +--- a/block/blk.h
 ++++ b/block/blk.h
-+@@ -354,6 +354,8 @@ void blk_free_ext_minor(unsigned int minor);
++@@ -354,6 +354,8 @@ void blk_free_ext_minor(unsigned int min
 + #define ADDPART_FLAG_NONE	0
 + #define ADDPART_FLAG_RAID	1
 + #define ADDPART_FLAG_WHOLEDISK	2
@@ -4867,8 +4849,6 @@ index 0000000000..b31479e5ac
 + int bdev_add_partition(struct gendisk *disk, int partno, sector_t start,
 + 		sector_t length);
 + int bdev_del_partition(struct gendisk *disk, int partno);
-+diff --git a/block/partitions/Kconfig b/block/partitions/Kconfig
-+index 278593b8e4e9..d4cd2f36ea95 100644
 +--- a/block/partitions/Kconfig
 ++++ b/block/partitions/Kconfig
 +@@ -101,6 +101,13 @@ config ATARI_PARTITION
@@ -4885,8 +4865,6 @@ index 0000000000..b31479e5ac
 + config IBM_PARTITION
 + 	bool "IBM disk label and partition support"
 + 	depends on PARTITION_ADVANCED && S390
-+diff --git a/block/partitions/Makefile b/block/partitions/Makefile
-+index a7f05cdb02a8..d319eb1deba9 100644
 +--- a/block/partitions/Makefile
 ++++ b/block/partitions/Makefile
 +@@ -8,6 +8,7 @@ obj-$(CONFIG_ACORN_PARTITION) += acorn.o
@@ -4897,11 +4875,9 @@ index 0000000000..b31479e5ac
 + obj-$(CONFIG_CMDLINE_PARTITION) += cmdline.o
 + obj-$(CONFIG_MAC_PARTITION) += mac.o
 + obj-$(CONFIG_LDM_PARTITION) += ldm.o
-+diff --git a/block/partitions/check.h b/block/partitions/check.h
-+index d5b28e309d64..1b2fd18b2480 100644
 +--- a/block/partitions/check.h
 ++++ b/block/partitions/check.h
-+@@ -58,6 +58,7 @@ int amiga_partition(struct parsed_partitions *state);
++@@ -58,6 +58,7 @@ int amiga_partition(struct parsed_partit
 + int atari_partition(struct parsed_partitions *state);
 + int cmdline_partition(struct parsed_partitions *state);
 + int efi_partition(struct parsed_partitions *state);
@@ -4909,14 +4885,12 @@ index 0000000000..b31479e5ac
 + int ibm_partition(struct parsed_partitions *);
 + int karma_partition(struct parsed_partitions *state);
 + int ldm_partition(struct parsed_partitions *state);
-+@@ -68,3 +69,5 @@ int sgi_partition(struct parsed_partitions *state);
++@@ -68,3 +69,5 @@ int sgi_partition(struct parsed_partitio
 + int sun_partition(struct parsed_partitions *state);
 + int sysv68_partition(struct parsed_partitions *state);
 + int ultrix_partition(struct parsed_partitions *state);
 ++
 ++int parse_fit_partitions(struct parsed_partitions *state, u64 start_sector, u64 nr_sectors, int *slot, int add_remain);
-+diff --git a/block/partitions/core.c b/block/partitions/core.c
-+index b9e9af84f518..176f7fe79c56 100644
 +--- a/block/partitions/core.c
 ++++ b/block/partitions/core.c
 +@@ -12,6 +12,10 @@
@@ -4930,7 +4904,7 @@ index 0000000000..b31479e5ac
 + #include "check.h"
 + 
 + static int (*check_part[])(struct parsed_partitions *) = {
-+@@ -48,6 +52,9 @@ static int (*check_part[])(struct parsed_partitions *) = {
++@@ -48,6 +52,9 @@ static int (*check_part[])(struct parsed
 + #ifdef CONFIG_EFI_PARTITION
 + 	efi_partition,		/* this must come before msdos */
 + #endif
@@ -4940,7 +4914,7 @@ index 0000000000..b31479e5ac
 + #ifdef CONFIG_SGI_PARTITION
 + 	sgi_partition,
 + #endif
-+@@ -408,6 +415,11 @@ static struct block_device *add_partition(struct gendisk *disk, int partno,
++@@ -408,6 +415,11 @@ static struct block_device *add_partitio
 + 			goto out_del;
 + 	}
 + 
@@ -4952,7 +4926,7 @@ index 0000000000..b31479e5ac
 + 	/* everything is up and running, commence */
 + 	err = xa_insert(&disk->part_tbl, partno, bdev, GFP_KERNEL);
 + 	if (err)
-+@@ -598,6 +610,11 @@ static bool blk_add_partition(struct gendisk *disk,
++@@ -598,6 +610,11 @@ static bool blk_add_partition(struct gen
 + 	    (state->parts[p].flags & ADDPART_FLAG_RAID))
 + 		md_autodetect_dev(part->bd_dev);
 + 
@@ -4964,11 +4938,9 @@ index 0000000000..b31479e5ac
 + 	return true;
 + }
 + 
-+diff --git a/block/partitions/efi.c b/block/partitions/efi.c
-+index 7ca5c4c374d4..9ecd2b3d5674 100644
 +--- a/block/partitions/efi.c
 ++++ b/block/partitions/efi.c
-+@@ -716,6 +716,9 @@ int efi_partition(struct parsed_partitions *state)
++@@ -716,6 +716,9 @@ int efi_partition(struct parsed_partitio
 + 	gpt_entry *ptes = NULL;
 + 	u32 i;
 + 	unsigned ssz = queue_logical_block_size(state->disk->queue) / 512;
@@ -4978,7 +4950,7 @@ index 0000000000..b31479e5ac
 + 
 + 	if (!find_valid_gpt(state, &gpt, &ptes) || !gpt || !ptes) {
 + 		kfree(gpt);
-+@@ -749,6 +752,11 @@ int efi_partition(struct parsed_partitions *state)
++@@ -749,6 +752,11 @@ int efi_partition(struct parsed_partitio
 + 				ARRAY_SIZE(ptes[i].partition_name));
 + 		utf16_le_to_7bit(ptes[i].partition_name, label_max, info->volname);
 + 		state->parts[i + 1].has_info = true;
@@ -4990,8 +4962,6 @@ index 0000000000..b31479e5ac
 + 	}
 + 	kfree(ptes);
 + 	kfree(gpt);
-+diff --git a/block/partitions/efi.h b/block/partitions/efi.h
-+index 8cc2b88d0aa8..b5807e35bafc 100644
 +--- a/block/partitions/efi.h
 ++++ b/block/partitions/efi.h
 +@@ -52,6 +52,9 @@
@@ -5004,11 +4974,9 @@ index 0000000000..b31479e5ac
 + 
 + typedef struct _gpt_header {
 + 	__le64 signature;
-+diff --git a/block/partitions/msdos.c b/block/partitions/msdos.c
-+index b5d5c229cc3b..ff7e74911359 100644
 +--- a/block/partitions/msdos.c
 ++++ b/block/partitions/msdos.c
-+@@ -564,6 +564,15 @@ static void parse_minix(struct parsed_partitions *state,
++@@ -564,6 +564,15 @@ static void parse_minix(struct parsed_pa
 + #endif /* CONFIG_MINIX_SUBPARTITION */
 + }
 + 
@@ -5032,11 +5000,9 @@ index 0000000000..b31479e5ac
 + 	{0, NULL},
 + };
 + 
-+diff --git a/drivers/mtd/mtd_blkdevs.c b/drivers/mtd/mtd_blkdevs.c
-+index 65470d1b8fc8..5dd9b54d6555 100644
 +--- a/drivers/mtd/mtd_blkdevs.c
 ++++ b/drivers/mtd/mtd_blkdevs.c
-+@@ -345,6 +345,8 @@ int add_mtd_blktrans_dev(struct mtd_blktrans_dev *new)
++@@ -345,6 +345,8 @@ int add_mtd_blktrans_dev(struct mtd_blkt
 + 	gd->first_minor = (new->devnum) << tr->part_bits;
 + 	gd->minors = 1 << tr->part_bits;
 + 	gd->fops = &mtd_block_ops;
@@ -5045,11 +5011,9 @@ index 0000000000..b31479e5ac
 + 
 + 	if (tr->part_bits)
 + 		if (new->devnum < 26)
-+diff --git a/drivers/mtd/ubi/block.c b/drivers/mtd/ubi/block.c
-+index 57b984dd73b4..5982070e470b 100644
 +--- a/drivers/mtd/ubi/block.c
 ++++ b/drivers/mtd/ubi/block.c
-+@@ -428,6 +428,9 @@ int ubiblock_create(struct ubi_volume_info *vi)
++@@ -428,6 +428,9 @@ int ubiblock_create(struct ubi_volume_in
 + 		goto out_cleanup_disk;
 + 	}
 + 	gd->private_data = dev;
@@ -5059,8 +5023,6 @@ index 0000000000..b31479e5ac
 + 	sprintf(gd->disk_name, "ubiblock%d_%d", dev->ubi_num, dev->vol_id);
 + 	set_capacity(gd, disk_capacity);
 + 	dev->gd = gd;
-+diff --git a/include/linux/msdos_partition.h b/include/linux/msdos_partition.h
-+index 2cb82db2a43c..c15b6c759aca 100644
 +--- a/include/linux/msdos_partition.h
 ++++ b/include/linux/msdos_partition.h
 +@@ -31,6 +31,7 @@ enum msdos_sys_ind {
@@ -5071,8 +5033,6 @@ index 0000000000..b31479e5ac
 + 	SOLARIS_X86_PARTITION =	0x82,	/* also Linux swap partitions */
 + 	NEW_SOLARIS_X86_PARTITION = 0xbf,
 + 
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch b/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
 new file mode 100644
 index 0000000000..90254c63bf
@@ -5246,10 +5206,10 @@ index 0000000000..965a331a19
 + 	*pparts = kmemdup(part->parts, sizeof(*part->parts) * part->num_parts,
 diff --git a/target/linux/generic/hack-5.15/430-mtk-bmt-support.patch b/target/linux/generic/hack-5.15/430-mtk-bmt-support.patch
 new file mode 100644
-index 0000000000..48181950b7
+index 0000000000..2a83f46e0e
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/430-mtk-bmt-support.patch
-@@ -0,0 +1,39 @@
+@@ -0,0 +1,33 @@
 +From ac84397efb3b3868c71c10ad7521161773228a17 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:41:44 +0200
@@ -5260,8 +5220,6 @@ index 0000000000..48181950b7
 + drivers/mtd/nand/Makefile | 1 +
 + 2 files changed, 5 insertions(+)
 +
-+diff --git a/drivers/mtd/nand/Kconfig b/drivers/mtd/nand/Kconfig
-+index b40455234cbd..72ef18c59cee 100644
 +--- a/drivers/mtd/nand/Kconfig
 ++++ b/drivers/mtd/nand/Kconfig
 +@@ -46,6 +46,10 @@ config MTD_NAND_ECC_SW_BCH
@@ -5275,8 +5233,6 @@ index 0000000000..48181950b7
 + endmenu
 + 
 + endmenu
-+diff --git a/drivers/mtd/nand/Makefile b/drivers/mtd/nand/Makefile
-+index 1c0b46960eb1..b9d97626bb47 100644
 +--- a/drivers/mtd/nand/Makefile
 ++++ b/drivers/mtd/nand/Makefile
 +@@ -2,6 +2,7 @@
@@ -5287,8 +5243,6 @@ index 0000000000..48181950b7
 + 
 + obj-y	+= onenand/
 + obj-y	+= raw/
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/531-debloat_lzma.patch b/target/linux/generic/hack-5.15/531-debloat_lzma.patch
 new file mode 100644
 index 0000000000..2f70eee3e9
@@ -6337,10 +6291,10 @@ index 0000000000..2f70eee3e9
 +-}
 diff --git a/target/linux/generic/hack-5.15/600-bridge_offload.patch b/target/linux/generic/hack-5.15/600-bridge_offload.patch
 new file mode 100644
-index 0000000000..7e87d9a3fd
+index 0000000000..9d71a741b2
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/600-bridge_offload.patch
-@@ -0,0 +1,880 @@
+@@ -0,0 +1,846 @@
 +From 11c3fae5afa6cac444d12622e2cf5af60a99c1ef Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:43:15 +0200
@@ -6366,8 +6320,6 @@ index 0000000000..7e87d9a3fd
 + create mode 100644 net/bridge/br_offload.c
 + create mode 100644 net/bridge/br_private_offload.h
 +
-+diff --git a/include/linux/if_bridge.h b/include/linux/if_bridge.h
-+index 18d3b264b754..944630df0ec3 100644
 +--- a/include/linux/if_bridge.h
 ++++ b/include/linux/if_bridge.h
 +@@ -59,6 +59,7 @@ struct br_ip_list {
@@ -6378,8 +6330,6 @@ index 0000000000..7e87d9a3fd
 + 
 + #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
 + 
-+diff --git a/net/bridge/Makefile b/net/bridge/Makefile
-+index 7fb9a021873b..0ebf3665c216 100644
 +--- a/net/bridge/Makefile
 ++++ b/net/bridge/Makefile
 +@@ -5,7 +5,7 @@
@@ -6391,8 +6341,6 @@ index 0000000000..7e87d9a3fd
 + 			br_ioctl.o br_stp.o br_stp_bpdu.o \
 + 			br_stp_if.o br_stp_timer.o br_netlink.o \
 + 			br_netlink_tunnel.o br_arp_nd_proxy.o
-+diff --git a/net/bridge/br.c b/net/bridge/br.c
-+index d3a32c6813e0..42e4d4fec604 100644
 +--- a/net/bridge/br.c
 ++++ b/net/bridge/br.c
 +@@ -18,6 +18,7 @@
@@ -6414,7 +6362,7 @@ index 0000000000..7e87d9a3fd
 + 	err = register_pernet_subsys(&br_net_ops);
 + 	if (err)
 + 		goto err_out1;
-+@@ -430,6 +435,8 @@ static int __init br_init(void)
++@@ -430,6 +435,8 @@ err_out3:
 + err_out2:
 + 	unregister_pernet_subsys(&br_net_ops);
 + err_out1:
@@ -6431,11 +6379,9 @@ index 0000000000..7e87d9a3fd
 + 	br_fdb_fini();
 + }
 + 
-+diff --git a/net/bridge/br_device.c b/net/bridge/br_device.c
-+index 8d6bab244c4a..d69d8e9ed7aa 100644
 +--- a/net/bridge/br_device.c
 ++++ b/net/bridge/br_device.c
-+@@ -524,6 +524,8 @@ void br_dev_setup(struct net_device *dev)
++@@ -524,6 +524,8 @@ void br_dev_setup(struct net_device *dev
 + 	br->bridge_hello_time = br->hello_time = 2 * HZ;
 + 	br->bridge_forward_delay = br->forward_delay = 15 * HZ;
 + 	br->bridge_ageing_time = br->ageing_time = BR_DEFAULT_AGEING_TIME;
@@ -6444,8 +6390,6 @@ index 0000000000..7e87d9a3fd
 + 	dev->max_mtu = ETH_MAX_MTU;
 + 
 + 	br_netfilter_rtable_init(br);
-+diff --git a/net/bridge/br_fdb.c b/net/bridge/br_fdb.c
-+index 46812b659710..20ea8f75d140 100644
 +--- a/net/bridge/br_fdb.c
 ++++ b/net/bridge/br_fdb.c
 +@@ -23,6 +23,7 @@
@@ -6456,7 +6400,7 @@ index 0000000000..7e87d9a3fd
 + 
 + static const struct rhashtable_params br_fdb_rht_params = {
 + 	.head_offset = offsetof(struct net_bridge_fdb_entry, rhnode),
-+@@ -518,6 +519,8 @@ static struct net_bridge_fdb_entry *fdb_create(struct net_bridge *br,
++@@ -518,6 +519,8 @@ static struct net_bridge_fdb_entry *fdb_
 + 		fdb->key.vlan_id = vid;
 + 		fdb->flags = flags;
 + 		fdb->updated = fdb->used = jiffies;
@@ -6465,7 +6409,7 @@ index 0000000000..7e87d9a3fd
 + 		if (rhashtable_lookup_insert_fast(&br->fdb_hash_tbl,
 + 						  &fdb->rhnode,
 + 						  br_fdb_rht_params)) {
-+@@ -794,6 +797,8 @@ static void fdb_notify(struct net_bridge *br,
++@@ -794,6 +797,8 @@ static void fdb_notify(struct net_bridge
 + 	struct sk_buff *skb;
 + 	int err = -ENOBUFS;
 + 
@@ -6474,8 +6418,6 @@ index 0000000000..7e87d9a3fd
 + 	if (swdev_notify)
 + 		br_switchdev_fdb_notify(br, fdb, type);
 + 
-+diff --git a/net/bridge/br_forward.c b/net/bridge/br_forward.c
-+index 9fe5c888f27d..6d9025106d9d 100644
 +--- a/net/bridge/br_forward.c
 ++++ b/net/bridge/br_forward.c
 +@@ -16,6 +16,7 @@
@@ -6486,7 +6428,7 @@ index 0000000000..7e87d9a3fd
 + 
 + /* Don't forward packets to originating port or forwarding disabled */
 + static inline int should_deliver(const struct net_bridge_port *p,
-+@@ -32,6 +33,8 @@ static inline int should_deliver(const struct net_bridge_port *p,
++@@ -32,6 +33,8 @@ static inline int should_deliver(const s
 + 
 + int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb)
 + {
@@ -6495,8 +6437,6 @@ index 0000000000..7e87d9a3fd
 + 	skb_push(skb, ETH_HLEN);
 + 	if (!is_skb_forwardable(skb->dev, skb))
 + 		goto drop;
-+diff --git a/net/bridge/br_if.c b/net/bridge/br_if.c
-+index 4a02f8bb278a..b1d3295b861c 100644
 +--- a/net/bridge/br_if.c
 ++++ b/net/bridge/br_if.c
 +@@ -25,6 +25,7 @@
@@ -6507,7 +6447,7 @@ index 0000000000..7e87d9a3fd
 + 
 + /*
 +  * Determine initial path cost based on speed.
-+@@ -428,7 +429,7 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
++@@ -428,7 +429,7 @@ static struct net_bridge_port *new_nbp(s
 + 	p->path_cost = port_cost(dev);
 + 	p->priority = 0x8000 >> BR_PORT_BITS;
 + 	p->port_no = index;
@@ -6516,7 +6456,7 @@ index 0000000000..7e87d9a3fd
 + 	br_init_port(p);
 + 	br_set_state(p, BR_STATE_DISABLED);
 + 	br_stp_port_timer_init(p);
-+@@ -771,6 +772,9 @@ void br_port_flags_change(struct net_bridge_port *p, unsigned long mask)
++@@ -771,6 +772,9 @@ void br_port_flags_change(struct net_bri
 + 
 + 	if (mask & BR_NEIGH_SUPPRESS)
 + 		br_recalculate_neigh_suppress_enabled(br);
@@ -6526,8 +6466,6 @@ index 0000000000..7e87d9a3fd
 + }
 + 
 + bool br_port_flag_is_set(const struct net_device *dev, unsigned long flag)
-+diff --git a/net/bridge/br_input.c b/net/bridge/br_input.c
-+index 65416af73714..b0601e6aed8c 100644
 +--- a/net/bridge/br_input.c
 ++++ b/net/bridge/br_input.c
 +@@ -22,6 +22,7 @@
@@ -6538,7 +6476,7 @@ index 0000000000..7e87d9a3fd
 + 
 + static int
 + br_netif_receive_skb(struct net *net, struct sock *sk, struct sk_buff *skb)
-+@@ -171,6 +172,7 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
++@@ -171,6 +172,7 @@ int br_handle_frame_finish(struct net *n
 + 			dst->used = now;
 + 		br_forward(dst->dst, skb, local_rcv, false);
 + 	} else {
@@ -6546,7 +6484,7 @@ index 0000000000..7e87d9a3fd
 + 		if (!mcast_hit)
 + 			br_flood(br, skb, pkt_type, local_rcv, false);
 + 		else
-+@@ -304,6 +306,9 @@ static rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
++@@ -304,6 +306,9 @@ static rx_handler_result_t br_handle_fra
 + 	memset(skb->cb, 0, sizeof(struct br_input_skb_cb));
 + 
 + 	p = br_port_get_rcu(skb->dev);
@@ -6556,9 +6494,6 @@ index 0000000000..7e87d9a3fd
 + 	if (p->flags & BR_VLAN_TUNNEL)
 + 		br_handle_ingress_vlan_tunnel(skb, p, nbp_vlan_group_rcu(p));
 + 
-+diff --git a/net/bridge/br_offload.c b/net/bridge/br_offload.c
-+new file mode 100644
-+index 000000000000..88173ed11093
 +--- /dev/null
 ++++ b/net/bridge/br_offload.c
 +@@ -0,0 +1,438 @@
@@ -7000,8 +6935,6 @@ index 0000000000..7e87d9a3fd
 ++{
 ++	kmem_cache_destroy(offload_cache);
 ++}
-+diff --git a/net/bridge/br_private.h b/net/bridge/br_private.h
-+index bd218c2b2cd9..951ba1d993ca 100644
 +--- a/net/bridge/br_private.h
 ++++ b/net/bridge/br_private.h
 +@@ -268,7 +268,13 @@ struct net_bridge_fdb_entry {
@@ -7061,9 +6994,6 @@ index 0000000000..7e87d9a3fd
 + 
 + #ifdef CONFIG_NET_SWITCHDEV
 + 	/* Set if TX data plane offloading is used towards at least one
-+diff --git a/net/bridge/br_private_offload.h b/net/bridge/br_private_offload.h
-+new file mode 100644
-+index 000000000000..97c13af2866b
 +--- /dev/null
 ++++ b/net/bridge/br_private_offload.h
 +@@ -0,0 +1,23 @@
@@ -7090,8 +7020,6 @@ index 0000000000..7e87d9a3fd
 ++}
 ++
 ++#endif
-+diff --git a/net/bridge/br_stp.c b/net/bridge/br_stp.c
-+index 1d80f34a139c..b57788b53d24 100644
 +--- a/net/bridge/br_stp.c
 ++++ b/net/bridge/br_stp.c
 +@@ -12,6 +12,7 @@
@@ -7102,7 +7030,7 @@ index 0000000000..7e87d9a3fd
 + 
 + /* since time values in bpdu are in jiffies and then scaled (1/256)
 +  * before sending, make sure that is at least one STP tick.
-+@@ -52,6 +53,8 @@ void br_set_state(struct net_bridge_port *p, unsigned int state)
++@@ -52,6 +53,8 @@ void br_set_state(struct net_bridge_port
 + 				(unsigned int) p->port_no, p->dev->name,
 + 				br_port_state_names[p->state]);
 + 
@@ -7111,8 +7039,6 @@ index 0000000000..7e87d9a3fd
 + 	if (p->br->stp_enabled == BR_KERNEL_STP) {
 + 		switch (p->state) {
 + 		case BR_STATE_BLOCKING:
-+diff --git a/net/bridge/br_sysfs_br.c b/net/bridge/br_sysfs_br.c
-+index 7b0c19772111..814cbfb77d25 100644
 +--- a/net/bridge/br_sysfs_br.c
 ++++ b/net/bridge/br_sysfs_br.c
 +@@ -18,6 +18,7 @@
@@ -7123,7 +7049,7 @@ index 0000000000..7e87d9a3fd
 + 
 + /* IMPORTANT: new bridge options must be added with netlink support only
 +  *            please do not add new sysfs entries
-+@@ -930,6 +931,38 @@ static ssize_t vlan_stats_per_port_store(struct device *d,
++@@ -930,6 +931,38 @@ static ssize_t vlan_stats_per_port_store
 + static DEVICE_ATTR_RW(vlan_stats_per_port);
 + #endif
 + 
@@ -7162,7 +7088,7 @@ index 0000000000..7e87d9a3fd
 + static struct attribute *bridge_attrs[] = {
 + 	&dev_attr_forward_delay.attr,
 + 	&dev_attr_hello_time.attr,
-+@@ -984,6 +1017,8 @@ static struct attribute *bridge_attrs[] = {
++@@ -984,6 +1017,8 @@ static struct attribute *bridge_attrs[]
 + 	&dev_attr_vlan_stats_enabled.attr,
 + 	&dev_attr_vlan_stats_per_port.attr,
 + #endif
@@ -7171,11 +7097,9 @@ index 0000000000..7e87d9a3fd
 + 	NULL
 + };
 + 
-+diff --git a/net/bridge/br_sysfs_if.c b/net/bridge/br_sysfs_if.c
-+index 9ee9c60738e2..2b44e5fb19e4 100644
 +--- a/net/bridge/br_sysfs_if.c
 ++++ b/net/bridge/br_sysfs_if.c
-+@@ -241,6 +241,7 @@ BRPORT_ATTR_FLAG(broadcast_flood, BR_BCAST_FLOOD);
++@@ -241,6 +241,7 @@ BRPORT_ATTR_FLAG(broadcast_flood, BR_BCA
 + BRPORT_ATTR_FLAG(neigh_suppress, BR_NEIGH_SUPPRESS);
 + BRPORT_ATTR_FLAG(isolated, BR_ISOLATED);
 + BRPORT_ATTR_FLAG(bpdu_filter, BR_BPDU_FILTER);
@@ -7183,7 +7107,7 @@ index 0000000000..7e87d9a3fd
 + 
 + #ifdef CONFIG_BRIDGE_IGMP_SNOOPING
 + static ssize_t show_multicast_router(struct net_bridge_port *p, char *buf)
-+@@ -295,6 +296,7 @@ static const struct brport_attribute *brport_attrs[] = {
++@@ -295,6 +296,7 @@ static const struct brport_attribute *br
 + 	&brport_attr_isolated,
 + 	&brport_attr_bpdu_filter,
 + 	&brport_attr_backup_port,
@@ -7191,8 +7115,6 @@ index 0000000000..7e87d9a3fd
 + 	NULL
 + };
 + 
-+diff --git a/net/bridge/br_vlan_tunnel.c b/net/bridge/br_vlan_tunnel.c
-+index 6399a8a69d07..ffc65dc4eea8 100644
 +--- a/net/bridge/br_vlan_tunnel.c
 ++++ b/net/bridge/br_vlan_tunnel.c
 +@@ -15,6 +15,7 @@
@@ -7203,7 +7125,7 @@ index 0000000000..7e87d9a3fd
 + 
 + static inline int br_vlan_tunid_cmp(struct rhashtable_compare_arg *arg,
 + 				    const void *ptr)
-+@@ -180,6 +181,7 @@ void br_handle_ingress_vlan_tunnel(struct sk_buff *skb,
++@@ -180,6 +181,7 @@ void br_handle_ingress_vlan_tunnel(struc
 + 	skb_dst_drop(skb);
 + 
 + 	__vlan_hwaccel_put_tag(skb, p->br->vlan_proto, vlan->vid);
@@ -7211,7 +7133,7 @@ index 0000000000..7e87d9a3fd
 + }
 + 
 + int br_handle_egress_vlan_tunnel(struct sk_buff *skb,
-+@@ -201,6 +203,7 @@ int br_handle_egress_vlan_tunnel(struct sk_buff *skb,
++@@ -201,6 +203,7 @@ int br_handle_egress_vlan_tunnel(struct
 + 	if (err)
 + 		return err;
 + 
@@ -7219,8 +7141,6 @@ index 0000000000..7e87d9a3fd
 + 	tunnel_dst = rcu_dereference(vlan->tinfo.tunnel_dst);
 + 	if (tunnel_dst && dst_hold_safe(&tunnel_dst->dst))
 + 		skb_dst_set(skb, &tunnel_dst->dst);
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch b/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch
 new file mode 100644
 index 0000000000..2d3fe01a75
@@ -7441,7 +7361,7 @@ index 0000000000..2d3fe01a75
 + 
 diff --git a/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch b/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch
 new file mode 100644
-index 0000000000..f826d65a81
+index 0000000000..961a930bb3
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch
 @@ -0,0 +1,860 @@
@@ -7494,7 +7414,7 @@ index 0000000000..f826d65a81
 + 	depends on !NF_CONNTRACK || NF_CONNTRACK
 +--- a/net/netfilter/Kconfig
 ++++ b/net/netfilter/Kconfig
-+@@ -708,8 +708,6 @@ config NFT_REJECT_NETDEV
++@@ -707,8 +707,6 @@ config NFT_REJECT_NETDEV
 + 
 + endif # NF_TABLES_NETDEV
 + 
@@ -7503,7 +7423,7 @@ index 0000000000..f826d65a81
 + config NF_FLOW_TABLE_INET
 + 	tristate "Netfilter flow table mixed IPv4/IPv6 module"
 + 	depends on NF_FLOW_TABLE
-+@@ -718,11 +716,12 @@ config NF_FLOW_TABLE_INET
++@@ -717,11 +715,12 @@ config NF_FLOW_TABLE_INET
 + 
 + 	  To compile it as a module, choose M here.
 + 
@@ -7517,7 +7437,7 @@ index 0000000000..f826d65a81
 + 	help
 + 	  This option adds the flow table core infrastructure.
 + 
-+@@ -1011,6 +1010,15 @@ config NETFILTER_XT_TARGET_NOTRACK
++@@ -1010,6 +1009,15 @@ config NETFILTER_XT_TARGET_NOTRACK
 + 	depends on NETFILTER_ADVANCED
 + 	select NETFILTER_XT_TARGET_CT
 + 
@@ -8269,7 +8189,7 @@ index 0000000000..f826d65a81
 + }
 ++EXPORT_SYMBOL_GPL(nf_flow_table_iterate);
 + 
-+ static void nf_flow_offload_work_gc(struct work_struct *work)
++ void nf_flow_table_gc_run(struct nf_flowtable *flow_table)
 + {
 +--- /dev/null
 ++++ b/include/uapi/linux/netfilter/xt_FLOWOFFLOAD.h
@@ -8293,7 +8213,7 @@ index 0000000000..f826d65a81
 ++#endif /* _XT_FLOWOFFLOAD_H */
 +--- a/include/net/netfilter/nf_flow_table.h
 ++++ b/include/net/netfilter/nf_flow_table.h
-+@@ -275,6 +275,11 @@ void nf_flow_table_free(struct nf_flowta
++@@ -276,6 +276,11 @@ void nf_flow_table_free(struct nf_flowta
 + 
 + void flow_offload_teardown(struct flow_offload *flow);
 + 
@@ -8538,10 +8458,10 @@ index 0000000000..48be440025
 + 	void __iomem *regs;
 diff --git a/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch b/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch
 new file mode 100644
-index 0000000000..8d7919a6e4
+index 0000000000..ffa44f0960
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/711-net-dsa-mv88e6xxx-disable-ATU-violation.patch
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,21 @@
 +From ebd924d773223593142d417c41d4ee6fa16f1805 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:45:56 +0200
@@ -8551,11 +8471,9 @@ index 0000000000..8d7919a6e4
 + drivers/net/dsa/mv88e6xxx/chip.c | 3 +++
 + 1 file changed, 3 insertions(+)
 +
-+diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
-+index cad98ab421d7..790e1887d73b 100644
 +--- a/drivers/net/dsa/mv88e6xxx/chip.c
 ++++ b/drivers/net/dsa/mv88e6xxx/chip.c
-+@@ -2981,6 +2981,9 @@ static int mv88e6xxx_setup_port(struct mv88e6xxx_chip *chip, int port)
++@@ -2980,6 +2980,9 @@ static int mv88e6xxx_setup_port(struct m
 + 	else
 + 		reg = 1 << port;
 + 
@@ -8565,8 +8483,6 @@ index 0000000000..8d7919a6e4
 + 	err = mv88e6xxx_port_write(chip, port, MV88E6XXX_PORT_ASSOC_VECTOR,
 + 				   reg);
 + 	if (err)
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch b/target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch
 new file mode 100644
 index 0000000000..65d8f47521
@@ -8717,7 +8633,7 @@ index 0000000000..65d8f47521
 + 
 diff --git a/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 new file mode 100644
-index 0000000000..256fdf5757
+index 0000000000..206e16cb17
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 @@ -0,0 +1,178 @@
@@ -8742,7 +8658,7 @@ index 0000000000..256fdf5757
 +
 +--- a/include/linux/netdevice.h
 ++++ b/include/linux/netdevice.h
-+@@ -1655,6 +1655,10 @@ enum netdev_priv_flags {
++@@ -1669,6 +1669,10 @@ enum netdev_priv_flags {
 + 	IFF_TX_SKB_NO_LINEAR		= BIT_ULL(31),
 + };
 + 
@@ -8753,7 +8669,7 @@ index 0000000000..256fdf5757
 + #define IFF_802_1Q_VLAN			IFF_802_1Q_VLAN
 + #define IFF_EBRIDGE			IFF_EBRIDGE
 + #define IFF_BONDING			IFF_BONDING
-+@@ -1687,6 +1691,7 @@ enum netdev_priv_flags {
++@@ -1701,6 +1705,7 @@ enum netdev_priv_flags {
 + #define IFF_L3MDEV_RX_HANDLER		IFF_L3MDEV_RX_HANDLER
 + #define IFF_LIVE_RENAME_OK		IFF_LIVE_RENAME_OK
 + #define IFF_TX_SKB_NO_LINEAR		IFF_TX_SKB_NO_LINEAR
@@ -8761,7 +8677,7 @@ index 0000000000..256fdf5757
 + 
 + /* Specifies the type of the struct net_device::ml_priv pointer */
 + enum netdev_ml_priv_type {
-+@@ -1988,6 +1993,7 @@ struct net_device {
++@@ -2002,6 +2007,7 @@ struct net_device {
 + 	/* Read-mostly cache-line for fast-path access */
 + 	unsigned int		flags;
 + 	unsigned int		priv_flags;
@@ -8769,7 +8685,7 @@ index 0000000000..256fdf5757
 + 	const struct net_device_ops *netdev_ops;
 + 	int			ifindex;
 + 	unsigned short		gflags;
-+@@ -2048,6 +2054,11 @@ struct net_device {
++@@ -2062,6 +2068,11 @@ struct net_device {
 + 	const struct tlsdev_ops *tlsdev_ops;
 + #endif
 + 
@@ -8781,7 +8697,7 @@ index 0000000000..256fdf5757
 + 	const struct header_ops *header_ops;
 + 
 + 	unsigned char		operstate;
-+@@ -2122,6 +2133,10 @@ struct net_device {
++@@ -2136,6 +2147,10 @@ struct net_device {
 + 	struct mctp_dev __rcu	*mctp_ptr;
 + #endif
 + 
@@ -8794,7 +8710,7 @@ index 0000000000..256fdf5757
 +  */
 +--- a/include/linux/skbuff.h
 ++++ b/include/linux/skbuff.h
-+@@ -2771,6 +2771,10 @@ static inline int pskb_trim(struct sk_bu
++@@ -2852,6 +2852,10 @@ static inline int pskb_trim(struct sk_bu
 + 	return (len < skb->len) ? __pskb_trim(skb, len) : 0;
 + }
 + 
@@ -8805,7 +8721,7 @@ index 0000000000..256fdf5757
 + /**
 +  *	pskb_trim_unique - remove end from a paged unique (not cloned) buffer
 +  *	@skb: buffer to alter
-+@@ -2921,16 +2925,6 @@ static inline struct sk_buff *dev_alloc_
++@@ -3002,16 +3006,6 @@ static inline struct sk_buff *dev_alloc_
 + }
 + 
 + 
@@ -9219,7 +9135,7 @@ index 0000000000..f7ccc454e9
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQCS109) },
 diff --git a/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch b/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch
 new file mode 100644
-index 0000000000..b71e1df06f
+index 0000000000..c54332f71c
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch
 @@ -0,0 +1,74 @@
@@ -9247,7 +9163,7 @@ index 0000000000..b71e1df06f
 + #include <linux/crc32.h>
 + #include <linux/if_vlan.h>
 + #include <linux/uaccess.h>
-+@@ -6852,6 +6853,22 @@ static void rtl_tally_reset(struct r8152
++@@ -6861,6 +6862,22 @@ static void rtl_tally_reset(struct r8152
 + 	ocp_write_word(tp, MCU_TYPE_PLA, PLA_RSTTALLY, ocp_data);
 + }
 + 
@@ -9270,7 +9186,7 @@ index 0000000000..b71e1df06f
 + static void r8152b_init(struct r8152 *tp)
 + {
 + 	u32 ocp_data;
-+@@ -6893,6 +6910,8 @@ static void r8152b_init(struct r8152 *tp
++@@ -6902,6 +6919,8 @@ static void r8152b_init(struct r8152 *tp
 + 	ocp_data = ocp_read_word(tp, MCU_TYPE_USB, USB_USB_CTRL);
 + 	ocp_data &= ~(RX_AGG_DISABLE | RX_ZERO_EN);
 + 	ocp_write_word(tp, MCU_TYPE_USB, USB_USB_CTRL, ocp_data);
@@ -9279,7 +9195,7 @@ index 0000000000..b71e1df06f
 + }
 + 
 + static void r8153_init(struct r8152 *tp)
-+@@ -7033,6 +7052,8 @@ static void r8153_init(struct r8152 *tp)
++@@ -7042,6 +7061,8 @@ static void r8153_init(struct r8152 *tp)
 + 		tp->coalesce = COALESCE_SLOW;
 + 		break;
 + 	}
@@ -9288,7 +9204,7 @@ index 0000000000..b71e1df06f
 + }
 + 
 + static void r8153b_init(struct r8152 *tp)
-+@@ -7115,6 +7136,8 @@ static void r8153b_init(struct r8152 *tp
++@@ -7124,6 +7145,8 @@ static void r8153b_init(struct r8152 *tp
 + 	rtl_tally_reset(tp);
 + 
 + 	tp->coalesce = 15000;	/* 15 us */
@@ -9463,10 +9379,10 @@ index 0000000000..1e4fc446ce
 + struct bgmac *bgmac_alloc(struct device *dev);
 diff --git a/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
 new file mode 100644
-index 0000000000..fcf0a412ae
+index 0000000000..096f143a2e
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,43 @@
 +From f81700b6bb2eda3756247bce472d8eaf6f466f61 Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:49:26 +0200
@@ -9477,23 +9393,19 @@ index 0000000000..fcf0a412ae
 + drivers/usb/serial/option.c | 7 +++++++
 + 2 files changed, 8 insertions(+)
 +
-+diff --git a/drivers/net/usb/qmi_wwan.c b/drivers/net/usb/qmi_wwan.c
-+index 8f1487f41085..d992985d599e 100644
 +--- a/drivers/net/usb/qmi_wwan.c
 ++++ b/drivers/net/usb/qmi_wwan.c
-+@@ -1085,6 +1085,7 @@ static const struct usb_device_id products[] = {
-+ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0512)},	/* Quectel EG12/EM12 */
++@@ -1086,6 +1086,7 @@ static const struct usb_device_id produc
 + 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0620)},	/* Quectel EM160R-GL */
 + 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0800)},	/* Quectel RM500Q-GL */
++ 	{QMI_MATCH_FF_FF_FF(0x2c7c, 0x0801)},	/* Quectel RM520N */
 ++	{QMI_MATCH_FF_FF_FF(0x05c6, 0xf601)},   /* MeigLink SLM750 */
 + 
 + 	/* 3. Combined interface devices matching on interface number */
 + 	{QMI_FIXED_INTF(0x0408, 0xea42, 4)},	/* Yota / Megafon M100-1 */
-+diff --git a/drivers/usb/serial/option.c b/drivers/usb/serial/option.c
-+index de59fa919540..9f00d047f5e9 100644
 +--- a/drivers/usb/serial/option.c
 ++++ b/drivers/usb/serial/option.c
-+@@ -243,6 +243,8 @@ static void option_instat_callback(struct urb *urb);
++@@ -243,6 +243,8 @@ static void option_instat_callback(struc
 + #define UBLOX_PRODUCT_R6XX			0x90fa
 + /* These Yuga products use Qualcomm's vendor ID */
 + #define YUGA_PRODUCT_CLM920_NC5			0x9625
@@ -9502,7 +9414,7 @@ index 0000000000..fcf0a412ae
 + 
 + #define QUECTEL_VENDOR_ID			0x2c7c
 + /* These Quectel products use Quectel's vendor ID */
-+@@ -1133,6 +1135,11 @@ static const struct usb_device_id option_ids[] = {
++@@ -1140,6 +1142,11 @@ static const struct usb_device_id option
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EG95, 0xff, 0, 0) },
 + 	{ USB_DEVICE(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_BG96),
 + 	  .driver_info = RSVD(4) },
@@ -9514,11 +9426,9 @@ index 0000000000..fcf0a412ae
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0xff, 0xff),
 + 	  .driver_info = RSVD(1) | RSVD(2) | RSVD(3) | RSVD(4) | NUMEP2 },
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0, 0) },
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch b/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
 new file mode 100644
-index 0000000000..3d34231b82
+index 0000000000..9fde1eaabb
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
 @@ -0,0 +1,162 @@
@@ -9539,7 +9449,7 @@ index 0000000000..3d34231b82
 + 
 + #include "gpiolib.h"
 + #include "gpiolib-of.h"
-+@@ -1057,3 +1059,72 @@ void of_gpio_dev_init(struct gpio_chip *
++@@ -1059,3 +1061,72 @@ void of_gpio_dev_init(struct gpio_chip *
 + 	else
 + 		gc->of_node = gdev->dev.of_node;
 + }
@@ -9684,6 +9594,41 @@ index 0000000000..3d34231b82
 + EXPORT_SYMBOL_GPL(gpiod_export);
 + 
 + static int match_export(struct device *dev, const void *desc)
+diff --git a/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch b/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
+new file mode 100644
+index 0000000000..146e6ae2f5
+--- /dev/null
++++ b/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
+@@ -0,0 +1,29 @@
++--- a/drivers/leds/Kconfig
+++++ b/drivers/leds/Kconfig
++@@ -876,6 +876,16 @@ source "drivers/leds/blink/Kconfig"
++ comment "Flash and Torch LED drivers"
++ source "drivers/leds/flash/Kconfig"
++ 
+++config LEDS_UBNT_LEDBAR
+++	tristate "LED support for Ubiquiti UniFi 6 LR"
+++	depends on LEDS_CLASS && I2C && OF
+++	help
+++	  This option enables support for the Ubiquiti LEDBAR
+++	  LED driver.
+++
+++	  To compile this driver as a module, choose M here: the module
+++	  will be called leds-ubnt-ledbar.
+++
++ comment "LED Triggers"
++ source "drivers/leds/trigger/Kconfig"
++ 
++--- a/drivers/leds/Makefile
+++++ b/drivers/leds/Makefile
++@@ -87,6 +87,7 @@ obj-$(CONFIG_LEDS_TURRIS_OMNIA)		+= leds
++ obj-$(CONFIG_LEDS_WM831X_STATUS)	+= leds-wm831x-status.o
++ obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
++ obj-$(CONFIG_LEDS_WRAP)			+= leds-wrap.o
+++obj-$(CONFIG_LEDS_UBNT_LEDBAR)		+= leds-ubnt-ledbar.o
++ 
++ # LED SPI Drivers
++ obj-$(CONFIG_LEDS_CR0014114)		+= leds-cr0014114.o
 diff --git a/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch b/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
 new file mode 100644
 index 0000000000..ab629d598f
@@ -9854,7 +9799,7 @@ index 0000000000..ab629d598f
 + 	  Support for UNIX socket monitoring interface used by the ss tool.
 diff --git a/target/linux/generic/hack-5.15/902-debloat_proc.patch b/target/linux/generic/hack-5.15/902-debloat_proc.patch
 new file mode 100644
-index 0000000000..fef28464bc
+index 0000000000..c58370eff1
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/902-debloat_proc.patch
 @@ -0,0 +1,408 @@
@@ -10190,7 +10135,7 @@ index 0000000000..fef28464bc
 + 
 +--- a/net/core/sock.c
 ++++ b/net/core/sock.c
-+@@ -3855,6 +3855,8 @@ static __net_initdata struct pernet_oper
++@@ -3857,6 +3857,8 @@ static __net_initdata struct pernet_oper
 + 
 + static int __init proto_init(void)
 + {
@@ -10201,7 +10146,7 @@ index 0000000000..fef28464bc
 + 
 +--- a/net/ipv4/fib_trie.c
 ++++ b/net/ipv4/fib_trie.c
-+@@ -3019,11 +3019,13 @@ static const struct seq_operations fib_r
++@@ -3022,11 +3022,13 @@ static const struct seq_operations fib_r
 + 
 + int __net_init fib_proc_init(struct net *net)
 + {
@@ -10217,7 +10162,7 @@ index 0000000000..fef28464bc
 + 			fib_triestat_seq_show, NULL))
 + 		goto out2;
 + 
-+@@ -3034,17 +3036,21 @@ int __net_init fib_proc_init(struct net
++@@ -3037,17 +3039,21 @@ int __net_init fib_proc_init(struct net
 + 	return 0;
 + 
 + out3:
@@ -10268,7 +10213,7 @@ index 0000000000..fef28464bc
 + 
 diff --git a/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch b/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
 new file mode 100644
-index 0000000000..1f4d2fd394
+index 0000000000..302c0007f2
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
 @@ -0,0 +1,92 @@
@@ -10337,7 +10282,7 @@ index 0000000000..1f4d2fd394
 ++dma-shared-buffer-objs :=  $(dma-buf-objs-y)
 +--- a/drivers/dma-buf/dma-buf.c
 ++++ b/drivers/dma-buf/dma-buf.c
-+@@ -1506,4 +1506,5 @@ static void __exit dma_buf_deinit(void)
++@@ -1513,4 +1513,5 @@ static void __exit dma_buf_deinit(void)
 + 	kern_unmount(dma_buf_mnt);
 + 	dma_buf_uninit_sysfs_statistics();
 + }
@@ -10346,7 +10291,7 @@ index 0000000000..1f4d2fd394
 ++MODULE_LICENSE("GPL");
 +--- a/kernel/sched/core.c
 ++++ b/kernel/sched/core.c
-+@@ -4175,6 +4175,7 @@ int wake_up_state(struct task_struct *p,
++@@ -4184,6 +4184,7 @@ int wake_up_state(struct task_struct *p,
 + {
 + 	return try_to_wake_up(p, state, 0);
 + }
@@ -10486,10 +10431,10 @@ index 0000000000..a487d55193
 + {
 diff --git a/target/linux/generic/hack-5.15/920-device_tree_cmdline.patch b/target/linux/generic/hack-5.15/920-device_tree_cmdline.patch
 new file mode 100644
-index 0000000000..0051edc25e
+index 0000000000..d1f36e716e
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/920-device_tree_cmdline.patch
-@@ -0,0 +1,25 @@
+@@ -0,0 +1,21 @@
 +From e08bcbbaa52fcc41f02743fd2e62a33255ce52da Mon Sep 17 00:00:00 2001
 +From: OpenWrt community <openwrt-devel@lists.openwrt.org>
 +Date: Wed, 13 Jul 2022 13:52:28 +0200
@@ -10499,11 +10444,9 @@ index 0000000000..0051edc25e
 + drivers/of/fdt.c | 3 +++
 + 1 file changed, 3 insertions(+)
 +
-+diff --git a/drivers/of/fdt.c b/drivers/of/fdt.c
-+index 59a7a9ee58ef..3b0b62b410dd 100644
 +--- a/drivers/of/fdt.c
 ++++ b/drivers/of/fdt.c
-+@@ -1158,6 +1158,9 @@ int __init early_init_dt_scan_chosen(unsigned long node, const char *uname,
++@@ -1158,6 +1158,9 @@ int __init early_init_dt_scan_chosen(uns
 + 	p = of_get_flat_dt_prop(node, "bootargs", &l);
 + 	if (p != NULL && l > 0)
 + 		strlcpy(data, p, min(l, COMMAND_LINE_SIZE));
@@ -10513,11 +10456,9 @@ index 0000000000..0051edc25e
 + 
 + 	/*
 + 	 * CONFIG_CMDLINE is meant to be a default in case nothing else
-+-- 
-+
 diff --git a/target/linux/generic/hack-5.15/930-Revert-Revert-Revert-driver-core-Set-fw_devlink-on-b.patch b/target/linux/generic/hack-5.15/930-Revert-Revert-Revert-driver-core-Set-fw_devlink-on-b.patch
 new file mode 100644
-index 0000000000..5dd0554edb
+index 0000000000..4f4d6c7509
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/930-Revert-Revert-Revert-driver-core-Set-fw_devlink-on-b.patch
 @@ -0,0 +1,30 @@
@@ -10542,7 +10483,7 @@ index 0000000000..5dd0554edb
 +
 +--- a/drivers/base/core.c
 ++++ b/drivers/base/core.c
-+@@ -1561,7 +1561,7 @@ static void device_links_purge(struct de
++@@ -1562,7 +1562,7 @@ static void device_links_purge(struct de
 + #define FW_DEVLINK_FLAGS_RPM		(FW_DEVLINK_FLAGS_ON | \
 + 					 DL_FLAG_PM_RUNTIME)
 + 
