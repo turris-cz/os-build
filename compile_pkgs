@@ -151,10 +151,7 @@ checkout() {
 	url="$(get_feed "#" "openwrt")"
 	report "Starting out: $(feed_ref "$url")"
 	report "Checking out OpenWRT repository"
-	# Note: OpenWrt's script getver.sh expects full history so we do not do deep
-	# copy for OpenWrt repository no matter the configuration.
-	CLONE_DEEP="" git_clean_checkout "openwrt" "$url" "." \
-		"/turris-build.conf"
+	git_clean_checkout "openwrt" "$url" "." "/turris-build.conf"
 
 	echo "/turris-build.conf" >> ./.gitignore
 	_git commit -m 'gitignore: Ignore turris-build related files' ./.gitignore
@@ -194,7 +191,7 @@ set_local_feeds() {
 	use_git_mirror || return 0
 	report "Setting feeds to their local counterparts"
 	while read -r vcs name url rest; do
-		if [ "$vcs" = src-git ]; then
+		if [ "$vcs" = src-git-full ]; then
 			git_mirror_update  "$name" "$(feed_url "$url")"
 			url="$(git_mirror_url "$name" "$url")"
 		fi
@@ -247,7 +244,7 @@ repatch_feeds() {
 
 	report "Patching feeds"
 	while read -r vcs name url rest; do
-		if [ "$vcs" = src-git ]; then
+		if [ "$vcs" = src-git-full ]; then
 			patch_repository "$name" "$build_dir/feeds/$name"
 		fi
 	done < feeds.conf
@@ -407,9 +404,6 @@ while [ $# -gt 0 ]; do
 		-s)
 			shift
 			SIGN_KEY="$1"
-			;;
-		-d)
-			CLONE_DEEP="y"
 			;;
 		-x)
 			debug="y"

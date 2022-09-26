@@ -1,4 +1,4 @@
-From c4425ebefa9ab1e63a4010e226e7c5f5639b6f1c Mon Sep 17 00:00:00 2001
+From 04a2d2df8a4fea1678f963c60506f55d3b2e9334 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Thu, 22 Feb 2018 14:46:46 +0100
 Subject: [PATCH] busybox: Provide static busybox build
@@ -7,16 +7,16 @@ Can be handy, but currently it is quite hacky.
 
 Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
- package/utils/busybox/Makefile                |   40 +
+ package/utils/busybox/Makefile                |   42 +
  .../utils/busybox/files/busybox-static.config | 1127 +++++++++++++++++
- 2 files changed, 1167 insertions(+)
+ 2 files changed, 1169 insertions(+)
  create mode 100644 package/utils/busybox/files/busybox-static.config
 
 diff --git a/package/utils/busybox/Makefile b/package/utils/busybox/Makefile
-index 9b80ed1..ef74405 100644
+index b2de0a8..b199c8f 100644
 --- a/package/utils/busybox/Makefile
 +++ b/package/utils/busybox/Makefile
-@@ -54,6 +54,20 @@ define Package/busybox/description
+@@ -71,6 +71,20 @@ define Package/busybox/description
   It slices, it dices, it makes Julian Fries.
  endef
  
@@ -37,10 +37,11 @@ index 9b80ed1..ef74405 100644
  define Package/busybox/config
  	source "$(SOURCE)/Config.in"
  endef
-@@ -94,9 +108,24 @@ endif
- define Build/Configure
- 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" > $(PKG_BUILD_DIR)/.config
+@@ -125,9 +139,26 @@ ifeq ($(BUILD_VARIANT),selinux)
+ endif
+ 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
  	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
++
 +	mv $(PKG_BUILD_DIR)/.config $(PKG_BUILD_DIR)/.config-regular
 +	cp ./files/busybox-static.config $(PKG_BUILD_DIR)/.config
 +	echo 'CONFIG_STATIC=y' >> $(PKG_BUILD_DIR)/.config
@@ -59,12 +60,13 @@ index 9b80ed1..ef74405 100644
 +	rm -f $(PKG_BUILD_DIR)/busybox.links
 +	$(call Build/Compile/Default,CONFIG_PREFIX="$(PKG_INSTALL_DIR)" busybox.links)
 +	$(call Build/Compile/Default,CONFIG_PREFIX="$(PKG_INSTALL_DIR)" install)
++
  	$(call Build/Compile/Default, \
  		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
  		all install \
-@@ -117,4 +146,15 @@ endif
- 	-rm -rf $(1)/lib64
- endef
+@@ -150,5 +181,16 @@ endef
+ 
+ Package/busybox-selinux/install = $(Package/busybox/install)
  
 +define Build/InstallDev
 +	$(INSTALL_DIR) $(1)/bin
@@ -77,6 +79,7 @@ index 9b80ed1..ef74405 100644
 +endef
 +
  $(eval $(call BuildPackage,busybox))
+ $(eval $(call BuildPackage,busybox-selinux))
 +$(eval $(call BuildPackage,busybox-static))
 diff --git a/package/utils/busybox/files/busybox-static.config b/package/utils/busybox/files/busybox-static.config
 new file mode 100644
@@ -1212,5 +1215,5 @@ index 0000000..3468908
 +CONFIG_FEATURE_IPC_SYSLOG_BUFFER_SIZE=0
 +# CONFIG_FEATURE_KMSG_SYSLOG is not set
 -- 
-2.24.0
+2.28.0
 

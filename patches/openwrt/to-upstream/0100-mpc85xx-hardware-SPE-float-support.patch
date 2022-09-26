@@ -1,0 +1,591 @@
+From 4cc13357962a308916a40bdc606f6061cc317ff7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:31:39 +0200
+Subject: [PATCH 1/7] mpc85xx: add support for cpu type 8548
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+8540 cpu type corresponds to e500v1 core while
+8548 cpu type corresponds to e500v2 core
+
+See https://www.nxp.com/products/processors-and-microcontrollers/legacy-mpu-mcus/powerquicc-processors:POWERQUICC_HOME#powerquicc-iii-mpc85xx
+and https://www.nxp.com/docs/en/application-note/AN2807.pdf .
+
+Co-authored-by: Josef Schlehofer <josef.schlehofer@nic.cz>
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ include/target.mk       | 1 +
+ toolchain/gcc/common.mk | 4 ++++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/include/target.mk b/include/target.mk
+index 7526224972..cc2e26a542 100644
+--- a/include/target.mk
++++ b/include/target.mk
+@@ -218,6 +218,7 @@ ifeq ($(DUMP),1)
+   ifeq ($(ARCH),powerpc)
+     CPU_CFLAGS_603e:=-mcpu=603e
+     CPU_CFLAGS_8540:=-mcpu=8540
++    CPU_CFLAGS_8548:=-mcpu=8548
+     CPU_CFLAGS_405:=-mcpu=405
+     CPU_CFLAGS_440:=-mcpu=440
+     CPU_CFLAGS_464fp:=-mcpu=464fp
+diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
+index 55fad1fcc4..99fd907969 100644
+--- a/toolchain/gcc/common.mk
++++ b/toolchain/gcc/common.mk
+@@ -150,6 +150,10 @@ ifneq ($(GCC_ARCH),)
+   GCC_CONFIGURE+= --with-arch=$(GCC_ARCH)
+ endif
+ 
++ifdef CONFIG_powerpc
++  GCC_CONFIGURE+= --with-cpu=$(CONFIG_CPU_TYPE)
++endif
++
+ ifeq ($(CONFIG_arm),y)
+   GCC_CONFIGURE+= \
+ 	--with-cpu=$(word 1, $(subst +," ,$(CONFIG_CPU_TYPE)))
+-- 
+2.35.3
+
+
+From 0d40aaf04e8eb7610be22170d3ba51173381156e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:38:38 +0200
+Subject: [PATCH 2/7] mpc85xx: set correct cpu type for p1010, p1020, p2020 subtargets
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All these subtargets use e500v2 cores.
+It is therefore correct to set cpu type to 8548.
+(see
+https://www.nxp.com/docs/en/application-note/AN2807.pdf ,
+https://www.nxp.com/docs/en/fact-sheet/QP1010FS.pdf ,
+https://www.nxp.com/docs/en/product-brief/P1020PB.pdf ,
+https://www.nxp.com/docs/en/fact-sheet/QP20XXFS.pdf )
+
+8540 cpu type (using e500v1 core) was left as default for the generic target
+because all the mpc85xx cpus use e500 cores and v1 is the oldest version.
+(see https://www.nxp.com/products/processors-and-microcontrollers/legacy-mpu-mcus/powerquicc-processors:POWERQUICC_HOME#powerquicc-iii-mpc85xx )
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ target/linux/mpc85xx/p1010/target.mk | 1 +
+ target/linux/mpc85xx/p1020/target.mk | 1 +
+ target/linux/mpc85xx/p2020/target.mk | 1 +
+ 3 files changed, 3 insertions(+)
+
+diff --git a/target/linux/mpc85xx/p1010/target.mk b/target/linux/mpc85xx/p1010/target.mk
+index 12ed78ace1..61bfa7791f 100644
+--- a/target/linux/mpc85xx/p1010/target.mk
++++ b/target/linux/mpc85xx/p1010/target.mk
+@@ -1,2 +1,3 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P1010
+ KERNELNAME:=simpleImage.tl-wdr4900-v1
+diff --git a/target/linux/mpc85xx/p1020/target.mk b/target/linux/mpc85xx/p1020/target.mk
+index a25409eebb..05a95936dd 100644
+--- a/target/linux/mpc85xx/p1020/target.mk
++++ b/target/linux/mpc85xx/p1020/target.mk
+@@ -1,2 +1,3 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P1020
+ 
+diff --git a/target/linux/mpc85xx/p2020/target.mk b/target/linux/mpc85xx/p2020/target.mk
+index 23aca656b2..ef9f1d4de6 100644
+--- a/target/linux/mpc85xx/p2020/target.mk
++++ b/target/linux/mpc85xx/p2020/target.mk
+@@ -1,3 +1,4 @@
++CPU_TYPE:=8548
+ BOARDNAME:=P2020
+ 
+ define Target/Description
+-- 
+2.35.3
+
+From ece96205444c94f05107fab146ddad3a8eedd374 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:43:36 +0200
+Subject: [PATCH 3/7] mpc85xx: backport musl patches for powerpc spe
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Backported from musl v1.2.3 to add hardware floating point SPE support
+for 8540 and 8548 cpu types.
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ ...e-check-for-older-compilers-erroring.patch |  51 +++++
+ ...02-add-SPE-FPU-support-to-powerpc-sf.patch | 203 ++++++++++++++++++
+ ...-access-in-powerpc-sf-setjmp-longjmp.patch |  38 ++++
+ 3 files changed, 292 insertions(+)
+ create mode 100644 toolchain/musl/patches/001-ppc-add-configure-check-for-older-compilers-erroring.patch
+ create mode 100644 toolchain/musl/patches/002-add-SPE-FPU-support-to-powerpc-sf.patch
+ create mode 100644 toolchain/musl/patches/003-fix-hwcap-access-in-powerpc-sf-setjmp-longjmp.patch
+
+diff --git a/toolchain/musl/patches/001-ppc-add-configure-check-for-older-compilers-erroring.patch b/toolchain/musl/patches/001-ppc-add-configure-check-for-older-compilers-erroring.patch
+new file mode 100644
+index 0000000000..2a3a3bf2ea
+--- /dev/null
++++ b/toolchain/musl/patches/001-ppc-add-configure-check-for-older-compilers-erroring.patch
+@@ -0,0 +1,51 @@
++From e47bbba4d536d540b5e94c1599f03757f65d51a4 Mon Sep 17 00:00:00 2001
++From: rofl0r <rofl0r@users.noreply.github.com>
++Date: Tue, 5 Nov 2019 21:01:42 +0000
++Subject: [PATCH 1/3] ppc: add configure check for older compilers erroring on
++ 'd' constraint
++
++(cherry picked from commit 66d1e31292a8c05d172872fe73880ca6d3b68104)
++---
++ configure               | 9 +++++++++
++ src/math/powerpc/fabs.c | 2 +-
++ src/math/powerpc/fma.c  | 2 +-
++ 3 files changed, 11 insertions(+), 2 deletions(-)
++
++--- a/configure
+++++ b/configure
++@@ -646,6 +646,15 @@ if test "$ARCH" = "powerpc" ; then
++ trycppif "__NO_FPRS__ && !_SOFT_FLOAT" "$t" && fail \
++   "$0: error: compiler's floating point configuration is unsupported"
++ trycppif _SOFT_FLOAT "$t" && SUBARCH=${SUBARCH}-sf
+++printf "checking whether compiler can use 'd' constraint in asm... "
+++echo 'double f(double x) { __asm__ ("fabs %0, %1" : "=d"(x) : "d"(x)); return x; }' > "$tmpc"
+++if $CC $CFLAGS_C99FSE $CPPFLAGS $CFLAGS -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
+++printf "yes\n"
+++else
+++printf "no\n"
+++CFLAGS_AUTO="$CFLAGS_AUTO -DBROKEN_PPC_D_ASM"
+++CFLAGS_AUTO="${CFLAGS_AUTO# }"
+++fi
++ fi
++ 
++ test "$ARCH" = "microblaze" && trycppif __MICROBLAZEEL__ "$t" \
++--- a/src/math/powerpc/fabs.c
+++++ b/src/math/powerpc/fabs.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(BROKEN_PPC_D_ASM)
++ 
++ #include "../fabs.c"
++ 
++--- a/src/math/powerpc/fma.c
+++++ b/src/math/powerpc/fma.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(BROKEN_PPC_D_ASM)
++ 
++ #include "../fma.c"
++ 
+diff --git a/toolchain/musl/patches/002-add-SPE-FPU-support-to-powerpc-sf.patch b/toolchain/musl/patches/002-add-SPE-FPU-support-to-powerpc-sf.patch
+new file mode 100644
+index 0000000000..fa45e99a4e
+--- /dev/null
++++ b/toolchain/musl/patches/002-add-SPE-FPU-support-to-powerpc-sf.patch
+@@ -0,0 +1,203 @@
++From 9ab8f13c638a26ca6fabb61d694121e71f0549ac Mon Sep 17 00:00:00 2001
++From: Rich Felker <dalias@aerifal.cx>
++Date: Thu, 23 Sep 2021 19:11:46 -0400
++Subject: [PATCH 2/3] add SPE FPU support to powerpc-sf
++
++When the soft-float ABI for PowerPC was added in commit
++5a92dd95c77cee81755f1a441ae0b71e3ae2bcdb, with Freescale cpus using
++the alternative SPE FPU as the main use case, it was noted that we
++could probably support hard float on them, but that it would involve
++determining some difficult ABI constraints. This commit is the
++completion of that work.
++
++The Power-Arch-32 ABI supplement defines the ABI profiles, and indeed
++ATR-SPE is built on ATR-SOFT-FLOAT. But setjmp/longjmp compatibility
++are problematic for the same reason they're problematic on ARM, where
++optional float-related parts of the register file are "call-saved if
++present". This requires testing __hwcap, which is now done.
++
++In keeping with the existing powerpc-sf subarch definition, which did
++not have fenv, the fenv macros are not defined for SPE and the SPEFSCR
++control register is left (and assumed to start in) the default mode.
++
++(cherry picked from commit 7be59733d71ada3a32a98622507399253f1d5e48)
++---
++ arch/powerpc/bits/fenv.h     |  2 +-
++ arch/powerpc/reloc.h         |  2 +-
++ configure                    |  4 +---
++ src/fenv/powerpc/fenv-sf.c   |  2 +-
++ src/fenv/powerpc/fenv.S      |  2 +-
++ src/math/powerpc/fabs.c      |  2 +-
++ src/math/powerpc/fabsf.c     |  2 +-
++ src/math/powerpc/fma.c       |  2 +-
++ src/math/powerpc/fmaf.c      |  2 +-
++ src/setjmp/powerpc/longjmp.S | 32 +++++++++++++++++++++++++++++++-
++ src/setjmp/powerpc/setjmp.S  | 32 +++++++++++++++++++++++++++++++-
++ 11 files changed, 71 insertions(+), 13 deletions(-)
++
++--- a/arch/powerpc/bits/fenv.h
+++++ b/arch/powerpc/bits/fenv.h
++@@ -1,4 +1,4 @@
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
++ #define FE_ALL_EXCEPT 0
++ #define FE_TONEAREST  0
++ #else
++--- a/arch/powerpc/reloc.h
+++++ b/arch/powerpc/reloc.h
++@@ -1,4 +1,4 @@
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
++ #define FP_SUFFIX "-sf"
++ #else
++ #define FP_SUFFIX ""
++--- a/configure
+++++ b/configure
++@@ -643,9 +643,7 @@ trycppif __mips_soft_float "$t" && SUBAR
++ fi
++ 
++ if test "$ARCH" = "powerpc" ; then
++-trycppif "__NO_FPRS__ && !_SOFT_FLOAT" "$t" && fail \
++-  "$0: error: compiler's floating point configuration is unsupported"
++-trycppif _SOFT_FLOAT "$t" && SUBARCH=${SUBARCH}-sf
+++trycppif "_SOFT_FLOAT || __NO_FPRS__" "$t" && SUBARCH=${SUBARCH}-sf
++ printf "checking whether compiler can use 'd' constraint in asm... "
++ echo 'double f(double x) { __asm__ ("fabs %0, %1" : "=d"(x) : "d"(x)); return x; }' > "$tmpc"
++ if $CC $CFLAGS_C99FSE $CPPFLAGS $CFLAGS -c -o /dev/null "$tmpc" >/dev/null 2>&1 ; then
++--- a/src/fenv/powerpc/fenv-sf.c
+++++ b/src/fenv/powerpc/fenv-sf.c
++@@ -1,3 +1,3 @@
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
++ #include "../fenv.c"
++ #endif
++--- a/src/fenv/powerpc/fenv.S
+++++ b/src/fenv/powerpc/fenv.S
++@@ -1,4 +1,4 @@
++-#ifndef _SOFT_FLOAT
+++#if !defined(_SOFT_FLOAT) && !defined(__NO_FPRS__)
++ .global feclearexcept
++ .type feclearexcept,@function
++ feclearexcept:
++--- a/src/math/powerpc/fabs.c
+++++ b/src/math/powerpc/fabs.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#if defined(_SOFT_FLOAT) || defined(BROKEN_PPC_D_ASM)
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__) || defined(BROKEN_PPC_D_ASM)
++ 
++ #include "../fabs.c"
++ 
++--- a/src/math/powerpc/fabsf.c
+++++ b/src/math/powerpc/fabsf.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
++ 
++ #include "../fabsf.c"
++ 
++--- a/src/math/powerpc/fma.c
+++++ b/src/math/powerpc/fma.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#if defined(_SOFT_FLOAT) || defined(BROKEN_PPC_D_ASM)
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__) || defined(BROKEN_PPC_D_ASM)
++ 
++ #include "../fma.c"
++ 
++--- a/src/math/powerpc/fmaf.c
+++++ b/src/math/powerpc/fmaf.c
++@@ -1,6 +1,6 @@
++ #include <math.h>
++ 
++-#ifdef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
++ 
++ #include "../fmaf.c"
++ 
++--- a/src/setjmp/powerpc/longjmp.S
+++++ b/src/setjmp/powerpc/longjmp.S
++@@ -37,7 +37,37 @@ longjmp:
++ 	lwz 29, 72(3)
++ 	lwz 30, 76(3)
++ 	lwz 31, 80(3)
++-#ifndef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
+++	mflr 0
+++	bl 1f
+++	.hidden __hwcap
+++	.long __hwcap-.
+++1:	mflr 4
+++	lwz 5, 0(4)
+++	add 4, 4, 5
+++	andis. 4, 4, 0x80
+++	beq 1f
+++	.long 0x11c35b01 /* evldd 14,88(3) */
+++	.long 0x11e36301 /* ... */
+++	.long 0x12036b01
+++	.long 0x12237301
+++	.long 0x12437b01
+++	.long 0x12638301
+++	.long 0x12838b01
+++	.long 0x12a39301
+++	.long 0x12c39b01
+++	.long 0x12e3a301
+++	.long 0x1303ab01
+++	.long 0x1323b301
+++	.long 0x1343bb01
+++	.long 0x1363c301
+++	.long 0x1383cb01
+++	.long 0x13a3d301
+++	.long 0x13c3db01
+++	.long 0x13e3e301 /* evldd 31,224(3) */
+++	.long 0x11a3eb01 /* evldd 13,232(3) */
+++1:	mtlr 0
+++#else
++ 	lfd 14,88(3)
++ 	lfd 15,96(3)
++ 	lfd 16,104(3)
++--- a/src/setjmp/powerpc/setjmp.S
+++++ b/src/setjmp/powerpc/setjmp.S
++@@ -37,7 +37,37 @@ setjmp:
++ 	stw 29, 72(3)
++ 	stw 30, 76(3)
++ 	stw 31, 80(3)
++-#ifndef _SOFT_FLOAT
+++#if defined(_SOFT_FLOAT) || defined(__NO_FPRS__)
+++	mflr 0
+++	bl 1f
+++	.hidden __hwcap
+++	.long __hwcap-.
+++1:	mflr 4
+++	lwz 5, 0(4)
+++	add 4, 4, 5
+++	andis. 4, 4, 0x80
+++	beq 1f
+++	.long 0x11c35b21 /* evstdd 14,88(3) */
+++	.long 0x11e36321 /* ... */
+++	.long 0x12036b21
+++	.long 0x12237321
+++	.long 0x12437b21
+++	.long 0x12638321
+++	.long 0x12838b21
+++	.long 0x12a39321
+++	.long 0x12c39b21
+++	.long 0x12e3a321
+++	.long 0x1303ab21
+++	.long 0x1323b321
+++	.long 0x1343bb21
+++	.long 0x1363c321
+++	.long 0x1383cb21
+++	.long 0x13a3d321
+++	.long 0x13c3db21
+++	.long 0x13e3e321 /* evstdd 31,224(3) */
+++	.long 0x11a3eb21 /* evstdd 13,232(3) */
+++1:	mtlr 0
+++#else
++ 	stfd 14,88(3)
++ 	stfd 15,96(3)
++ 	stfd 16,104(3)
+diff --git a/toolchain/musl/patches/003-fix-hwcap-access-in-powerpc-sf-setjmp-longjmp.patch b/toolchain/musl/patches/003-fix-hwcap-access-in-powerpc-sf-setjmp-longjmp.patch
+new file mode 100644
+index 0000000000..e573964201
+--- /dev/null
++++ b/toolchain/musl/patches/003-fix-hwcap-access-in-powerpc-sf-setjmp-longjmp.patch
+@@ -0,0 +1,38 @@
++From b4d1e3ee075880fac571a4f12489281fd3c578ab Mon Sep 17 00:00:00 2001
++From: Rich Felker <dalias@aerifal.cx>
++Date: Mon, 29 Nov 2021 17:41:43 -0500
++Subject: [PATCH 3/3] fix hwcap access in powerpc-sf setjmp/longjmp
++
++commit 7be59733d71ada3a32a98622507399253f1d5e48 introduced the
++hwcap-based branches to support the SPE FPU, but wrongly coded them as
++bitwise tests on the computed address of __hwcap, not a value loaded
++from that address. replace the add with indexed load to fix it.
++
++(cherry picked from commit 8274aaaaa1948c50c661aa32e21b3db27a5c0eab)
++---
++ src/setjmp/powerpc/longjmp.S | 2 +-
++ src/setjmp/powerpc/setjmp.S  | 2 +-
++ 2 files changed, 2 insertions(+), 2 deletions(-)
++
++--- a/src/setjmp/powerpc/longjmp.S
+++++ b/src/setjmp/powerpc/longjmp.S
++@@ -44,7 +44,7 @@ longjmp:
++ 	.long __hwcap-.
++ 1:	mflr 4
++ 	lwz 5, 0(4)
++-	add 4, 4, 5
+++	lwzx 4, 4, 5
++ 	andis. 4, 4, 0x80
++ 	beq 1f
++ 	.long 0x11c35b01 /* evldd 14,88(3) */
++--- a/src/setjmp/powerpc/setjmp.S
+++++ b/src/setjmp/powerpc/setjmp.S
++@@ -44,7 +44,7 @@ setjmp:
++ 	.long __hwcap-.
++ 1:	mflr 4
++ 	lwz 5, 0(4)
++-	add 4, 4, 5
+++	lwzx 4, 4, 5
++ 	andis. 4, 4, 0x80
++ 	beq 1f
++ 	.long 0x11c35b21 /* evstdd 14,88(3) */
+-- 
+2.35.3
+
+From 38a92bdd369c37c741c72da13b86a63327182d73 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:54:18 +0200
+Subject: [PATCH 5/7] mpc85xx: define flags for hardware SPE float support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+8548 cpu type (e500v2 core) supports double precision SPE instructions
+while 8540 (e500v1 core) supports single precision SPE instructions only.
+(see https://www.nxp.com/docs/en/reference-manual/E500CORERM.pdf )
+
+Signed-off-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ rules.mk                | 15 +++++++++++++++
+ toolchain/gcc/common.mk | 13 +++++++++++++
+ 2 files changed, 28 insertions(+)
+
+diff --git a/rules.mk b/rules.mk
+index f31d9bb113..5b2f2465a7 100644
+--- a/rules.mk
++++ b/rules.mk
+@@ -92,8 +92,11 @@ ifneq ($(filter -march=armv%,$(TARGET_OPTIMIZATION)),)
+   GCC_ARCH:=$(patsubst -march=%,%,$(filter -march=armv%,$(TARGET_OPTIMIZATION)))
+ endif
+ ifdef CONFIG_HAS_SPE_FPU
++ifndef CONFIG_SOFT_FLOAT
++  # suffix 'spe' enables hardware floating point support
+   TARGET_SUFFIX:=$(TARGET_SUFFIX)spe
+ endif
++endif
+ ifdef CONFIG_MIPS64_ABI
+   ifneq ($(CONFIG_MIPS64_ABI_O32),y)
+      ARCH_SUFFIX:=$(ARCH_SUFFIX)_$(call qstrip,$(CONFIG_MIPS64_ABI))
+@@ -231,6 +234,18 @@ else
+   ifeq ($(CONFIG_arm),y)
+     TARGET_CFLAGS+= -mfloat-abi=hard
+   endif
++  ifdef CONFIG_HAS_SPE_FPU
++    # -mabi=spe -mspe is required on e500v1 and e500v2 cores for proper hardware floating point support
++    TARGET_CFLAGS+= -mabi=spe -mspe
++  endif
++  ifeq ($(CONFIG_CPU_TYPE),"8540")
++    # cpu type 8540 (e500v1 core) has hardware SPE support only for single precision floats
++    TARGET_CFLAGS+= -mfloat-gprs=single
++  endif
++  ifeq ($(CONFIG_CPU_TYPE),"8548")
++    # cpu type 8548 (e500v2 core) has hardware SPE support also for double precision floats
++    TARGET_CFLAGS+= -mfloat-gprs=double
++  endif
+ endif
+ 
+ export PATH:=$(TARGET_PATH)
+diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
+index 99fd907969..e8736cd819 100644
+--- a/toolchain/gcc/common.mk
++++ b/toolchain/gcc/common.mk
+@@ -152,6 +152,19 @@ endif
+ 
+ ifdef CONFIG_powerpc
+   GCC_CONFIGURE+= --with-cpu=$(CONFIG_CPU_TYPE)
++  ifndef CONFIG_SOFT_FLOAT
++    ifdef CONFIG_HAS_SPE_FPU
++      # --enable-obsolete is required since gcc-8 for cpu type 8540 and 8548 with floating point support
++      GCC_CONFIGURE+= --enable-obsolete
++    endif
++    ifeq ($(CONFIG_CPU_TYPE),"8548")
++      # cpu type 8548 is e500v2 core (e500 with double precision floating point support)
++      GCC_CONFIGURE+= --enable-e500-double
++      # --with-long-double-128 which enables long double support is disabled for now because
++      # musl libc does not support this kind of IBM long double format (mantisa with 106 bits)
++      #GCC_CONFIGURE+= --with-long-double-128
++    endif
++  endif
+ endif
+ 
+ ifeq ($(CONFIG_arm),y)
+-- 
+2.35.3
+
+
+From c585683b65091fdcd7ced98233882781beb227be Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 15 Jun 2022 17:58:46 +0200
+Subject: [PATCH 6/7] mpc85xx: enable hardware SPE floating point support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This enables use of SPE APU instructions specific to e500 cpu cores
+contained in mpc85xx cpus as described in
+https://www.nxp.com/docs/en/reference-manual/E500CORERM.pdf
+to perform floating point operations.
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ target/linux/mpc85xx/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/target/linux/mpc85xx/Makefile b/target/linux/mpc85xx/Makefile
+index b1771dfd8e..e88e4f99f0 100644
+--- a/target/linux/mpc85xx/Makefile
++++ b/target/linux/mpc85xx/Makefile
+@@ -8,7 +8,7 @@ ARCH:=powerpc
+ BOARD:=mpc85xx
+ BOARDNAME:=Freescale MPC85xx
+ CPU_TYPE:=8540
+-FEATURES:=squashfs ramdisk nand
++FEATURES:=squashfs ramdisk nand spe_fpu
+ SUBTARGETS:=p1010 p1020 p2020
+ 
+ KERNEL_PATCHVER:=5.4
+-- 
+2.35.3
+
+
+From c8df0c15d6e5c58a9cb367600a895f90526a6777 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Mon, 27 Jun 2022 13:09:21 +0200
+Subject: [PATCH 7/7] package-defaults: use REAL_GNU_TARGET_NAME in CONFIGURE_ARGS where appropriate
+
+This fixes Python build for -muslspe target.
+
+---
+ include/package-defaults.mk | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/include/package-defaults.mk b/include/package-defaults.mk
+index 3ee3a965f2..d9ceba24b2 100644
+--- a/include/package-defaults.mk
++++ b/include/package-defaults.mk
+@@ -77,8 +77,8 @@ endif
+ 
+ CONFIGURE_PREFIX:=/usr
+ CONFIGURE_ARGS = \
+-		--target=$(GNU_TARGET_NAME) \
+-		--host=$(GNU_TARGET_NAME) \
++		--target=$(REAL_GNU_TARGET_NAME) \
++		--host=$(REAL_GNU_TARGET_NAME) \
+ 		--build=$(GNU_HOST_NAME) \
+ 		--program-prefix="" \
+ 		--program-suffix="" \
+-- 
+2.35.3
+

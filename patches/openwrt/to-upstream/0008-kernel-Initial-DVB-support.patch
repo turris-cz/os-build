@@ -11,19 +11,22 @@ is unsupported, but the list can grow over the time.
 
 Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
+Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
+(rebased on kernel 5.10, disabled cxusb analog)
+
 ---
- package/kernel/linux/modules/dvb.mk | 1195 +++++++++++++++++++++++++++
- 1 file changed, 1195 insertions(+)
+ package/kernel/linux/modules/dvb.mk | 1225 +++++++++++++++++++++++++++
+ 1 file changed, 1225 insertions(+)
  create mode 100644 package/kernel/linux/modules/dvb.mk
 
 diff --git a/package/kernel/linux/modules/dvb.mk b/package/kernel/linux/modules/dvb.mk
 new file mode 100644
-index 0000000000..c927328ffd
+index 0000000000..06875f5c00
 --- /dev/null
 +++ b/package/kernel/linux/modules/dvb.mk
-@@ -0,0 +1,1195 @@
+@@ -0,0 +1,1225 @@
 +#
-+# Copyright (C) 2018 CZ.NIC, z. s. p. o. <https://www.nic.cz/>
++# Copyright (C) 2018-2022 CZ.NIC, z. s. p. o. <https://www.nic.cz>
 +#
 +# This is free software, licensed under the GNU General Public License v2.
 +# See /LICENSE for more information.
@@ -34,6 +37,7 @@ index 0000000000..c927328ffd
 +
 +CURRENTLY_UNSUPPORTED:= \
 +CONFIG_VIDEO_AU0828=n \
++CONFIG_DVB_USB_CXUSB_ANALOG=n \
 +CONFIG_DVB_USB_UMT_010=n \
 +CONFIG_DVB_USB_M920X=n \
 +CONFIG_DVB_USB_DIGITV=n \
@@ -166,6 +170,9 @@ index 0000000000..c927328ffd
 +	CONFIG_RC_DEVICES=y \
 +	CONFIG_IR_SERIAL=n \
 +	CONFIG_IR_SIR=n \
++	CONFIG_IR_TOY=n \
++	CONFIG_RC_XBOX_DVD = n \
++	CONFIG_LIRC=n \
 +	CONFIG_RC_CORE
 +  FILES:=$(LINUX_DIR)/drivers/media/rc/rc-core.ko
 +  AUTOLOAD:=$(call AutoProbe,rc-core)
@@ -818,6 +825,18 @@ index 0000000000..c927328ffd
 +  AUTOLOAD:=$(call AutoProbe,$1)
 +endef
 +
++define KernelPackage/media-tuner-tda18250
++  TITLE:=NXP TDA18250 silicon tuner
++  $(call MediaTuner,tda18250,CONFIG_MEDIA_TUNER_TDA18250)
++  DEPENDS+=+kmod-regmap-i2c +kmod-video-core
++endef
++
++define KernelPackage/media-tuner-tda18250/description
++ NXP TDA18250 silicon tuner driver.
++endef
++
++$(eval $(call KernelPackage,media-tuner-tda18250))
++
 +define KernelPackage/media-tuner-e4000
 +  TITLE:=Elonics E4000 silicon tuner
 +  $(call MediaTuner,e4000,CONFIG_MEDIA_TUNER_E4000)
@@ -1190,8 +1209,7 @@ index 0000000000..c927328ffd
 +  TITLE:=v4l2
 +  KCONFIG:=CONFIG_VIDEO_V4L2
 +  FILES:=\
-+	$(LINUX_DIR)/drivers/media/v4l2-core/videodev.ko \
-+	$(LINUX_DIR)/drivers/media/v4l2-core/v4l2-common.ko
++	$(LINUX_DIR)/drivers/media/v4l2-core/videodev.ko
 +  AUTOLOAD:=$(call AutoProbe,videodev v4l2-common)
 +endef
 +
@@ -1217,6 +1235,21 @@ index 0000000000..c927328ffd
 +endef
 +
 +$(eval $(call KernelPackage,video-em28xx))
++
++define KernelPackage/video-em28xx-dvb
++  TITLE:=DVB/ATSC support for em28xx based TV cards
++  FILES:=$(LINUX_DIR)/drivers/media/usb/em28xx/em28xx-dvb.ko
++  AUTOLOAD:=$(call AutoProbe,video-em28xx-dvb)
++  DEPENDS+=+kmod-dvb-core +kmod-video-em28xx
++  $(call AddDepends/dvb-usb)
++  SUBMENU:=$(VIDEO_MENU)
++endef
++
++define KernelPackage/video-em28xx-dvb/description
++  DVB/ATSC support for em28xx
++endef
++
++$(eval $(call KernelPackage,video-em28xx-dvb))
 -- 
-2.26.0
+2.32.0
 

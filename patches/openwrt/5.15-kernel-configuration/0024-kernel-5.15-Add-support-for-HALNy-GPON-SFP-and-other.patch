@@ -1,0 +1,619 @@
+From ff0b52972da8e3049de4066e6d9dab2fbb2d23a6 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Fri, 26 Aug 2022 16:21:44 +0200
+Subject: [PATCH] kernel: 5.15: Add support for HALNy-GPON-SFP and other fixes
+
+It was reported on Turris forum [1] that HALNy-GPON-SFP module does not
+work as it should with kernel 5.15. Russel King prepared this patch
+series, which should hopefully fix this issue.
+
+Before sending this to OpenWrt, it needs to tested with Turris Omnia.
+
+[1] https://forum.turris.cz/t/hbl-turrisos-6-0-alpha2-halny-hl-gsfp-sfp-gpon-stick-problems/17547
+---
+ ...t-sfp-move-quirk-handling-into-sfp.c.patch | 299 ++++++++++++++++++
+ ...move-Alcatel-Lucent-3FE46541AA-fixup.patch |  75 +++++
+ ...12-net-sfp-move-Huawei-MA5671A-fixup.patch |  52 +++
+ ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  93 ++++++
+ ...t-sfp-add-support-for-HALNy-GPON-SFP.patch |  42 +++
+ 5 files changed, 561 insertions(+)
+ create mode 100644 target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
+ create mode 100644 target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
+ create mode 100644 target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
+ create mode 100644 target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+ create mode 100644 target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+
+diff --git a/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch b/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
+new file mode 100644
+index 0000000000..fa7480458b
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/110-net-sfp-move-quirk-handling-into-sfp.c.patch
+@@ -0,0 +1,299 @@
++From cb3a4e33a0415f84736734e77fb2d6c1a5fab1d7 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Fri, 26 Aug 2022 08:43:30 +0100
++Subject: [PATCH 1/4] net: sfp: move quirk handling into sfp.c
++
++We need to handle more quirks than just those which affect the link
++modes of the module. Move the quirk lookup into sfp.c, and pass the
++quirk to sfp-bus.c
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/sfp-bus.c | 98 ++-------------------------------------
++ drivers/net/phy/sfp.c     | 94 ++++++++++++++++++++++++++++++++++++-
++ drivers/net/phy/sfp.h     |  9 +++-
++ 3 files changed, 104 insertions(+), 97 deletions(-)
++
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index 4369d6249e7b..267182d32bd5 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -10,12 +10,6 @@
++ 
++ #include "sfp.h"
++ 
++-struct sfp_quirk {
++-	const char *vendor;
++-	const char *part;
++-	void (*modes)(const struct sfp_eeprom_id *id, unsigned long *modes);
++-};
++-
++ /**
++  * struct sfp_bus - internal representation of a sfp bus
++  */
++@@ -38,93 +32,6 @@ struct sfp_bus {
++ 	bool started;
++ };
++ 
++-static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++-				unsigned long *modes)
++-{
++-	phylink_set(modes, 2500baseX_Full);
++-}
++-
++-static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
++-				      unsigned long *modes)
++-{
++-	/* Ubiquiti U-Fiber Instant module claims that support all transceiver
++-	 * types including 10G Ethernet which is not truth. So clear all claimed
++-	 * modes and set only one mode which module supports: 1000baseX_Full.
++-	 */
++-	phylink_zero(modes);
++-	phylink_set(modes, 1000baseX_Full);
++-}
++-
++-static const struct sfp_quirk sfp_quirks[] = {
++-	{
++-		// Alcatel Lucent G-010S-P can operate at 2500base-X, but
++-		// incorrectly report 2500MBd NRZ in their EEPROM
++-		.vendor = "ALCATELLUCENT",
++-		.part = "G010SP",
++-		.modes = sfp_quirk_2500basex,
++-	}, {
++-		// Alcatel Lucent G-010S-A can operate at 2500base-X, but
++-		// report 3.2GBd NRZ in their EEPROM
++-		.vendor = "ALCATELLUCENT",
++-		.part = "3FE46541AA",
++-		.modes = sfp_quirk_2500basex,
++-	}, {
++-		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++-		// NRZ in their EEPROM
++-		.vendor = "HUAWEI",
++-		.part = "MA5671A",
++-		.modes = sfp_quirk_2500basex,
++-	}, {
++-		// Lantech 8330-262D-E can operate at 2500base-X, but
++-		// incorrectly report 2500MBd NRZ in their EEPROM
++-		.vendor = "Lantech",
++-		.part = "8330-262D-E",
++-		.modes = sfp_quirk_2500basex,
++-	}, {
++-		.vendor = "UBNT",
++-		.part = "UF-INSTANT",
++-		.modes = sfp_quirk_ubnt_uf_instant,
++-	},
++-};
++-
++-static size_t sfp_strlen(const char *str, size_t maxlen)
++-{
++-	size_t size, i;
++-
++-	/* Trailing characters should be filled with space chars */
++-	for (i = 0, size = 0; i < maxlen; i++)
++-		if (str[i] != ' ')
++-			size = i + 1;
++-
++-	return size;
++-}
++-
++-static bool sfp_match(const char *qs, const char *str, size_t len)
++-{
++-	if (!qs)
++-		return true;
++-	if (strlen(qs) != len)
++-		return false;
++-	return !strncmp(qs, str, len);
++-}
++-
++-static const struct sfp_quirk *sfp_lookup_quirk(const struct sfp_eeprom_id *id)
++-{
++-	const struct sfp_quirk *q;
++-	unsigned int i;
++-	size_t vs, ps;
++-
++-	vs = sfp_strlen(id->base.vendor_name, ARRAY_SIZE(id->base.vendor_name));
++-	ps = sfp_strlen(id->base.vendor_pn, ARRAY_SIZE(id->base.vendor_pn));
++-
++-	for (i = 0, q = sfp_quirks; i < ARRAY_SIZE(sfp_quirks); i++, q++)
++-		if (sfp_match(q->vendor, id->base.vendor_name, vs) &&
++-		    sfp_match(q->part, id->base.vendor_pn, ps))
++-			return q;
++-
++-	return NULL;
++-}
++-
++ /**
++  * sfp_parse_port() - Parse the EEPROM base ID, setting the port type
++  * @bus: a pointer to the &struct sfp_bus structure for the sfp module
++@@ -786,12 +693,13 @@ void sfp_link_down(struct sfp_bus *bus)
++ }
++ EXPORT_SYMBOL_GPL(sfp_link_down);
++ 
++-int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id)
+++int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
+++		      const struct sfp_quirk *quirk)
++ {
++ 	const struct sfp_upstream_ops *ops = sfp_get_upstream_ops(bus);
++ 	int ret = 0;
++ 
++-	bus->sfp_quirk = sfp_lookup_quirk(id);
+++	bus->sfp_quirk = quirk;
++ 
++ 	if (ops && ops->module_insert)
++ 		ret = ops->module_insert(bus->upstream, id);
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 028a5df5c538..7be9eb47c40f 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -252,6 +252,8 @@ struct sfp {
++ 	unsigned int module_t_start_up;
++ 	bool tx_fault_ignore;
++ 
+++	const struct sfp_quirk *quirk;
+++
++ #if IS_ENABLED(CONFIG_HWMON)
++ 	struct sfp_diag diag;
++ 	struct delayed_work hwmon_probe;
++@@ -308,6 +310,93 @@ static const struct of_device_id sfp_of_match[] = {
++ };
++ MODULE_DEVICE_TABLE(of, sfp_of_match);
++ 
+++static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
+++				unsigned long *modes)
+++{
+++	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, modes);
+++}
+++
+++static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
+++				      unsigned long *modes)
+++{
+++	/* Ubiquiti U-Fiber Instant module claims that support all transceiver
+++	 * types including 10G Ethernet which is not truth. So clear all claimed
+++	 * modes and set only one mode which module supports: 1000baseX_Full.
+++	 */
+++	linkmode_zero(modes);
+++	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseX_Full_BIT, modes);
+++}
+++
+++static const struct sfp_quirk sfp_quirks[] = {
+++	{
+++		// Alcatel Lucent G-010S-P can operate at 2500base-X, but
+++		// incorrectly report 2500MBd NRZ in their EEPROM
+++		.vendor = "ALCATELLUCENT",
+++		.part = "G010SP",
+++		.modes = sfp_quirk_2500basex,
+++	}, {
+++		// Alcatel Lucent G-010S-A can operate at 2500base-X, but
+++		// report 3.2GBd NRZ in their EEPROM
+++		.vendor = "ALCATELLUCENT",
+++		.part = "3FE46541AA",
+++		.modes = sfp_quirk_2500basex,
+++	}, {
+++		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
+++		// NRZ in their EEPROM
+++		.vendor = "HUAWEI",
+++		.part = "MA5671A",
+++		.modes = sfp_quirk_2500basex,
+++	}, {
+++		// Lantech 8330-262D-E can operate at 2500base-X, but
+++		// incorrectly report 2500MBd NRZ in their EEPROM
+++		.vendor = "Lantech",
+++		.part = "8330-262D-E",
+++		.modes = sfp_quirk_2500basex,
+++	}, {
+++		.vendor = "UBNT",
+++		.part = "UF-INSTANT",
+++		.modes = sfp_quirk_ubnt_uf_instant,
+++	},
+++};
+++
+++static size_t sfp_strlen(const char *str, size_t maxlen)
+++{
+++	size_t size, i;
+++
+++	/* Trailing characters should be filled with space chars */
+++	for (i = 0, size = 0; i < maxlen; i++)
+++		if (str[i] != ' ')
+++			size = i + 1;
+++
+++	return size;
+++}
+++
+++static bool sfp_match(const char *qs, const char *str, size_t len)
+++{
+++	if (!qs)
+++		return true;
+++	if (strlen(qs) != len)
+++		return false;
+++	return !strncmp(qs, str, len);
+++}
+++
+++static const struct sfp_quirk *sfp_lookup_quirk(const struct sfp_eeprom_id *id)
+++{
+++	const struct sfp_quirk *q;
+++	unsigned int i;
+++	size_t vs, ps;
+++
+++	vs = sfp_strlen(id->base.vendor_name, ARRAY_SIZE(id->base.vendor_name));
+++	ps = sfp_strlen(id->base.vendor_pn, ARRAY_SIZE(id->base.vendor_pn));
+++
+++	for (i = 0, q = sfp_quirks; i < ARRAY_SIZE(sfp_quirks); i++, q++)
+++		if (sfp_match(q->vendor, id->base.vendor_name, vs) &&
+++		    sfp_match(q->part, id->base.vendor_pn, ps))
+++			return q;
+++
+++	return NULL;
+++}
+++
++ static unsigned long poll_jiffies;
++ 
++ static unsigned int sfp_gpio_get_state(struct sfp *sfp)
++@@ -1952,6 +2041,8 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 	else
++ 		sfp->tx_fault_ignore = false;
++ 
+++	sfp->quirk = sfp_lookup_quirk(&id);
+++
++ 	return 0;
++ }
++ 
++@@ -2063,7 +2154,8 @@ static void sfp_sm_module(struct sfp *sfp, unsigned int event)
++ 			break;
++ 
++ 		/* Report the module insertion to the upstream device */
++-		err = sfp_module_insert(sfp->sfp_bus, &sfp->id);
+++		err = sfp_module_insert(sfp->sfp_bus, &sfp->id,
+++					sfp->quirk);
++ 		if (err < 0) {
++ 			sfp_sm_mod_next(sfp, SFP_MOD_ERROR, 0);
++ 			break;
++diff --git a/drivers/net/phy/sfp.h b/drivers/net/phy/sfp.h
++index 27226535c72b..03f1d47fe6ca 100644
++--- a/drivers/net/phy/sfp.h
+++++ b/drivers/net/phy/sfp.h
++@@ -6,6 +6,12 @@
++ 
++ struct sfp;
++ 
+++struct sfp_quirk {
+++	const char *vendor;
+++	const char *part;
+++	void (*modes)(const struct sfp_eeprom_id *id, unsigned long *modes);
+++};
+++
++ struct sfp_socket_ops {
++ 	void (*attach)(struct sfp *sfp);
++ 	void (*detach)(struct sfp *sfp);
++@@ -23,7 +29,8 @@ int sfp_add_phy(struct sfp_bus *bus, struct phy_device *phydev);
++ void sfp_remove_phy(struct sfp_bus *bus);
++ void sfp_link_up(struct sfp_bus *bus);
++ void sfp_link_down(struct sfp_bus *bus);
++-int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id);
+++int sfp_module_insert(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
+++		      const struct sfp_quirk *quirk);
++ void sfp_module_remove(struct sfp_bus *bus);
++ int sfp_module_start(struct sfp_bus *bus);
++ void sfp_module_stop(struct sfp_bus *bus);
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch b/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
+new file mode 100644
+index 0000000000..56716ca2a0
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/111-net-sfp-move-Alcatel-Lucent-3FE46541AA-fixup.patch
+@@ -0,0 +1,75 @@
++From d189313ed65a21a425889664abc5e7c4646a00ba Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Fri, 26 Aug 2022 08:43:35 +0100
++Subject: [PATCH 2/4] net: sfp: move Alcatel Lucent 3FE46541AA fixup
++
++Add a new fixup mechanism to the SFP quirks, and use it for this
++module.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/sfp.c | 14 +++++++++-----
++ drivers/net/phy/sfp.h |  1 +
++ 2 files changed, 10 insertions(+), 5 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 7be9eb47c40f..900b10887c3f 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -310,6 +310,11 @@ static const struct of_device_id sfp_of_match[] = {
++ };
++ MODULE_DEVICE_TABLE(of, sfp_of_match);
++ 
+++static void sfp_fixup_long_startup(struct sfp *sfp)
+++{
+++	sfp->module_t_start_up = T_START_UP_BAD_GPON;
+++}
+++
++ static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++ 				unsigned long *modes)
++ {
++@@ -340,6 +345,7 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.vendor = "ALCATELLUCENT",
++ 		.part = "3FE46541AA",
++ 		.modes = sfp_quirk_2500basex,
+++		.fixup = sfp_fixup_long_startup,
++ 	}, {
++ 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++ 		// NRZ in their EEPROM
++@@ -2029,11 +2035,7 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 	if (ret < 0)
++ 		return ret;
++ 
++-	if (!memcmp(id.base.vendor_name, "ALCATELLUCENT   ", 16) &&
++-	    !memcmp(id.base.vendor_pn, "3FE46541AA      ", 16))
++-		sfp->module_t_start_up = T_START_UP_BAD_GPON;
++-	else
++-		sfp->module_t_start_up = T_START_UP;
+++	sfp->module_t_start_up = T_START_UP;
++ 
++ 	if (!memcmp(id.base.vendor_name, "HUAWEI          ", 16) &&
++ 	    !memcmp(id.base.vendor_pn, "MA5671A         ", 16))
++@@ -2042,6 +2044,8 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 		sfp->tx_fault_ignore = false;
++ 
++ 	sfp->quirk = sfp_lookup_quirk(&id);
+++	if (sfp->quirk && sfp->quirk->fixup)
+++		sfp->quirk->fixup(sfp);
++ 
++ 	return 0;
++ }
++diff --git a/drivers/net/phy/sfp.h b/drivers/net/phy/sfp.h
++index 03f1d47fe6ca..7ad06deae76c 100644
++--- a/drivers/net/phy/sfp.h
+++++ b/drivers/net/phy/sfp.h
++@@ -10,6 +10,7 @@ struct sfp_quirk {
++ 	const char *vendor;
++ 	const char *part;
++ 	void (*modes)(const struct sfp_eeprom_id *id, unsigned long *modes);
+++	void (*fixup)(struct sfp *sfp);
++ };
++ 
++ struct sfp_socket_ops {
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch b/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
+new file mode 100644
+index 0000000000..416f3a3a6a
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/112-net-sfp-move-Huawei-MA5671A-fixup.patch
+@@ -0,0 +1,52 @@
++From a9e957e4da9f28797663b162e0bdd0147ace7853 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Fri, 26 Aug 2022 08:43:40 +0100
++Subject: [PATCH 3/4] net: sfp: move Huawei MA5671A fixup
++
++Move this module over to the new fixup mechanism.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/sfp.c | 12 +++++++-----
++ 1 file changed, 7 insertions(+), 5 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 900b10887c3f..db922d27ee79 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -315,6 +315,11 @@ static void sfp_fixup_long_startup(struct sfp *sfp)
++ 	sfp->module_t_start_up = T_START_UP_BAD_GPON;
++ }
++ 
+++static void sfp_fixup_ignore_tx_fault(struct sfp *sfp)
+++{
+++	sfp->tx_fault_ignore = true;
+++}
+++
++ static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++ 				unsigned long *modes)
++ {
++@@ -352,6 +357,7 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.vendor = "HUAWEI",
++ 		.part = "MA5671A",
++ 		.modes = sfp_quirk_2500basex,
+++		.fixup = sfp_fixup_ignore_tx_fault,
++ 	}, {
++ 		// Lantech 8330-262D-E can operate at 2500base-X, but
++ 		// incorrectly report 2500MBd NRZ in their EEPROM
++@@ -2037,11 +2043,7 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
++ 
++ 	sfp->module_t_start_up = T_START_UP;
++ 
++-	if (!memcmp(id.base.vendor_name, "HUAWEI          ", 16) &&
++-	    !memcmp(id.base.vendor_pn, "MA5671A         ", 16))
++-		sfp->tx_fault_ignore = true;
++-	else
++-		sfp->tx_fault_ignore = false;
+++	sfp->tx_fault_ignore = false;
++ 
++ 	sfp->quirk = sfp_lookup_quirk(&id);
++ 	if (sfp->quirk && sfp->quirk->fixup)
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch b/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+new file mode 100644
+index 0000000000..e66bcb7748
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/113-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+@@ -0,0 +1,93 @@
++From 9490075c53cec3925039d2b1c5afc4507e772660 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Fri, 26 Aug 2022 08:43:45 +0100
++Subject: [PATCH 4/4] net: sfp: add support for HALNy GPON SFP
++
++Add a quirk for the HALNy HL-GSFP module, which appears to have an
++inverted RX_LOS signal, and possibly uses TX_FAULT as an inverted
++host-link status signal. As we can't be certain about the modules
++use of TX_FAULT, we ignore it.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/phy/sfp-bus.c |  2 +-
++ drivers/net/phy/sfp.c     | 29 ++++++++++++++++++++++++++---
++ 2 files changed, 27 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
++index 267182d32bd5..4566348a6d05 100644
++--- a/drivers/net/phy/sfp-bus.c
+++++ b/drivers/net/phy/sfp-bus.c
++@@ -283,7 +283,7 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
++ 			phylink_set(modes, 2500baseX_Full);
++ 	}
++ 
++-	if (bus->sfp_quirk)
+++	if (bus->sfp_quirk && bus->sfp_quirk->modes)
++ 		bus->sfp_quirk->modes(id, modes);
++ 
++ 	bitmap_or(support, support, modes, __ETHTOOL_LINK_MODE_MASK_NBITS);
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index db922d27ee79..2ebc577bfc56 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -320,6 +320,23 @@ static void sfp_fixup_ignore_tx_fault(struct sfp *sfp)
++ 	sfp->tx_fault_ignore = true;
++ }
++ 
+++static void sfp_fixup_inverted_los(struct sfp *sfp)
+++{
+++	const __be16 los_inverted = cpu_to_be16(SFP_OPTIONS_LOS_INVERTED);
+++	const __be16 los_normal = cpu_to_be16(SFP_OPTIONS_LOS_NORMAL);
+++
+++	sfp->id.ext.options &= ~los_normal;
+++	sfp->id.ext.options |= los_inverted;
+++}
+++
+++static void sfp_fixup_hanly_gsfp(struct sfp *sfp)
+++{
+++	/* LOS is inverted */
+++	sfp_fixup_inverted_los(sfp);
+++	/* TX fault might be inverted, but we don't know for certain. */
+++	sfp_fixup_ignore_tx_fault(sfp);
+++}
+++
++ static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
++ 				unsigned long *modes)
++ {
++@@ -351,6 +368,10 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.part = "3FE46541AA",
++ 		.modes = sfp_quirk_2500basex,
++ 		.fixup = sfp_fixup_long_startup,
+++	}, {
+++		.vendor = "HANLy",
+++		.part = "HL-GSFP",
+++		.fixup = sfp_fixup_hanly_gsfp,
++ 	}, {
++ 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++ 		// NRZ in their EEPROM
++@@ -368,16 +389,18 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.vendor = "UBNT",
++ 		.part = "UF-INSTANT",
++ 		.modes = sfp_quirk_ubnt_uf_instant,
++-	},
+++	}
++ };
++ 
++ static size_t sfp_strlen(const char *str, size_t maxlen)
++ {
++ 	size_t size, i;
++ 
++-	/* Trailing characters should be filled with space chars */
+++	/* Trailing characters should be filled with space chars, but
+++	 * some manufacturers can't read SFF-8472 and use NUL.
+++	 */
++ 	for (i = 0, size = 0; i < maxlen; i++)
++-		if (str[i] != ' ')
+++		if (str[i] != ' ' && str[i] != '\0')
++ 			size = i + 1;
++ 
++ 	return size;
++-- 
++2.34.1
++
+diff --git a/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch b/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+new file mode 100644
+index 0000000000..99ca247366
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/114-fixup-net-sfp-add-support-for-HALNy-GPON-SFP.patch
+@@ -0,0 +1,42 @@
++From 6dc810804bb2fa91d9972601c209471fab852509 Mon Sep 17 00:00:00 2001
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Date: Fri, 26 Aug 2022 20:50:51 +0200
++Subject: [PATCH] fixup! net: sfp: add support for HALNy GPON SFP
++
++There are a few typos, which was reported by Orest Worhacz
++(@AreYouLoco), which needs to be fixed.
++
++SFP is detected as
++[    9.607535] sfp sfp: module HALNy HL-GSFP          rev V1.0 sn HALN1010493c     dc 20150525
++---
++ drivers/net/phy/sfp.c | 6 +++---
++ 1 file changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
++index 2ebc577bfc56..277292e2ed35 100644
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -329,7 +329,7 @@ static void sfp_fixup_inverted_los(struct sfp *sfp)
++ 	sfp->id.ext.options |= los_inverted;
++ }
++ 
++-static void sfp_fixup_hanly_gsfp(struct sfp *sfp)
+++static void sfp_fixup_halny_gsfp(struct sfp *sfp)
++ {
++ 	/* LOS is inverted */
++ 	sfp_fixup_inverted_los(sfp);
++@@ -369,9 +369,9 @@ static const struct sfp_quirk sfp_quirks[] = {
++ 		.modes = sfp_quirk_2500basex,
++ 		.fixup = sfp_fixup_long_startup,
++ 	}, {
++-		.vendor = "HANLy",
+++		.vendor = "HALNy",
++ 		.part = "HL-GSFP",
++-		.fixup = sfp_fixup_hanly_gsfp,
+++		.fixup = sfp_fixup_halny_gsfp,
++ 	}, {
++ 		// Huawei MA5671A can operate at 2500base-X, but report 1.2GBd
++ 		// NRZ in their EEPROM
++-- 
++2.34.1
++
+-- 
+2.34.1
+

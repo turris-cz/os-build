@@ -1,0 +1,79 @@
+From 65190e71599951bf8b383df3a75790a82c6f9f66 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 13 Jul 2022 18:43:02 +0200
+Subject: [PATCH 1/2] gcc 8.4.0: mpc85xx SPE: expect '-sf' `ld` suffix even with SPE enabled
+
+An incorrect name of the dynamic linker symlink is expected on Turris 1.x
+(and probably other mpc85xx devices) with SPE ISA extension[^1] enabled otherwise,
+leading to gcc compiled binaries being unable to utilize dynamic linker => crashes at boot.
+
+From musl point of view usage of Power ISA SPE instructions for floating point
+arithmetic is considered to be soft float. As a result the name of symlink
+to musl `ld` is appended with '-sf' suffix.
+
+Note: The scope of changes and new conditions is probably larger than necessary.
+Since SPE instructions are relevant to e500 PPC cores only (used in both mpc8540 and mpc8548)
+this should not break any OpenWrt (future or existing) device.
+Nevertheless, there is no doubt this patch can be further optimized.
+
+[^1]: https://www.nxp.com/docs/en/reference-manual/SPEPEM.pdf
+
+Co-authored-by: Pali Rohár <pali@kernel.org>
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ ...-in-linux64.h-sysv4.h-if-musl-spe-or.patch | 46 +++++++++++++++++++
+ 1 file changed, 46 insertions(+)
+ create mode 100644 toolchain/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+
+diff --git a/toolchain/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch b/toolchain/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+new file mode 100644
+index 0000000000..f723a2e673
+--- /dev/null
++++ b/toolchain/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+@@ -0,0 +1,43 @@
++From 6c0906bc51d2bb12ef9b0f4261cf9a39425e0ff7 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
++Date: Wed, 13 Jul 2022 12:39:07 +0200
++Subject: [PATCH] add -sf suffix to the dynamic linker in linux64.h and sysv4.h if musl-spe is to be used
++
++The scope of changes and new conditions is probably larger than necessary. Further refactoring would be beneficial.
++---
++ gcc/config/powerpcspe/linux64.h | 4 ++--
++ gcc/config/powerpcspe/sysv4.h   | 2 +-
++ 2 files changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/gcc/config/powerpcspe/linux64.h b/gcc/config/powerpcspe/linux64.h
++index b3a0cc4e46c..79ad98270e7 100644
++--- a/gcc/config/powerpcspe/linux64.h
+++++ b/gcc/config/powerpcspe/linux64.h
++@@ -425,9 +425,9 @@ extern int dot_symbols;
++ #endif
++ 
++ #define MUSL_DYNAMIC_LINKER32 \
++-  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ #define MUSL_DYNAMIC_LINKER64 \
++-  "/lib/ld-musl-powerpc64" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc64" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ 
++ #define UCLIBC_DYNAMIC_LINKER32 "/lib/ld-uClibc.so.0"
++ #define UCLIBC_DYNAMIC_LINKER64 "/lib/ld64-uClibc.so.0"
++diff --git a/gcc/config/powerpcspe/sysv4.h b/gcc/config/powerpcspe/sysv4.h
++index 4f352746151..a79df9ff376 100644
++--- a/gcc/config/powerpcspe/sysv4.h
+++++ b/gcc/config/powerpcspe/sysv4.h
++@@ -783,7 +783,7 @@ ENDIAN_SELECT(" -mbig", " -mlittle", DEFAULT_ASM_ENDIAN)
++ #define GLIBC_DYNAMIC_LINKER "/lib/ld.so.1"
++ #define UCLIBC_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
++ #define MUSL_DYNAMIC_LINKER \
++-  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ #if DEFAULT_LIBC == LIBC_UCLIBC
++ #define CHOOSE_DYNAMIC_LINKER(G, U, M) \
++   "%{mglibc:" G ";:%{mmusl:" M ";:" U "}}"
++-- 
++2.35.3
++
+-- 
+2.35.3
+

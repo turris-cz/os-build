@@ -1,0 +1,128 @@
+From e797e6cd86f6eb5100569c555718e64e4b0546fb Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Mon, 27 Jun 2022 14:49:05 +0200
+Subject: [PATCH] python3: fix crosscompilation for mpc8548 musl
+
+---
+ .../030_detect_musl_as_a_separate_SOABI.patch | 69 +++++++++++++++++++
+ ...e-detect-linux-musl-triplet-properly.patch | 32 +++++++++
+ 2 files changed, 101 insertions(+)
+ create mode 100644 lang/python/python3/patches/030_detect_musl_as_a_separate_SOABI.patch
+ create mode 100644 lang/python/python3/patches/031-configure-detect-linux-musl-triplet-properly.patch
+
+diff --git a/lang/python/python3/patches/030_detect_musl_as_a_separate_SOABI.patch b/lang/python/python3/patches/030_detect_musl_as_a_separate_SOABI.patch
+new file mode 100644
+index 000000000..bb0988fdb
+--- /dev/null
++++ b/lang/python/python3/patches/030_detect_musl_as_a_separate_SOABI.patch
+@@ -0,0 +1,69 @@
++From 1f036ede59e2c4befc07714cf76603c591d5c972 Mon Sep 17 00:00:00 2001
++From: Natanael Copa <ncopa@alpinelinux.org>
++Date: Sat, 29 Jan 2022 00:02:54 +0100
++Subject: [PATCH] bpo-43112: detect musl as a separate SOABI (GH-24502)
++
++musl libc and gnu libc are not ABI compatible so we need set different
++SOABI for musl and not simply assume that all linux is linux-gnu.
++
++Replace linux-gnu with the detected os for the build from config.guess
++for linux-musl*.
++---
++ Lib/test/test_sysconfig.py                                | 8 ++++----
++ .../next/Build/2021-02-10-17-54-04.bpo-43112.H5Lat6.rst   | 1 +
++ configure                                                 | 5 +++++
++ configure.ac                                              | 5 +++++
++ 4 files changed, 15 insertions(+), 4 deletions(-)
++ create mode 100644 Misc/NEWS.d/next/Build/2021-02-10-17-54-04.bpo-43112.H5Lat6.rst
++
++--- a/Lib/test/test_sysconfig.py
+++++ b/Lib/test/test_sysconfig.py
++@@ -377,11 +377,11 @@ class TestSysConfig(unittest.TestCase):
++             self.assertTrue('linux' in suffix, suffix)
++         if re.match('(i[3-6]86|x86_64)$', machine):
++             if ctypes.sizeof(ctypes.c_char_p()) == 4:
++-                self.assertTrue(suffix.endswith('i386-linux-gnu.so') or
++-                                suffix.endswith('x86_64-linux-gnux32.so'),
++-                                suffix)
+++                expected_suffixes = 'i386-linux-gnu.so', 'x86_64-linux-gnux32.so', 'i386-linux-musl.so'
++             else: # 8 byte pointer size
++-                self.assertTrue(suffix.endswith('x86_64-linux-gnu.so'), suffix)
+++                expected_suffixes = 'x86_64-linux-gnu.so', 'x86_64-linux-musl.so'
+++        self.assertTrue(suffix.endswith(expected_suffixes),
+++                        f'unexpected suffix {suffix!r}')
++ 
++     @unittest.skipUnless(sys.platform == 'darwin', 'OS X-specific test')
++     def test_osx_ext_suffix(self):
++--- /dev/null
+++++ b/Misc/NEWS.d/next/Build/2021-02-10-17-54-04.bpo-43112.H5Lat6.rst
++@@ -0,0 +1 @@
+++Detect musl libc as a separate SOABI (tagged as ``linux-musl``).
++\ No newline at end of file
++--- a/configure
+++++ b/configure
++@@ -5358,6 +5358,11 @@ EOF
++ 
++ if $CPP $CPPFLAGS conftest.c >conftest.out 2>/dev/null; then
++   PLATFORM_TRIPLET=`grep -v '^#' conftest.out | grep -v '^ *$' | tr -d ' 	'`
+++  case "$build_os" in
+++  linux-musl*)
+++    PLATFORM_TRIPLET=`echo "$PLATFORM_TRIPLET" | sed 's/linux-gnu/linux-musl/'`
+++    ;;
+++  esac
++   { $as_echo "$as_me:${as_lineno-$LINENO}: result: $PLATFORM_TRIPLET" >&5
++ $as_echo "$PLATFORM_TRIPLET" >&6; }
++ else
++--- a/configure.ac
+++++ b/configure.ac
++@@ -876,6 +876,11 @@ EOF
++ 
++ if $CPP $CPPFLAGS conftest.c >conftest.out 2>/dev/null; then
++   PLATFORM_TRIPLET=`grep -v '^#' conftest.out | grep -v '^ *$' | tr -d ' 	'`
+++  case "$build_os" in
+++  linux-musl*)
+++    PLATFORM_TRIPLET=`echo "$PLATFORM_TRIPLET" | sed 's/linux-gnu/linux-musl/'`
+++    ;;
+++  esac
++   AC_MSG_RESULT([$PLATFORM_TRIPLET])
++ else
++   AC_MSG_RESULT([none])
+diff --git a/lang/python/python3/patches/031-configure-detect-linux-musl-triplet-properly.patch b/lang/python/python3/patches/031-configure-detect-linux-musl-triplet-properly.patch
+new file mode 100644
+index 000000000..a99300d52
+--- /dev/null
++++ b/lang/python/python3/patches/031-configure-detect-linux-musl-triplet-properly.patch
+@@ -0,0 +1,32 @@
++From e48b0cd5fea3a9ce4936b8037ea81df693dd9746 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
++Date: Mon, 27 Jun 2022 13:53:37 +0200
++Subject: [PATCH] configure: detect linux-musl* triplet properly
++
++---
++ configure    | 2 +-
++ configure.ac | 2 +-
++ 2 files changed, 2 insertions(+), 2 deletions(-)
++
++--- a/configure
+++++ b/configure
++@@ -5358,7 +5358,7 @@ EOF
++ 
++ if $CPP $CPPFLAGS conftest.c >conftest.out 2>/dev/null; then
++   PLATFORM_TRIPLET=`grep -v '^#' conftest.out | grep -v '^ *$' | tr -d ' 	'`
++-  case "$build_os" in
+++  case "$host_os" in
++   linux-musl*)
++     PLATFORM_TRIPLET=`echo "$PLATFORM_TRIPLET" | sed 's/linux-gnu/linux-musl/'`
++     ;;
++--- a/configure.ac
+++++ b/configure.ac
++@@ -876,7 +876,7 @@ EOF
++ 
++ if $CPP $CPPFLAGS conftest.c >conftest.out 2>/dev/null; then
++   PLATFORM_TRIPLET=`grep -v '^#' conftest.out | grep -v '^ *$' | tr -d ' 	'`
++-  case "$build_os" in
+++  case "$host_os" in
++   linux-musl*)
++     PLATFORM_TRIPLET=`echo "$PLATFORM_TRIPLET" | sed 's/linux-gnu/linux-musl/'`
++     ;;
+-- 
+2.35.3
+

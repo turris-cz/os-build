@@ -51,7 +51,7 @@ set_protected_build_dir() {
 }
 
 # Helper function to locate specific line in feeds.conf
-# First argument is feed's VCS. That is in general "src-git" for real feeds or
+# First argument is feed's VCS. That is in general "src-git-full" for real feeds or
 # "#" for non-feed repositories.
 # Second argument is feed's name.
 # Echoes URL as stored in feeds.conf file
@@ -182,7 +182,14 @@ git_mirror_update() {
 		_git_mirror_lock "$SHELL" -eus "$mirror" "$url" <<-"EOF"
 			git -C "$1" remote set-url origin "$2"
 			git -C "$1" remote update --prune
+			[ "$(git -C "$1" rev-parse HEAD)" = "$(git -C "$1" rev-parse FETCH_HEAD)" ] \
+				|| rm -rf "$1"
 		EOF
+		if [ ! -d "$mirror" ]; then
+			note "Remote head changed. Local mirror removed for re-clone."
+			git_mirror_update "$@"
+			return
+		fi
 	else
 		_git_mirror_lock \
 			git -C "$GIT_MIRROR" clone --mirror "$url" "$mirror"
@@ -228,7 +235,7 @@ git_checkout() (
 	if use_git_mirror || feed_ref_is_branch "$url"; then
 		git_mirror_update "$name" "$(feed_url "$url")"
 		_git_mirror_lock \
-			git fetch ${CLONE_DEEP:+--depth 1} origin "$(feed_ref "$url")"
+			git fetch origin "$(feed_ref "$url")"
 	else
 		# If we are downloading directly from server we can't fetch specific
 		# commit so fetch everything

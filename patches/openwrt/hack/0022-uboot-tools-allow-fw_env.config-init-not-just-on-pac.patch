@@ -1,0 +1,38 @@
+From 996859d32701a238381e8d42582bbc3c85dc507a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Thu, 24 Feb 2022 15:50:47 +0100
+Subject: [PATCH] uboot-tools: allow fw_env.config init not just on package
+ install
+
+The file that is able to detect and set the correct fw_env.config was
+being installed as uci-defaults and thus removed once it was executed.
+Thus to force new detection of fw_env.config we would have to reinstall
+the package to get that file back.
+This instead installs it as a regular script and adds thin a script to
+the uci-defaults directory instead.
+---
+ package/boot/uboot-envtools/Makefile | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-envtools/Makefile
+index a9eccec0ce..10d4b1c994 100644
+--- a/package/boot/uboot-envtools/Makefile
++++ b/package/boot/uboot-envtools/Makefile
+@@ -69,10 +69,12 @@ define Package/uboot-envtools/install
+ 	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
+ 	$(INSTALL_DIR) $(1)/lib
+ 	$(INSTALL_DATA) ./files/uboot-envtools.sh $(1)/lib
++	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(INSTALL_DIR) $(1)/etc/uci-defaults
+ 	$(if $(wildcard ./files/$(BOARD)), \
+-		$(INSTALL_DATA) ./files/$(BOARD) \
+-		$(1)/etc/uci-defaults/30_uboot-envtools \
++		$(INSTALL_BIN) ./files/$(BOARD) $(1)/usr/bin/fw_env-config-init.sh && \
++		echo '#!/bin/sh\nexec /usr/bin/fw_env-config-init.sh' \
++			>$(1)/etc/uci-defaults/30_uboot-envtools \
+ 	)
+ endef
+ 
+-- 
+2.32.0
+

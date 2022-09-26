@@ -1,4 +1,4 @@
-From 68d617a62d8312ea9b90780db2a638c0e093b927 Mon Sep 17 00:00:00 2001
+From 92703b2054a9a8add4ceea89728a800c74b438a4 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Tue, 29 May 2018 16:13:18 +0200
 Subject: [PATCH] base-files: do not automatically activate services and
@@ -15,17 +15,17 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
 ---
  package/base-files/Makefile                  | 11 ++++
- package/base-files/files/etc/services_wanted | 58 ++++++++++++++++++++
- package/base-files/files/lib/functions.sh    | 16 +++---
- 3 files changed, 78 insertions(+), 7 deletions(-)
+ package/base-files/files/etc/services_wanted | 60 ++++++++++++++++++++
+ package/base-files/files/lib/functions.sh    | 14 +++--
+ 3 files changed, 79 insertions(+), 6 deletions(-)
  create mode 100644 package/base-files/files/etc/services_wanted
 
 diff --git a/package/base-files/Makefile b/package/base-files/Makefile
-index 0a7c2bc..4a80593 100644
+index 8a1ddf96f5..3b3a22c4da 100644
 --- a/package/base-files/Makefile
 +++ b/package/base-files/Makefile
-@@ -200,6 +200,17 @@ define Package/base-files/install
- 		rm -f $(1)/sbin/pkg_check,)
+@@ -207,6 +207,17 @@ define Package/base-files/install
+ 		rm -f $(1)/etc/banner.failsafe,)
  endef
  
 +define Package/base-files/postinst
@@ -44,17 +44,16 @@ index 0a7c2bc..4a80593 100644
    -include $(PLATFORM_SUBDIR)/base-files.mk
 diff --git a/package/base-files/files/etc/services_wanted b/package/base-files/files/etc/services_wanted
 new file mode 100644
-index 0000000..cc74025
+index 0000000000..116a83a18c
 --- /dev/null
 +++ b/package/base-files/files/etc/services_wanted
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,60 @@
 +asm1062-fix
 +atd
 +atlas
 +atsha204-feed-entropy
 +boot
 +cron
-+cups
 +dev-detect
 +dnsmasq
 +done
@@ -72,7 +71,7 @@ index 0000000..cc74025
 +lm-sensors
 +lvm2
 +lxc-auto
-+mountd
++morce
 +mox_autosetup
 +netdata
 +nethist
@@ -106,35 +105,35 @@ index 0000000..cc74025
 +updater-journal-recover
 +urandom_seed
 +usbmode
++watchdog_adjust
++wpad
 +zram
 diff --git a/package/base-files/files/lib/functions.sh b/package/base-files/files/lib/functions.sh
-index 860fc04..213e2c2 100755
+index 2bad45324f..2680951cc4 100644
 --- a/package/base-files/files/lib/functions.sh
 +++ b/package/base-files/files/lib/functions.sh
-@@ -251,14 +251,16 @@ default_postinst() {
+@@ -277,13 +277,15 @@ default_postinst() {
  
- 	local shell="$(which bash)"
+ 	local shell="$(command -v bash)"
  	for i in $(grep -s "^/etc/init.d/" "$root$filelist"); do
 -		if [ -n "$root" ]; then
 -			${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 -		else
 -			if [ "$PKG_UPGRADE" != "1" ]; then
 -				"$i" enable
--			fi
--			"$i" start
 +		if grep -q "^$(basename "$i")$" "$root/etc/services_wanted"; then
 +			if [ -n "$root" ]; then
 +				${shell:-/bin/sh} "$root/etc/rc.common" "$root$i" enable
 +			else
 +				[ "$PKG_UPGRADE" = "1" ] || "$i" enable
-+ 			fi
- 		fi
+ 			fi
+-			"$i" start
++		fi
 +		if [ -z "$root" ] && "$i" enabled; then
 +			"$i" restart
-+ 		fi
+ 		fi
  	done
  
- 	return $ret
 -- 
-2.30.0
+2.32.0
 

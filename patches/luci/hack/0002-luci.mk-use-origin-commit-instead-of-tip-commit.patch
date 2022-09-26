@@ -1,4 +1,4 @@
-From 156083844cd950c6a3d7480bd4018511753ec93a Mon Sep 17 00:00:00 2001
+From 51c5aac594425cf757b3820052c96b0512d1a57b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 2 Dec 2019 11:02:22 +0100
 Subject: [PATCH] luci.mk: use origin commit instead of tip commit
@@ -15,19 +15,19 @@ commit.
  1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/luci.mk b/luci.mk
-index f915381..9f63af0 100644
+index d7a89d9..f471006 100644
 --- a/luci.mk
 +++ b/luci.mk
-@@ -56,7 +56,8 @@ PKG_VERSION?=$(if $(DUMP),x,$(strip $(shell \
- 	elif git log -1 >/dev/null 2>/dev/null; then \
- 		revision="svn-r$$(LC_ALL=C git log -1 | sed -ne 's/.*git-svn-id: .*@\([0-9]\+\) .*/\1/p')"; \
- 		if [ "$$revision" = "svn-r" ]; then \
--			set -- $$(git log -1 --format="%ct %h" --abbrev=7); \
-+			hash="$$(git rev-list HEAD | git name-rev --stdin --refs='origin/*' | awk '$$2 != "" { print $$1; exit }')"; \
-+			set -- $$(git log -1 --format="%ct %h" --abbrev=7 "$$hash"); \
- 			secs="$$(($$1 % 86400))"; \
- 			yday="$$(date --utc --date="@$$1" "+%y.%j")"; \
- 			revision="$$(printf 'git-%s.%05d-%s' "$$yday" "$$secs" "$$2")"; \
+@@ -64,7 +64,8 @@ PKG_NAME?=$(LUCI_NAME)
+ define findrev
+   $(shell \
+     if git log -1 >/dev/null 2>/dev/null; then \
+-      set -- $$(git log -1 --format="%ct %h" --abbrev=7 -- $(if $(1),. ':(exclude)po',po)); \
++      hash="$$(git rev-list HEAD | git name-rev --stdin --refs='origin/*' | awk '$$2 != "" { print $$1; exit }')"; \
++      set -- $$(git log -1 --format="%ct %h" --abbrev=7 "$$hash" -- $(if $(1),. ':(exclude)po',po)); \
+       if [ -n "$$1" ]; then
+         secs="$$(($$1 % 86400))"; \
+         yday="$$(date --utc --date="@$$1" "+%y.%j")"; \
 -- 
-2.24.1
+2.26.2
 

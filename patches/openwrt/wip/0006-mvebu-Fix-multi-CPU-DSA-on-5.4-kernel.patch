@@ -1,0 +1,50 @@
+From 04a2e4853ebe06c51d48b4625d7f3324b86610e5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Tue, 12 Oct 2021 15:56:05 +0200
+Subject: [PATCH] mvebu: Fix multi-CPU DSA on 5.4 kernel
+
+---
+ ...-net-dsa-mv88e6xxx-fix-multi-cpu-DSA.patch | 31 +++++++++++++++++++
+ 1 file changed, 31 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.4/9954-net-dsa-mv88e6xxx-fix-multi-cpu-DSA.patch
+
+diff --git a/target/linux/mvebu/patches-5.4/9954-net-dsa-mv88e6xxx-fix-multi-cpu-DSA.patch b/target/linux/mvebu/patches-5.4/9954-net-dsa-mv88e6xxx-fix-multi-cpu-DSA.patch
+new file mode 100644
+index 0000000000..f2e2fb83fc
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.4/9954-net-dsa-mv88e6xxx-fix-multi-cpu-DSA.patch
+@@ -0,0 +1,31 @@
++diff -Naurp a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -5141,6 +5141,7 @@ static int mv88e6xxx_register_switch(str
++ {
++ 	struct device *dev = chip->dev;
++ 	struct dsa_switch *ds;
+++	int ret;
++ 
++ 	ds = dsa_switch_alloc(dev, mv88e6xxx_num_ports(chip));
++ 	if (!ds)
++@@ -5151,11 +5152,17 @@ static int mv88e6xxx_register_switch(str
++ 	ds->ops = &mv88e6xxx_switch_ops;
++ 	ds->ageing_time_min = chip->info->age_time_coeff;
++ 	ds->ageing_time_max = chip->info->age_time_coeff * U8_MAX;
++-	ds->assisted_learning_on_cpu_port = true;
++ 
++ 	dev_set_drvdata(dev, ds);
++ 
++-	return dsa_register_switch(ds);
+++	ret = dsa_register_switch(ds);
+++	if (ret)
+++		return ret;
+++
+++	if (ds->dst->num_cpu_dps == 1)
+++		ds->assisted_learning_on_cpu_port = true;
+++
+++	return ret;
++ }
++ 
++ static void mv88e6xxx_unregister_switch(struct mv88e6xxx_chip *chip)
+-- 
+2.32.0
+

@@ -1,0 +1,80 @@
+From bd8f3ba211a7ed71600054cdcb22a73b5fba4991 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Mon, 23 May 2022 09:16:31 +0200
+Subject: [PATCH 8/8] Backport rtl8812au-ct
+
+---
+ package/kernel/rtl8812au-ct/Makefile            |  8 ++++----
+ .../rtl8812au-ct/patches/003-wireless-5.8.patch | 17 +++++------------
+ 2 files changed, 9 insertions(+), 16 deletions(-)
+
+diff --git a/package/kernel/rtl8812au-ct/Makefile b/package/kernel/rtl8812au-ct/Makefile
+index 4dab3fd232..aa2d7a2ea9 100644
+--- a/package/kernel/rtl8812au-ct/Makefile
++++ b/package/kernel/rtl8812au-ct/Makefile
+@@ -1,16 +1,16 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=rtl8812au-ct
+-PKG_RELEASE=2
++PKG_RELEASE=1
+ 
+ PKG_LICENSE:=GPLv2
+ PKG_LICENSE_FILES:=
+ 
+ PKG_SOURCE_URL:=https://github.com/greearb/rtl8812AU_8821AU_linux.git
+-PKG_MIRROR_HASH:=fa689e034cad9e4683ea784b8f3cb590492ab5c68e8babd492a4e8bf2de3b114
++PKG_MIRROR_HASH:=31e658df3e4d4c18c396259c2e0bef2bfc44a4aa870931f031a31e948be98af4
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_DATE:=2020-01-12
+-PKG_SOURCE_VERSION:=e0d586aa93cb8687dd7dc0e593b6a820df2d6e1d
++PKG_SOURCE_DATE:=2021-11-07
++PKG_SOURCE_VERSION:=39df55967b7de9f6c9600017b724303f95a8b9e2
+ 
+ PKG_MAINTAINER:=Ben Greear <greearb@candelatech.com>
+ PKG_BUILD_PARALLEL:=1
+diff --git a/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch b/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
+index 64c5ab162b..67ebb82b38 100644
+--- a/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
++++ b/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
+@@ -1,6 +1,6 @@
+ --- a/os_dep/linux/ioctl_cfg80211.c
+ +++ b/os_dep/linux/ioctl_cfg80211.c
+-@@ -5177,6 +5177,14 @@ exit:
++@@ -5177,6 +5177,15 @@ exit:
+  	return ret;
+  }
+  
+@@ -11,19 +11,12 @@
+ +{
+ +
+ +}
+-+#else
+- static void cfg80211_rtw_mgmt_frame_register(struct wiphy *wiphy,
+- #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 6, 0))
+-         struct wireless_dev *wdev,
+-@@ -5205,6 +5213,7 @@ static void cfg80211_rtw_mgmt_frame_regi
+- exit:
+- 	return;
+- }
+ +#endif
+- 
+++ 
+  #if defined(CONFIG_TDLS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+  static int cfg80211_rtw_tdls_mgmt(struct wiphy *wiphy,
+-@@ -6019,7 +6028,10 @@ static struct cfg80211_ops rtw_cfg80211_
++ 		struct net_device *ndev,
++@@ -5990,7 +5999,10 @@ static struct cfg80211_ops rtw_cfg80211_
+  	.cancel_remain_on_channel = cfg80211_rtw_cancel_remain_on_channel,
+  #endif
+  
+@@ -33,5 +26,5 @@
+ +	.update_mgmt_frame_registrations = cfg80211_rtw_update_mgmt_frame_registrations,
+ +#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
+  	.mgmt_tx = cfg80211_rtw_mgmt_tx,
+- 	.mgmt_frame_register = cfg80211_rtw_mgmt_frame_register,
+  #elif  (LINUX_VERSION_CODE>=KERNEL_VERSION(2,6,34) && LINUX_VERSION_CODE<=KERNEL_VERSION(2,6,35))
++ 	.action = cfg80211_rtw_mgmt_tx,
+-- 
+2.34.1
+

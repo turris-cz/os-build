@@ -1,0 +1,109 @@
+From 8fa57d101d1c7bbe2b155c3ee32dc3c512de4309 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sat, 3 Sep 2022 19:38:20 +0200
+Subject: [PATCH] uboot-mpc85xx: add Turris 1.x versions for SD and NOR
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ package/boot/uboot-mpc85xx/Makefile           | 49 +++++++++++++++++++
+ .../uboot-mpc85xx/patches/force-libfdt.patch  | 32 ++++++++++++
+ 2 files changed, 81 insertions(+)
+ create mode 100644 package/boot/uboot-mpc85xx/Makefile
+ create mode 100644 package/boot/uboot-mpc85xx/patches/force-libfdt.patch
+
+diff --git a/package/boot/uboot-mpc85xx/Makefile b/package/boot/uboot-mpc85xx/Makefile
+new file mode 100644
+index 0000000000..db057bfba2
+--- /dev/null
++++ b/package/boot/uboot-mpc85xx/Makefile
+@@ -0,0 +1,49 @@
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++include $(TOPDIR)/rules.mk
++include $(INCLUDE_DIR)/kernel.mk
++
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/u-boot.git
++PKG_MIRROR_HASH:=bbdf8764ea53e0b5daf24dbab50cbd92a8ab26be374de384070518712a56230d
++PKG_SOURCE_DATE:=2022-08-31
++PKG_SOURCE_VERSION:=turris1x-v2022.04
++
++include $(INCLUDE_DIR)/u-boot.mk
++include $(INCLUDE_DIR)/package.mk
++include $(INCLUDE_DIR)/host-build.mk
++
++define U-Boot/Default
++  BUILD_TARGET:=mpc85xx
++  HIDDEN:=1
++endef
++
++define U-Boot/turris1x-sd
++  NAME:=Turris 1.x
++  BUILD_DEVICES:=cznic_turris1x
++  BUILD_SUBTARGET:=p2020
++  UBOOT_CONFIG:=turris_1x_sdcard
++  UBOOT_IMAGE:=u-boot-with-spl.bin
++endef
++
++define U-Boot/turris1x-nor
++  NAME:=Turris 1.x
++  BUILD_DEVICES:=cznic_turris1x
++  BUILD_SUBTARGET:=p2020
++  UBOOT_CONFIG:=turris_1x_nor
++  UBOOT_IMAGE:=u-boot-with-dtb.bin
++endef
++
++UBOOT_TARGETS:= \
++        turris1x-sd \
++        turris1x-nor
++
++define Build/InstallDev
++	$(INSTALL_DIR) $(STAGING_DIR_IMAGE)
++	$(CP) $(PKG_BUILD_DIR)/$(UBOOT_IMAGE) $(STAGING_DIR_IMAGE)/$(BUILD_VARIANT)-$(UBOOT_IMAGE)
++endef
++
++$(eval $(call BuildPackage/U-Boot))
+diff --git a/package/boot/uboot-mpc85xx/patches/force-libfdt.patch b/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
+new file mode 100644
+index 0000000000..a21020baca
+--- /dev/null
++++ b/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
+@@ -0,0 +1,32 @@
++Taken from https://github.com/openwrt/openwrt/commit/e760f065c6fd17005c5458e54d6cc0fb8356b4df#commitcomment-78364865
++
++--- a/Makefile
+++++ b/Makefile
++@@ -2051,26 +2051,7 @@ endif
++ # Check dtc and pylibfdt, if DTC is provided, else build them
++ PHONY += scripts_dtc
++ scripts_dtc: scripts_basic
++-	$(Q)if test "$(DTC)" = "$(DTC_INTREE)"; then \
++-		$(MAKE) $(build)=scripts/dtc; \
++-	else \
++-		if ! $(DTC) -v >/dev/null; then \
++-			echo '*** Failed to check dtc version: $(DTC)'; \
++-			false; \
++-		else \
++-			if test "$(call dtc-version)" -lt $(DTC_MIN_VERSION); then \
++-				echo '*** Your dtc is too old, please upgrade to dtc $(DTC_MIN_VERSION) or newer'; \
++-				false; \
++-			else \
++-				if [ -n "$(CONFIG_PYLIBFDT)" ]; then \
++-					if ! echo "import libfdt" | $(PYTHON3) 2>/dev/null; then \
++-						echo '*** pylibfdt does not seem to be available with $(PYTHON3)'; \
++-						false; \
++-					fi; \
++-				fi; \
++-			fi; \
++-		fi; \
++-	fi
+++	$(MAKE) $(build)=scripts/dtc
++ 
++ # ---------------------------------------------------------------------------
++ quiet_cmd_cpp_lds = LDS     $@
+-- 
+2.34.1
+

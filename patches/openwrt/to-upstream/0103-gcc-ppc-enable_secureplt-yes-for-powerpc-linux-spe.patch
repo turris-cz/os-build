@@ -1,0 +1,42 @@
+From f6c19218f7aedb1e5c45f47f7c19be2520f10a66 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Wed, 13 Jul 2022 18:46:31 +0200
+Subject: [PATCH 2/2] gcc: ppc: enable_secureplt=yes for powerpc*-*-linux*-musl*spe*
+
+Required by musl as described in
+https://wiki.musl-libc.org/faq.html#Q:-My-dynamically-linked-program-crashes-on-PowerPC!
+but the enabling condition was missing from gcc for powerpc-linux-muslspe.
+
+Signed-off-by: Pali Rohár <pali@kernel.org>
+[add commit message]
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ .../patches/8.4.0/970-musl-spe-secure-plt.patch  | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 toolchain/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+
+diff --git a/toolchain/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch b/toolchain/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+new file mode 100644
+index 0000000000..50a34a00f8
+--- /dev/null
++++ b/toolchain/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+@@ -0,0 +1,16 @@
++--- a/gcc/config.gcc
+++++ b/gcc/config.gcc
++@@ -2504,6 +2504,13 @@ powerpc*-*-linux*spe*)
++ 	tm_file="${tm_file} powerpcspe/linux.h glibc-stdint.h"
++ 	tmake_file="${tmake_file} powerpcspe/t-ppcos powerpcspe/t-linux"
++ 	tm_file="${tm_file} powerpcspe/linuxspe.h powerpcspe/e500.h"
+++	case ${target} in
+++		*-linux*-musl*)
+++		enable_secureplt=yes ;;
+++	esac
+++		if test x${enable_secureplt} = xyes; then
+++		tm_file="powerpcspe/secureplt.h ${tm_file}"
+++	fi
++ 	;;
++ powerpc*-*-linux*)
++ 	tm_file="${tm_file} dbxelf.h elfos.h gnu-user.h freebsd-spec.h rs6000/sysv4.h"
+-- 
+2.35.3
+

@@ -1,0 +1,87 @@
+From 301084954d4de9eb2e2d65bfade8ae03f0174d2c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Wed, 17 Aug 2022 14:57:28 +0200
+Subject: [PATCH] mvebu: Change 2500base-x tx amplitude to fix packet loss
+ issue on Mox
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...mvebu-a3700-comphy-Change-2500base-x.patch | 63 +++++++++++++++++++
+ 1 file changed, 63 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.15/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+
+diff --git a/target/linux/mvebu/patches-5.15/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch b/target/linux/mvebu/patches-5.15/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+new file mode 100644
+index 0000000000..545f3a136d
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+@@ -0,0 +1,63 @@
++From e1f0728b3596b49f20cda9b8a794a439086bc4fa Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 17 Aug 2022 14:35:59 +0200
++Subject: [PATCH] phy: marvell: phy-mvebu-a3700-comphy: Change 2500base-x
++ transmit amplitude
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Change transmit amplitude to 1025 mV for 2500base-x mode.
++
++This fixes issue wherein if the 8b/10b encoded packet contains a long
++enough alternating sequence of bits (010101... or 101010...), which
++happens if the packet contains a sequence of 'J' or '\xb5' bytes, the
++packet may be lost due to FCS error. The probability of loss grows with
++the number of 'J's with default transmit amplitude setting - with 114
++'J's the probability is about 50%, with 125 'J's almost 100% of packets
++are lost.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/phy/marvell/phy-mvebu-a3700-comphy.c | 18 ++++++++++++++++++
++ 1 file changed, 18 insertions(+)
++
++diff --git a/drivers/phy/marvell/phy-mvebu-a3700-comphy.c b/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
++index a4d7d9bd100d..4a18f9ca6d25 100644
++--- a/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
+++++ b/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
++@@ -68,6 +68,12 @@
++ #define SPEED_PLL_MASK			GENMASK(7, 2)
++ #define SPEED_PLL_VALUE_16		FIELD_PREP(SPEED_PLL_MASK, 0x10)
++ 
+++#define COMPHY_GEN3_SET0		0x0d
+++#define Gx_TX_AMP_MASK			GENMASK(5, 1)
+++#define Gx_TX_AMP_VALUE(x)		FIELD_PREP(Gx_TX_AMP_MASK, x)
+++#define Gx_TX_AMP_ADJ			BIT(6)
+++#define Gx_TX_AMP_1025MV		(Gx_TX_AMP_VALUE(0x12) | Gx_TX_AMP_ADJ)
+++
++ #define COMPHY_DIG_LOOPBACK_EN		0x23
++ #define SEL_DATA_WIDTH_MASK		GENMASK(11, 10)
++ #define DATA_WIDTH_10BIT		FIELD_PREP(SEL_DATA_WIDTH_MASK, 0x0)
++@@ -746,6 +752,18 @@ mvebu_a3700_comphy_ethernet_power_on(struct mvebu_a3700_comphy_lane *lane)
++ 		comphy_gbe_phy_init(lane,
++ 				    lane->submode != PHY_INTERFACE_MODE_2500BASEX);
++ 
+++	/*
+++	 * Fix issue wherein a packet may be lost if it contains a long enough
+++	 * sequence of 'J' or '\xb5' bytes.
+++	 * This only happens with 2500base-x mode. Fix this by changing transmit
+++	 * amplitude to 1025 mV.
+++	 */
+++	if (lane->submode == PHY_INTERFACE_MODE_2500BASEX) {
+++		data = Gx_TX_AMP_1025MV;
+++		mask = Gx_TX_AMP_MASK | Gx_TX_AMP_ADJ;
+++		comphy_lane_reg_set(lane, COMPHY_GEN3_SET0, data, mask);
+++	}
+++
++ 	/*
++ 	 * 14. Check the PHY Polarity invert bit
++ 	 */
++-- 
++2.35.1
++
+-- 
+2.35.1
+
