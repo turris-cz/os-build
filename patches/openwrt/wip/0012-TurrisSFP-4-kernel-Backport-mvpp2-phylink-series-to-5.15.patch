@@ -1,0 +1,318 @@
+From a22c95b2371c4ab641d9d3a692331999cd872a28 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Sep 2022 20:25:01 +0200
+Subject: [PATCH 4/9] kernel: Backport mvpp2-phylink series to 5.15
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This backports Russell King's patch series mvpp2-phylink from 5.16:
+  8498e17ed4c5 ("net: mvpp2: populate supported_interfaces member")
+  6c0c4b7ac06f ("net: mvpp2: remove interface checks in mvpp2_phylink_validate()")
+  76947a635874 ("net: mvpp2: drop use of phylink_helper_basex_speed()")
+  b63f1117aefc ("net: mvpp2: clean up mvpp2_phylink_validate()")
+
+The original cover letter said:
+  Convert mvpp2 to phylink supported_interfaces
+
+  This patch series converts mvpp2 to use phylinks supported_interfaces
+  bitmap to simplify the validate() implementation. The patches:
+
+  1) Add the supported interface modes the supported_interfaces bitmap.
+  2) Removes the checks for the interface type being supported from
+     the validate callback
+  3) Removes the now unnecessary checks and call to
+     phylink_helper_basex_speed() to support switching between
+     1000base-X and 2500base-X for SFPs
+  4) Cleans up the resulting validate() code.
+
+  (3) becomes possible because when asking the MAC for its complete
+  support, we walk all supported interfaces which will include 1000base-X
+  and 2500base-X only if the comphy is present.
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...populate-supported_interfaces-member.patch | 62 ++++++++++++++++++
+ ...-interface-checks-in-mvpp2_phylink_v.patch | 63 ++++++++++++++++++
+ ...op-use-of-phylink_helper_basex_speed.patch | 58 +++++++++++++++++
+ ...vpp2-clean-up-mvpp2_phylink_validate.patch | 64 +++++++++++++++++++
+ 4 files changed, 247 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/779-v5.16-1-net-mvpp2-populate-supported_interfaces-member.patch
+ create mode 100644 target/linux/generic/backport-5.15/779-v5.16-2-net-mvpp2-remove-interface-checks-in-mvpp2_phylink_v.patch
+ create mode 100644 target/linux/generic/backport-5.15/779-v5.16-3-net-mvpp2-drop-use-of-phylink_helper_basex_speed.patch
+ create mode 100644 target/linux/generic/backport-5.15/779-v5.16-4-net-mvpp2-clean-up-mvpp2_phylink_validate.patch
+
+diff --git a/target/linux/generic/backport-5.15/779-v5.16-1-net-mvpp2-populate-supported_interfaces-member.patch b/target/linux/generic/backport-5.15/779-v5.16-1-net-mvpp2-populate-supported_interfaces-member.patch
+new file mode 100644
+index 0000000000..28c7134c3d
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/779-v5.16-1-net-mvpp2-populate-supported_interfaces-member.patch
+@@ -0,0 +1,62 @@
++From 7d3f249f553251b6167feb8259b85699239eb64a Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Wed, 27 Oct 2021 10:49:14 +0100
++Subject: [PATCH 1/4] net: mvpp2: populate supported_interfaces member
++
++Populate the phy interface mode bitmap for the Marvell mvpp2 driver
++with interfaces modes supported by the MAC.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ .../net/ethernet/marvell/mvpp2/mvpp2_main.c   | 34 +++++++++++++++++++
++ 1 file changed, 34 insertions(+)
++
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index 3c267a94f1ca..d765559f7bd0 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -6941,6 +6941,40 @@ static int mvpp2_port_probe(struct platform_device *pdev,
++ 		port->phylink_config.dev = &dev->dev;
++ 		port->phylink_config.type = PHYLINK_NETDEV;
++ 
+++		if (mvpp2_port_supports_xlg(port)) {
+++			__set_bit(PHY_INTERFACE_MODE_10GBASER,
+++				  port->phylink_config.supported_interfaces);
+++			__set_bit(PHY_INTERFACE_MODE_XAUI,
+++				  port->phylink_config.supported_interfaces);
+++		}
+++
+++		if (mvpp2_port_supports_rgmii(port))
+++			phy_interface_set_rgmii(port->phylink_config.supported_interfaces);
+++
+++		if (comphy) {
+++			/* If a COMPHY is present, we can support any of the
+++			 * serdes modes and switch between them.
+++			 */
+++			__set_bit(PHY_INTERFACE_MODE_SGMII,
+++				  port->phylink_config.supported_interfaces);
+++			__set_bit(PHY_INTERFACE_MODE_1000BASEX,
+++				  port->phylink_config.supported_interfaces);
+++			__set_bit(PHY_INTERFACE_MODE_2500BASEX,
+++				  port->phylink_config.supported_interfaces);
+++		} else if (phy_mode == PHY_INTERFACE_MODE_2500BASEX) {
+++			/* No COMPHY, with only 2500BASE-X mode supported */
+++			__set_bit(PHY_INTERFACE_MODE_2500BASEX,
+++				  port->phylink_config.supported_interfaces);
+++		} else if (phy_mode == PHY_INTERFACE_MODE_1000BASEX ||
+++			   phy_mode == PHY_INTERFACE_MODE_SGMII) {
+++			/* No COMPHY, we can switch between 1000BASE-X and SGMII
+++			 */
+++			__set_bit(PHY_INTERFACE_MODE_1000BASEX,
+++				  port->phylink_config.supported_interfaces);
+++			__set_bit(PHY_INTERFACE_MODE_SGMII,
+++				  port->phylink_config.supported_interfaces);
+++		}
+++
++ 		phylink = phylink_create(&port->phylink_config, port_fwnode,
++ 					 phy_mode, &mvpp2_phylink_ops);
++ 		if (IS_ERR(phylink)) {
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/779-v5.16-2-net-mvpp2-remove-interface-checks-in-mvpp2_phylink_v.patch b/target/linux/generic/backport-5.15/779-v5.16-2-net-mvpp2-remove-interface-checks-in-mvpp2_phylink_v.patch
+new file mode 100644
+index 0000000000..1ac1b4b91d
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/779-v5.16-2-net-mvpp2-remove-interface-checks-in-mvpp2_phylink_v.patch
+@@ -0,0 +1,63 @@
++From 7e6f41d50ea0af9f04c17937c4060ddcafa1bc90 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Wed, 27 Oct 2021 10:49:19 +0100
++Subject: [PATCH 2/4] net: mvpp2: remove interface checks in
++ mvpp2_phylink_validate()
++
++As phylink checks the interface mode against the supported_interfaces
++bitmap, we no longer need to validate the interface mode in the
++validation function. Remove this to simplify it.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ .../net/ethernet/marvell/mvpp2/mvpp2_main.c   | 33 ++++---------------
++ 1 file changed, 7 insertions(+), 26 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index d765559f7bd0..9ee1b7ef6edf 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -6265,32 +6265,13 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 	struct mvpp2_port *port = mvpp2_phylink_to_port(config);
++ 	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
++ 
++-	/* Invalid combinations */
++-	switch (state->interface) {
++-	case PHY_INTERFACE_MODE_10GBASER:
++-	case PHY_INTERFACE_MODE_XAUI:
++-		if (!mvpp2_port_supports_xlg(port))
++-			goto empty_set;
++-		break;
++-	case PHY_INTERFACE_MODE_RGMII:
++-	case PHY_INTERFACE_MODE_RGMII_ID:
++-	case PHY_INTERFACE_MODE_RGMII_RXID:
++-	case PHY_INTERFACE_MODE_RGMII_TXID:
++-		if (!mvpp2_port_supports_rgmii(port))
++-			goto empty_set;
++-		break;
++-	case PHY_INTERFACE_MODE_1000BASEX:
++-	case PHY_INTERFACE_MODE_2500BASEX:
++-		/* When in 802.3z mode, we must have AN enabled:
++-		 * Bit 2 Field InBandAnEn In-band Auto-Negotiation enable. ...
++-		 * When <PortType> = 1 (1000BASE-X) this field must be set to 1.
++-		 */
++-		if (!phylink_test(state->advertising, Autoneg))
++-			goto empty_set;
++-		break;
++-	default:
++-		break;
++-	}
+++	/* When in 802.3z mode, we must have AN enabled:
+++	 * Bit 2 Field InBandAnEn In-band Auto-Negotiation enable. ...
+++	 * When <PortType> = 1 (1000BASE-X) this field must be set to 1.
+++	 */
+++	if (phy_interface_mode_is_8023z(state->interface) &&
+++	    !phylink_test(state->advertising, Autoneg))
+++		goto empty_set;
++ 
++ 	phylink_set(mask, Autoneg);
++ 	phylink_set_port_modes(mask);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/779-v5.16-3-net-mvpp2-drop-use-of-phylink_helper_basex_speed.patch b/target/linux/generic/backport-5.15/779-v5.16-3-net-mvpp2-drop-use-of-phylink_helper_basex_speed.patch
+new file mode 100644
+index 0000000000..0d3add40a9
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/779-v5.16-3-net-mvpp2-drop-use-of-phylink_helper_basex_speed.patch
+@@ -0,0 +1,58 @@
++From 5159f776d9ca2bf038499a551292231740df8122 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Wed, 27 Oct 2021 10:49:24 +0100
++Subject: [PATCH 3/4] net: mvpp2: drop use of phylink_helper_basex_speed()
++
++Now that we have a better method to select SFP interface modes, we
++no longer need to use phylink_helper_basex_speed() in a driver's
++validation function, and we can also get rid of our hack to indicate
++both 1000base-X and 2500base-X if the comphy is present to make that
++work. Remove this hack and use of phylink_helper_basex_speed().
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ .../net/ethernet/marvell/mvpp2/mvpp2_main.c   | 19 +++++++------------
++ 1 file changed, 7 insertions(+), 12 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index 9ee1b7ef6edf..a354aa8d7b9a 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -6307,17 +6307,14 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 			break;
++ 		fallthrough;
++ 	case PHY_INTERFACE_MODE_1000BASEX:
+++		phylink_set(mask, 1000baseT_Full);
+++		phylink_set(mask, 1000baseX_Full);
+++		if (state->interface != PHY_INTERFACE_MODE_NA)
+++			break;
+++		fallthrough;
++ 	case PHY_INTERFACE_MODE_2500BASEX:
++-		if (port->comphy ||
++-		    state->interface != PHY_INTERFACE_MODE_2500BASEX) {
++-			phylink_set(mask, 1000baseT_Full);
++-			phylink_set(mask, 1000baseX_Full);
++-		}
++-		if (port->comphy ||
++-		    state->interface == PHY_INTERFACE_MODE_2500BASEX) {
++-			phylink_set(mask, 2500baseT_Full);
++-			phylink_set(mask, 2500baseX_Full);
++-		}
+++		phylink_set(mask, 2500baseT_Full);
+++		phylink_set(mask, 2500baseX_Full);
++ 		break;
++ 	default:
++ 		goto empty_set;
++@@ -6325,8 +6322,6 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 
++ 	linkmode_and(supported, supported, mask);
++ 	linkmode_and(state->advertising, state->advertising, mask);
++-
++-	phylink_helper_basex_speed(state);
++ 	return;
++ 
++ empty_set:
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/779-v5.16-4-net-mvpp2-clean-up-mvpp2_phylink_validate.patch b/target/linux/generic/backport-5.15/779-v5.16-4-net-mvpp2-clean-up-mvpp2_phylink_validate.patch
+new file mode 100644
+index 0000000000..fdd4d20c06
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/779-v5.16-4-net-mvpp2-clean-up-mvpp2_phylink_validate.patch
+@@ -0,0 +1,64 @@
++From 4792da1beeaa5c782b660bc793d331501dc4216b Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Wed, 27 Oct 2021 10:49:29 +0100
++Subject: [PATCH 4/4] net: mvpp2: clean up mvpp2_phylink_validate()
++
++mvpp2_phylink_validate() no longer needs to check for
++PHY_INTERFACE_MODE_NA as phylink will walk the supported interface
++types to discover the link mode capabilities. Remove these checks.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c | 17 +++++++----------
++ 1 file changed, 7 insertions(+), 10 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++index a354aa8d7b9a..be0dcba4649b 100644
++--- a/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
+++++ b/drivers/net/ethernet/marvell/mvpp2/mvpp2_main.c
++@@ -6284,14 +6284,12 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 	switch (state->interface) {
++ 	case PHY_INTERFACE_MODE_10GBASER:
++ 	case PHY_INTERFACE_MODE_XAUI:
++-	case PHY_INTERFACE_MODE_NA:
++ 		if (mvpp2_port_supports_xlg(port)) {
++ 			phylink_set_10g_modes(mask);
++ 			phylink_set(mask, 10000baseKR_Full);
++ 		}
++-		if (state->interface != PHY_INTERFACE_MODE_NA)
++-			break;
++-		fallthrough;
+++		break;
+++
++ 	case PHY_INTERFACE_MODE_RGMII:
++ 	case PHY_INTERFACE_MODE_RGMII_ID:
++ 	case PHY_INTERFACE_MODE_RGMII_RXID:
++@@ -6303,19 +6301,18 @@ static void mvpp2_phylink_validate(struct phylink_config *config,
++ 		phylink_set(mask, 100baseT_Full);
++ 		phylink_set(mask, 1000baseT_Full);
++ 		phylink_set(mask, 1000baseX_Full);
++-		if (state->interface != PHY_INTERFACE_MODE_NA)
++-			break;
++-		fallthrough;
+++		break;
+++
++ 	case PHY_INTERFACE_MODE_1000BASEX:
++ 		phylink_set(mask, 1000baseT_Full);
++ 		phylink_set(mask, 1000baseX_Full);
++-		if (state->interface != PHY_INTERFACE_MODE_NA)
++-			break;
++-		fallthrough;
+++		break;
+++
++ 	case PHY_INTERFACE_MODE_2500BASEX:
++ 		phylink_set(mask, 2500baseT_Full);
++ 		phylink_set(mask, 2500baseX_Full);
++ 		break;
+++
++ 	default:
++ 		goto empty_set;
++ 	}
++-- 
++2.35.1
++
+-- 
+2.35.1
+
