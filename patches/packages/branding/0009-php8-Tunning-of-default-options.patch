@@ -1,0 +1,74 @@
+From 3a98c2171eca9551cbd87d9bcc880ced1ec95a22 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Tue, 9 Apr 2019 14:09:07 +0200
+Subject: [PATCH 1/2] php8: Tunning of default options
+
+Make php more performant as we have good enough HW
+
+---
+ lang/php8/Makefile          | 1 +
+ lang/php8/files/opcache.ini | 8 ++++++++
+ lang/php8/files/php.ini     | 6 +++---
+ 3 files changed, 12 insertions(+), 3 deletions(-)
+ create mode 100644 lang/php8/files/opcache.ini
+
+diff --git a/lang/php8/Makefile b/lang/php8/Makefile
+index 6a4cbfd8c..6ad19f7e1 100644
+--- a/lang/php8/Makefile
++++ b/lang/php8/Makefile
+@@ -600,6 +600,7 @@ define BuildModule
+ 	$(INSTALL_DIR) $$(1)/usr/lib/php8
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/modules/$(subst -,_,$(1)).so $$(1)/usr/lib/php8/
+ 	$(INSTALL_DIR) $$(1)/etc/php8
++	[ \! -f ./files/$(subst -,_,$(1)).ini ] || cp ./files/$(subst -,_,$(1)).ini $$(1)/etc/php8/99_$(subst -,_,$(1)).ini
+       ifeq ($(5),zend)
+ 	echo "zend_extension=/usr/lib/php8/$(subst -,_,$(1)).so" > $$(1)/etc/php8/$(if $(4),$(4),20)_$(subst -,_,$(1)).ini
+       else
+diff --git a/lang/php8/files/opcache.ini b/lang/php8/files/opcache.ini
+new file mode 100644
+index 000000000..54ffc995b
+--- /dev/null
++++ b/lang/php8/files/opcache.ini
+@@ -0,0 +1,8 @@
++opcache.enable=1
++opcache.enable_cli=1
++opcache.interned_strings_buffer=16
++opcache.max_accelerated_files=10000
++opcache.memory_consumption=256
++opcache.save_comments=1
++opcache.revalidate_freq=1
++
+diff --git a/lang/php8/files/php.ini b/lang/php8/files/php.ini
+index 0254b4309..fc77e197d 100644
+--- a/lang/php8/files/php.ini
++++ b/lang/php8/files/php.ini
+@@ -47,7 +47,7 @@ max_execution_time = 30
+ max_input_time = 60
+ ;max_input_nesting_level = 64
+ ;max_input_vars = 1000
+-memory_limit = 8M
++memory_limit = 512M
+ 
+ ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ ; Error handling and logging ;
+@@ -97,7 +97,7 @@ default_mimetype = "text/html"
+ ;;;;;;;;;;;;;;;;;;;;;;;;;
+ 
+ ;include_path = ".:/php/includes"
+-doc_root = "/www"
++doc_root = "/srv/www"
+ user_dir =
+ extension_dir = "/usr/lib/php8"
+ ;sys_temp_dir = "/tmp"
+@@ -118,7 +118,7 @@ cgi.fix_pathinfo = 1
+ 
+ file_uploads = On
+ upload_tmp_dir = "/tmp"
+-upload_max_filesize = 2M
++upload_max_filesize = 512M
+ max_file_uploads = 20
+ 
+ ;;;;;;;;;;;;;;;;;;
+-- 
+2.32.0
+

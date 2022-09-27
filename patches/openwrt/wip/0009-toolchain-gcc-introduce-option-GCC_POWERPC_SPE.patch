@@ -1,0 +1,59 @@
+From 856026aace68acc4a7091572044f146ff704c2ce Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 10 Aug 2022 10:01:55 +0200
+Subject: [PATCH] toolchain/gcc: introduce option GCC_POWERPC_SPE
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+PowerPC SPE support was removed in GCC 9 and newer releases because it was not maintained. [^1] [^2]
+
+The usage of SPE[^3] ISA extension allows CPUs with PowerPC e500v2 cores (used in Turris 1.x routers, NXP P2020RDB
+boards, ...) to perform native operations on single[^4] and double precision floats stored in GPRs[^5] as well
+as vector operations using the whole 64-bit size of CPU registers (whose upper 32 bits are inaccessible otherwise).[^6]
+This enables programs to be compiled for these CPUs without the need for floating-point arithmetic translation
+leading to better performance.
+
+[^1] https://www.phoronix.com/news/GCC-Removes-PowerPCSPE
+[^2] https://gcc.gnu.org/git/?p=gcc.git;a=commitdiff;h=b31d0348ddada49453e3edaaf93a423fdc61dc79
+[^3]: signal processing engine
+[^4]: applies to e500v1 as well
+[^5]: general purpose registers
+[^6]: https://www.nxp.com/docs/en/reference-manual/SPEPEM.pdf
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+[patch renumbered, commit message edited]
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ toolchain/gcc/Config.in | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/toolchain/gcc/Config.in b/toolchain/gcc/Config.in
+index 357589e172..fec05c02e7 100644
+--- a/toolchain/gcc/Config.in
++++ b/toolchain/gcc/Config.in
+@@ -10,12 +10,19 @@ choice
+ 		bool "gcc 8.x"
+ 
+ 	config GCC_USE_VERSION_10
+-		bool "gcc 10.x"
++		bool "gcc 10.x" if !GCC_POWERPC_SPE
+ 
+ 	config GCC_USE_VERSION_11
+-		bool "gcc 11.x"
++		bool "gcc 11.x" if !GCC_POWERPC_SPE
+ endchoice
+ 
++config GCC_POWERPC_SPE
++	bool
++	depends on TARGET_mpc85xx
++	prompt "Enable PowerPC SPE support" if TOOLCHAINOPTS
++	help
++            This option enables PowerPC SPE support for mpc85xx, which was removed in GCC 9 and newer versions.
++
+ config GCC_USE_GRAPHITE
+ 	bool
+ 	prompt "Compile in support for the new Graphite framework in GCC 4.4+" if TOOLCHAINOPTS
+-- 
+2.34.1
+

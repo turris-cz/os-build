@@ -1,0 +1,44 @@
+From 07a7ea132bf36ec574383c40b27741d1dfdd783e Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@nic.cz>
+Date: Tue, 9 Apr 2019 14:10:20 +0200
+Subject: [PATCH 2/2] php7: Integrate php-fpm into lighttpd
+
+We have lighttpd installed by default so making sure that installation of php
+enables php sites.
+---
+ lang/php8/Makefile               | 3 +++
+ lang/php8/files/php-fpm.lighttpd | 8 ++++++++
+ 2 files changed, 11 insertions(+)
+ create mode 100644 lang/php8/files/php-fpm.lighttpd
+
+diff --git a/lang/php8/Makefile b/lang/php8/Makefile
+index 6ad19f7e1..2ef8e52ef 100644
+--- a/lang/php8/Makefile
++++ b/lang/php8/Makefile
+@@ -540,6 +540,9 @@ define Package/php8-fpm/install
+ 
+ 	$(INSTALL_DIR) $(1)/etc/init.d
+ 	$(INSTALL_BIN) ./files/php8-fpm.init $(1)/etc/init.d/php8-fpm
++
++	$(INSTALL_DIR) $(1)/etc/lighttpd/conf.d/
++	$(INSTALL_DATA) ./files/php-fpm.lighttpd $(1)/etc/lighttpd/conf.d/30-php-fpm.conf
+ endef
+ 
+ define Package/php8-fpm/conffiles
+diff --git a/lang/php8/files/php-fpm.lighttpd b/lang/php8/files/php-fpm.lighttpd
+new file mode 100644
+index 000000000..cfdda8a45
+--- /dev/null
++++ b/lang/php8/files/php-fpm.lighttpd
+@@ -0,0 +1,8 @@
++fastcgi.server += ( ".php" =>
++        ((
++                "socket" => "/var/run/php7-fpm.sock",
++                "broken-scriptfilename" => "enable",
++                "fix-root-scriptname" => "enable"
++        ))
++)
++
+-- 
+2.32.0
+

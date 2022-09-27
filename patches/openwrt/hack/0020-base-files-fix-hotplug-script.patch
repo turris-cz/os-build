@@ -1,0 +1,39 @@
+From 4acb2d9d6b3f403a1c384cb80cf6902221427598 Mon Sep 17 00:00:00 2001
+From: Jan Pavlinec <jan.pavlinec@nic.cz>
+Date: Thu, 7 Mar 2019 16:55:16 +0100
+Subject: [PATCH] base-files: don't source script in hotplug-call if is
+ executable
+
+Note: This should also fix the situation when hotplug-call
+tries to source nonshell scripts and don't break case when
+shell hotplug script is installed without executable permission
+
+This patch was rejected by upstream:
+https://github.com/openwrt/openwrt/pull/1908
+
+Signed-off-by: Jan Pavlinec <jan.pavlinec@nic.cz>
+---
+ package/base-files/files/sbin/hotplug-call | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/package/base-files/files/sbin/hotplug-call b/package/base-files/files/sbin/hotplug-call
+index f595b9e..c76860e 100755
+--- a/package/base-files/files/sbin/hotplug-call
++++ b/package/base-files/files/sbin/hotplug-call
+@@ -13,6 +13,12 @@ export DEVICENAME="${DEVPATH##*/}"
+ 
+ if [ \! -z "$1" -a -d /etc/hotplug.d/$1 ]; then
+ 	for script in $(ls /etc/hotplug.d/$1/* 2>&-); do (
+-		[ -f $script ] && . $script
++		[ -f "$script" ] && {
++			if [ -x "$script" ]; then
++				"$script"
++			else
++				. "$script"
++			fi
++		}
+ 	); done
+ fi
+-- 
+2.26.0
+
