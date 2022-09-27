@@ -1,0 +1,700 @@
+From 923255d12be4940f4458ab2fe42fcb7a5f049179 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Sep 2022 20:27:53 +0200
+Subject: [PATCH 6/9] kernel: Backport
+ convert-two-dsa-drivers-to-phylink_generic_validate series to 5.15
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This backports Russell King's patch series
+convert-two-dsa-drivers-to-phylink_generic_validate from 5.17:
+  21bd64bd717d ("net: dsa: consolidate phylink creation")
+  072eea6c22b2 ("net: dsa: replace phylink_get_interfaces() with phylink_get_caps()")
+  5938bce4b6e2 ("net: dsa: support use of phylink_generic_validate()")
+  1c9e7fd2a579 ("net: dsa: hellcreek: convert to phylink_generic_validate()")
+  a2279b08c7f4 ("net: dsa: lantiq: convert to phylink_generic_validate()")
+and dependency
+  c07c6e8eb4b3 ("net: dsa: populate supported_interfaces member")
+
+The original cover letter said:
+  net: dsa: convert two drivers to phylink_generic_validate()
+
+  Patches 1 to 3 update core DSA code to allow drivers to be converted,
+  and patches 4 and 5 convert hellcreek and lantiq to use this (both of
+  which received reviewed-by from their maintainers.) As the rest have
+  yet to be reviewed by their maintainers, they are not included here.
+
+  Patch 1 had a request to change the formatting of it; I have not done
+  so as I believe a patch should do one change and one change only -
+  reformatting it is a separate change that should be in its own patch.
+  However, as patch 2 gets rid of the reason for reformatting it, it
+  would be pointless, and pure noise to include such an intermediary
+  patch.
+
+  Instead, I have swapped the order of patches 2 and 3 from the RFC
+  series.
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...populate-supported_interfaces-member.patch |  72 +++++++
+ ...net-dsa-consolidate-phylink-creation.patch | 158 ++++++++++++++
+ ...phylink_get_interfaces-with-phylink_.patch |  58 ++++++
+ ...port-use-of-phylink_generic_validate.patch |  46 ++++
+ ...k-convert-to-phylink_generic_validat.patch |  78 +++++++
+ ...-convert-to-phylink_generic_validate.patch | 196 ++++++++++++++++++
+ 6 files changed, 608 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-1-net-dsa-populate-supported_interfaces-member.patch
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-2-net-dsa-consolidate-phylink-creation.patch
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-3-net-dsa-replace-phylink_get_interfaces-with-phylink_.patch
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-4-net-dsa-support-use-of-phylink_generic_validate.patch
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch
+ create mode 100644 target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch
+
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-1-net-dsa-populate-supported_interfaces-member.patch b/target/linux/generic/backport-5.15/781-v5.17-1-net-dsa-populate-supported_interfaces-member.patch
+new file mode 100644
+index 0000000000..d4bcbb3eaa
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-1-net-dsa-populate-supported_interfaces-member.patch
+@@ -0,0 +1,72 @@
++From e89cf45caa992df5baee7ce07431d9598ac1defc Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Thu, 28 Oct 2021 18:00:14 +0100
++Subject: [PATCH 1/6] net: dsa: populate supported_interfaces member
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add a new DSA switch operation, phylink_get_interfaces, which should
++fill in which PHY_INTERFACE_MODE_* are supported by given port.
++
++Use this before phylink_create() to fill phylinks supported_interfaces
++member, allowing phylink to determine which PHY_INTERFACE_MODEs are
++supported.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++[tweaked patch and description to add more complete support -- rmk]
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ include/net/dsa.h | 2 ++
++ net/dsa/port.c    | 4 ++++
++ net/dsa/slave.c   | 4 ++++
++ 3 files changed, 10 insertions(+)
++
++diff --git a/include/net/dsa.h b/include/net/dsa.h
++index 206ff3c4ce47..77d0d9a8e2ab 100644
++--- a/include/net/dsa.h
+++++ b/include/net/dsa.h
++@@ -636,6 +636,8 @@ struct dsa_switch_ops {
++ 	/*
++ 	 * PHYLINK integration
++ 	 */
+++	void	(*phylink_get_interfaces)(struct dsa_switch *ds, int port,
+++					  unsigned long *supported_interfaces);
++ 	void	(*phylink_validate)(struct dsa_switch *ds, int port,
++ 				    unsigned long *supported,
++ 				    struct phylink_link_state *state);
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index a21015d6bd36..d1502403aeb8 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -1172,6 +1172,10 @@ static int dsa_port_phylink_register(struct dsa_port *dp)
++ 	dp->pl_config.type = PHYLINK_DEV;
++ 	dp->pl_config.pcs_poll = ds->pcs_poll;
++ 
+++	if (ds->ops->phylink_get_interfaces)
+++		ds->ops->phylink_get_interfaces(ds, dp->index,
+++					dp->pl_config.supported_interfaces);
+++
++ 	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(port_dn),
++ 				mode, &dsa_port_phylink_mac_ops);
++ 	if (IS_ERR(dp->pl)) {
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index 4d581bd22cd5..525140370950 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1837,6 +1837,10 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
++ 		dp->pl_config.poll_fixed_state = true;
++ 	}
++ 
+++	if (ds->ops->phylink_get_interfaces)
+++		ds->ops->phylink_get_interfaces(ds, dp->index,
+++					dp->pl_config.supported_interfaces);
+++
++ 	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(port_dn), mode,
++ 				&dsa_port_phylink_mac_ops);
++ 	if (IS_ERR(dp->pl)) {
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-2-net-dsa-consolidate-phylink-creation.patch b/target/linux/generic/backport-5.15/781-v5.17-2-net-dsa-consolidate-phylink-creation.patch
+new file mode 100644
+index 0000000000..26606a5ada
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-2-net-dsa-consolidate-phylink-creation.patch
+@@ -0,0 +1,158 @@
++From b4668037f74e9f105675fd4dc7da468702d3ea18 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 13:09:55 +0000
++Subject: [PATCH 2/6] net: dsa: consolidate phylink creation
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The code in port.c and slave.c creating the phylink instance is very
++similar - let's consolidate this into a single function.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ net/dsa/dsa_priv.h |  2 +-
++ net/dsa/port.c     | 44 ++++++++++++++++++++++++++++----------------
++ net/dsa/slave.c    | 19 +++----------------
++ 3 files changed, 32 insertions(+), 33 deletions(-)
++
++diff --git a/net/dsa/dsa_priv.h b/net/dsa/dsa_priv.h
++index f0963d85b134..4a18e874779b 100644
++--- a/net/dsa/dsa_priv.h
+++++ b/net/dsa/dsa_priv.h
++@@ -267,13 +267,13 @@ int dsa_port_mrp_add_ring_role(const struct dsa_port *dp,
++ 			       const struct switchdev_obj_ring_role_mrp *mrp);
++ int dsa_port_mrp_del_ring_role(const struct dsa_port *dp,
++ 			       const struct switchdev_obj_ring_role_mrp *mrp);
+++int dsa_port_phylink_create(struct dsa_port *dp);
++ int dsa_port_link_register_of(struct dsa_port *dp);
++ void dsa_port_link_unregister_of(struct dsa_port *dp);
++ int dsa_port_hsr_join(struct dsa_port *dp, struct net_device *hsr);
++ void dsa_port_hsr_leave(struct dsa_port *dp, struct net_device *hsr);
++ int dsa_port_tag_8021q_vlan_add(struct dsa_port *dp, u16 vid, bool broadcast);
++ void dsa_port_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid, bool broadcast);
++-extern const struct phylink_mac_ops dsa_port_phylink_mac_ops;
++ 
++ static inline bool dsa_port_offloads_bridge_port(struct dsa_port *dp,
++ 						 const struct net_device *dev)
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index d1502403aeb8..4d227c503837 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -1076,7 +1076,7 @@ static void dsa_port_phylink_mac_link_up(struct phylink_config *config,
++ 				     speed, duplex, tx_pause, rx_pause);
++ }
++ 
++-const struct phylink_mac_ops dsa_port_phylink_mac_ops = {
+++static const struct phylink_mac_ops dsa_port_phylink_mac_ops = {
++ 	.validate = dsa_port_phylink_validate,
++ 	.mac_pcs_get_state = dsa_port_phylink_mac_pcs_get_state,
++ 	.mac_config = dsa_port_phylink_mac_config,
++@@ -1085,6 +1085,30 @@ const struct phylink_mac_ops dsa_port_phylink_mac_ops = {
++ 	.mac_link_up = dsa_port_phylink_mac_link_up,
++ };
++ 
+++int dsa_port_phylink_create(struct dsa_port *dp)
+++{
+++	struct dsa_switch *ds = dp->ds;
+++	phy_interface_t mode;
+++	int err;
+++
+++	err = of_get_phy_mode(dp->dn, &mode);
+++	if (err)
+++		mode = PHY_INTERFACE_MODE_NA;
+++
+++	if (ds->ops->phylink_get_interfaces)
+++		ds->ops->phylink_get_interfaces(ds, dp->index,
+++					dp->pl_config.supported_interfaces);
+++
+++	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(dp->dn),
+++				mode, &dsa_port_phylink_mac_ops);
+++	if (IS_ERR(dp->pl)) {
+++		pr_err("error creating PHYLINK: %ld\n", PTR_ERR(dp->pl));
+++		return PTR_ERR(dp->pl);
+++	}
+++
+++	return 0;
+++}
+++
++ static int dsa_port_setup_phy_of(struct dsa_port *dp, bool enable)
++ {
++ 	struct dsa_switch *ds = dp->ds;
++@@ -1161,27 +1185,15 @@ static int dsa_port_phylink_register(struct dsa_port *dp)
++ {
++ 	struct dsa_switch *ds = dp->ds;
++ 	struct device_node *port_dn = dp->dn;
++-	phy_interface_t mode;
++ 	int err;
++ 
++-	err = of_get_phy_mode(port_dn, &mode);
++-	if (err)
++-		mode = PHY_INTERFACE_MODE_NA;
++-
++ 	dp->pl_config.dev = ds->dev;
++ 	dp->pl_config.type = PHYLINK_DEV;
++ 	dp->pl_config.pcs_poll = ds->pcs_poll;
++ 
++-	if (ds->ops->phylink_get_interfaces)
++-		ds->ops->phylink_get_interfaces(ds, dp->index,
++-					dp->pl_config.supported_interfaces);
++-
++-	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(port_dn),
++-				mode, &dsa_port_phylink_mac_ops);
++-	if (IS_ERR(dp->pl)) {
++-		pr_err("error creating PHYLINK: %ld\n", PTR_ERR(dp->pl));
++-		return PTR_ERR(dp->pl);
++-	}
+++	err = dsa_port_phylink_create(dp);
+++	if (err)
+++		return err;
++ 
++ 	err = phylink_of_phy_connect(dp->pl, port_dn, 0);
++ 	if (err && err != -ENODEV) {
++diff --git a/net/dsa/slave.c b/net/dsa/slave.c
++index 525140370950..0520b4a2d898 100644
++--- a/net/dsa/slave.c
+++++ b/net/dsa/slave.c
++@@ -1817,14 +1817,9 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
++ 	struct dsa_port *dp = dsa_slave_to_port(slave_dev);
++ 	struct device_node *port_dn = dp->dn;
++ 	struct dsa_switch *ds = dp->ds;
++-	phy_interface_t mode;
++ 	u32 phy_flags = 0;
++ 	int ret;
++ 
++-	ret = of_get_phy_mode(port_dn, &mode);
++-	if (ret)
++-		mode = PHY_INTERFACE_MODE_NA;
++-
++ 	dp->pl_config.dev = &slave_dev->dev;
++ 	dp->pl_config.type = PHYLINK_NETDEV;
++ 
++@@ -1837,17 +1832,9 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
++ 		dp->pl_config.poll_fixed_state = true;
++ 	}
++ 
++-	if (ds->ops->phylink_get_interfaces)
++-		ds->ops->phylink_get_interfaces(ds, dp->index,
++-					dp->pl_config.supported_interfaces);
++-
++-	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(port_dn), mode,
++-				&dsa_port_phylink_mac_ops);
++-	if (IS_ERR(dp->pl)) {
++-		netdev_err(slave_dev,
++-			   "error creating PHYLINK: %ld\n", PTR_ERR(dp->pl));
++-		return PTR_ERR(dp->pl);
++-	}
+++	ret = dsa_port_phylink_create(dp);
+++	if (ret)
+++		return ret;
++ 
++ 	if (ds->ops->get_phy_flags)
++ 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-3-net-dsa-replace-phylink_get_interfaces-with-phylink_.patch b/target/linux/generic/backport-5.15/781-v5.17-3-net-dsa-replace-phylink_get_interfaces-with-phylink_.patch
+new file mode 100644
+index 0000000000..d2f1bd88bb
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-3-net-dsa-replace-phylink_get_interfaces-with-phylink_.patch
+@@ -0,0 +1,58 @@
++From 31509e304cd5cbdeaecf12cb2de78b6ffe2ac022 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 13:10:01 +0000
++Subject: [PATCH 3/6] net: dsa: replace phylink_get_interfaces() with
++ phylink_get_caps()
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Phylink needs slightly more information than phylink_get_interfaces()
++allows us to get from the DSA drivers - we need the MAC capabilities.
++Replace the phylink_get_interfaces() method with phylink_get_caps() to
++allow DSA drivers to fill in the phylink_config MAC capabilities field
++as well.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ include/net/dsa.h | 4 ++--
++ net/dsa/port.c    | 5 ++---
++ 2 files changed, 4 insertions(+), 5 deletions(-)
++
++diff --git a/include/net/dsa.h b/include/net/dsa.h
++index 77d0d9a8e2ab..1b130566ae3a 100644
++--- a/include/net/dsa.h
+++++ b/include/net/dsa.h
++@@ -636,8 +636,8 @@ struct dsa_switch_ops {
++ 	/*
++ 	 * PHYLINK integration
++ 	 */
++-	void	(*phylink_get_interfaces)(struct dsa_switch *ds, int port,
++-					  unsigned long *supported_interfaces);
+++	void	(*phylink_get_caps)(struct dsa_switch *ds, int port,
+++				    struct phylink_config *config);
++ 	void	(*phylink_validate)(struct dsa_switch *ds, int port,
++ 				    unsigned long *supported,
++ 				    struct phylink_link_state *state);
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index 4d227c503837..eed1b5397dc7 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -1095,9 +1095,8 @@ int dsa_port_phylink_create(struct dsa_port *dp)
++ 	if (err)
++ 		mode = PHY_INTERFACE_MODE_NA;
++ 
++-	if (ds->ops->phylink_get_interfaces)
++-		ds->ops->phylink_get_interfaces(ds, dp->index,
++-					dp->pl_config.supported_interfaces);
+++	if (ds->ops->phylink_get_caps)
+++		ds->ops->phylink_get_caps(ds, dp->index, &dp->pl_config);
++ 
++ 	dp->pl = phylink_create(&dp->pl_config, of_fwnode_handle(dp->dn),
++ 				mode, &dsa_port_phylink_mac_ops);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-4-net-dsa-support-use-of-phylink_generic_validate.patch b/target/linux/generic/backport-5.15/781-v5.17-4-net-dsa-support-use-of-phylink_generic_validate.patch
+new file mode 100644
+index 0000000000..6720e5569e
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-4-net-dsa-support-use-of-phylink_generic_validate.patch
+@@ -0,0 +1,46 @@
++From 3943c373f8848128218a8cceba63511ffcc09a9d Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 13:10:06 +0000
++Subject: [PATCH 4/6] net: dsa: support use of phylink_generic_validate()
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Support the use of phylink_generic_validate() when there is no
++phylink_validate method given in the DSA switch operations and
++mac_capabilities have been set in the phylink_config structure by the
++DSA switch driver.
++
++This gives DSA switch drivers the option to use this if they provide
++the supported_interfaces and mac_capabilities, while still giving them
++an option to override the default implementation if necessary.
++
++Reviewed-by: Vladimir Oltean <vladimir.oltean@nxp.com>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ net/dsa/port.c | 5 ++++-
++ 1 file changed, 4 insertions(+), 1 deletion(-)
++
++diff --git a/net/dsa/port.c b/net/dsa/port.c
++index eed1b5397dc7..371d25606546 100644
++--- a/net/dsa/port.c
+++++ b/net/dsa/port.c
++@@ -985,8 +985,11 @@ static void dsa_port_phylink_validate(struct phylink_config *config,
++ 	struct dsa_port *dp = container_of(config, struct dsa_port, pl_config);
++ 	struct dsa_switch *ds = dp->ds;
++ 
++-	if (!ds->ops->phylink_validate)
+++	if (!ds->ops->phylink_validate) {
+++		if (config->mac_capabilities)
+++			phylink_generic_validate(config, supported, state);
++ 		return;
+++	}
++ 
++ 	ds->ops->phylink_validate(ds, dp->index, supported, state);
++ }
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch b/target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch
+new file mode 100644
+index 0000000000..9c72c3e245
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch
+@@ -0,0 +1,78 @@
++From 7e0b9a29934d228bec9a133f504f283903333029 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 13:10:11 +0000
++Subject: [PATCH 5/6] net: dsa: hellcreek: convert to
++ phylink_generic_validate()
++
++Populate the supported interfaces and MAC capabilities for the
++hellcreek DSA switch and remove the old validate implementation to
++allow DSA to use phylink_generic_validate() for this switch driver.
++
++The switch actually only supports MII and RGMII, but as phylib defaults
++to GMII, we need to include this interface mode to keep existing DT
++working.
++
++Reviewed-by: Kurt Kanzenbach <kurt@linutronix.de>
++Tested-by: Kurt Kanzenbach <kurt@linutronix.de>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/dsa/hirschmann/hellcreek.c | 24 +++++++++++++-----------
++ 1 file changed, 13 insertions(+), 11 deletions(-)
++
++diff --git a/drivers/net/dsa/hirschmann/hellcreek.c b/drivers/net/dsa/hirschmann/hellcreek.c
++index b2bab460d2e9..a6ae2246844c 100644
++--- a/drivers/net/dsa/hirschmann/hellcreek.c
+++++ b/drivers/net/dsa/hirschmann/hellcreek.c
++@@ -1457,14 +1457,19 @@ static void hellcreek_teardown(struct dsa_switch *ds)
++ 	dsa_devlink_resources_unregister(ds);
++ }
++ 
++-static void hellcreek_phylink_validate(struct dsa_switch *ds, int port,
++-				       unsigned long *supported,
++-				       struct phylink_link_state *state)
+++static void hellcreek_phylink_get_caps(struct dsa_switch *ds, int port,
+++				       struct phylink_config *config)
++ {
++-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
++ 	struct hellcreek *hellcreek = ds->priv;
++ 
++-	dev_dbg(hellcreek->dev, "Phylink validate for port %d\n", port);
+++	__set_bit(PHY_INTERFACE_MODE_MII, config->supported_interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_RGMII, config->supported_interfaces);
+++
+++	/* Include GMII - the hardware does not support this interface
+++	 * mode, but it's the default interface mode for phylib, so we
+++	 * need it for compatibility with existing DT.
+++	 */
+++	__set_bit(PHY_INTERFACE_MODE_GMII, config->supported_interfaces);
++ 
++ 	/* The MAC settings are a hardware configuration option and cannot be
++ 	 * changed at run time or by strapping. Therefore the attached PHYs
++@@ -1472,12 +1477,9 @@ static void hellcreek_phylink_validate(struct dsa_switch *ds, int port,
++ 	 * by the hardware.
++ 	 */
++ 	if (hellcreek->pdata->is_100_mbits)
++-		phylink_set(mask, 100baseT_Full);
+++		config->mac_capabilities = MAC_100FD;
++ 	else
++-		phylink_set(mask, 1000baseT_Full);
++-
++-	linkmode_and(supported, supported, mask);
++-	linkmode_and(state->advertising, state->advertising, mask);
+++		config->mac_capabilities = MAC_1000FD;
++ }
++ 
++ static int
++@@ -1828,7 +1830,7 @@ static const struct dsa_switch_ops hellcreek_ds_ops = {
++ 	.get_strings	       = hellcreek_get_strings,
++ 	.get_tag_protocol      = hellcreek_get_tag_protocol,
++ 	.get_ts_info	       = hellcreek_get_ts_info,
++-	.phylink_validate      = hellcreek_phylink_validate,
+++	.phylink_get_caps      = hellcreek_phylink_get_caps,
++ 	.port_bridge_flags     = hellcreek_bridge_flags,
++ 	.port_bridge_join      = hellcreek_port_bridge_join,
++ 	.port_bridge_leave     = hellcreek_port_bridge_leave,
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch b/target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch
+new file mode 100644
+index 0000000000..9473bdff3b
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch
+@@ -0,0 +1,196 @@
++From 7a9dfdfe2fdd746541377f395bf0c0d54ea56ad5 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 13:10:16 +0000
++Subject: [PATCH 6/6] net: dsa: lantiq: convert to phylink_generic_validate()
++
++Populate the supported interfaces and MAC capabilities for the Lantiq
++DSA switches and remove the old validate implementation to allow DSA to
++use phylink_generic_validate() for this switch driver.
++
++The exclusion of Gigabit linkmodes for MII, Reverse MII and Reduced MII
++links is handled within phylink_generic_validate() in phylink, so there
++is no need to make them conditional on the interface mode in the driver.
++
++Reviewed-by: Hauke Mehrtens <hauke@hauke-m.de>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/dsa/lantiq_gswip.c | 120 +++++++++++----------------------
++ 1 file changed, 38 insertions(+), 82 deletions(-)
++
++diff --git a/drivers/net/dsa/lantiq_gswip.c b/drivers/net/dsa/lantiq_gswip.c
++index 4599e958fa05..de9489063824 100644
++--- a/drivers/net/dsa/lantiq_gswip.c
+++++ b/drivers/net/dsa/lantiq_gswip.c
++@@ -1426,114 +1426,70 @@ static int gswip_port_fdb_dump(struct dsa_switch *ds, int port,
++ 	return 0;
++ }
++ 
++-static void gswip_phylink_set_capab(unsigned long *supported,
++-				    struct phylink_link_state *state)
++-{
++-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
++-
++-	/* Allow all the expected bits */
++-	phylink_set(mask, Autoneg);
++-	phylink_set_port_modes(mask);
++-	phylink_set(mask, Pause);
++-	phylink_set(mask, Asym_Pause);
++-
++-	/* With the exclusion of MII, Reverse MII and Reduced MII, we
++-	 * support Gigabit, including Half duplex
++-	 */
++-	if (state->interface != PHY_INTERFACE_MODE_MII &&
++-	    state->interface != PHY_INTERFACE_MODE_REVMII &&
++-	    state->interface != PHY_INTERFACE_MODE_RMII) {
++-		phylink_set(mask, 1000baseT_Full);
++-		phylink_set(mask, 1000baseT_Half);
++-	}
++-
++-	phylink_set(mask, 10baseT_Half);
++-	phylink_set(mask, 10baseT_Full);
++-	phylink_set(mask, 100baseT_Half);
++-	phylink_set(mask, 100baseT_Full);
++-
++-	linkmode_and(supported, supported, mask);
++-	linkmode_and(state->advertising, state->advertising, mask);
++-}
++-
++-static void gswip_xrx200_phylink_validate(struct dsa_switch *ds, int port,
++-					  unsigned long *supported,
++-					  struct phylink_link_state *state)
+++static void gswip_xrx200_phylink_get_caps(struct dsa_switch *ds, int port,
+++					  struct phylink_config *config)
++ {
++ 	switch (port) {
++ 	case 0:
++ 	case 1:
++-		if (!phy_interface_mode_is_rgmii(state->interface) &&
++-		    state->interface != PHY_INTERFACE_MODE_MII &&
++-		    state->interface != PHY_INTERFACE_MODE_REVMII &&
++-		    state->interface != PHY_INTERFACE_MODE_RMII)
++-			goto unsupported;
+++		phy_interface_set_rgmii(config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_MII,
+++			  config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_REVMII,
+++			  config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_RMII,
+++			  config->supported_interfaces);
++ 		break;
+++
++ 	case 2:
++ 	case 3:
++ 	case 4:
++-		if (state->interface != PHY_INTERFACE_MODE_INTERNAL)
++-			goto unsupported;
+++		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+++			  config->supported_interfaces);
++ 		break;
+++
++ 	case 5:
++-		if (!phy_interface_mode_is_rgmii(state->interface) &&
++-		    state->interface != PHY_INTERFACE_MODE_INTERNAL)
++-			goto unsupported;
+++		phy_interface_set_rgmii(config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+++			  config->supported_interfaces);
++ 		break;
++-	default:
++-		linkmode_zero(supported);
++-		dev_err(ds->dev, "Unsupported port: %i\n", port);
++-		return;
++ 	}
++ 
++-	gswip_phylink_set_capab(supported, state);
++-
++-	return;
++-
++-unsupported:
++-	linkmode_zero(supported);
++-	dev_err(ds->dev, "Unsupported interface '%s' for port %d\n",
++-		phy_modes(state->interface), port);
+++	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+++		MAC_10 | MAC_100 | MAC_1000;
++ }
++ 
++-static void gswip_xrx300_phylink_validate(struct dsa_switch *ds, int port,
++-					  unsigned long *supported,
++-					  struct phylink_link_state *state)
+++static void gswip_xrx300_phylink_get_caps(struct dsa_switch *ds, int port,
+++					  struct phylink_config *config)
++ {
++ 	switch (port) {
++ 	case 0:
++-		if (!phy_interface_mode_is_rgmii(state->interface) &&
++-		    state->interface != PHY_INTERFACE_MODE_GMII &&
++-		    state->interface != PHY_INTERFACE_MODE_RMII)
++-			goto unsupported;
+++		phy_interface_set_rgmii(config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_GMII,
+++			  config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_RMII,
+++			  config->supported_interfaces);
++ 		break;
+++
++ 	case 1:
++ 	case 2:
++ 	case 3:
++ 	case 4:
++-		if (state->interface != PHY_INTERFACE_MODE_INTERNAL)
++-			goto unsupported;
+++		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+++			  config->supported_interfaces);
++ 		break;
+++
++ 	case 5:
++-		if (!phy_interface_mode_is_rgmii(state->interface) &&
++-		    state->interface != PHY_INTERFACE_MODE_INTERNAL &&
++-		    state->interface != PHY_INTERFACE_MODE_RMII)
++-			goto unsupported;
+++		phy_interface_set_rgmii(config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_INTERNAL,
+++			  config->supported_interfaces);
+++		__set_bit(PHY_INTERFACE_MODE_RMII,
+++			  config->supported_interfaces);
++ 		break;
++-	default:
++-		linkmode_zero(supported);
++-		dev_err(ds->dev, "Unsupported port: %i\n", port);
++-		return;
++ 	}
++ 
++-	gswip_phylink_set_capab(supported, state);
++-
++-	return;
++-
++-unsupported:
++-	linkmode_zero(supported);
++-	dev_err(ds->dev, "Unsupported interface '%s' for port %d\n",
++-		phy_modes(state->interface), port);
+++	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
+++		MAC_10 | MAC_100 | MAC_1000;
++ }
++ 
++ static void gswip_port_set_link(struct gswip_priv *priv, int port, bool link)
++@@ -1812,7 +1768,7 @@ static const struct dsa_switch_ops gswip_xrx200_switch_ops = {
++ 	.port_fdb_add		= gswip_port_fdb_add,
++ 	.port_fdb_del		= gswip_port_fdb_del,
++ 	.port_fdb_dump		= gswip_port_fdb_dump,
++-	.phylink_validate	= gswip_xrx200_phylink_validate,
+++	.phylink_get_caps	= gswip_xrx200_phylink_get_caps,
++ 	.phylink_mac_config	= gswip_phylink_mac_config,
++ 	.phylink_mac_link_down	= gswip_phylink_mac_link_down,
++ 	.phylink_mac_link_up	= gswip_phylink_mac_link_up,
++@@ -1836,7 +1792,7 @@ static const struct dsa_switch_ops gswip_xrx300_switch_ops = {
++ 	.port_fdb_add		= gswip_port_fdb_add,
++ 	.port_fdb_del		= gswip_port_fdb_del,
++ 	.port_fdb_dump		= gswip_port_fdb_dump,
++-	.phylink_validate	= gswip_xrx300_phylink_validate,
+++	.phylink_get_caps	= gswip_xrx300_phylink_get_caps,
++ 	.phylink_mac_config	= gswip_phylink_mac_config,
++ 	.phylink_mac_link_down	= gswip_phylink_mac_link_down,
++ 	.phylink_mac_link_up	= gswip_phylink_mac_link_up,
++-- 
++2.35.1
++
+-- 
+2.35.1
+

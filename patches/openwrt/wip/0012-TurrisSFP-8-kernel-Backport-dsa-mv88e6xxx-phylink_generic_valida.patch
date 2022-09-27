@@ -1,0 +1,1373 @@
+From 514cc61acb4d9644093293eaaae78157cf3afe48 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Sep 2022 20:46:58 +0200
+Subject: [PATCH 8/9] kernel: Backport dsa-mv88e6xxx-phylink_generic_validate
+ series to 5.15
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This backports Russell King's patch series
+dsa-mv88e6xxx-phylink_generic_validate from 5.19:
+  62001548a6da ("net: dsa: mv88e6xxx: add mv88e6352_g2_scratch_port_has_serdes()")
+  d4ebf12bcec4 ("net: dsa: mv88e6xxx: populate supported_interfaces and mac_capabilities")
+  2ee84cfefb1e ("net: dsa: mv88e6xxx: convert to phylink_generic_validate()")
+  7f7d32bc2608 ("net: dsa: mv88e6xxx: improve 88e6352 serdes statistics detection")
+and related fixes
+  dde41a697331 ("net: dsa: mv88e6xxx: Fix off by in one in mv88e6185_phylink_get_caps()")
+  d0b78ab1ca35 ("net: dsa: mv88e6xxx: Fix validation of built-in PHYs on 6095/6097")
+
+The original cover letter said:
+  net: dsa: mv88e6xxx: convert to phylink_generic_validate()
+
+  The overall objective of this series is to convert the mv88e6xxx DSA
+  driver to use phylink_generic_validate().
+
+  Patch 1 adds a new helper mv88e6352_g2_scratch_port_has_serdes() which
+  indicates whether an 88e6352 port has a serdes associated with it. This
+  is necessary as ports 4 and 5 will normally be in automedia mode, where
+  the CMODE field in the port status register will change e.g. between 15
+  (internal PHY) and 9 (1000base-X) depending on whether the serdes has
+  link.
+
+  The existing code caches the cmode field, and depending whether the
+  serdes has link at probe time, determines whether we allow things such
+  as the serdes statistics to be accessed. This means if the link isn't
+  up at probe time, the serdes is essentially unavailable.
+
+  Patch 1 addresses this by reading the pin configuration to find out
+  whether the serdes is attached to port 4 or port 5.
+
+  Patch 2 is a joint effort between myself and Marek Behún, adding the
+  supported interfaces and MAC capabilities to all mv88e6xxx supported
+  switch devices. This is slightly more restrictive than the original
+  code as we didn't used to care too much about the interface mode, but
+  with this we do - which is why we must know if there's a serdes
+  associated now.
+
+  Patch 3 switches mv88e6xxx to use the generic validation by removing
+  the initialisation of the phylink_validate pointer in the dsa_ops
+  struct.
+
+  Patch 4 updates the statistics code to use the new helper in patch 1,
+  so the serdes statistics are available even if the link was down at
+  driver probe time.
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...x-add-mv88e6352_g2_scratch_port_has_.patch |  77 +++
+ ...x-populate-supported_interfaces-and-.patch | 548 ++++++++++++++++++
+ ...x-convert-to-phylink_generic_validat.patch | 407 +++++++++++++
+ ...x-improve-88e6352-serdes-statistics-.patch | 125 ++++
+ ...x-Fix-off-by-in-one-in-mv88e6185_phy.patch |  33 ++
+ ...x-Fix-validation-of-built-in-PHYs-on.patch |  73 +++
+ 6 files changed, 1263 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-1-net-dsa-mv88e6xxx-add-mv88e6352_g2_scratch_port_has_.patch
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-2-net-dsa-mv88e6xxx-populate-supported_interfaces-and-.patch
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-3-net-dsa-mv88e6xxx-convert-to-phylink_generic_validat.patch
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-4-net-dsa-mv88e6xxx-improve-88e6352-serdes-statistics-.patch
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-5-net-dsa-mv88e6xxx-Fix-off-by-in-one-in-mv88e6185_phy.patch
+ create mode 100644 target/linux/generic/backport-5.15/784-v5.19-6-net-dsa-mv88e6xxx-Fix-validation-of-built-in-PHYs-on.patch
+
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-1-net-dsa-mv88e6xxx-add-mv88e6352_g2_scratch_port_has_.patch b/target/linux/generic/backport-5.15/784-v5.19-1-net-dsa-mv88e6xxx-add-mv88e6352_g2_scratch_port_has_.patch
+new file mode 100644
+index 0000000000..b18c019792
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-1-net-dsa-mv88e6xxx-add-mv88e6352_g2_scratch_port_has_.patch
+@@ -0,0 +1,77 @@
++From 41a26921e2cb825bb1dea2620dd5d9250eb25258 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Thu, 3 Feb 2022 13:30:36 +0000
++Subject: [PATCH 1/6] net: dsa: mv88e6xxx: add
++ mv88e6352_g2_scratch_port_has_serdes()
++
++Read the hardware configuration to determine which port is attached
++to the serdes.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/global2.h         |  3 +++
++ drivers/net/dsa/mv88e6xxx/global2_scratch.c | 28 +++++++++++++++++++++
++ 2 files changed, 31 insertions(+)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/global2.h b/drivers/net/dsa/mv88e6xxx/global2.h
++index f3e27573a386..807aeaad9830 100644
++--- a/drivers/net/dsa/mv88e6xxx/global2.h
+++++ b/drivers/net/dsa/mv88e6xxx/global2.h
++@@ -299,6 +299,8 @@
++ #define MV88E6352_G2_SCRATCH_CONFIG_DATA1_NO_CPU	BIT(2)
++ #define MV88E6352_G2_SCRATCH_CONFIG_DATA2	0x72
++ #define MV88E6352_G2_SCRATCH_CONFIG_DATA2_P0_MODE_MASK	0x3
+++#define MV88E6352_G2_SCRATCH_CONFIG_DATA3	0x73
+++#define MV88E6352_G2_SCRATCH_CONFIG_DATA3_S_SEL		BIT(1)
++ 
++ #define MV88E6352_G2_SCRATCH_GPIO_PCTL_GPIO	0
++ #define MV88E6352_G2_SCRATCH_GPIO_PCTL_TRIG	1
++@@ -370,6 +372,7 @@ extern const struct mv88e6xxx_gpio_ops mv88e6352_gpio_ops;
++ 
++ int mv88e6xxx_g2_scratch_gpio_set_smi(struct mv88e6xxx_chip *chip,
++ 				      bool external);
+++int mv88e6352_g2_scratch_port_has_serdes(struct mv88e6xxx_chip *chip, int port);
++ int mv88e6xxx_g2_atu_stats_set(struct mv88e6xxx_chip *chip, u16 kind, u16 bin);
++ int mv88e6xxx_g2_atu_stats_get(struct mv88e6xxx_chip *chip, u16 *stats);
++ 
++diff --git a/drivers/net/dsa/mv88e6xxx/global2_scratch.c b/drivers/net/dsa/mv88e6xxx/global2_scratch.c
++index eda710062933..a9d6e40321a2 100644
++--- a/drivers/net/dsa/mv88e6xxx/global2_scratch.c
+++++ b/drivers/net/dsa/mv88e6xxx/global2_scratch.c
++@@ -289,3 +289,31 @@ int mv88e6xxx_g2_scratch_gpio_set_smi(struct mv88e6xxx_chip *chip,
++ 
++ 	return mv88e6xxx_g2_scratch_write(chip, misc_cfg, val);
++ }
+++
+++/**
+++ * mv88e6352_g2_scratch_port_has_serdes - indicate if a port can have a serdes
+++ * @chip: chip private data
+++ * @port: port number to check for serdes
+++ *
+++ * Indicates whether the port may have a serdes attached according to the
+++ * pin strapping. Returns negative error number, 0 if the port is not
+++ * configured to have a serdes, and 1 if the port is configured to have a
+++ * serdes attached.
+++ */
+++int mv88e6352_g2_scratch_port_has_serdes(struct mv88e6xxx_chip *chip, int port)
+++{
+++	u8 config3, p;
+++	int err;
+++
+++	err = mv88e6xxx_g2_scratch_read(chip, MV88E6352_G2_SCRATCH_CONFIG_DATA3,
+++					&config3);
+++	if (err)
+++		return err;
+++
+++	if (config3 & MV88E6352_G2_SCRATCH_CONFIG_DATA3_S_SEL)
+++		p = 5;
+++	else
+++		p = 4;
+++
+++	return port == p;
+++}
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-2-net-dsa-mv88e6xxx-populate-supported_interfaces-and-.patch b/target/linux/generic/backport-5.15/784-v5.19-2-net-dsa-mv88e6xxx-populate-supported_interfaces-and-.patch
+new file mode 100644
+index 0000000000..7793bea294
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-2-net-dsa-mv88e6xxx-populate-supported_interfaces-and-.patch
+@@ -0,0 +1,548 @@
++From 25845d4c0a9932a9b9308139f2e5f9de580e2243 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Thu, 3 Feb 2022 13:30:42 +0000
++Subject: [PATCH 2/6] net: dsa: mv88e6xxx: populate supported_interfaces and
++ mac_capabilities
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Populate the supported interfaces and MAC capabilities for the
++Marvell MV88E6xxx DSA switches in preparation to using these for the
++validation functionality.
++
++Patch co-authored by Marek.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: Marek Behún <kabel@kernel.org> [ fixed 6341 and 6393x ]
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 275 ++++++++++++++++++++++++++++++-
++ drivers/net/dsa/mv88e6xxx/chip.h |   2 +
++ drivers/net/dsa/mv88e6xxx/port.h |   5 +
++ 3 files changed, 279 insertions(+), 3 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index d2751f73246b..c86a08274ca3 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -685,11 +685,251 @@ static void mv88e6xxx_validate(struct dsa_switch *ds, int port,
++ 
++ 	linkmode_and(supported, supported, mask);
++ 	linkmode_and(state->advertising, state->advertising, mask);
+++}
+++
+++static const u8 mv88e6185_phy_interface_modes[] = {
+++	[MV88E6185_PORT_STS_CMODE_GMII_FD]	 = PHY_INTERFACE_MODE_GMII,
+++	[MV88E6185_PORT_STS_CMODE_MII_100_FD_PS] = PHY_INTERFACE_MODE_MII,
+++	[MV88E6185_PORT_STS_CMODE_MII_100]	 = PHY_INTERFACE_MODE_MII,
+++	[MV88E6185_PORT_STS_CMODE_MII_10]	 = PHY_INTERFACE_MODE_MII,
+++	[MV88E6185_PORT_STS_CMODE_SERDES]	 = PHY_INTERFACE_MODE_1000BASEX,
+++	[MV88E6185_PORT_STS_CMODE_1000BASE_X]	 = PHY_INTERFACE_MODE_1000BASEX,
+++	[MV88E6185_PORT_STS_CMODE_PHY]		 = PHY_INTERFACE_MODE_SGMII,
+++};
+++
+++static void mv88e6185_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	u8 cmode = chip->ports[port].cmode;
+++
+++	if (cmode <= ARRAY_SIZE(mv88e6185_phy_interface_modes) &&
+++	    mv88e6185_phy_interface_modes[cmode])
+++		__set_bit(mv88e6185_phy_interface_modes[cmode],
+++			  config->supported_interfaces);
++ 
++-	/* We can only operate at 2500BaseX or 1000BaseX.  If requested
++-	 * to advertise both, only report advertising at 2500BaseX.
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100 |
+++				   MAC_1000FD;
+++}
+++
+++static const u8 mv88e6xxx_phy_interface_modes[] = {
+++	[MV88E6XXX_PORT_STS_CMODE_MII_PHY]	= PHY_INTERFACE_MODE_MII,
+++	[MV88E6XXX_PORT_STS_CMODE_MII]		= PHY_INTERFACE_MODE_MII,
+++	[MV88E6XXX_PORT_STS_CMODE_GMII]		= PHY_INTERFACE_MODE_GMII,
+++	[MV88E6XXX_PORT_STS_CMODE_RMII_PHY]	= PHY_INTERFACE_MODE_RMII,
+++	[MV88E6XXX_PORT_STS_CMODE_RMII]		= PHY_INTERFACE_MODE_RMII,
+++	[MV88E6XXX_PORT_STS_CMODE_100BASEX]	= PHY_INTERFACE_MODE_100BASEX,
+++	[MV88E6XXX_PORT_STS_CMODE_1000BASEX]	= PHY_INTERFACE_MODE_1000BASEX,
+++	[MV88E6XXX_PORT_STS_CMODE_SGMII]	= PHY_INTERFACE_MODE_SGMII,
+++	/* higher interface modes are not needed here, since ports supporting
+++	 * them are writable, and so the supported interfaces are filled in the
+++	 * corresponding .phylink_set_interfaces() implementation below
++ 	 */
++-	phylink_helper_basex_speed(state);
+++};
+++
+++static void mv88e6xxx_translate_cmode(u8 cmode, unsigned long *supported)
+++{
+++	if (cmode < ARRAY_SIZE(mv88e6xxx_phy_interface_modes) &&
+++	    mv88e6xxx_phy_interface_modes[cmode])
+++		__set_bit(mv88e6xxx_phy_interface_modes[cmode], supported);
+++	else if (cmode == MV88E6XXX_PORT_STS_CMODE_RGMII)
+++		phy_interface_set_rgmii(supported);
+++}
+++
+++static void mv88e6250_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++
+++	/* Translate the default cmode */
+++	mv88e6xxx_translate_cmode(chip->ports[port].cmode, supported);
+++
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100;
+++}
+++
+++static int mv88e6352_get_port4_serdes_cmode(struct mv88e6xxx_chip *chip)
+++{
+++	u16 reg, val;
+++	int err;
+++
+++	err = mv88e6xxx_port_read(chip, 4, MV88E6XXX_PORT_STS, &reg);
+++	if (err)
+++		return err;
+++
+++	/* If PHY_DETECT is zero, then we are not in auto-media mode */
+++	if (!(reg & MV88E6XXX_PORT_STS_PHY_DETECT))
+++		return 0xf;
+++
+++	val = reg & ~MV88E6XXX_PORT_STS_PHY_DETECT;
+++	err = mv88e6xxx_port_write(chip, 4, MV88E6XXX_PORT_STS, val);
+++	if (err)
+++		return err;
+++
+++	err = mv88e6xxx_port_read(chip, 4, MV88E6XXX_PORT_STS, &val);
+++	if (err)
+++		return err;
+++
+++	/* Restore PHY_DETECT value */
+++	err = mv88e6xxx_port_write(chip, 4, MV88E6XXX_PORT_STS, reg);
+++	if (err)
+++		return err;
+++
+++	return val & MV88E6XXX_PORT_STS_CMODE_MASK;
+++}
+++
+++static void mv88e6352_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++	int err, cmode;
+++
+++	/* Translate the default cmode */
+++	mv88e6xxx_translate_cmode(chip->ports[port].cmode, supported);
+++
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100 |
+++				   MAC_1000FD;
+++
+++	/* Port 4 supports automedia if the serdes is associated with it. */
+++	if (port == 4) {
+++		mv88e6xxx_reg_lock(chip);
+++		err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++		if (err < 0)
+++			dev_err(chip->dev, "p%d: failed to read scratch\n",
+++				port);
+++		if (err <= 0)
+++			goto unlock;
+++
+++		cmode = mv88e6352_get_port4_serdes_cmode(chip);
+++		if (cmode < 0)
+++			dev_err(chip->dev, "p%d: failed to read serdes cmode\n",
+++				port);
+++		else
+++			mv88e6xxx_translate_cmode(cmode, supported);
+++unlock:
+++		mv88e6xxx_reg_unlock(chip);
+++	}
+++}
+++
+++static void mv88e6341_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++
+++	/* Translate the default cmode */
+++	mv88e6xxx_translate_cmode(chip->ports[port].cmode, supported);
+++
+++	/* No ethtool bits for 200Mbps */
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100 |
+++				   MAC_1000FD;
+++
+++	/* The C_Mode field is programmable on port 5 */
+++	if (port == 5) {
+++		__set_bit(PHY_INTERFACE_MODE_SGMII, supported);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported);
+++		__set_bit(PHY_INTERFACE_MODE_2500BASEX, supported);
+++
+++		config->mac_capabilities |= MAC_2500FD;
+++	}
+++}
+++
+++static void mv88e6390_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++
+++	/* Translate the default cmode */
+++	mv88e6xxx_translate_cmode(chip->ports[port].cmode, supported);
+++
+++	/* No ethtool bits for 200Mbps */
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100 |
+++				   MAC_1000FD;
+++
+++	/* The C_Mode field is programmable on ports 9 and 10 */
+++	if (port == 9 || port == 10) {
+++		__set_bit(PHY_INTERFACE_MODE_SGMII, supported);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported);
+++		__set_bit(PHY_INTERFACE_MODE_2500BASEX, supported);
+++
+++		config->mac_capabilities |= MAC_2500FD;
+++	}
+++}
+++
+++static void mv88e6390x_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++					struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++
+++	mv88e6390_phylink_get_caps(chip, port, config);
+++
+++	/* For the 6x90X, ports 2-7 can be in automedia mode.
+++	 * (Note that 6x90 doesn't support RXAUI nor XAUI).
+++	 *
+++	 * Port 2 can also support 1000BASE-X in automedia mode if port 9 is
+++	 * configured for 1000BASE-X, SGMII or 2500BASE-X.
+++	 * Port 3-4 can also support 1000BASE-X in automedia mode if port 9 is
+++	 * configured for RXAUI, 1000BASE-X, SGMII or 2500BASE-X.
+++	 *
+++	 * Port 5 can also support 1000BASE-X in automedia mode if port 10 is
+++	 * configured for 1000BASE-X, SGMII or 2500BASE-X.
+++	 * Port 6-7 can also support 1000BASE-X in automedia mode if port 10 is
+++	 * configured for RXAUI, 1000BASE-X, SGMII or 2500BASE-X.
+++	 *
+++	 * For now, be permissive (as the old code was) and allow 1000BASE-X
+++	 * on ports 2..7.
+++	 */
+++	if (port >= 2 && port <= 7)
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported);
+++
+++	/* The C_Mode field can also be programmed for 10G speeds */
+++	if (port == 9 || port == 10) {
+++		__set_bit(PHY_INTERFACE_MODE_XAUI, supported);
+++		__set_bit(PHY_INTERFACE_MODE_RXAUI, supported);
+++
+++		config->mac_capabilities |= MAC_10000FD;
+++	}
+++}
+++
+++static void mv88e6393x_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++					struct phylink_config *config)
+++{
+++	unsigned long *supported = config->supported_interfaces;
+++	bool is_6191x =
+++		chip->info->prod_num == MV88E6XXX_PORT_SWITCH_ID_PROD_6191X;
+++
+++	mv88e6xxx_translate_cmode(chip->ports[port].cmode, supported);
+++
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100 |
+++				   MAC_1000FD;
+++
+++	/* The C_Mode field can be programmed for ports 0, 9 and 10 */
+++	if (port == 0 || port == 9 || port == 10) {
+++		__set_bit(PHY_INTERFACE_MODE_SGMII, supported);
+++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported);
+++
+++		/* 6191X supports >1G modes only on port 10 */
+++		if (!is_6191x || port == 10) {
+++			__set_bit(PHY_INTERFACE_MODE_2500BASEX, supported);
+++			__set_bit(PHY_INTERFACE_MODE_5GBASER, supported);
+++			__set_bit(PHY_INTERFACE_MODE_10GBASER, supported);
+++			/* FIXME: USXGMII is not supported yet */
+++			/* __set_bit(PHY_INTERFACE_MODE_USXGMII, supported); */
+++
+++			config->mac_capabilities |= MAC_2500FD | MAC_5000FD |
+++				MAC_10000FD;
+++		}
+++	}
+++}
+++
+++static void mv88e6xxx_get_caps(struct dsa_switch *ds, int port,
+++			       struct phylink_config *config)
+++{
+++	struct mv88e6xxx_chip *chip = ds->priv;
+++
+++	chip->info->ops->phylink_get_caps(chip, port, config);
+++
+++	/* Internal ports need GMII for PHYLIB */
+++	if (mv88e6xxx_phy_is_internal(ds, port))
+++		__set_bit(PHY_INTERFACE_MODE_GMII,
+++			  config->supported_interfaces);
++ }
++ 
++ static void mv88e6xxx_mac_config(struct dsa_switch *ds, int port,
++@@ -3599,6 +3839,7 @@ static const struct mv88e6xxx_ops mv88e6085_ops = {
++ 	.rmu_disable = mv88e6085_g1_rmu_disable,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -3633,6 +3874,7 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++ 	.reset = mv88e6185_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -3680,6 +3922,7 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++ 	.rmu_disable = mv88e6085_g1_rmu_disable,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -3717,6 +3960,7 @@ static const struct mv88e6xxx_ops mv88e6123_ops = {
++ 	.atu_set_hash = mv88e6165_g1_atu_set_hash,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -3758,6 +4002,7 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++ 	.reset = mv88e6185_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -3822,6 +4067,7 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++ 	.serdes_get_stats = mv88e6390_serdes_get_stats,
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
+++	.phylink_get_caps = mv88e6341_phylink_get_caps,
++ 	.phylink_validate = mv88e6341_phylink_validate,
++ };
++ 
++@@ -3864,6 +4110,7 @@ static const struct mv88e6xxx_ops mv88e6161_ops = {
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.avb_ops = &mv88e6165_avb_ops,
++ 	.ptp_ops = &mv88e6165_ptp_ops,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -3900,6 +4147,7 @@ static const struct mv88e6xxx_ops mv88e6165_ops = {
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.avb_ops = &mv88e6165_avb_ops,
++ 	.ptp_ops = &mv88e6165_ptp_ops,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -3942,6 +4190,7 @@ static const struct mv88e6xxx_ops mv88e6171_ops = {
++ 	.atu_set_hash = mv88e6165_g1_atu_set_hash,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -3997,6 +4246,7 @@ static const struct mv88e6xxx_ops mv88e6172_ops = {
++ 	.serdes_get_regs_len = mv88e6352_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
+++	.phylink_get_caps = mv88e6352_phylink_get_caps,
++ 	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++@@ -4039,6 +4289,7 @@ static const struct mv88e6xxx_ops mv88e6175_ops = {
++ 	.atu_set_hash = mv88e6165_g1_atu_set_hash,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -4097,6 +4348,7 @@ static const struct mv88e6xxx_ops mv88e6176_ops = {
++ 	.serdes_get_regs_len = mv88e6352_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
+++	.phylink_get_caps = mv88e6352_phylink_get_caps,
++ 	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++@@ -4136,6 +4388,7 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
++ 	.reset = mv88e6185_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++@@ -4198,6 +4451,7 @@ static const struct mv88e6xxx_ops mv88e6190_ops = {
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
+++	.phylink_get_caps = mv88e6390_phylink_get_caps,
++ 	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++@@ -4259,6 +4513,7 @@ static const struct mv88e6xxx_ops mv88e6190x_ops = {
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
+++	.phylink_get_caps = mv88e6390x_phylink_get_caps,
++ 	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++@@ -4319,6 +4574,7 @@ static const struct mv88e6xxx_ops mv88e6191_ops = {
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6390_phylink_get_caps,
++ 	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++@@ -4379,6 +4635,7 @@ static const struct mv88e6xxx_ops mv88e6240_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6352_phylink_get_caps,
++ 	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++@@ -4419,6 +4676,7 @@ static const struct mv88e6xxx_ops mv88e6250_ops = {
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6250_ptp_ops,
+++	.phylink_get_caps = mv88e6250_phylink_get_caps,
++ 	.phylink_validate = mv88e6065_phylink_validate,
++ };
++ 
++@@ -4481,6 +4739,7 @@ static const struct mv88e6xxx_ops mv88e6290_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6390_phylink_get_caps,
++ 	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++@@ -4525,6 +4784,7 @@ static const struct mv88e6xxx_ops mv88e6320_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -4567,6 +4827,7 @@ static const struct mv88e6xxx_ops mv88e6321_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -4633,6 +4894,7 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++ 	.serdes_get_stats = mv88e6390_serdes_get_stats,
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
+++	.phylink_get_caps = mv88e6341_phylink_get_caps,
++ 	.phylink_validate = mv88e6341_phylink_validate,
++ };
++ 
++@@ -4675,6 +4937,7 @@ static const struct mv88e6xxx_ops mv88e6350_ops = {
++ 	.atu_set_hash = mv88e6165_g1_atu_set_hash,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -4719,6 +4982,7 @@ static const struct mv88e6xxx_ops mv88e6351_ops = {
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6185_phylink_get_caps,
++ 	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++@@ -4782,6 +5046,7 @@ static const struct mv88e6xxx_ops mv88e6352_ops = {
++ 	.serdes_get_stats = mv88e6352_serdes_get_stats,
++ 	.serdes_get_regs_len = mv88e6352_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
+++	.phylink_get_caps = mv88e6352_phylink_get_caps,
++ 	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++@@ -4847,6 +5112,7 @@ static const struct mv88e6xxx_ops mv88e6390_ops = {
++ 	.serdes_get_stats = mv88e6390_serdes_get_stats,
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
+++	.phylink_get_caps = mv88e6390_phylink_get_caps,
++ 	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++@@ -4911,6 +5177,7 @@ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6390x_phylink_get_caps,
++ 	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++@@ -4975,6 +5242,7 @@ static const struct mv88e6xxx_ops mv88e6393x_ops = {
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
+++	.phylink_get_caps = mv88e6393x_phylink_get_caps,
++ 	.phylink_validate = mv88e6393x_phylink_validate,
++ };
++ 
++@@ -6244,6 +6512,7 @@ static const struct dsa_switch_ops mv88e6xxx_switch_ops = {
++ 	.teardown		= mv88e6xxx_teardown,
++ 	.port_setup		= mv88e6xxx_port_setup,
++ 	.port_teardown		= mv88e6xxx_port_teardown,
+++	.phylink_get_caps	= mv88e6xxx_get_caps,
++ 	.phylink_validate	= mv88e6xxx_validate,
++ 	.phylink_mac_link_state	= mv88e6xxx_serdes_pcs_get_state,
++ 	.phylink_mac_config	= mv88e6xxx_mac_config,
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
++index 8271b8aa7b71..5b0ee59b3c94 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.h
+++++ b/drivers/net/dsa/mv88e6xxx/chip.h
++@@ -609,6 +609,8 @@ struct mv88e6xxx_ops {
++ 	const struct mv88e6xxx_ptp_ops *ptp_ops;
++ 
++ 	/* Phylink */
+++	void (*phylink_get_caps)(struct mv88e6xxx_chip *chip, int port,
+++				 struct phylink_config *config);
++ 	void (*phylink_validate)(struct mv88e6xxx_chip *chip, int port,
++ 				 unsigned long *mask,
++ 				 struct phylink_link_state *state);
++diff --git a/drivers/net/dsa/mv88e6xxx/port.h b/drivers/net/dsa/mv88e6xxx/port.h
++index 03382b66f800..ea6adfcfb42c 100644
++--- a/drivers/net/dsa/mv88e6xxx/port.h
+++++ b/drivers/net/dsa/mv88e6xxx/port.h
++@@ -42,6 +42,11 @@
++ #define MV88E6XXX_PORT_STS_TX_PAUSED		0x0020
++ #define MV88E6XXX_PORT_STS_FLOW_CTL		0x0010
++ #define MV88E6XXX_PORT_STS_CMODE_MASK		0x000f
+++#define MV88E6XXX_PORT_STS_CMODE_MII_PHY	0x0001
+++#define MV88E6XXX_PORT_STS_CMODE_MII		0x0002
+++#define MV88E6XXX_PORT_STS_CMODE_GMII		0x0003
+++#define MV88E6XXX_PORT_STS_CMODE_RMII_PHY	0x0004
+++#define MV88E6XXX_PORT_STS_CMODE_RMII		0x0005
++ #define MV88E6XXX_PORT_STS_CMODE_RGMII		0x0007
++ #define MV88E6XXX_PORT_STS_CMODE_100BASEX	0x0008
++ #define MV88E6XXX_PORT_STS_CMODE_1000BASEX	0x0009
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-3-net-dsa-mv88e6xxx-convert-to-phylink_generic_validat.patch b/target/linux/generic/backport-5.15/784-v5.19-3-net-dsa-mv88e6xxx-convert-to-phylink_generic_validat.patch
+new file mode 100644
+index 0000000000..ca67edc871
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-3-net-dsa-mv88e6xxx-convert-to-phylink_generic_validat.patch
+@@ -0,0 +1,407 @@
++From 632d16a663154c8a02810ea266bd6cff31316f9f Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Thu, 3 Feb 2022 13:30:47 +0000
++Subject: [PATCH 3/6] net: dsa: mv88e6xxx: convert to
++ phylink_generic_validate()
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Now that the mv88e6xxx chip drivers are supplying the supported
++interfaces and MAC capabilities, switch the driver to use the generic
++phylink validation implementation by removing our own validation
++implementations. This causes DSA to call phylink_generic_validate()
++on our behalf.
++
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 153 -------------------------------
++ drivers/net/dsa/mv88e6xxx/chip.h |   3 -
++ 2 files changed, 156 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index c86a08274ca3..7172b3e2e323 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -563,130 +563,6 @@ static int mv88e6xxx_serdes_pcs_link_up(struct mv88e6xxx_chip *chip, int port,
++ 	return 0;
++ }
++ 
++-static void mv88e6065_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-				       unsigned long *mask,
++-				       struct phylink_link_state *state)
++-{
++-	if (!phy_interface_mode_is_8023z(state->interface)) {
++-		/* 10M and 100M are only supported in non-802.3z mode */
++-		phylink_set(mask, 10baseT_Half);
++-		phylink_set(mask, 10baseT_Full);
++-		phylink_set(mask, 100baseT_Half);
++-		phylink_set(mask, 100baseT_Full);
++-	}
++-}
++-
++-static void mv88e6185_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-				       unsigned long *mask,
++-				       struct phylink_link_state *state)
++-{
++-	/* FIXME: if the port is in 1000Base-X mode, then it only supports
++-	 * 1000M FD speeds.  In this case, CMODE will indicate 5.
++-	 */
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
++-
++-	mv88e6065_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6341_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-				       unsigned long *mask,
++-				       struct phylink_link_state *state)
++-{
++-	if (port >= 5)
++-		phylink_set(mask, 2500baseX_Full);
++-
++-	/* No ethtool bits for 200Mbps */
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
++-
++-	mv88e6065_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6352_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-				       unsigned long *mask,
++-				       struct phylink_link_state *state)
++-{
++-	/* No ethtool bits for 200Mbps */
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
++-
++-	mv88e6065_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6390_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-				       unsigned long *mask,
++-				       struct phylink_link_state *state)
++-{
++-	if (port >= 9) {
++-		phylink_set(mask, 2500baseX_Full);
++-		phylink_set(mask, 2500baseT_Full);
++-	}
++-
++-	/* No ethtool bits for 200Mbps */
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
++-
++-	mv88e6065_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6390x_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-					unsigned long *mask,
++-					struct phylink_link_state *state)
++-{
++-	if (port >= 9) {
++-		phylink_set(mask, 10000baseT_Full);
++-		phylink_set(mask, 10000baseKR_Full);
++-	}
++-
++-	mv88e6390_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6393x_phylink_validate(struct mv88e6xxx_chip *chip, int port,
++-					unsigned long *mask,
++-					struct phylink_link_state *state)
++-{
++-	bool is_6191x =
++-		chip->info->prod_num == MV88E6XXX_PORT_SWITCH_ID_PROD_6191X;
++-
++-	if (((port == 0 || port == 9) && !is_6191x) || port == 10) {
++-		phylink_set(mask, 10000baseT_Full);
++-		phylink_set(mask, 10000baseKR_Full);
++-		phylink_set(mask, 10000baseCR_Full);
++-		phylink_set(mask, 10000baseSR_Full);
++-		phylink_set(mask, 10000baseLR_Full);
++-		phylink_set(mask, 10000baseLRM_Full);
++-		phylink_set(mask, 10000baseER_Full);
++-		phylink_set(mask, 5000baseT_Full);
++-		phylink_set(mask, 2500baseX_Full);
++-		phylink_set(mask, 2500baseT_Full);
++-	}
++-
++-	phylink_set(mask, 1000baseT_Full);
++-	phylink_set(mask, 1000baseX_Full);
++-
++-	mv88e6065_phylink_validate(chip, port, mask, state);
++-}
++-
++-static void mv88e6xxx_validate(struct dsa_switch *ds, int port,
++-			       unsigned long *supported,
++-			       struct phylink_link_state *state)
++-{
++-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
++-	struct mv88e6xxx_chip *chip = ds->priv;
++-
++-	/* Allow all the expected bits */
++-	phylink_set(mask, Autoneg);
++-	phylink_set(mask, Pause);
++-	phylink_set_port_modes(mask);
++-
++-	if (chip->info->ops->phylink_validate)
++-		chip->info->ops->phylink_validate(chip, port, mask, state);
++-
++-	linkmode_and(supported, supported, mask);
++-	linkmode_and(state->advertising, state->advertising, mask);
++-}
++-
++ static const u8 mv88e6185_phy_interface_modes[] = {
++ 	[MV88E6185_PORT_STS_CMODE_GMII_FD]	 = PHY_INTERFACE_MODE_GMII,
++ 	[MV88E6185_PORT_STS_CMODE_MII_100_FD_PS] = PHY_INTERFACE_MODE_MII,
++@@ -3840,7 +3716,6 @@ static const struct mv88e6xxx_ops mv88e6085_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -3875,7 +3750,6 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -3923,7 +3797,6 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -3961,7 +3834,6 @@ static const struct mv88e6xxx_ops mv88e6123_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -4003,7 +3875,6 @@ static const struct mv88e6xxx_ops mv88e6131_ops = {
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6141_ops = {
++@@ -4068,7 +3939,6 @@ static const struct mv88e6xxx_ops mv88e6141_ops = {
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.phylink_get_caps = mv88e6341_phylink_get_caps,
++-	.phylink_validate = mv88e6341_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6161_ops = {
++@@ -4111,7 +3981,6 @@ static const struct mv88e6xxx_ops mv88e6161_ops = {
++ 	.avb_ops = &mv88e6165_avb_ops,
++ 	.ptp_ops = &mv88e6165_ptp_ops,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -4148,7 +4017,6 @@ static const struct mv88e6xxx_ops mv88e6165_ops = {
++ 	.avb_ops = &mv88e6165_avb_ops,
++ 	.ptp_ops = &mv88e6165_ptp_ops,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6171_ops = {
++@@ -4191,7 +4059,6 @@ static const struct mv88e6xxx_ops mv88e6171_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6172_ops = {
++@@ -4247,7 +4114,6 @@ static const struct mv88e6xxx_ops mv88e6172_ops = {
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.phylink_get_caps = mv88e6352_phylink_get_caps,
++-	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6175_ops = {
++@@ -4290,7 +4156,6 @@ static const struct mv88e6xxx_ops mv88e6175_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6176_ops = {
++@@ -4349,7 +4214,6 @@ static const struct mv88e6xxx_ops mv88e6176_ops = {
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.phylink_get_caps = mv88e6352_phylink_get_caps,
++-	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6185_ops = {
++@@ -4389,7 +4253,6 @@ static const struct mv88e6xxx_ops mv88e6185_ops = {
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -4452,7 +4315,6 @@ static const struct mv88e6xxx_ops mv88e6190_ops = {
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.phylink_get_caps = mv88e6390_phylink_get_caps,
++-	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6190x_ops = {
++@@ -4514,7 +4376,6 @@ static const struct mv88e6xxx_ops mv88e6190x_ops = {
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.gpio_ops = &mv88e6352_gpio_ops,
++ 	.phylink_get_caps = mv88e6390x_phylink_get_caps,
++-	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6191_ops = {
++@@ -4575,7 +4436,6 @@ static const struct mv88e6xxx_ops mv88e6191_ops = {
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6390_phylink_get_caps,
++-	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6240_ops = {
++@@ -4636,7 +4496,6 @@ static const struct mv88e6xxx_ops mv88e6240_ops = {
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6352_phylink_get_caps,
++-	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6250_ops = {
++@@ -4677,7 +4536,6 @@ static const struct mv88e6xxx_ops mv88e6250_ops = {
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6250_ptp_ops,
++ 	.phylink_get_caps = mv88e6250_phylink_get_caps,
++-	.phylink_validate = mv88e6065_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6290_ops = {
++@@ -4740,7 +4598,6 @@ static const struct mv88e6xxx_ops mv88e6290_ops = {
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6390_phylink_get_caps,
++-	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6320_ops = {
++@@ -4785,7 +4642,6 @@ static const struct mv88e6xxx_ops mv88e6320_ops = {
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6321_ops = {
++@@ -4828,7 +4684,6 @@ static const struct mv88e6xxx_ops mv88e6321_ops = {
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6341_ops = {
++@@ -4895,7 +4750,6 @@ static const struct mv88e6xxx_ops mv88e6341_ops = {
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.phylink_get_caps = mv88e6341_phylink_get_caps,
++-	.phylink_validate = mv88e6341_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6350_ops = {
++@@ -4938,7 +4792,6 @@ static const struct mv88e6xxx_ops mv88e6350_ops = {
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6351_ops = {
++@@ -4983,7 +4836,6 @@ static const struct mv88e6xxx_ops mv88e6351_ops = {
++ 	.avb_ops = &mv88e6352_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6185_phylink_get_caps,
++-	.phylink_validate = mv88e6185_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6352_ops = {
++@@ -5047,7 +4899,6 @@ static const struct mv88e6xxx_ops mv88e6352_ops = {
++ 	.serdes_get_regs_len = mv88e6352_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6352_serdes_get_regs,
++ 	.phylink_get_caps = mv88e6352_phylink_get_caps,
++-	.phylink_validate = mv88e6352_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6390_ops = {
++@@ -5113,7 +4964,6 @@ static const struct mv88e6xxx_ops mv88e6390_ops = {
++ 	.serdes_get_regs_len = mv88e6390_serdes_get_regs_len,
++ 	.serdes_get_regs = mv88e6390_serdes_get_regs,
++ 	.phylink_get_caps = mv88e6390_phylink_get_caps,
++-	.phylink_validate = mv88e6390_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++@@ -5178,7 +5028,6 @@ static const struct mv88e6xxx_ops mv88e6390x_ops = {
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6390x_phylink_get_caps,
++-	.phylink_validate = mv88e6390x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_ops mv88e6393x_ops = {
++@@ -5243,7 +5092,6 @@ static const struct mv88e6xxx_ops mv88e6393x_ops = {
++ 	.avb_ops = &mv88e6390_avb_ops,
++ 	.ptp_ops = &mv88e6352_ptp_ops,
++ 	.phylink_get_caps = mv88e6393x_phylink_get_caps,
++-	.phylink_validate = mv88e6393x_phylink_validate,
++ };
++ 
++ static const struct mv88e6xxx_info mv88e6xxx_table[] = {
++@@ -6513,7 +6361,6 @@ static const struct dsa_switch_ops mv88e6xxx_switch_ops = {
++ 	.port_setup		= mv88e6xxx_port_setup,
++ 	.port_teardown		= mv88e6xxx_port_teardown,
++ 	.phylink_get_caps	= mv88e6xxx_get_caps,
++-	.phylink_validate	= mv88e6xxx_validate,
++ 	.phylink_mac_link_state	= mv88e6xxx_serdes_pcs_get_state,
++ 	.phylink_mac_config	= mv88e6xxx_mac_config,
++ 	.phylink_mac_an_restart	= mv88e6xxx_serdes_pcs_an_restart,
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.h b/drivers/net/dsa/mv88e6xxx/chip.h
++index 5b0ee59b3c94..3a685d0cf07c 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.h
+++++ b/drivers/net/dsa/mv88e6xxx/chip.h
++@@ -611,9 +611,6 @@ struct mv88e6xxx_ops {
++ 	/* Phylink */
++ 	void (*phylink_get_caps)(struct mv88e6xxx_chip *chip, int port,
++ 				 struct phylink_config *config);
++-	void (*phylink_validate)(struct mv88e6xxx_chip *chip, int port,
++-				 unsigned long *mask,
++-				 struct phylink_link_state *state);
++ 
++ 	/* Max Frame Size */
++ 	int (*set_max_frame_size)(struct mv88e6xxx_chip *chip, int mtu);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-4-net-dsa-mv88e6xxx-improve-88e6352-serdes-statistics-.patch b/target/linux/generic/backport-5.15/784-v5.19-4-net-dsa-mv88e6xxx-improve-88e6352-serdes-statistics-.patch
+new file mode 100644
+index 0000000000..ce639191d7
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-4-net-dsa-mv88e6xxx-improve-88e6352-serdes-statistics-.patch
+@@ -0,0 +1,125 @@
++From d84031286e44a08a3512a8e98a6f3a4e37e6c11d Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Thu, 3 Feb 2022 13:30:52 +0000
++Subject: [PATCH 4/6] net: dsa: mv88e6xxx: improve 88e6352 serdes statistics
++ detection
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The decision whether to report serdes statistics currently depends on
++the cached C_Mode value for the port, read at probe time or updated by
++configuration. However, port 4 can be in "automedia" mode when it is
++used as a serdes port, meaning it switches between the internal PHY and
++the serdes, changing the read-only C_Mode value depending on which
++first gains link. Consequently, the C_Mode value read at probe does not
++accurately reflect whether the port has the serdes associated with it.
++
++In "net: dsa: mv88e6xxx: add mv88e6352_g2_scratch_port_has_serdes()",
++we added a way to read the hardware configuration to determine which
++port has the serdes associated with it. Use this to determine which
++port reports the serdes statistics.
++
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/serdes.c | 43 ++++++++++++++++--------------
++ 1 file changed, 23 insertions(+), 20 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/serdes.c b/drivers/net/dsa/mv88e6xxx/serdes.c
++index 6ae7a0ed9e0b..bde2228b674d 100644
++--- a/drivers/net/dsa/mv88e6xxx/serdes.c
+++++ b/drivers/net/dsa/mv88e6xxx/serdes.c
++@@ -267,14 +267,6 @@ int mv88e6352_serdes_get_lane(struct mv88e6xxx_chip *chip, int port)
++ 	return lane;
++ }
++ 
++-static bool mv88e6352_port_has_serdes(struct mv88e6xxx_chip *chip, int port)
++-{
++-	if (mv88e6xxx_serdes_get_lane(chip, port) >= 0)
++-		return true;
++-
++-	return false;
++-}
++-
++ struct mv88e6352_serdes_hw_stat {
++ 	char string[ETH_GSTRING_LEN];
++ 	int sizeof_stat;
++@@ -288,20 +280,24 @@ static struct mv88e6352_serdes_hw_stat mv88e6352_serdes_hw_stats[] = {
++ 
++ int mv88e6352_serdes_get_sset_count(struct mv88e6xxx_chip *chip, int port)
++ {
++-	if (mv88e6352_port_has_serdes(chip, port))
++-		return ARRAY_SIZE(mv88e6352_serdes_hw_stats);
+++	int err;
++ 
++-	return 0;
+++	err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++	if (err <= 0)
+++		return err;
+++
+++	return ARRAY_SIZE(mv88e6352_serdes_hw_stats);
++ }
++ 
++ int mv88e6352_serdes_get_strings(struct mv88e6xxx_chip *chip,
++ 				 int port, uint8_t *data)
++ {
++ 	struct mv88e6352_serdes_hw_stat *stat;
++-	int i;
+++	int err, i;
++ 
++-	if (!mv88e6352_port_has_serdes(chip, port))
++-		return 0;
+++	err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++	if (err <= 0)
+++		return err;
++ 
++ 	for (i = 0; i < ARRAY_SIZE(mv88e6352_serdes_hw_stats); i++) {
++ 		stat = &mv88e6352_serdes_hw_stats[i];
++@@ -343,11 +339,12 @@ int mv88e6352_serdes_get_stats(struct mv88e6xxx_chip *chip, int port,
++ {
++ 	struct mv88e6xxx_port *mv88e6xxx_port = &chip->ports[port];
++ 	struct mv88e6352_serdes_hw_stat *stat;
+++	int i, err;
++ 	u64 value;
++-	int i;
++ 
++-	if (!mv88e6352_port_has_serdes(chip, port))
++-		return 0;
+++	err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++	if (err <= 0)
+++		return err;
++ 
++ 	BUILD_BUG_ON(ARRAY_SIZE(mv88e6352_serdes_hw_stats) >
++ 		     ARRAY_SIZE(mv88e6xxx_port->serdes_stats));
++@@ -414,8 +411,13 @@ unsigned int mv88e6352_serdes_irq_mapping(struct mv88e6xxx_chip *chip, int port)
++ 
++ int mv88e6352_serdes_get_regs_len(struct mv88e6xxx_chip *chip, int port)
++ {
++-	if (!mv88e6352_port_has_serdes(chip, port))
++-		return 0;
+++	int err;
+++
+++	mv88e6xxx_reg_lock(chip);
+++	err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++	mv88e6xxx_reg_unlock(chip);
+++	if (err <= 0)
+++		return err;
++ 
++ 	return 32 * sizeof(u16);
++ }
++@@ -427,7 +429,8 @@ void mv88e6352_serdes_get_regs(struct mv88e6xxx_chip *chip, int port, void *_p)
++ 	int err;
++ 	int i;
++ 
++-	if (!mv88e6352_port_has_serdes(chip, port))
+++	err = mv88e6352_g2_scratch_port_has_serdes(chip, port);
+++	if (err <= 0)
++ 		return;
++ 
++ 	for (i = 0 ; i < 32; i++) {
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-5-net-dsa-mv88e6xxx-Fix-off-by-in-one-in-mv88e6185_phy.patch b/target/linux/generic/backport-5.15/784-v5.19-5-net-dsa-mv88e6xxx-Fix-off-by-in-one-in-mv88e6185_phy.patch
+new file mode 100644
+index 0000000000..7679555cb7
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-5-net-dsa-mv88e6xxx-Fix-off-by-in-one-in-mv88e6185_phy.patch
+@@ -0,0 +1,33 @@
++From f0fd1787a0db7b23ec859e50af3b66d9e8cc8c56 Mon Sep 17 00:00:00 2001
++From: Dan Carpenter <dan.carpenter@oracle.com>
++Date: Mon, 7 Feb 2022 11:22:53 +0300
++Subject: [PATCH 5/6] net: dsa: mv88e6xxx: Fix off by in one in
++ mv88e6185_phylink_get_caps()
++
++The <= ARRAY_SIZE() needs to be < ARRAY_SIZE() to prevent an out of
++bounds error.
++
++Fixes: d4ebf12bcec4 ("net: dsa: mv88e6xxx: populate supported_interfaces and mac_capabilities")
++Signed-off-by: Dan Carpenter <dan.carpenter@oracle.com>
++Reviewed-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 7172b3e2e323..5bac1d54325e 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -578,7 +578,7 @@ static void mv88e6185_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
++ {
++ 	u8 cmode = chip->ports[port].cmode;
++ 
++-	if (cmode <= ARRAY_SIZE(mv88e6185_phy_interface_modes) &&
+++	if (cmode < ARRAY_SIZE(mv88e6185_phy_interface_modes) &&
++ 	    mv88e6185_phy_interface_modes[cmode])
++ 		__set_bit(mv88e6185_phy_interface_modes[cmode],
++ 			  config->supported_interfaces);
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/784-v5.19-6-net-dsa-mv88e6xxx-Fix-validation-of-built-in-PHYs-on.patch b/target/linux/generic/backport-5.15/784-v5.19-6-net-dsa-mv88e6xxx-Fix-validation-of-built-in-PHYs-on.patch
+new file mode 100644
+index 0000000000..f3e5410672
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/784-v5.19-6-net-dsa-mv88e6xxx-Fix-validation-of-built-in-PHYs-on.patch
+@@ -0,0 +1,73 @@
++From d2056d3cd927b7c0e0f1a466f77f21b0f6658e7b Mon Sep 17 00:00:00 2001
++From: Tobias Waldekranz <tobias@waldekranz.com>
++Date: Sun, 13 Feb 2022 19:51:54 +0100
++Subject: [PATCH 6/6] net: dsa: mv88e6xxx: Fix validation of built-in PHYs on
++ 6095/6097
++
++These chips have 8 built-in FE PHYs and 3 SERDES interfaces that can
++run at 1G. With the blamed commit, the built-in PHYs could no longer
++be connected to, using an MII PHY interface mode.
++
++Create a separate .phylink_get_caps callback for these chips, which
++takes the FE/GE split into consideration.
++
++Fixes: 2ee84cfefb1e ("net: dsa: mv88e6xxx: convert to phylink_generic_validate()")
++Signed-off-by: Tobias Waldekranz <tobias@waldekranz.com>
++Reviewed-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++Link: https://lore.kernel.org/r/20220213185154.3262207-1-tobias@waldekranz.com
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/dsa/mv88e6xxx/chip.c | 23 +++++++++++++++++++++--
++ 1 file changed, 21 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/dsa/mv88e6xxx/chip.c b/drivers/net/dsa/mv88e6xxx/chip.c
++index 5bac1d54325e..5c3a490a206e 100644
++--- a/drivers/net/dsa/mv88e6xxx/chip.c
+++++ b/drivers/net/dsa/mv88e6xxx/chip.c
++@@ -573,6 +573,25 @@ static const u8 mv88e6185_phy_interface_modes[] = {
++ 	[MV88E6185_PORT_STS_CMODE_PHY]		 = PHY_INTERFACE_MODE_SGMII,
++ };
++ 
+++static void mv88e6095_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
+++				       struct phylink_config *config)
+++{
+++	u8 cmode = chip->ports[port].cmode;
+++
+++	config->mac_capabilities = MAC_SYM_PAUSE | MAC_10 | MAC_100;
+++
+++	if (mv88e6xxx_phy_is_internal(chip->ds, port)) {
+++		__set_bit(PHY_INTERFACE_MODE_MII, config->supported_interfaces);
+++	} else {
+++		if (cmode < ARRAY_SIZE(mv88e6185_phy_interface_modes) &&
+++		    mv88e6185_phy_interface_modes[cmode])
+++			__set_bit(mv88e6185_phy_interface_modes[cmode],
+++				  config->supported_interfaces);
+++
+++		config->mac_capabilities |= MAC_1000FD;
+++	}
+++}
+++
++ static void mv88e6185_phylink_get_caps(struct mv88e6xxx_chip *chip, int port,
++ 				       struct phylink_config *config)
++ {
++@@ -3749,7 +3768,7 @@ static const struct mv88e6xxx_ops mv88e6095_ops = {
++ 	.reset = mv88e6185_g1_reset,
++ 	.vtu_getnext = mv88e6185_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6185_g1_vtu_loadpurge,
++-	.phylink_get_caps = mv88e6185_phylink_get_caps,
+++	.phylink_get_caps = mv88e6095_phylink_get_caps,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++@@ -3796,7 +3815,7 @@ static const struct mv88e6xxx_ops mv88e6097_ops = {
++ 	.rmu_disable = mv88e6085_g1_rmu_disable,
++ 	.vtu_getnext = mv88e6352_g1_vtu_getnext,
++ 	.vtu_loadpurge = mv88e6352_g1_vtu_loadpurge,
++-	.phylink_get_caps = mv88e6185_phylink_get_caps,
+++	.phylink_get_caps = mv88e6095_phylink_get_caps,
++ 	.set_max_frame_size = mv88e6185_g1_set_max_frame_size,
++ };
++ 
++-- 
++2.35.1
++
+-- 
+2.35.1
+
