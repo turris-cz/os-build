@@ -1,0 +1,161 @@
+From 04f871d251cd20424d8e22a632770ac8460684d3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Fri, 23 Sep 2022 20:29:59 +0200
+Subject: [PATCH 7/9] kernel: Backport two more patches to 5.15
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This backports two more patches from 5.17:
+  aa729c439441 ("net: phylink: tidy up disable bit clearing")
+  0dc1df059888 ("net: mvneta: program 1ms autonegotiation clock divisor")
+
+Signed-off-by: Marek Behún <marek.behun@nic.cz>
+---
+ ...phylink-tidy-up-disable-bit-clearing.patch | 70 +++++++++++++++++++
+ ...am-1ms-autonegotiation-clock-divisor.patch | 56 +++++++++++++++
+ 2 files changed, 126 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/782-v5.17-1-net-phylink-tidy-up-disable-bit-clearing.patch
+ create mode 100644 target/linux/generic/backport-5.15/782-v5.17-2-net-mvneta-program-1ms-autonegotiation-clock-divisor.patch
+
+diff --git a/target/linux/generic/backport-5.15/782-v5.17-1-net-phylink-tidy-up-disable-bit-clearing.patch b/target/linux/generic/backport-5.15/782-v5.17-1-net-phylink-tidy-up-disable-bit-clearing.patch
+new file mode 100644
+index 0000000000..07fbe0f63a
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/782-v5.17-1-net-phylink-tidy-up-disable-bit-clearing.patch
+@@ -0,0 +1,70 @@
++From 219b507f5c0a08507c17ecf4df80eaa1ccb0f3b7 Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 14:49:41 +0000
++Subject: [PATCH 1/2] net: phylink: tidy up disable bit clearing
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Tidy up the disable bit clearing where we clear a bit
++and then run the link resolver.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Reviewed-by: Andrew Lunn <andrew@lunn.ch>
++Link: https://lore.kernel.org/r/E1ms4Rx-00EKEc-En@rmk-PC.armlinux.org.uk
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/phy/phylink.c | 15 +++++++++------
++ 1 file changed, 9 insertions(+), 6 deletions(-)
++
++diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
++index 3e1d7dea616d..e95c6086d811 100644
++--- a/drivers/net/phy/phylink.c
+++++ b/drivers/net/phy/phylink.c
++@@ -1149,6 +1149,12 @@ static void phylink_run_resolve_and_disable(struct phylink *pl, int bit)
++ 	}
++ }
++ 
+++static void phylink_enable_and_run_resolve(struct phylink *pl, int bit)
+++{
+++	clear_bit(bit, &pl->phylink_disable_state);
+++	phylink_run_resolve(pl);
+++}
+++
++ static void phylink_fixed_poll(struct timer_list *t)
++ {
++ 	struct phylink *pl = container_of(t, struct phylink, link_poll);
++@@ -1636,8 +1642,7 @@ void phylink_start(struct phylink *pl)
++ 	 */
++ 	phylink_mac_initial_config(pl, true);
++ 
++-	clear_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state);
++-	phylink_run_resolve(pl);
+++	phylink_enable_and_run_resolve(pl, PHYLINK_DISABLE_STOPPED);
++ 
++ 	if (pl->cfg_link_an_mode == MLO_AN_FIXED && pl->link_gpio) {
++ 		int irq = gpiod_to_irq(pl->link_gpio);
++@@ -1777,8 +1782,7 @@ void phylink_resume(struct phylink *pl)
++ 		phylink_mac_initial_config(pl, true);
++ 
++ 		/* Re-enable and re-resolve the link parameters */
++-		clear_bit(PHYLINK_DISABLE_MAC_WOL, &pl->phylink_disable_state);
++-		phylink_run_resolve(pl);
+++		phylink_enable_and_run_resolve(pl, PHYLINK_DISABLE_MAC_WOL);
++ 	} else {
++ 		phylink_start(pl);
++ 	}
++@@ -2817,8 +2821,7 @@ static void phylink_sfp_link_up(void *upstream)
++ 
++ 	ASSERT_RTNL();
++ 
++-	clear_bit(PHYLINK_DISABLE_LINK, &pl->phylink_disable_state);
++-	phylink_run_resolve(pl);
+++	phylink_enable_and_run_resolve(pl, PHYLINK_DISABLE_LINK);
++ }
++ 
++ /* The Broadcom BCM84881 in the Methode DM7052 is unable to provide a SGMII
++-- 
++2.35.1
++
+diff --git a/target/linux/generic/backport-5.15/782-v5.17-2-net-mvneta-program-1ms-autonegotiation-clock-divisor.patch b/target/linux/generic/backport-5.15/782-v5.17-2-net-mvneta-program-1ms-autonegotiation-clock-divisor.patch
+new file mode 100644
+index 0000000000..d9883ca71e
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/782-v5.17-2-net-mvneta-program-1ms-autonegotiation-clock-divisor.patch
+@@ -0,0 +1,56 @@
++From 93bb797861804c03e561e72ce419f79933ce8aea Mon Sep 17 00:00:00 2001
++From: Russell King <rmk+kernel@armlinux.org.uk>
++Date: Tue, 30 Nov 2021 14:54:05 +0000
++Subject: [PATCH 2/2] net: mvneta: program 1ms autonegotiation clock divisor
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Program the 1ms autonegotiation clock divisor according to the clocking
++rate of neta - without this, the 1ms clock ticks at about 660us on
++Armada 38x configured for 250MHz. Bring this into correct specification.
++
++Signed-off-by: Russell King <rmk+kernel@armlinux.org.uk>
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/E1ms4WD-00EKLK-Ld@rmk-PC.armlinux.org.uk
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 8 ++++++--
++ 1 file changed, 6 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 191eef5c26a7..380e8791b805 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -3949,7 +3949,7 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
++ 	} else if (state->interface == PHY_INTERFACE_MODE_SGMII) {
++ 		/* SGMII mode receives the state from the PHY */
++ 		new_ctrl2 |= MVNETA_GMAC2_INBAND_AN_ENABLE;
++-		new_clk |= MVNETA_GMAC_1MS_CLOCK_ENABLE;
+++		new_clk = MVNETA_GMAC_1MS_CLOCK_ENABLE;
++ 		new_an = (new_an & ~(MVNETA_GMAC_FORCE_LINK_DOWN |
++ 				     MVNETA_GMAC_FORCE_LINK_PASS |
++ 				     MVNETA_GMAC_CONFIG_MII_SPEED |
++@@ -3961,7 +3961,7 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
++ 	} else {
++ 		/* 802.3z negotiation - only 1000base-X */
++ 		new_ctrl0 |= MVNETA_GMAC0_PORT_1000BASE_X;
++-		new_clk |= MVNETA_GMAC_1MS_CLOCK_ENABLE;
+++		new_clk = MVNETA_GMAC_1MS_CLOCK_ENABLE;
++ 		new_an = (new_an & ~(MVNETA_GMAC_FORCE_LINK_DOWN |
++ 				     MVNETA_GMAC_FORCE_LINK_PASS |
++ 				     MVNETA_GMAC_CONFIG_MII_SPEED)) |
++@@ -3974,6 +3974,10 @@ static void mvneta_mac_config(struct phylink_config *config, unsigned int mode,
++ 			new_an |= MVNETA_GMAC_AN_FLOW_CTRL_EN;
++ 	}
++ 
+++	/* Set the 1ms clock divisor */
+++	if (new_clk == MVNETA_GMAC_1MS_CLOCK_ENABLE)
+++		new_clk |= clk_get_rate(pp->clk) / 1000;
+++
++ 	/* Armada 370 documentation says we can only change the port mode
++ 	 * and in-band enable when the link is down, so force it down
++ 	 * while making these changes. We also do this for GMAC_CTRL2
++-- 
++2.35.1
++
+-- 
+2.35.1
+
