@@ -1,0 +1,643 @@
+From d497256867d04d6ff3070b207431aa03830b8c53 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 12 Oct 2022 12:27:37 +0200
+Subject: [PATCH] Backport linux/generic/files
+
+---
+ .../generic/files/block/partitions/fit.c      |  12 +-
+ .../files/drivers/leds/leds-ubnt-ledbar.c     | 255 ------------------
+ .../files/drivers/mtd/mtdsplit/Kconfig        |   5 +
+ .../files/drivers/mtd/mtdsplit/Makefile       |   1 +
+ .../files/drivers/mtd/mtdsplit/mtdsplit_fit.c |  11 +-
+ .../drivers/mtd/mtdsplit/mtdsplit_h3c_vfs.c   | 170 ++++++++++++
+ .../generic/files/drivers/net/phy/ar8216.c    |  10 +
+ .../generic/files/drivers/net/phy/ar8327.c    |   2 +-
+ .../files/drivers/net/phy/b53/b53_common.c    |   2 +-
+ 9 files changed, 204 insertions(+), 264 deletions(-)
+ delete mode 100644 target/linux/generic/files/drivers/leds/leds-ubnt-ledbar.c
+ create mode 100644 target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_h3c_vfs.c
+
+diff --git a/target/linux/generic/files/block/partitions/fit.c b/target/linux/generic/files/block/partitions/fit.c
+index 75516af493..ce6a2b5411 100644
+--- a/target/linux/generic/files/block/partitions/fit.c
++++ b/target/linux/generic/files/block/partitions/fit.c
+@@ -20,6 +20,7 @@
+ #include <linux/of_device.h>
+ #include <linux/of_fdt.h>
+ #include <linux/libfdt.h>
++#include <linux/version.h>
+ 
+ #include "check.h"
+ 
+@@ -72,7 +73,12 @@
+ 
+ int parse_fit_partitions(struct parsed_partitions *state, u64 fit_start_sector, u64 sectors, int *slot, int add_remain)
+ {
+-	struct address_space *mapping = state->bdev->bd_inode->i_mapping;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
++	struct block_device *bdev = state->disk->part0;
++#else
++	struct block_device *bdev = state->bdev;
++#endif
++	struct address_space *mapping = bdev->bd_inode->i_mapping;
+ 	struct page *page;
+ 	void *fit, *init_fit;
+ 	struct partition_meta_info *info;
+@@ -116,7 +122,7 @@ int parse_fit_partitions(struct parsed_partitions *state, u64 fit_start_sector,
+ 		return 0;
+ 	}
+ 
+-	dsectors = get_capacity(state->bdev->bd_disk);
++	dsectors = get_capacity(bdev->bd_disk);
+ 	if (sectors)
+ 		dsectors = (dsectors>sectors)?sectors:dsectors;
+ 
+@@ -142,7 +148,7 @@ int parse_fit_partitions(struct parsed_partitions *state, u64 fit_start_sector,
+ 
+ 	np = of_find_node_by_path("/chosen");
+ 	if (np)
+-		bootconf = of_get_property(np, "bootconf", NULL);
++		bootconf = of_get_property(np, "u-boot,bootconf", NULL);
+ 	else
+ 		bootconf = NULL;
+ 
+diff --git a/target/linux/generic/files/drivers/leds/leds-ubnt-ledbar.c b/target/linux/generic/files/drivers/leds/leds-ubnt-ledbar.c
+deleted file mode 100644
+index 555340c5e8..0000000000
+--- a/target/linux/generic/files/drivers/leds/leds-ubnt-ledbar.c
++++ /dev/null
+@@ -1,255 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-only
+-
+-#include <linux/delay.h>
+-#include <linux/i2c.h>
+-#include <linux/init.h>
+-#include <linux/leds.h>
+-#include <linux/module.h>
+-#include <linux/mutex.h>
+-#include <linux/of.h>
+-#include <linux/of_gpio.h>
+-#include <linux/gpio/consumer.h>
+-
+-/**
+- * Driver for the Ubiquiti RGB LED controller (LEDBAR).
+- * This Controller is based on a Holtek HT32F52241 and connected
+- * via I2C.
+- *
+- *  - The Controller needs an enable signal set to high when
+- *    performing a transaction. On the U6-LR, this is located
+- *    at Pin 18 (R6902)
+- *
+- *  - The Pin is also printed when calling the "usetled" function
+- *    contained in the ubntapp bootloader application.
+- */
+-
+-#define UBNT_LEDBAR_MAX_BRIGHTNESS	0xff
+-
+-#define UBNT_LEDBAR_TRANSACTION_LENGTH	8
+-#define UBNT_LEDBAR_TRANSACTION_SUCCESS	(char) 0xaa
+-
+-#define UBNT_LEDBAR_TRANSACTION_BLUE_IDX	2
+-#define UBNT_LEDBAR_TRANSACTION_GREEN_IDX	3
+-#define UBNT_LEDBAR_TRANSACTION_RED_IDX		4
+-#define UBNT_LEDBAR_TRANSACTION_LED_COUNT_IDX	6
+-
+-struct ubnt_ledbar {
+-	struct mutex lock;
+-	u32 led_count;
+-	struct i2c_client *client;
+-	struct led_classdev led_red;
+-	struct led_classdev led_green;
+-	struct led_classdev led_blue;
+-	struct gpio_desc *enable_gpio;
+-	struct gpio_desc *reset_gpio;
+-};
+-
+-static void ubnt_ledbar_perform_transaction(struct ubnt_ledbar *ledbar,
+-					   const char *transaction, int len,
+-					   char *result, int result_len)
+-{
+-	int i;
+-
+-	for (i = 0; i < len; i++)
+-		i2c_smbus_write_byte(ledbar->client, transaction[i]);
+-
+-	for (i = 0; i < result_len; i++)
+-		result[i] = i2c_smbus_read_byte(ledbar->client);
+-}
+-
+-static int ubnt_ledbar_apply_state(struct ubnt_ledbar *ledbar)
+-{
+-	char setup_msg[UBNT_LEDBAR_TRANSACTION_LENGTH] = {0x40, 0x10, 0x00, 0x00,
+-							  0x00, 0x00, 0x00, 0x11};
+-	char led_msg[UBNT_LEDBAR_TRANSACTION_LENGTH] = {0x40, 0x00, 0x00, 0x00,
+-							0x00, 0x00, 0x00, 0x00};
+-	char i2c_response;
+-	int ret = 0;
+-
+-	mutex_lock(&ledbar->lock);
+-
+-	led_msg[UBNT_LEDBAR_TRANSACTION_BLUE_IDX] = ledbar->led_blue.brightness;
+-	led_msg[UBNT_LEDBAR_TRANSACTION_GREEN_IDX] = ledbar->led_green.brightness;
+-	led_msg[UBNT_LEDBAR_TRANSACTION_RED_IDX] = ledbar->led_red.brightness;
+-	led_msg[UBNT_LEDBAR_TRANSACTION_LED_COUNT_IDX] = ledbar->led_count;
+-
+-	gpiod_set_value(ledbar->enable_gpio, 1);
+-
+-	msleep(10);
+-
+-	ubnt_ledbar_perform_transaction(ledbar, setup_msg, sizeof(setup_msg), &i2c_response, sizeof(i2c_response));
+-	if (i2c_response != UBNT_LEDBAR_TRANSACTION_SUCCESS) {
+-		dev_err(&ledbar->client->dev, "Error initializing LED transaction: %02hhx\n", i2c_response);
+-		ret = -EINVAL;
+-		goto out_gpio;
+-	}
+-
+-	ubnt_ledbar_perform_transaction(ledbar, led_msg, sizeof(led_msg), &i2c_response, sizeof(i2c_response));
+-	if (i2c_response != UBNT_LEDBAR_TRANSACTION_SUCCESS) {
+-		dev_err(&ledbar->client->dev, "Failed LED transaction: %02hhx\n", i2c_response);
+-		ret = -EINVAL;
+-		goto out_gpio;
+-	}
+-
+-	msleep(10);
+-out_gpio:
+-	gpiod_set_value(ledbar->enable_gpio, 0);
+-
+-	mutex_unlock(&ledbar->lock);
+-
+-	return ret;
+-}
+-
+-static void ubnt_ledbar_reset(struct ubnt_ledbar *ledbar)
+-{
+-	static const char init_msg[16] = {0x02, 0x81, 0xfd, 0x7e,
+-					  0x00, 0x00, 0x00, 0x00,
+-					  0x00, 0x00, 0x00, 0x00,
+-					  0x00, 0x00, 0x00, 0x00};
+-	char init_response[4];
+-
+-	if (!ledbar->reset_gpio)
+-		return;
+-
+-	mutex_lock(&ledbar->lock);
+-
+-	gpiod_set_value(ledbar->reset_gpio, 1);
+-	msleep(10);
+-	gpiod_set_value(ledbar->reset_gpio, 0);
+-
+-	msleep(10);
+-
+-	gpiod_set_value(ledbar->enable_gpio, 1);
+-	msleep(10);
+-	ubnt_ledbar_perform_transaction(ledbar, init_msg, sizeof(init_msg), init_response, sizeof(init_response));
+-	msleep(10);
+-	gpiod_set_value(ledbar->enable_gpio, 0);
+-
+-	mutex_unlock(&ledbar->lock);
+-}
+-
+-#define UBNT_LEDBAR_CONTROL_RGBS(name)				\
+-static int ubnt_ledbar_set_##name##_brightness(struct led_classdev *led_cdev,\
+-					enum led_brightness value)	\
+-{									\
+-	struct ubnt_ledbar *ledbar = \
+-			container_of(led_cdev, struct ubnt_ledbar, led_##name); \
+-	int ret; \
+-	led_cdev->brightness = value; \
+-	ret = ubnt_ledbar_apply_state(ledbar); \
+-	return ret; \
+-}
+-
+-UBNT_LEDBAR_CONTROL_RGBS(red);
+-UBNT_LEDBAR_CONTROL_RGBS(green);
+-UBNT_LEDBAR_CONTROL_RGBS(blue);
+-
+-
+-static int ubnt_ledbar_init_led(struct device_node *np, struct ubnt_ledbar *ledbar,
+-				struct led_classdev *led_cdev)
+-{
+-	struct led_init_data init_data = {};
+-	int ret;
+-
+-	if (!np)
+-		return 0;
+-
+-	init_data.fwnode = of_fwnode_handle(np);
+-
+-	led_cdev->max_brightness = UBNT_LEDBAR_MAX_BRIGHTNESS;
+-
+-	ret = devm_led_classdev_register_ext(&ledbar->client->dev, led_cdev,
+-					     &init_data);
+-	if (ret)
+-		dev_err(&ledbar->client->dev, "led register err: %d\n", ret);
+-
+-	return ret;
+-}
+-
+-
+-static int ubnt_ledbar_probe(struct i2c_client *client,
+-			     const struct i2c_device_id *id)
+-{
+-	struct device_node *np = client->dev.of_node;
+-	struct ubnt_ledbar *ledbar;
+-	int ret;
+-
+-	ledbar = devm_kzalloc(&client->dev, sizeof(*ledbar), GFP_KERNEL);
+-	if (!ledbar)
+-		return -ENOMEM;
+-
+-	ledbar->enable_gpio = devm_gpiod_get(&client->dev, "enable", GPIOD_OUT_LOW);
+-
+-	if (IS_ERR(ledbar->enable_gpio)) {
+-		ret = PTR_ERR(ledbar->enable_gpio);
+-		dev_err(&client->dev, "Failed to get enable gpio: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ledbar->reset_gpio = devm_gpiod_get_optional(&client->dev, "reset", GPIOD_OUT_LOW);
+-
+-	if (IS_ERR(ledbar->reset_gpio)) {
+-		ret = PTR_ERR(ledbar->reset_gpio);
+-		dev_err(&client->dev, "Failed to get reset gpio: %d\n", ret);
+-		return ret;
+-	}
+-
+-	ledbar->led_count = 1;
+-	of_property_read_u32(np, "led-count", &ledbar->led_count);
+-
+-	ledbar->client = client;
+-
+-	mutex_init(&ledbar->lock);
+-
+-	i2c_set_clientdata(client, ledbar);
+-
+-	// Reset and initialize the MCU
+-	ubnt_ledbar_reset(ledbar);
+-
+-	ledbar->led_red.brightness_set_blocking = ubnt_ledbar_set_red_brightness;
+-	ubnt_ledbar_init_led(of_get_child_by_name(np, "red"), ledbar, &ledbar->led_red);
+-
+-	ledbar->led_green.brightness_set_blocking = ubnt_ledbar_set_green_brightness;
+-	ubnt_ledbar_init_led(of_get_child_by_name(np, "green"), ledbar, &ledbar->led_green);
+-
+-	ledbar->led_blue.brightness_set_blocking = ubnt_ledbar_set_blue_brightness;
+-	ubnt_ledbar_init_led(of_get_child_by_name(np, "blue"), ledbar, &ledbar->led_blue);
+-
+-	return ubnt_ledbar_apply_state(ledbar);
+-}
+-
+-static int ubnt_ledbar_remove(struct i2c_client *client)
+-{
+-	struct ubnt_ledbar *ledbar = i2c_get_clientdata(client);
+-
+-	mutex_destroy(&ledbar->lock);
+-
+-	return 0;
+-}
+-
+-static const struct i2c_device_id ubnt_ledbar_id[] = {
+-	{ "ubnt-ledbar", 0 },
+-	{ }
+-};
+-MODULE_DEVICE_TABLE(i2c, ubnt_ledbar_id);
+-
+-static const struct of_device_id of_ubnt_ledbar_match[] = {
+-	{ .compatible = "ubnt,ledbar", },
+-	{},
+-};
+-MODULE_DEVICE_TABLE(of, of_ubnt_ledbar_match);
+-
+-static struct i2c_driver ubnt_ledbar_driver = {
+-	.driver = {
+-		.name	= "ubnt-ledbar",
+-		.of_match_table = of_ubnt_ledbar_match,
+-	},
+-	.probe		= ubnt_ledbar_probe,
+-	.remove		= ubnt_ledbar_remove,
+-	.id_table	= ubnt_ledbar_id,
+-};
+-module_i2c_driver(ubnt_ledbar_driver);
+-
+-MODULE_DESCRIPTION("Ubiquiti LEDBAR driver");
+-MODULE_AUTHOR("David Bauer <mail@david-bauer.net>");
+-MODULE_LICENSE("GPL v2");
+diff --git a/target/linux/generic/files/drivers/mtd/mtdsplit/Kconfig b/target/linux/generic/files/drivers/mtd/mtdsplit/Kconfig
+index 794a39f2c3..f929c6153e 100644
+--- a/target/linux/generic/files/drivers/mtd/mtdsplit/Kconfig
++++ b/target/linux/generic/files/drivers/mtd/mtdsplit/Kconfig
+@@ -101,3 +101,8 @@ config MTD_SPLIT_ELF_FW
+ 	bool "ELF loader firmware partition parser"
+ 	depends on MTD_SPLIT_SUPPORT
+ 	select MTD_SPLIT
++
++config MTD_SPLIT_H3C_VFS
++	bool "Parser finding rootfs appended to H3C VFS"
++	depends on MTD_SPLIT_SUPPORT
++	select MTD_SPLIT
+diff --git a/target/linux/generic/files/drivers/mtd/mtdsplit/Makefile b/target/linux/generic/files/drivers/mtd/mtdsplit/Makefile
+index 1461099b7c..a969c336aa 100644
+--- a/target/linux/generic/files/drivers/mtd/mtdsplit/Makefile
++++ b/target/linux/generic/files/drivers/mtd/mtdsplit/Makefile
+@@ -15,3 +15,4 @@ obj-$(CONFIG_MTD_SPLIT_WRGG_FW) += mtdsplit_wrgg.o
+ obj-$(CONFIG_MTD_SPLIT_MINOR_FW) += mtdsplit_minor.o
+ obj-$(CONFIG_MTD_SPLIT_JIMAGE_FW) += mtdsplit_jimage.o
+ obj-$(CONFIG_MTD_SPLIT_ELF_FW) += mtdsplit_elf.o
++obj-$(CONFIG_MTD_SPLIT_H3C_VFS) += mtdsplit_h3c_vfs.o
+diff --git a/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_fit.c b/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_fit.c
+index d8fb74ea38..3b71597d23 100644
+--- a/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_fit.c
++++ b/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_fit.c
+@@ -199,6 +199,7 @@ mtdsplit_fit_parse(struct mtd_info *mtd,
+ 	struct fdt_header hdr;
+ 	size_t hdr_len, retlen;
+ 	size_t offset;
++	u32 offset_start = 0;
+ 	size_t fit_offset, fit_size;
+ 	size_t rootfs_offset, rootfs_size;
+ 	size_t data_size, img_total, max_size = 0;
+@@ -211,11 +212,13 @@ mtdsplit_fit_parse(struct mtd_info *mtd,
+ 	if (cmdline_match && !strstr(saved_command_line, cmdline_match))
+ 		return -ENODEV;
+ 
++	of_property_read_u32(np, "openwrt,fit-offset", &offset_start);
++
+ 	hdr_len = sizeof(struct fdt_header);
+ 
+ 	/* Parse the MTD device & search for the FIT image location */
+ 	for(offset = 0; offset + hdr_len <= mtd->size; offset += mtd->erasesize) {
+-		ret = mtd_read(mtd, offset, hdr_len, &retlen, (void*) &hdr);
++		ret = mtd_read(mtd, offset + offset_start, hdr_len, &retlen, (void*) &hdr);
+ 		if (ret) {
+ 			pr_err("read error in \"%s\" at offset 0x%llx\n",
+ 			       mtd->name, (unsigned long long) offset);
+@@ -259,7 +262,7 @@ mtdsplit_fit_parse(struct mtd_info *mtd,
+ 		enum mtdsplit_part_type type;
+ 
+ 		/* Search for the rootfs partition after the FIT image */
+-		ret = mtd_find_rootfs_from(mtd, fit_offset + fit_size, mtd->size,
++		ret = mtd_find_rootfs_from(mtd, fit_offset + fit_size + offset_start, mtd->size,
+ 					   &rootfs_offset, &type);
+ 		if (ret) {
+ 			pr_info("no rootfs found after FIT image in \"%s\"\n",
+@@ -275,7 +278,7 @@ mtdsplit_fit_parse(struct mtd_info *mtd,
+ 
+ 		parts[0].name = KERNEL_PART_NAME;
+ 		parts[0].offset = fit_offset;
+-		parts[0].size = mtd_rounddown_to_eb(fit_size, mtd) + mtd->erasesize;
++		parts[0].size = mtd_rounddown_to_eb(fit_size + offset_start, mtd) + mtd->erasesize;
+ 
+ 		if (type == MTDSPLIT_PART_TYPE_UBI)
+ 			parts[1].name = UBI_PART_NAME;
+@@ -290,7 +293,7 @@ mtdsplit_fit_parse(struct mtd_info *mtd,
+ 	} else {
+ 		/* Search for rootfs_data after FIT external data */
+ 		fit = kzalloc(fit_size, GFP_KERNEL);
+-		ret = mtd_read(mtd, offset, fit_size, &retlen, fit);
++		ret = mtd_read(mtd, offset, fit_size + offset_start, &retlen, fit);
+ 		if (ret) {
+ 			pr_err("read error in \"%s\" at offset 0x%llx\n",
+ 			       mtd->name, (unsigned long long) offset);
+diff --git a/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_h3c_vfs.c b/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_h3c_vfs.c
+new file mode 100644
+index 0000000000..f264233dbd
+--- /dev/null
++++ b/target/linux/generic/files/drivers/mtd/mtdsplit/mtdsplit_h3c_vfs.c
+@@ -0,0 +1,170 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Some devices made by H3C use a "VFS" filesystem to store firmware images.
++ * This parses the start of the filesystem to read the length of the first
++ * file (the kernel image). It then searches for the rootfs after the end of
++ * the file data. This driver assumes that the filesystem was generated by
++ * mkh3cvfs, and only works if the filesystem matches the expected layout,
++ * which includes the file name of the kernel image.
++ */
++
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/slab.h>
++#include <linux/of.h>
++#include <linux/types.h>
++#include <linux/mtd/mtd.h>
++#include <linux/mtd/partitions.h>
++
++#include "mtdsplit.h"
++
++#define	VFS_ERASEBLOCK_SIZE		0x10000
++#define	VFS_BLOCK_SIZE			0x400
++#define VFS_BLOCKS_PER_ERASEBLOCK	(VFS_ERASEBLOCK_SIZE / VFS_BLOCK_SIZE)
++
++#define FORMAT_FLAG_OFFSET		0x0
++
++#define FORMAT_FLAG			(VFS_ERASEBLOCK_SIZE << 12 | VFS_BLOCK_SIZE)
++
++#define FILE_ENTRY_OFFSET		0x800
++
++#define FILE_ENTRY_FLAGS		0x3f
++#define FILE_ENTRY_PARENT_BLOCK		0
++#define FILE_ENTRY_PARENT_INDEX 	0
++#define FILE_ENTRY_DATA_BLOCK	 	2
++#define FILE_ENTRY_NAME			"openwrt-kernel.bin"
++
++#define NR_PARTS			2
++
++struct file_entry {
++	uint8_t flags;
++
++	uint8_t res0[5];
++
++	uint16_t year;
++	uint8_t month;
++	uint8_t day;
++	uint8_t hour;
++	uint8_t minute;
++	uint8_t second;
++
++	uint8_t res1[3];
++
++	uint32_t length;
++
++	uint32_t parent_block;
++	uint16_t parent_index;
++
++	uint8_t res2[2];
++
++	uint32_t data_block;
++
++	char name[96];
++} __attribute__ ((packed));
++
++static inline size_t block_offset(int block)
++{
++	return VFS_ERASEBLOCK_SIZE * (block / (VFS_BLOCKS_PER_ERASEBLOCK-1))
++		+ VFS_BLOCK_SIZE * (1 + (block % (VFS_BLOCKS_PER_ERASEBLOCK-1)));
++}
++
++static inline int block_count(size_t size)
++{
++	return (size + VFS_BLOCK_SIZE - 1) / VFS_BLOCK_SIZE;
++}
++
++static int mtdsplit_h3c_vfs_parse(struct mtd_info *mtd,
++				  const struct mtd_partition **pparts,
++				  struct mtd_part_parser_data *data)
++{
++	struct mtd_partition *parts;
++	uint32_t format_flag;
++	struct file_entry file_entry;
++	size_t retlen;
++	int err;
++	size_t kernel_size;
++	size_t expected_offset;
++	size_t rootfs_offset;
++
++	if (mtd->erasesize != VFS_ERASEBLOCK_SIZE)
++		return -EINVAL;
++
++	/* Check format flag */
++	err = mtd_read(mtd, FORMAT_FLAG_OFFSET, sizeof(format_flag), &retlen,
++		       (void *) &format_flag);
++	if (err)
++		return err;
++
++	if (retlen != sizeof(format_flag))
++		return -EIO;
++
++	if (format_flag != FORMAT_FLAG)
++		return -EINVAL;
++
++	/* Check file entry */
++	err = mtd_read(mtd, FILE_ENTRY_OFFSET, sizeof(file_entry), &retlen,
++		       (void *) &file_entry);
++	if (err)
++		return err;
++
++	if (retlen != sizeof(file_entry))
++		return -EIO;
++
++	if (file_entry.flags != FILE_ENTRY_FLAGS)
++		return -EINVAL;
++
++	if (file_entry.parent_block != FILE_ENTRY_PARENT_BLOCK)
++		return -EINVAL;
++
++	if (file_entry.parent_index != FILE_ENTRY_PARENT_INDEX)
++		return -EINVAL;
++
++	if (file_entry.data_block != FILE_ENTRY_DATA_BLOCK)
++		return -EINVAL;
++
++	if (strncmp(file_entry.name, FILE_ENTRY_NAME, sizeof(file_entry.name)) != 0)
++		return -EINVAL;
++
++	/* Find rootfs offset */
++	kernel_size = block_offset(file_entry.data_block +
++				   block_count(file_entry.length) - 1) +
++		      VFS_BLOCK_SIZE;
++
++	expected_offset = mtd_roundup_to_eb(kernel_size, mtd);
++
++	err = mtd_find_rootfs_from(mtd, expected_offset, mtd->size,
++				   &rootfs_offset, NULL);
++	if (err)
++		return err;
++
++	parts = kzalloc(NR_PARTS * sizeof(*parts), GFP_KERNEL);
++	if (!parts)
++		return -ENOMEM;
++
++	parts[0].name = KERNEL_PART_NAME;
++	parts[0].offset = 0;
++	parts[0].size = rootfs_offset;
++
++	parts[1].name = ROOTFS_PART_NAME;
++	parts[1].offset = rootfs_offset;
++	parts[1].size = mtd->size - rootfs_offset;
++
++	*pparts = parts;
++	return NR_PARTS;
++}
++
++static const struct of_device_id mtdsplit_h3c_vfs_of_match_table[] = {
++	{ .compatible = "h3c,vfs-firmware" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, mtdsplit_h3c_vfs_of_match_table);
++
++static struct mtd_part_parser mtdsplit_h3c_vfs_parser = {
++	.owner = THIS_MODULE,
++	.name = "h3c-vfs",
++	.of_match_table = mtdsplit_h3c_vfs_of_match_table,
++	.parse_fn = mtdsplit_h3c_vfs_parse,
++	.type = MTD_PARSER_TYPE_FIRMWARE,
++};
++
++module_mtd_part_parser(mtdsplit_h3c_vfs_parser);
+diff --git a/target/linux/generic/files/drivers/net/phy/ar8216.c b/target/linux/generic/files/drivers/net/phy/ar8216.c
+index 11cb18e4f3..bf98fd599e 100644
+--- a/target/linux/generic/files/drivers/net/phy/ar8216.c
++++ b/target/linux/generic/files/drivers/net/phy/ar8216.c
+@@ -2433,7 +2433,9 @@ static int
+ ar8xxx_phy_config_init(struct phy_device *phydev)
+ {
+ 	struct ar8xxx_priv *priv = phydev->priv;
++#ifdef CONFIG_ETHERNET_PACKET_MANGLE
+ 	struct net_device *dev = phydev->attached_dev;
++#endif
+ 	int ret;
+ 
+ 	if (WARN_ON(!priv))
+@@ -2465,7 +2467,11 @@ ar8xxx_phy_config_init(struct phy_device *phydev)
+ 	/* VID fixup only needed on ar8216 */
+ 	if (chip_is_ar8216(priv)) {
+ 		dev->phy_ptr = priv;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
++		dev->extra_priv_flags |= IFF_NO_IP_ALIGN;
++#else
+ 		dev->priv_flags |= IFF_NO_IP_ALIGN;
++#endif
+ 		dev->eth_mangle_rx = ar8216_mangle_rx;
+ 		dev->eth_mangle_tx = ar8216_mangle_tx;
+ 	}
+@@ -2700,7 +2706,11 @@ ar8xxx_phy_detach(struct phy_device *phydev)
+ 
+ #ifdef CONFIG_ETHERNET_PACKET_MANGLE
+ 	dev->phy_ptr = NULL;
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,15,0)
++	dev->extra_priv_flags &= ~IFF_NO_IP_ALIGN;
++#else
+ 	dev->priv_flags &= ~IFF_NO_IP_ALIGN;
++#endif
+ 	dev->eth_mangle_rx = NULL;
+ 	dev->eth_mangle_tx = NULL;
+ #endif
+diff --git a/target/linux/generic/files/drivers/net/phy/ar8327.c b/target/linux/generic/files/drivers/net/phy/ar8327.c
+index dce52ce0e4..3313149559 100644
+--- a/target/linux/generic/files/drivers/net/phy/ar8327.c
++++ b/target/linux/generic/files/drivers/net/phy/ar8327.c
+@@ -183,7 +183,7 @@ ar8327_phy_fixup(struct ar8xxx_priv *priv, int phy)
+ 
+ 	case 2:
+ 		ar8xxx_phy_mmd_write(priv, phy, 0x7, 0x3c, 0x0);
+-		/* fallthrough */
++		fallthrough;
+ 	case 4:
+ 		ar8xxx_phy_mmd_write(priv, phy, 0x3, 0x800d, 0x803f);
+ 		ar8xxx_phy_dbg_write(priv, phy, 0x3d, 0x6860);
+diff --git a/target/linux/generic/files/drivers/net/phy/b53/b53_common.c b/target/linux/generic/files/drivers/net/phy/b53/b53_common.c
+index 030c5c86d6..87d731ec3e 100644
+--- a/target/linux/generic/files/drivers/net/phy/b53/b53_common.c
++++ b/target/linux/generic/files/drivers/net/phy/b53/b53_common.c
+@@ -529,7 +529,7 @@ static int b53_configure_ports_of(struct b53_device *dev)
+ 						po |= PORT_OVERRIDE_SPEED_2000M;
+ 					else
+ 						po |= GMII_PO_SPEED_2000M;
+-					/* fall through */
++					fallthrough;
+ 				case 1000:
+ 					po |= GMII_PO_SPEED_1000M;
+ 					break;
+-- 
+2.34.1
+
