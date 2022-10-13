@@ -9,7 +9,7 @@ RUN apt-get -y install --no-install-recommends \
     git subversion \
     gawk unzip file \
     ca-certificates wget curl rsync \
-    python python3 \
+    python3 python3-distutils \
     build-essential zlib1g-dev libssl-dev libncurses-dev gcc-multilib
 
 ## Dependencies for building medkit in general as Updater-ng, usign and fakeroot and others
