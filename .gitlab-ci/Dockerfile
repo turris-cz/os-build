@@ -1,4 +1,4 @@
-FROM debian:stable
+FROM debian:bullseye
 
 ## Apt update and upgrade
 RUN apt-get update && \
