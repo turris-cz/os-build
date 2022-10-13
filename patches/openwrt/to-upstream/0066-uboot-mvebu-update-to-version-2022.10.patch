@@ -1,0 +1,155 @@
+From 2f021e2b1089c31736d98f61d99ef65697b96828 Mon Sep 17 00:00:00 2001
+From: Robert Marko <robert.marko@sartura.hr>
+Date: Tue, 27 Sep 2022 10:58:50 +0200
+Subject: [PATCH] uboot-mvebu: update to 2022.10
+
+Update mvebu U-boot to 2022.10 to avoid backporting patches in order
+to support Methode eDPU.
+
+It also allows dropping existing patches as they are all backports.
+
+Signed-off-by: Robert Marko <robert.marko@sartura.hr>
+---
+ package/boot/uboot-mvebu/Makefile             |  4 +-
+ ...nux.h-Fix-compilation-on-non-glibc-s.patch | 44 -------------------
+ ...ools-mkimage-fix-build-with-LibreSSL.patch | 28 ------------
+ ...image-fix-build-with-recent-LibreSSL.patch | 27 ------------
+ 4 files changed, 2 insertions(+), 101 deletions(-)
+ delete mode 100644 package/boot/uboot-mvebu/patches/0001-tools-termios_linux.h-Fix-compilation-on-non-glibc-s.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0002-tools-mkimage-fix-build-with-LibreSSL.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0003-tools-mkimage-fix-build-with-recent-LibreSSL.patch
+
+diff --git a/package/boot/uboot-mvebu/Makefile b/package/boot/uboot-mvebu/Makefile
+index 5bf5d59b023ef..274cc641d97fc 100644
+--- a/package/boot/uboot-mvebu/Makefile
++++ b/package/boot/uboot-mvebu/Makefile
+@@ -8,10 +8,10 @@
+ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+-PKG_VERSION:=2022.07
++PKG_VERSION:=2022.10
+ PKG_RELEASE:=$(AUTORELEASE)
+ 
+-PKG_HASH:=92b08eb49c24da14c1adbf70a71ae8f37cc53eeb4230e859ad8b6733d13dcf5e
++PKG_HASH:=50b4482a505bc281ba8470c399a3c26e145e29b23500bc35c50debd7fa46bdf8
+ 
+ include $(INCLUDE_DIR)/u-boot.mk
+ include $(INCLUDE_DIR)/package.mk
+diff --git a/package/boot/uboot-mvebu/patches/0001-tools-termios_linux.h-Fix-compilation-on-non-glibc-s.patch b/package/boot/uboot-mvebu/patches/0001-tools-termios_linux.h-Fix-compilation-on-non-glibc-s.patch
+deleted file mode 100644
+index e2f8a08bea673..0000000000000
+--- a/package/boot/uboot-mvebu/patches/0001-tools-termios_linux.h-Fix-compilation-on-non-glibc-s.patch
++++ /dev/null
+@@ -1,44 +0,0 @@
+-From 82a6da13c3a113eefdb378ff53635f32a6184d6f Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
+-Date: Thu, 8 Sep 2022 16:59:36 +0200
+-Subject: [PATCH] tools: termios_linux.h: Fix compilation on non-glibc systems
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-TCGETS2 is defined in header file asm/ioctls.h provided by linux kernel.
+-On glib systems it is automatically included by some other glibc include
+-header file and therefore TCGETS2 is present in termios_linux.h when
+-linux kernel provides it.
+-
+-On non-glibc systems (e.g. musl) asm/ioctls.h is not automatically included
+-which results in the strange error that BOTHER is supported, TCGETS2 not
+-defined and struct termios does not provide c_ispeed member.
+-
+-    tools/kwboot.c: In function 'kwboot_tty_change_baudrate':
+-    tools/kwboot.c:662:6: error: 'struct termios' has no member named 'c_ospeed'
+-      662 |   tio.c_ospeed = tio.c_ispeed = baudrate;
+-          |      ^
+-
+-Fix this issue by explicitly including asm/ioctls.h file which provides
+-TCGETS2 macro (if supported on selected architecture) to not depending on
+-glibc auto-include behavior and because termios_linux.h requires it.
+-
+-With this change it is possible compile kwboot with musl libc.
+-
+-Reported-by: Michal Vasilek <michal.vasilek@nic.cz>
+-Signed-off-by: Pali Rohár <pali@kernel.org>
+----
+- tools/termios_linux.h | 1 +
+- 1 file changed, 1 insertion(+)
+-
+---- a/tools/termios_linux.h
+-+++ b/tools/termios_linux.h
+-@@ -29,6 +29,7 @@
+- #include <errno.h>
+- #include <sys/ioctl.h>
+- #include <sys/types.h>
+-+#include <asm/ioctls.h>
+- #include <asm/termbits.h>
+- 
+- #if defined(BOTHER) && defined(TCGETS2)
+diff --git a/package/boot/uboot-mvebu/patches/0002-tools-mkimage-fix-build-with-LibreSSL.patch b/package/boot/uboot-mvebu/patches/0002-tools-mkimage-fix-build-with-LibreSSL.patch
+deleted file mode 100644
+index ebea2a41cdff4..0000000000000
+--- a/package/boot/uboot-mvebu/patches/0002-tools-mkimage-fix-build-with-LibreSSL.patch
++++ /dev/null
+@@ -1,28 +0,0 @@
+-From aed6107ae96870cd190b23d6da34a7e616799ed3 Mon Sep 17 00:00:00 2001
+-From: Michal Vasilek <michal.vasilek@nic.cz>
+-Date: Fri, 22 Jul 2022 19:55:53 +0200
+-Subject: [PATCH 1/2] tools: mkimage: fix build with LibreSSL
+-
+-RSA_get0_* functions are not available in LibreSSL
+-
+-Signed-off-by: Michal Vasilek <michal.vasilek@nic.cz>
+-Reviewed-by: Simon Glass <sjg@chromium.org>
+----
+- tools/sunxi_toc0.c | 6 ++++++
+- 1 file changed, 6 insertions(+)
+-
+---- a/tools/sunxi_toc0.c
+-+++ b/tools/sunxi_toc0.c
+-@@ -34,6 +34,12 @@
+- #define pr_warn(fmt, args...)	fprintf(stderr, pr_fmt(fmt), "warning", ##args)
+- #define pr_info(fmt, args...)	fprintf(stderr, pr_fmt(fmt), "info", ##args)
+- 
+-+#if defined(LIBRESSL_VERSION_NUMBER)
+-+#define RSA_get0_n(key) (key)->n
+-+#define RSA_get0_e(key) (key)->e
+-+#define RSA_get0_d(key) (key)->d
+-+#endif
+-+
+- struct __packed toc0_key_item {
+- 	__le32  vendor_id;
+- 	__le32  key0_n_len;
+diff --git a/package/boot/uboot-mvebu/patches/0003-tools-mkimage-fix-build-with-recent-LibreSSL.patch b/package/boot/uboot-mvebu/patches/0003-tools-mkimage-fix-build-with-recent-LibreSSL.patch
+deleted file mode 100644
+index 2e955848e8cfe..0000000000000
+--- a/package/boot/uboot-mvebu/patches/0003-tools-mkimage-fix-build-with-recent-LibreSSL.patch
++++ /dev/null
+@@ -1,27 +0,0 @@
+-From 16b94d211b18ae0204c4f850fdf23573b19170ec Mon Sep 17 00:00:00 2001
+-From: Mark Kettenis <kettenis@openbsd.org>
+-Date: Mon, 29 Aug 2022 13:34:01 +0200
+-Subject: [PATCH 2/2] tools: mkimage: fix build with recent LibreSSL
+-
+-LibreSSL 3.5.0 and later (also shipped as part of OpenBSD 7.1 and
+-and later) have an opaque RSA object and do provide the
+-RSA_get0_* functions that OpenSSL provides.
+-
+-Fixes: 2ecc354b8e46 ("tools: mkimage: fix build with LibreSSL")
+-Signed-off-by: Mark Kettenis <kettenis@openbsd.org>
+-Reviewed-by: Jonathan Gray <jsg@jsg.id.au>
+----
+- tools/sunxi_toc0.c | 2 +-
+- 1 file changed, 1 insertion(+), 1 deletion(-)
+-
+---- a/tools/sunxi_toc0.c
+-+++ b/tools/sunxi_toc0.c
+-@@ -34,7 +34,7 @@
+- #define pr_warn(fmt, args...)	fprintf(stderr, pr_fmt(fmt), "warning", ##args)
+- #define pr_info(fmt, args...)	fprintf(stderr, pr_fmt(fmt), "info", ##args)
+- 
+--#if defined(LIBRESSL_VERSION_NUMBER)
+-+#if defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER < 0x3050000fL
+- #define RSA_get0_n(key) (key)->n
+- #define RSA_get0_e(key) (key)->e
+- #define RSA_get0_d(key) (key)->d
