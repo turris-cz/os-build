@@ -1,0 +1,52 @@
+From 2b17807ea23bf120e643f1fada694af975101b6a Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Fri, 14 Oct 2022 09:53:57 +0200
+Subject: [PATCH] kernel: disable wireless extensions only when needed
+
+Based on https://github.com/openwrt/openwrt/commit/6eeb5d45649ffa591b06d2ccd6a43e47939b6b18#diff-06802c9e3474cd0144a19cff482538b1aa25f9e10891060a69139559fd19203bL7094
+---
+ config/Config-kernel.in                    | 15 +++++++++++++++
+ package/network/services/hostapd/Config.in |  1 +
+ 2 files changed, 16 insertions(+)
+
+diff --git a/config/Config-kernel.in b/config/Config-kernel.in
+index 5e12ddd78d..f4aafe2504 100644
+--- a/config/Config-kernel.in
++++ b/config/Config-kernel.in
+@@ -1057,6 +1057,21 @@ config KERNEL_NET_L3_MASTER_DEV
+ 	  This module provides glue between core networking code and device
+ 	  drivers to support L3 master devices like VRF.
+ 
++config KERNEL_WIRELESS_EXT
++	def_bool n
++
++config KERNEL_WEXT_CORE
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_PRIV
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_PROC
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_SPY
++	def_bool KERNEL_WIRELESS_EXT
++
+ #
+ # NFS related symbols
+ #
+diff --git a/package/network/services/hostapd/Config.in b/package/network/services/hostapd/Config.in
+index 5c00f3e24e..313836a0d8 100644
+--- a/package/network/services/hostapd/Config.in
++++ b/package/network/services/hostapd/Config.in
+@@ -65,6 +65,7 @@ config WPA_WOLFSSL
+ 
+ config DRIVER_WEXT_SUPPORT
+ 	bool
++	select KERNEL_WIRELESS_EXT
+ 	default n
+ 
+ config DRIVER_11N_SUPPORT
+-- 
+2.34.1
+
