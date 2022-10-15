@@ -1,0 +1,79 @@
+From 350d3b72b90a4e95f8ae3cb4d4c0645a8e3e5f9f Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Fri, 14 Oct 2022 09:53:57 +0200
+Subject: [PATCH 1/2] kernel: disable wireless extensions only when needed
+
+Based on https://github.com/openwrt/openwrt/commit/6eeb5d45649ffa591b06d2ccd6a43e47939b6b18#diff-06802c9e3474cd0144a19cff482538b1aa25f9e10891060a69139559fd19203bL7094
+---
+ config/Config-kernel.in                    | 15 +++++++++++++++
+ package/kernel/broadcom-wl/Makefile        |  2 +-
+ package/kernel/mac80211/Makefile           |  1 -
+ package/network/services/hostapd/Config.in |  1 +
+ 4 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/config/Config-kernel.in b/config/Config-kernel.in
+index 5e12ddd78d..f4aafe2504 100644
+--- a/config/Config-kernel.in
++++ b/config/Config-kernel.in
+@@ -1057,6 +1057,21 @@ config KERNEL_NET_L3_MASTER_DEV
+ 	  This module provides glue between core networking code and device
+ 	  drivers to support L3 master devices like VRF.
+ 
++config KERNEL_WIRELESS_EXT
++	def_bool n
++
++config KERNEL_WEXT_CORE
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_PRIV
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_PROC
++	def_bool KERNEL_WIRELESS_EXT
++
++config KERNEL_WEXT_SPY
++	def_bool KERNEL_WIRELESS_EXT
++
+ #
+ # NFS related symbols
+ #
+diff --git a/package/kernel/broadcom-wl/Makefile b/package/kernel/broadcom-wl/Makefile
+index 7188c4900e..dec5bcb98d 100644
+--- a/package/kernel/broadcom-wl/Makefile
++++ b/package/kernel/broadcom-wl/Makefile
+@@ -40,7 +40,7 @@ endef
+ define KernelPackage/brcm-wl/Default
+   $(call Package/broadcom-wl/Default)
+   SECTION:=kernel
+-  DEPENDS:=@(TARGET_bcm47xx||TARGET_bcm63xx) +wireless-tools
++  DEPENDS:=@(TARGET_bcm47xx||TARGET_bcm63xx) +wireless-tools +@KERNEL_WIRELESS_EXT
+   TITLE:=Kernel driver for BCM43xx chipsets
+   FILES:=$(PKG_BUILD_DIR)/driver$(1)/wl.ko $(PKG_BUILD_DIR)/glue/wl_glue.ko
+   AUTOLOAD:=$(call AutoProbe,wl)
+diff --git a/package/kernel/mac80211/Makefile b/package/kernel/mac80211/Makefile
+index c5b190dfa0..335acab33f 100644
+--- a/package/kernel/mac80211/Makefile
++++ b/package/kernel/mac80211/Makefile
+@@ -56,7 +56,6 @@ config_package=$(if $(CONFIG_PACKAGE_kmod-$(1)),m)
+ 
+ config-y:= \
+ 	WLAN \
+-	CFG80211_WEXT \
+ 	CFG80211_CERTIFICATION_ONUS \
+ 	MAC80211_RC_MINSTREL \
+ 	MAC80211_RC_MINSTREL_HT \
+diff --git a/package/network/services/hostapd/Config.in b/package/network/services/hostapd/Config.in
+index 5c00f3e24e..313836a0d8 100644
+--- a/package/network/services/hostapd/Config.in
++++ b/package/network/services/hostapd/Config.in
+@@ -65,6 +65,7 @@ config WPA_WOLFSSL
+ 
+ config DRIVER_WEXT_SUPPORT
+ 	bool
++	select KERNEL_WIRELESS_EXT
+ 	default n
+ 
+ config DRIVER_11N_SUPPORT
+-- 
+2.34.1
+
