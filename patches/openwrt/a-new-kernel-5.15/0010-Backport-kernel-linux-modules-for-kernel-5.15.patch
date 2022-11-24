@@ -1,19 +1,19 @@
-From ac287513999be017ce1862bcdb388c8794f3b165 Mon Sep 17 00:00:00 2001
+From 7ac04393007aa8262b032e59a0c49cf895ec3834 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Mon, 14 Nov 2022 10:02:02 +0100
-Subject: [PATCH] Backport kernel/linux/modules for kernel 5.15
+Date: Thu, 24 Nov 2022 15:12:51 +0100
+Subject: [PATCH] Backport Linux kernel modules from OpenWrt master
 
 ---
  package/kernel/linux/modules/block.mk      |  21 +-
  package/kernel/linux/modules/crypto.mk     |  25 ++-
- package/kernel/linux/modules/fs.mk         | 111 +++++++---
+ package/kernel/linux/modules/fs.mk         | 106 ++++++---
  package/kernel/linux/modules/hwmon.mk      |  29 +++
  package/kernel/linux/modules/i2c.mk        |   2 +-
  package/kernel/linux/modules/iio.mk        | 117 +++++-----
  package/kernel/linux/modules/input.mk      |  29 ++-
  package/kernel/linux/modules/leds.mk       |  19 ++
  package/kernel/linux/modules/lib.mk        |  10 +
- package/kernel/linux/modules/netdevices.mk | 155 +++++++++++--
+ package/kernel/linux/modules/netdevices.mk | 189 ++++++++++++++--
  package/kernel/linux/modules/netfilter.mk  |   6 +-
  package/kernel/linux/modules/netsupport.mk |  71 ++----
  package/kernel/linux/modules/nls.mk        |   6 +-
@@ -25,7 +25,7 @@ Subject: [PATCH] Backport kernel/linux/modules for kernel 5.15
  package/kernel/linux/modules/virt.mk       |  43 ++++
  package/kernel/linux/modules/w1.mk         |  17 --
  package/kernel/linux/modules/wireless.mk   |  42 ----
- 21 files changed, 672 insertions(+), 368 deletions(-)
+ 21 files changed, 703 insertions(+), 366 deletions(-)
  delete mode 100644 package/kernel/linux/modules/wireless.mk
 
 diff --git a/package/kernel/linux/modules/block.mk b/package/kernel/linux/modules/block.mk
@@ -166,7 +166,7 @@ index 3a59d78671..83048e50d3 100644
  define KernelPackage/crypto-sha1/mpc85xx
    FILES+=$(LINUX_DIR)/arch/powerpc/crypto/sha1-ppc-spe.ko
 diff --git a/package/kernel/linux/modules/fs.mk b/package/kernel/linux/modules/fs.mk
-index 91cf1ea233..ac2131e04a 100644
+index c746479a3b..ac2131e04a 100644
 --- a/package/kernel/linux/modules/fs.mk
 +++ b/package/kernel/linux/modules/fs.mk
 @@ -87,24 +87,31 @@ define KernelPackage/fs-cifs
@@ -292,24 +292,7 @@ index 91cf1ea233..ac2131e04a 100644
    FILES:=$(LINUX_DIR)/fs/nfsd/nfsd.ko
    AUTOLOAD:=$(call AutoLoad,40,nfsd)
  endef
-@@ -484,7 +510,7 @@ $(eval $(call KernelPackage,fs-nfsd))
- 
- define KernelPackage/fs-ntfs
-   SUBMENU:=$(FS_MENU)
--  TITLE:=NTFS filesystem support
-+  TITLE:=NTFS filesystem read-only (old driver) support
-   KCONFIG:=CONFIG_NTFS_FS
-   FILES:=$(LINUX_DIR)/fs/ntfs/ntfs.ko
-   AUTOLOAD:=$(call AutoLoad,30,ntfs)
-@@ -492,31 +518,31 @@ define KernelPackage/fs-ntfs
- endef
- 
- define KernelPackage/fs-ntfs/description
-- Kernel module for NTFS filesystem support
-+ Kernel module for limited NTFS filesystem support. Support for writing
-+ is extremely limited and disabled as a result.
- endef
- 
+@@ -499,25 +525,24 @@ endef
  $(eval $(call KernelPackage,fs-ntfs))
  
  
@@ -348,7 +331,7 @@ index 91cf1ea233..ac2131e04a 100644
  
  
  define KernelPackage/fs-reiserfs
-@@ -576,7 +602,7 @@ define KernelPackage/fs-vfat
+@@ -577,7 +602,7 @@ define KernelPackage/fs-vfat
    FILES:= \
  	$(LINUX_DIR)/fs/fat/fat.ko \
  	$(LINUX_DIR)/fs/fat/vfat.ko
@@ -357,7 +340,7 @@ index 91cf1ea233..ac2131e04a 100644
    $(call AddDepends/nls,cp437 iso8859-1 utf8)
  endef
  
-@@ -616,3 +642,24 @@ define KernelPackage/fuse/description
+@@ -617,3 +642,24 @@ define KernelPackage/fuse/description
  endef
  
  $(eval $(call KernelPackage,fuse))
@@ -1056,7 +1039,7 @@ index c52a8133be..81ceb1f76c 100644
    SUBMENU:=$(LIB_MENU)
    TITLE:=Object identifier registry
 diff --git a/package/kernel/linux/modules/netdevices.mk b/package/kernel/linux/modules/netdevices.mk
-index 5ca1a141a8..394180902d 100644
+index 5ca1a141a8..518d83f9a2 100644
 --- a/package/kernel/linux/modules/netdevices.mk
 +++ b/package/kernel/linux/modules/netdevices.mk
 @@ -141,7 +141,7 @@ $(eval $(call KernelPackage,mii))
@@ -1087,7 +1070,48 @@ index 5ca1a141a8..394180902d 100644
    AUTOLOAD:=$(call AutoProbe,mdio-gpio)
  endef
  
-@@ -389,7 +387,7 @@ $(eval $(call KernelPackage,switch-rtl8306))
+@@ -275,6 +273,40 @@ endef
+ $(eval $(call KernelPackage,phy-bcm84881))
+ 
+ 
++define KernelPackage/phy-marvell
++   SUBMENU:=$(NETWORK_DEVICES_MENU)
++   TITLE:=Marvell Gigabit Ethernet PHY driver
++   KCONFIG:=CONFIG_MARVELL_PHY
++   DEPENDS:=+kmod-libphy
++   FILES:=$(LINUX_DIR)/drivers/net/phy/marvell.ko
++   AUTOLOAD:=$(call AutoLoad,18,marvell)
++endef
++
++define KernelPackage/phy-marvell/description
++   Supports Marvell Gigabit Ethernet PHYs:
++   * 88E1101
++   * 88E1112
++   * 88E1111 (incl. Finisar variant)
++   * 88E1118
++   * 88E1121R
++   * 88E1145
++   * 88E1149R
++   * 88E1240
++   * 88E1318S
++   * 88E1116R
++   * 88E1510
++   * 88E1540
++   * 88E1545
++   * 88E3016
++   * 88E6341 family
++   * 88E6390 family
++   * 88E6393 family
++   * 88E1340S
++   * 88E1548P
++endef
++
++$(eval $(call KernelPackage,phy-marvell))
++
+ 
+ define KernelPackage/phy-realtek
+    SUBMENU:=$(NETWORK_DEVICES_MENU)
+@@ -389,7 +421,7 @@ $(eval $(call KernelPackage,switch-rtl8306))
  define KernelPackage/switch-rtl8366-smi
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek RTL8366 SMI switch interface support
@@ -1096,7 +1120,7 @@ index 5ca1a141a8..394180902d 100644
    KCONFIG:=CONFIG_RTL8366_SMI
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366_smi.ko
    AUTOLOAD:=$(call AutoLoad,42,rtl8366_smi,1)
-@@ -408,7 +406,7 @@ define KernelPackage/switch-rtl8366rb
+@@ -408,7 +440,7 @@ define KernelPackage/switch-rtl8366rb
    DEPENDS:=+kmod-switch-rtl8366-smi
    KCONFIG:=CONFIG_RTL8366RB_PHY
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366rb.ko
@@ -1105,7 +1129,7 @@ index 5ca1a141a8..394180902d 100644
  endef
  
  define KernelPackage/switch-rtl8366rb/description
-@@ -424,7 +422,7 @@ define KernelPackage/switch-rtl8366s
+@@ -424,7 +456,7 @@ define KernelPackage/switch-rtl8366s
    DEPENDS:=+kmod-switch-rtl8366-smi
    KCONFIG:=CONFIG_RTL8366S_PHY
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366s.ko
@@ -1114,7 +1138,7 @@ index 5ca1a141a8..394180902d 100644
  endef
  
  define KernelPackage/switch-rtl8366s/description
-@@ -434,6 +432,22 @@ endef
+@@ -434,6 +466,22 @@ endef
  $(eval $(call KernelPackage,switch-rtl8366s))
  
  
@@ -1137,7 +1161,7 @@ index 5ca1a141a8..394180902d 100644
  define KernelPackage/switch-rtl8367b
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek RTL8367R/B switch support
-@@ -450,6 +464,22 @@ endef
+@@ -450,6 +498,22 @@ endef
  $(eval $(call KernelPackage,switch-rtl8367b))
  
  
@@ -1160,7 +1184,7 @@ index 5ca1a141a8..394180902d 100644
  define KernelPackage/natsemi
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=National Semiconductor DP8381x series
-@@ -610,7 +640,7 @@ $(eval $(call KernelPackage,8139cp))
+@@ -610,7 +674,7 @@ $(eval $(call KernelPackage,8139cp))
  define KernelPackage/r8169
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=RealTek RTL-8169 PCI Gigabit Ethernet Adapter kernel support
@@ -1169,7 +1193,7 @@ index 5ca1a141a8..394180902d 100644
    KCONFIG:= \
      CONFIG_R8169 \
      CONFIG_R8169_NAPI=y \
-@@ -736,7 +766,7 @@ $(eval $(call KernelPackage,igbvf))
+@@ -736,7 +800,7 @@ $(eval $(call KernelPackage,igbvf))
  define KernelPackage/ixgbe
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Intel(R) 82598/82599 PCI-Express 10 Gigabit Ethernet support
@@ -1178,7 +1202,7 @@ index 5ca1a141a8..394180902d 100644
    KCONFIG:=CONFIG_IXGBE \
      CONFIG_IXGBE_VXLAN=n \
      CONFIG_IXGBE_HWMON=y \
-@@ -1089,8 +1119,8 @@ define KernelPackage/of-mdio
+@@ -1089,8 +1153,8 @@ define KernelPackage/of-mdio
    DEPENDS:=+kmod-libphy +kmod-fixed-phy @!TARGET_x86
    KCONFIG:=CONFIG_OF_MDIO
    FILES:= \
@@ -1189,7 +1213,7 @@ index 5ca1a141a8..394180902d 100644
    AUTOLOAD:=$(call AutoLoad,41,of_mdio)
  endef
  
-@@ -1256,6 +1286,22 @@ endef
+@@ -1256,6 +1320,22 @@ endef
  $(eval $(call KernelPackage,mlx5-core))
  
  
@@ -1212,7 +1236,7 @@ index 5ca1a141a8..394180902d 100644
  define KernelPackage/qlcnic
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    DEPENDS:=@PCI_SUPPORT +kmod-hwmon-core
-@@ -1285,8 +1331,7 @@ define KernelPackage/sfp
+@@ -1285,8 +1365,7 @@ define KernelPackage/sfp
  	CONFIG_MDIO_I2C
    FILES:= \
  	$(LINUX_DIR)/drivers/net/phy/sfp.ko \
@@ -1222,7 +1246,7 @@ index 5ca1a141a8..394180902d 100644
    AUTOLOAD:=$(call AutoProbe,mdio-i2c sfp)
  endef
  
-@@ -1348,3 +1393,83 @@ define KernelPackage/sfc-falcon/description
+@@ -1348,3 +1427,83 @@ define KernelPackage/sfc-falcon/description
  endef
  
  $(eval $(call KernelPackage,sfc-falcon))
