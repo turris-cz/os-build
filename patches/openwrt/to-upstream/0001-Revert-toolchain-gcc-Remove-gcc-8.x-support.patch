@@ -1,0 +1,1067 @@
+From 4e568cc2d7aa04a15bdde84507e2826ed7299069 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
+Date: Fri, 25 Nov 2022 18:43:17 +0100
+Subject: [PATCH] Revert "toolchain: gcc: Remove gcc 8.x support"
+
+This reverts commit a14544d1bb6f6840dd64c600c58d938b193c09e3.
+
+gcc 8.x is needed for powerpc SPE instruction set extension support
+in mpc85xx devices.
+---
+ toolchain/gcc/Config.in                       |   3 +
+ toolchain/gcc/Config.version                  |   5 +
+ toolchain/gcc/common.mk                       |   4 +
+ .../patches-8.x/002-case_insensitive.patch    |  24 +++
+ .../gcc/patches-8.x/010-documentation.patch   |  35 ++++
+ .../patches-8.x/110-Fix-MIPS-PR-84790.patch   |  20 +++
+ .../gcc/patches-8.x/230-musl_libssp.patch     |  13 ++
+ .../300-mips_Os_cpu_rtx_cost_model.patch      |  21 +++
+ .../800-arm_v5te_no_ldrd_strd.patch           |  11 ++
+ .../810-arm-softfloat-libgcc.patch            |  33 ++++
+ .../gcc/patches-8.x/820-libgcc_pic.patch      |  44 +++++
+ .../840-armv4_pass_fix-v4bx_to_ld.patch       |  28 +++
+ .../patches-8.x/850-use_shared_libgcc.patch   |  54 ++++++
+ .../patches-8.x/851-libgcc_no_compat.patch    |  22 +++
+ .../patches-8.x/870-ppc_no_crtsavres.patch    |  11 ++
+ .../gcc/patches-8.x/881-no_tm_section.patch   |  11 ++
+ .../gcc/patches-8.x/900-bad-mips16-crt.patch  |   9 +
+ .../gcc/patches-8.x/910-mbsd_multi.patch      | 146 +++++++++++++++
+ .../920-specs_nonfatal_getenv.patch           |  22 +++
+ .../930-fix-mips-noexecstack.patch            | 111 ++++++++++++
+ ...ibffi-fix-MIPS-softfloat-build-issue.patch | 168 ++++++++++++++++++
+ ...mpilation-when-making-cross-compiler.patch |  67 +++++++
+ 22 files changed, 862 insertions(+)
+ create mode 100644 toolchain/gcc/patches-8.x/002-case_insensitive.patch
+ create mode 100644 toolchain/gcc/patches-8.x/010-documentation.patch
+ create mode 100644 toolchain/gcc/patches-8.x/110-Fix-MIPS-PR-84790.patch
+ create mode 100644 toolchain/gcc/patches-8.x/230-musl_libssp.patch
+ create mode 100644 toolchain/gcc/patches-8.x/300-mips_Os_cpu_rtx_cost_model.patch
+ create mode 100644 toolchain/gcc/patches-8.x/800-arm_v5te_no_ldrd_strd.patch
+ create mode 100644 toolchain/gcc/patches-8.x/810-arm-softfloat-libgcc.patch
+ create mode 100644 toolchain/gcc/patches-8.x/820-libgcc_pic.patch
+ create mode 100644 toolchain/gcc/patches-8.x/840-armv4_pass_fix-v4bx_to_ld.patch
+ create mode 100644 toolchain/gcc/patches-8.x/850-use_shared_libgcc.patch
+ create mode 100644 toolchain/gcc/patches-8.x/851-libgcc_no_compat.patch
+ create mode 100644 toolchain/gcc/patches-8.x/870-ppc_no_crtsavres.patch
+ create mode 100644 toolchain/gcc/patches-8.x/881-no_tm_section.patch
+ create mode 100644 toolchain/gcc/patches-8.x/900-bad-mips16-crt.patch
+ create mode 100644 toolchain/gcc/patches-8.x/910-mbsd_multi.patch
+ create mode 100644 toolchain/gcc/patches-8.x/920-specs_nonfatal_getenv.patch
+ create mode 100644 toolchain/gcc/patches-8.x/930-fix-mips-noexecstack.patch
+ create mode 100644 toolchain/gcc/patches-8.x/931-libffi-fix-MIPS-softfloat-build-issue.patch
+ create mode 100644 toolchain/gcc/patches-8.x/960-gotools-fix-compilation-when-making-cross-compiler.patch
+
+diff --git a/toolchain/gcc/Config.in b/toolchain/gcc/Config.in
+index 3c074c99b2..40422b47e1 100644
+--- a/toolchain/gcc/Config.in
++++ b/toolchain/gcc/Config.in
+@@ -6,6 +6,9 @@ choice
+ 	help
+ 	  Select the version of gcc you wish to use.
+ 
++	config GCC_USE_VERSION_8
++		bool "gcc 8.x"
++
+ 	config GCC_USE_VERSION_11
+ 		bool "gcc 11.x"
+ 
+diff --git a/toolchain/gcc/Config.version b/toolchain/gcc/Config.version
+index 65f272746b..b3684d1b8c 100644
+--- a/toolchain/gcc/Config.version
++++ b/toolchain/gcc/Config.version
+@@ -1,8 +1,13 @@
++config GCC_VERSION_8
++	default y if GCC_USE_VERSION_8
++	bool
++
+ config GCC_VERSION_12
+ 	default y if GCC_USE_VERSION_12
+ 	bool
+ 
+ config GCC_VERSION
+ 	string
++	default "8.4.0"		if GCC_VERSION_8
+ 	default "12.2.0"	if GCC_VERSION_12
+ 	default "11.3.0"
+diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
+index 6661b0aa38..cdcab2a271 100644
+--- a/toolchain/gcc/common.mk
++++ b/toolchain/gcc/common.mk
+@@ -29,6 +29,10 @@ GCC_DIR:=$(PKG_NAME)-$(PKG_VERSION)
+ PKG_SOURCE_URL:=@GNU/gcc/gcc-$(PKG_VERSION)
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+ 
++ifeq ($(PKG_VERSION),8.4.0)
++  PKG_HASH:=e30a6e52d10e1f27ed55104ad233c30bd1e99cfb5ff98ab022dc941edd1b2dd4
++endif
++
+ ifeq ($(PKG_VERSION),11.3.0)
+   PKG_HASH:=b47cf2818691f5b1e21df2bb38c795fac2cfbd640ede2d0a5e1c89e338a3ac39
+ endif
+diff --git a/toolchain/gcc/patches-8.x/002-case_insensitive.patch b/toolchain/gcc/patches-8.x/002-case_insensitive.patch
+new file mode 100644
+index 0000000000..3442076d7d
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/002-case_insensitive.patch
+@@ -0,0 +1,24 @@
++commit 81cc26c706b2bc8c8c1eb1a322e5c5157900836e
++Author: Felix Fietkau <nbd@openwrt.org>
++Date:   Sun Oct 19 21:45:51 2014 +0000
++
++    gcc: do not assume that the Mac OS X filesystem is case insensitive
++    
++    Signed-off-by: Felix Fietkau <nbd@openwrt.org>
++    
++    SVN-Revision: 42973
++
++--- a/include/filenames.h
+++++ b/include/filenames.h
++@@ -43,11 +43,6 @@ extern "C" {
++ #  define IS_DIR_SEPARATOR(c) IS_DOS_DIR_SEPARATOR (c)
++ #  define IS_ABSOLUTE_PATH(f) IS_DOS_ABSOLUTE_PATH (f)
++ #else /* not DOSish */
++-#  if defined(__APPLE__)
++-#    ifndef HAVE_CASE_INSENSITIVE_FILE_SYSTEM
++-#      define HAVE_CASE_INSENSITIVE_FILE_SYSTEM 1
++-#    endif
++-#  endif /* __APPLE__ */
++ #  define HAS_DRIVE_SPEC(f) (0)
++ #  define IS_DIR_SEPARATOR(c) IS_UNIX_DIR_SEPARATOR (c)
++ #  define IS_ABSOLUTE_PATH(f) IS_UNIX_ABSOLUTE_PATH (f)
+diff --git a/toolchain/gcc/patches-8.x/010-documentation.patch b/toolchain/gcc/patches-8.x/010-documentation.patch
+new file mode 100644
+index 0000000000..c7e3d4ad55
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/010-documentation.patch
+@@ -0,0 +1,35 @@
++commit 098bd91f5eae625c7d2ee621e10930fc4434e5e2
++Author: Luka Perkov <luka@openwrt.org>
++Date:   Tue Feb 26 16:16:33 2013 +0000
++
++    gcc: don't build documentation
++    
++    This closes #13039.
++    
++    Signed-off-by: Luka Perkov <luka@openwrt.org>
++    
++    SVN-Revision: 35807
++
++--- a/gcc/Makefile.in
+++++ b/gcc/Makefile.in
++@@ -3204,18 +3204,10 @@ doc/gcc.info: $(TEXI_GCC_FILES)
++ doc/gccint.info: $(TEXI_GCCINT_FILES)
++ doc/cppinternals.info: $(TEXI_CPPINT_FILES)
++ 
++-doc/%.info: %.texi
++-	if [ x$(BUILD_INFO) = xinfo ]; then \
++-		$(MAKEINFO) $(MAKEINFOFLAGS) -I . -I $(gcc_docdir) \
++-			-I $(gcc_docdir)/include -o $@ $<; \
++-	fi
+++doc/%.info:
++ 
++ # Duplicate entry to handle renaming of gccinstall.info
++-doc/gccinstall.info: $(TEXI_GCCINSTALL_FILES)
++-	if [ x$(BUILD_INFO) = xinfo ]; then \
++-		$(MAKEINFO) $(MAKEINFOFLAGS) -I $(gcc_docdir) \
++-			-I $(gcc_docdir)/include -o $@ $<; \
++-	fi
+++doc/gccinstall.info:
++ 
++ doc/cpp.dvi: $(TEXI_CPP_FILES)
++ doc/gcc.dvi: $(TEXI_GCC_FILES)
+diff --git a/toolchain/gcc/patches-8.x/110-Fix-MIPS-PR-84790.patch b/toolchain/gcc/patches-8.x/110-Fix-MIPS-PR-84790.patch
+new file mode 100644
+index 0000000000..b89eca2faf
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/110-Fix-MIPS-PR-84790.patch
+@@ -0,0 +1,20 @@
++Fix https://gcc.gnu.org/bugzilla/show_bug.cgi?id=84790.
++MIPS16 functions have a static assembler prologue which clobbers
++registers v0 and v1. Add these register clobbers to function call
++instructions.
++
++--- a/gcc/config/mips/mips.c
+++++ b/gcc/config/mips/mips.c
++@@ -3102,6 +3102,12 @@ mips_emit_call_insn (rtx pattern, rtx or
++       emit_insn (gen_update_got_version ());
++     }
++ 
+++  if (TARGET_MIPS16 && TARGET_USE_GOT)
+++    {
+++      clobber_reg (&CALL_INSN_FUNCTION_USAGE (insn), MIPS16_PIC_TEMP);
+++      clobber_reg (&CALL_INSN_FUNCTION_USAGE (insn), MIPS_PROLOGUE_TEMP (word_mode));
+++    }
+++
++   if (TARGET_MIPS16
++       && TARGET_EXPLICIT_RELOCS
++       && TARGET_CALL_CLOBBERED_GP)
+diff --git a/toolchain/gcc/patches-8.x/230-musl_libssp.patch b/toolchain/gcc/patches-8.x/230-musl_libssp.patch
+new file mode 100644
+index 0000000000..b3ab79cafb
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/230-musl_libssp.patch
+@@ -0,0 +1,13 @@
++--- a/gcc/gcc.c
+++++ b/gcc/gcc.c
++@@ -868,7 +868,9 @@ proper position among the other output f
++ #endif
++ 
++ #ifndef LINK_SSP_SPEC
++-#ifdef TARGET_LIBC_PROVIDES_SSP
+++#if DEFAULT_LIBC == LIBC_MUSL
+++#define LINK_SSP_SPEC "-lssp_nonshared"
+++#elif defined(TARGET_LIBC_PROVIDES_SSP)
++ #define LINK_SSP_SPEC "%{fstack-protector|fstack-protector-all" \
++ 		       "|fstack-protector-strong|fstack-protector-explicit:}"
++ #else
+diff --git a/toolchain/gcc/patches-8.x/300-mips_Os_cpu_rtx_cost_model.patch b/toolchain/gcc/patches-8.x/300-mips_Os_cpu_rtx_cost_model.patch
+new file mode 100644
+index 0000000000..2e2c609e48
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/300-mips_Os_cpu_rtx_cost_model.patch
+@@ -0,0 +1,21 @@
++commit ecf7671b769fe96f7b5134be442089f8bdba55d2
++Author: Felix Fietkau <nbd@nbd.name>
++Date:   Thu Aug 4 20:29:45 2016 +0200
++
++gcc: add a patch to generate better code with Os on mips
++
++Also happens to reduce compressed code size a bit
++
++Signed-off-by: Felix Fietkau <nbd@nbd.name>
++
++--- a/gcc/config/mips/mips.c
+++++ b/gcc/config/mips/mips.c
++@@ -19847,7 +19847,7 @@ mips_option_override (void)
++     flag_pcc_struct_return = 0;
++ 
++   /* Decide which rtx_costs structure to use.  */
++-  if (optimize_size)
+++  if (0 && optimize_size)
++     mips_cost = &mips_rtx_cost_optimize_size;
++   else
++     mips_cost = &mips_rtx_cost_data[mips_tune];
+diff --git a/toolchain/gcc/patches-8.x/800-arm_v5te_no_ldrd_strd.patch b/toolchain/gcc/patches-8.x/800-arm_v5te_no_ldrd_strd.patch
+new file mode 100644
+index 0000000000..172295f28b
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/800-arm_v5te_no_ldrd_strd.patch
+@@ -0,0 +1,11 @@
++--- a/gcc/config/arm/arm.h
+++++ b/gcc/config/arm/arm.h
++@@ -155,7 +155,7 @@ extern tree arm_fp16_type_node;
++ /* Thumb-1 only.  */
++ #define TARGET_THUMB1_ONLY		(TARGET_THUMB1 && !arm_arch_notm)
++ 
++-#define TARGET_LDRD			(arm_arch5e && ARM_DOUBLEWORD_ALIGN \
+++#define TARGET_LDRD			(arm_arch6 && ARM_DOUBLEWORD_ALIGN \
++                                          && !TARGET_THUMB1)
++ 
++ #define TARGET_CRC32			(arm_arch_crc)
+diff --git a/toolchain/gcc/patches-8.x/810-arm-softfloat-libgcc.patch b/toolchain/gcc/patches-8.x/810-arm-softfloat-libgcc.patch
+new file mode 100644
+index 0000000000..5c9d86aead
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/810-arm-softfloat-libgcc.patch
+@@ -0,0 +1,33 @@
++commit 8570c4be394cff7282f332f97da2ff569a927ddb
++Author: Imre Kaloz <kaloz@openwrt.org>
++Date:   Wed Feb 2 20:06:12 2011 +0000
++
++    fixup arm soft-float symbols
++    
++    SVN-Revision: 25325
++
++--- a/libgcc/config/arm/t-linux
+++++ b/libgcc/config/arm/t-linux
++@@ -1,6 +1,10 @@
++ LIB1ASMSRC = arm/lib1funcs.S
++ LIB1ASMFUNCS = _udivsi3 _divsi3 _umodsi3 _modsi3 _dvmd_lnx _clzsi2 _clzdi2 \
++-	_ctzsi2 _arm_addsubdf3 _arm_addsubsf3
+++	_ctzsi2 _arm_addsubdf3 _arm_addsubsf3 \
+++	_arm_negdf2 _arm_muldivdf3 _arm_cmpdf2 _arm_unorddf2 \
+++	_arm_fixdfsi _arm_fixunsdfsi _arm_truncdfsf2 \
+++	_arm_negsf2 _arm_muldivsf3 _arm_cmpsf2 _arm_unordsf2 \
+++	_arm_fixsfsi _arm_fixunssfsi
++ 
++ # Just for these, we omit the frame pointer since it makes such a big
++ # difference.
++--- a/gcc/config/arm/linux-elf.h
+++++ b/gcc/config/arm/linux-elf.h
++@@ -58,8 +58,6 @@
++    %{shared:-lc} \
++    %{!shared:%{profile:-lc_p}%{!profile:-lc}}"
++ 
++-#define LIBGCC_SPEC "%{mfloat-abi=soft*:-lfloat} -lgcc"
++-
++ #define GLIBC_DYNAMIC_LINKER "/lib/ld-linux.so.2"
++ 
++ #define LINUX_TARGET_LINK_SPEC  "%{h*} \
+diff --git a/toolchain/gcc/patches-8.x/820-libgcc_pic.patch b/toolchain/gcc/patches-8.x/820-libgcc_pic.patch
+new file mode 100644
+index 0000000000..1a9678d480
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/820-libgcc_pic.patch
+@@ -0,0 +1,44 @@
++commit c96312958c0621e72c9b32da5bc224ffe2161384
++Author: Felix Fietkau <nbd@openwrt.org>
++Date:   Mon Oct 19 23:26:09 2009 +0000
++
++    gcc: create a proper libgcc_pic.a static library for relinking (4.3.3+ for now, backport will follow)
++    
++    SVN-Revision: 18086
++
++--- a/libgcc/Makefile.in
+++++ b/libgcc/Makefile.in
++@@ -923,11 +923,12 @@ $(libgcov-driver-objects): %$(objext): $
++ 
++ # Static libraries.
++ libgcc.a: $(libgcc-objects)
+++libgcc_pic.a: $(libgcc-s-objects)
++ libgcov.a: $(libgcov-objects)
++ libunwind.a: $(libunwind-objects)
++ libgcc_eh.a: $(libgcc-eh-objects)
++ 
++-libgcc.a libgcov.a libunwind.a libgcc_eh.a:
+++libgcc.a libgcov.a libunwind.a libgcc_eh.a libgcc_pic.a:
++ 	-rm -f $@
++ 
++ 	objects="$(objects)";					\
++@@ -948,7 +949,7 @@ all: libunwind.a
++ endif
++ 
++ ifeq ($(enable_shared),yes)
++-all: libgcc_eh.a libgcc_s$(SHLIB_EXT)
+++all: libgcc_eh.a libgcc_pic.a libgcc_s$(SHLIB_EXT)
++ ifneq ($(LIBUNWIND),)
++ all: libunwind$(SHLIB_EXT)
++ libgcc_s$(SHLIB_EXT): libunwind$(SHLIB_EXT)
++@@ -1154,6 +1155,10 @@ install-shared:
++ 	chmod 644 $(DESTDIR)$(inst_libdir)/libgcc_eh.a
++ 	$(RANLIB) $(DESTDIR)$(inst_libdir)/libgcc_eh.a
++ 
+++	$(INSTALL_DATA) libgcc_pic.a $(mapfile) $(DESTDIR)$(inst_libdir)/
+++	chmod 644 $(DESTDIR)$(inst_libdir)/libgcc_pic.a
+++	$(RANLIB) $(DESTDIR)$(inst_libdir)/libgcc_pic.a
+++
++ 	$(subst @multilib_dir@,$(MULTIDIR),$(subst \
++ 		@shlib_base_name@,libgcc_s,$(subst \
++ 		@shlib_slibdir_qual@,$(MULTIOSSUBDIR),$(SHLIB_INSTALL))))
+diff --git a/toolchain/gcc/patches-8.x/840-armv4_pass_fix-v4bx_to_ld.patch b/toolchain/gcc/patches-8.x/840-armv4_pass_fix-v4bx_to_ld.patch
+new file mode 100644
+index 0000000000..b9c9b161ad
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/840-armv4_pass_fix-v4bx_to_ld.patch
+@@ -0,0 +1,28 @@
++commit 7edc8ca5456d9743dd0075eb3cc5b04f4f24c8cc
++Author: Imre Kaloz <kaloz@openwrt.org>
++Date:   Wed Feb 2 19:34:36 2011 +0000
++
++    add armv4 fixup patches
++    
++    SVN-Revision: 25322
++
++
++--- a/gcc/config/arm/linux-eabi.h
+++++ b/gcc/config/arm/linux-eabi.h
++@@ -88,10 +88,15 @@
++ #define MUSL_DYNAMIC_LINKER \
++   "/lib/ld-musl-arm" MUSL_DYNAMIC_LINKER_E "%{mfloat-abi=hard:hf}.so.1"
++ 
+++/* For armv4 we pass --fix-v4bx to linker to support EABI */
+++#undef TARGET_FIX_V4BX_SPEC
+++#define TARGET_FIX_V4BX_SPEC " %{mcpu=arm8|mcpu=arm810|mcpu=strongarm*"\
+++  "|march=armv4|mcpu=fa526|mcpu=fa626:--fix-v4bx}"
+++
++ /* At this point, bpabi.h will have clobbered LINK_SPEC.  We want to
++    use the GNU/Linux version, not the generic BPABI version.  */
++ #undef  LINK_SPEC
++-#define LINK_SPEC EABI_LINK_SPEC					\
+++#define LINK_SPEC EABI_LINK_SPEC TARGET_FIX_V4BX_SPEC			\
++   LINUX_OR_ANDROID_LD (LINUX_TARGET_LINK_SPEC,				\
++ 		       LINUX_TARGET_LINK_SPEC " " ANDROID_LINK_SPEC)
++ 
+diff --git a/toolchain/gcc/patches-8.x/850-use_shared_libgcc.patch b/toolchain/gcc/patches-8.x/850-use_shared_libgcc.patch
+new file mode 100644
+index 0000000000..f619f0e6a1
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/850-use_shared_libgcc.patch
+@@ -0,0 +1,54 @@
++commit dcfc40358b5a3cae7320c17f8d1cebd5ad5540cd
++Author: Felix Fietkau <nbd@openwrt.org>
++Date:   Sun Feb 12 20:25:47 2012 +0000
++
++    gcc 4.6: port over the missing patch 850-use_shared_libgcc.patch to prevent libgcc crap from leaking into every single binary
++    
++    SVN-Revision: 30486
++--- a/gcc/config/arm/linux-eabi.h
+++++ b/gcc/config/arm/linux-eabi.h
++@@ -126,10 +126,6 @@
++   "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} "	\
++   LINUX_OR_ANDROID_LD (GNU_USER_TARGET_ENDFILE_SPEC, ANDROID_ENDFILE_SPEC)
++ 
++-/* Use the default LIBGCC_SPEC, not the version in linux-elf.h, as we
++-   do not use -lfloat.  */
++-#undef LIBGCC_SPEC
++-
++ /* Clear the instruction cache from `beg' to `end'.  This is
++    implemented in lib1funcs.S, so ensure an error if this definition
++    is used.  */
++--- a/gcc/config/linux.h
+++++ b/gcc/config/linux.h
++@@ -53,6 +53,10 @@ see the files COPYING3 and COPYING.RUNTI
++ 	builtin_assert ("system=posix");			\
++     } while (0)
++ 
+++#ifndef LIBGCC_SPEC
+++#define LIBGCC_SPEC "%{static|static-libgcc:-lgcc}%{!static:%{!static-libgcc:-lgcc_s}}"
+++#endif
+++
++ /* Determine which dynamic linker to use depending on whether GLIBC or
++    uClibc or Bionic or musl is the default C library and whether
++    -muclibc or -mglibc or -mbionic or -mmusl has been passed to change
++--- a/libgcc/mkmap-symver.awk
+++++ b/libgcc/mkmap-symver.awk
++@@ -136,5 +136,5 @@ function output(lib) {
++   else if (inherit[lib])
++     printf("} %s;\n", inherit[lib]);
++   else
++-    printf ("\n  local:\n\t*;\n};\n");
+++    printf ("\n\t*;\n};\n");
++ }
++--- a/gcc/config/rs6000/linux.h
+++++ b/gcc/config/rs6000/linux.h
++@@ -60,6 +60,9 @@
++ #undef	CPP_OS_DEFAULT_SPEC
++ #define CPP_OS_DEFAULT_SPEC "%(cpp_os_linux)"
++ 
+++#undef LIBGCC_SPEC
+++#define LIBGCC_SPEC "%{!static:%{!static-libgcc:-lgcc_s}} -lgcc"
+++
++ #undef  LINK_SHLIB_SPEC
++ #define LINK_SHLIB_SPEC "%{shared:-shared} %{!shared: %{static:-static}} \
++   %{static-pie:-static -pie --no-dynamic-linker -z text}"
+diff --git a/toolchain/gcc/patches-8.x/851-libgcc_no_compat.patch b/toolchain/gcc/patches-8.x/851-libgcc_no_compat.patch
+new file mode 100644
+index 0000000000..d710e40717
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/851-libgcc_no_compat.patch
+@@ -0,0 +1,22 @@
++commit 64661de100da1ec1061ef3e5e400285dce115e6b
++Author: Felix Fietkau <nbd@openwrt.org>
++Date:   Sun May 10 13:16:35 2015 +0000
++
++    gcc: add some size optimization patches
++    
++    Signed-off-by: Felix Fietkau <nbd@openwrt.org>
++    
++    SVN-Revision: 45664
++
++--- a/libgcc/config/t-libunwind
+++++ b/libgcc/config/t-libunwind
++@@ -2,8 +2,7 @@
++ 
++ HOST_LIBGCC2_CFLAGS += -DUSE_GAS_SYMVER
++ 
++-LIB2ADDEH = $(srcdir)/unwind-sjlj.c $(srcdir)/unwind-c.c \
++-  $(srcdir)/unwind-compat.c $(srcdir)/unwind-dw2-fde-compat.c
+++LIB2ADDEH = $(srcdir)/unwind-sjlj.c $(srcdir)/unwind-c.c
++ LIB2ADDEHSTATIC = $(srcdir)/unwind-sjlj.c $(srcdir)/unwind-c.c
++ 
++ # Override the default value from t-slibgcc-elf-ver and mention -lunwind
+diff --git a/toolchain/gcc/patches-8.x/870-ppc_no_crtsavres.patch b/toolchain/gcc/patches-8.x/870-ppc_no_crtsavres.patch
+new file mode 100644
+index 0000000000..51d11c3d85
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/870-ppc_no_crtsavres.patch
+@@ -0,0 +1,11 @@
++--- a/gcc/config/rs6000/rs6000.c
+++++ b/gcc/config/rs6000/rs6000.c
++@@ -24780,7 +24780,7 @@ rs6000_savres_strategy (rs6000_stack_t *
++   /* Define cutoff for using out-of-line functions to save registers.  */
++   if (DEFAULT_ABI == ABI_V4 || TARGET_ELF)
++     {
++-      if (!optimize_size)
+++      if (1)
++ 	{
++ 	  strategy |= SAVE_INLINE_FPRS | REST_INLINE_FPRS;
++ 	  strategy |= SAVE_INLINE_GPRS | REST_INLINE_GPRS;
+diff --git a/toolchain/gcc/patches-8.x/881-no_tm_section.patch b/toolchain/gcc/patches-8.x/881-no_tm_section.patch
+new file mode 100644
+index 0000000000..fab5db3be5
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/881-no_tm_section.patch
+@@ -0,0 +1,11 @@
++--- a/libgcc/crtstuff.c
+++++ b/libgcc/crtstuff.c
++@@ -152,7 +152,7 @@ call_ ## FUNC (void)					\
++ #endif
++ 
++ #if !defined(USE_TM_CLONE_REGISTRY) && defined(OBJECT_FORMAT_ELF)
++-# define USE_TM_CLONE_REGISTRY 1
+++# define USE_TM_CLONE_REGISTRY 0
++ #endif
++ 
++ /* We do not want to add the weak attribute to the declarations of these
+diff --git a/toolchain/gcc/patches-8.x/900-bad-mips16-crt.patch b/toolchain/gcc/patches-8.x/900-bad-mips16-crt.patch
+new file mode 100644
+index 0000000000..dd6e9dc889
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/900-bad-mips16-crt.patch
+@@ -0,0 +1,9 @@
++--- a/libgcc/config/mips/t-mips16
+++++ b/libgcc/config/mips/t-mips16
++@@ -43,3 +43,6 @@ SYNC_CFLAGS = -mno-mips16
++ 
++ # Version these symbols if building libgcc.so.
++ SHLIB_MAPFILES += $(srcdir)/config/mips/libgcc-mips16.ver
+++
+++CRTSTUFF_T_CFLAGS += -mno-mips16
+++CRTSTUFF_T_CFLAGS_S += -mno-mips16
+diff --git a/toolchain/gcc/patches-8.x/910-mbsd_multi.patch b/toolchain/gcc/patches-8.x/910-mbsd_multi.patch
+new file mode 100644
+index 0000000000..c566ea35e5
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/910-mbsd_multi.patch
+@@ -0,0 +1,146 @@
++commit 99368862e44740ff4fd33760893f04e14f9dbdf1
++Author: Felix Fietkau <nbd@openwrt.org>
++Date:   Tue Jul 31 00:52:27 2007 +0000
++
++    Port the mbsd_multi patch from freewrt, which adds -fhonour-copts. This will emit warnings in packages that don't use our target cflags properly
++    
++    SVN-Revision: 8256
++
++	This patch brings over a feature from MirBSD:
++	* -fhonour-copts
++	  If this option is not given, it's warned (depending
++	  on environment variables). This is to catch errors
++	  of misbuilt packages which override CFLAGS themselves.
++
++	This patch was authored by Thorsten Glaser <tg at mirbsd.de>
++	with copyright assignment to the FSF in effect.
++
++--- a/gcc/c-family/c-opts.c
+++++ b/gcc/c-family/c-opts.c
++@@ -107,6 +107,9 @@ static dump_flags_t original_dump_flags;
++ /* Whether any standard preincluded header has been preincluded.  */
++ static bool done_preinclude;
++ 
+++/* Check if a port honours COPTS.  */
+++static int honour_copts = 0;
+++
++ static void handle_OPT_d (const char *);
++ static void set_std_cxx98 (int);
++ static void set_std_cxx11 (int);
++@@ -459,6 +462,12 @@ c_common_handle_option (size_t scode, co
++       flag_no_builtin = !value;
++       break;
++ 
+++    case OPT_fhonour_copts:
+++      if (c_language == clk_c) {
+++        honour_copts++;
+++      }
+++      break;
+++
++     case OPT_fconstant_string_class_:
++       constant_string_class_name = arg;
++       break;
++@@ -1125,6 +1134,47 @@ c_common_init (void)
++       return false;
++     }
++ 
+++  if (c_language == clk_c) {
+++    char *ev = getenv ("GCC_HONOUR_COPTS");
+++    int evv;
+++    if (ev == NULL)
+++      evv = -1;
+++    else if ((*ev == '0') || (*ev == '\0'))
+++      evv = 0;
+++    else if (*ev == '1')
+++      evv = 1;
+++    else if (*ev == '2')
+++      evv = 2;
+++    else if (*ev == 's')
+++      evv = -1;
+++    else {
+++      warning (0, "unknown GCC_HONOUR_COPTS value, assuming 1");
+++      evv = 1; /* maybe depend this on something like MIRBSD_NATIVE?  */
+++    }
+++    if (evv == 1) {
+++      if (honour_copts == 0) {
+++        error ("someone does not honour COPTS at all in lenient mode");
+++        return false;
+++      } else if (honour_copts != 1) {
+++        warning (0, "someone does not honour COPTS correctly, passed %d times",
+++         honour_copts);
+++      }
+++    } else if (evv == 2) {
+++      if (honour_copts == 0) {
+++        error ("someone does not honour COPTS at all in strict mode");
+++        return false;
+++      } else if (honour_copts != 1) {
+++        error ("someone does not honour COPTS correctly, passed %d times",
+++         honour_copts);
+++        return false;
+++      }
+++    } else if (evv == 0) {
+++      if (honour_copts != 1)
+++        inform (UNKNOWN_LOCATION, "someone does not honour COPTS correctly, passed %d times",
+++         honour_copts);
+++    }
+++  }
+++
++   return true;
++ }
++ 
++--- a/gcc/c-family/c.opt
+++++ b/gcc/c-family/c.opt
++@@ -1469,6 +1469,9 @@ C++ ObjC++ Optimization Alias(fexception
++ fhonor-std
++ C++ ObjC++ Ignore Warn(switch %qs is no longer supported)
++ 
+++fhonour-copts
+++C ObjC C++ ObjC++ RejectNegative
+++
++ fhosted
++ C ObjC
++ Assume normal C execution environment.
++--- a/gcc/common.opt
+++++ b/gcc/common.opt
++@@ -1551,6 +1551,9 @@ fguess-branch-probability
++ Common Report Var(flag_guess_branch_prob) Optimization
++ Enable guessing of branch probabilities.
++ 
+++fhonour-copts
+++Common RejectNegative
+++
++ ; Nonzero means ignore `#ident' directives.  0 means handle them.
++ ; Generate position-independent code for executables if possible
++ ; On SVR4 targets, it also controls whether or not to emit a
++--- a/gcc/opts.c
+++++ b/gcc/opts.c
++@@ -2073,6 +2073,9 @@ common_handle_option (struct gcc_options
++ 			       opts, opts_set, loc, dc);
++       break;
++ 
+++    case OPT_fhonour_copts:
+++      break;
+++
++     case OPT_Wlarger_than_:
++       opts->x_larger_than_size = value;
++       opts->x_warn_larger_than = value != -1;
++--- a/gcc/doc/invoke.texi
+++++ b/gcc/doc/invoke.texi
++@@ -7013,6 +7013,17 @@ This option is only supported for C and
++ @option{-Wall} and by @option{-Wpedantic}, which can be disabled with
++ @option{-Wno-pointer-sign}.
++ 
+++@item -fhonour-copts
+++@opindex fhonour-copts
+++If @env{GCC_HONOUR_COPTS} is set to 1, abort if this option is not
+++given at least once, and warn if it is given more than once.
+++If @env{GCC_HONOUR_COPTS} is set to 2, abort if this option is not
+++given exactly once.
+++If @env{GCC_HONOUR_COPTS} is set to 0 or unset, warn if this option
+++is not given exactly once.
+++The warning is quelled if @env{GCC_HONOUR_COPTS} is set to @samp{s}.
+++This flag and environment variable only affect the C language.
+++
++ @item -Wstack-protector
++ @opindex Wstack-protector
++ @opindex Wno-stack-protector
+diff --git a/toolchain/gcc/patches-8.x/920-specs_nonfatal_getenv.patch b/toolchain/gcc/patches-8.x/920-specs_nonfatal_getenv.patch
+new file mode 100644
+index 0000000000..c3836e63af
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/920-specs_nonfatal_getenv.patch
+@@ -0,0 +1,22 @@
++Author: Jo-Philipp Wich <jow@openwrt.org>
++Date:   Sat Apr 21 03:02:39 2012 +0000
++
++    gcc: add patch to make the getenv() spec function nonfatal if requested environment variable is unset
++    
++    SVN-Revision: 31390
++
++--- a/gcc/gcc.c
+++++ b/gcc/gcc.c
++@@ -9347,8 +9347,10 @@ getenv_spec_function (int argc, const ch
++     value = varname;
++ 
++   if (!value)
++-    fatal_error (input_location,
++-		 "environment variable %qs not defined", varname);
+++    {
+++      warning (input_location, "environment variable %qs not defined", varname);
+++      value = "";
+++    }
++ 
++   /* We have to escape every character of the environment variable so
++      they are not interpreted as active spec characters.  A
+diff --git a/toolchain/gcc/patches-8.x/930-fix-mips-noexecstack.patch b/toolchain/gcc/patches-8.x/930-fix-mips-noexecstack.patch
+new file mode 100644
+index 0000000000..ed8ada22a1
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/930-fix-mips-noexecstack.patch
+@@ -0,0 +1,111 @@
++From da45b3fde60095756f5f6030f6012c23a3d34429 Mon Sep 17 00:00:00 2001
++From: Andrew McDonnell <bugs@andrewmcdonnell.net>
++Date: Fri, 3 Oct 2014 19:09:00 +0930
++Subject: Add .note.GNU-stack section
++
++See http://lists.busybox.net/pipermail/uclibc/2014-October/048671.html
++Below copied from https://gcc.gnu.org/ml/gcc-patches/2014-09/msg02430.html
++
++Re: [Patch, MIPS] Add .note.GNU-stack section
++
++    From: Steve Ellcey <sellcey at mips dot com>
++
++On Wed, 2014-09-10 at 10:15 -0700, Eric Christopher wrote:
++>
++>
++> On Wed, Sep 10, 2014 at 9:27 AM, <pinskia@gmail.com> wrote:
++
++>         This works except you did not update the assembly files in
++>         libgcc or glibc. We (Cavium) have the same patch in our tree
++>         for a few released versions.
++
++> Mind just checking yours in then Andrew?
++
++> Thanks!
++> -eric
++
++I talked to Andrew about what files he changed in GCC and created and
++tested this new patch.  Andrew also mentioned changing some assembly
++files in glibc but I don't see any use of '.section .note.GNU-stack' in
++any assembly files in glibc (for any platform) so I wasn't planning on
++creating a glibc to add them to mips glibc assembly language files.
++
++OK to check in this patch?
++
++Steve Ellcey
++sellcey@mips.com
++
++
++
++2014-09-26  Steve Ellcey  <sellcey@mips.com>
++---
++ gcc/config/mips/mips.c          | 3 +++
++ libgcc/config/mips/crti.S       | 4 ++++
++ libgcc/config/mips/crtn.S       | 3 +++
++ libgcc/config/mips/mips16.S     | 4 ++++
++ libgcc/config/mips/vr4120-div.S | 4 ++++
++ 5 files changed, 18 insertions(+)
++
++--- a/gcc/config/mips/mips.c
+++++ b/gcc/config/mips/mips.c
++@@ -22640,6 +22640,9 @@ mips_starting_frame_offset (void)
++ #undef TARGET_STARTING_FRAME_OFFSET
++ #define TARGET_STARTING_FRAME_OFFSET mips_starting_frame_offset
++ 
+++#undef TARGET_ASM_FILE_END
+++#define TARGET_ASM_FILE_END file_end_indicate_exec_stack
+++
++ struct gcc_target targetm = TARGET_INITIALIZER;
++ 
++ #include "gt-mips.h"
++--- a/libgcc/config/mips/crti.S
+++++ b/libgcc/config/mips/crti.S
++@@ -21,6 +21,10 @@ a copy of the GCC Runtime Library Except
++ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++ <http://www.gnu.org/licenses/>.  */
++ 
+++
+++/* An executable stack is *not* required for these functions.  */
+++	.section .note.GNU-stack,"",%progbits
+++
++ /* 4 slots for argument spill area.  1 for cpreturn, 1 for stack.
++    Return spill offset of 40 and 20.  Aligned to 16 bytes for n32.  */
++ 
++--- a/libgcc/config/mips/crtn.S
+++++ b/libgcc/config/mips/crtn.S
++@@ -21,6 +21,9 @@ a copy of the GCC Runtime Library Except
++ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
++ <http://www.gnu.org/licenses/>.  */
++ 
+++/* An executable stack is *not* required for these functions.  */
+++	.section .note.GNU-stack,"",%progbits
+++
++ /* 4 slots for argument spill area.  1 for cpreturn, 1 for stack.
++    Return spill offset of 40 and 20.  Aligned to 16 bytes for n32.  */
++ 
++--- a/libgcc/config/mips/mips16.S
+++++ b/libgcc/config/mips/mips16.S
++@@ -48,6 +48,10 @@ see the files COPYING3 and COPYING.RUNTI
++    values using the soft-float calling convention, but do the actual
++    operation using the hard floating point instructions.  */
++ 
+++/* An executable stack is *not* required for these functions.  */
+++	.section .note.GNU-stack,"",%progbits
+++	.previous
+++
++ #if defined _MIPS_SIM && (_MIPS_SIM == _ABIO32 || _MIPS_SIM == _ABIO64)
++ 
++ /* This file contains 32-bit assembly code.  */
++--- a/libgcc/config/mips/vr4120-div.S
+++++ b/libgcc/config/mips/vr4120-div.S
++@@ -26,6 +26,10 @@ see the files COPYING3 and COPYING.RUNTI
++    -mfix-vr4120.  div and ddiv do not give the correct result when one
++    of the operands is negative.  */
++ 
+++/* An executable stack is *not* required for these functions.  */
+++	.section .note.GNU-stack,"",%progbits
+++	.previous
+++
++ 	.set	nomips16
++ 
++ #define DIV								\
+diff --git a/toolchain/gcc/patches-8.x/931-libffi-fix-MIPS-softfloat-build-issue.patch b/toolchain/gcc/patches-8.x/931-libffi-fix-MIPS-softfloat-build-issue.patch
+new file mode 100644
+index 0000000000..fb4cb1533a
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/931-libffi-fix-MIPS-softfloat-build-issue.patch
+@@ -0,0 +1,168 @@
++From c0c62fa4256f805389f16ebfc4a60cf789129b50 Mon Sep 17 00:00:00 2001
++From: BangLang Huang <banglang.huang@foxmail.com>
++Date: Wed, 9 Nov 2016 10:36:49 +0800
++Subject: [PATCH] libffi: fix MIPS softfloat build issue
++
++Backported from github.com/libffi/libffi#272
++
++Signed-off-by: BangLang Huang <banglang.huang@foxmail.com>
++Signed-off-by: Yousong Zhou <yszhou4tech@gmail.com>
++---
++ libffi/src/mips/n32.S | 17 +++++++++++++++++
++ libffi/src/mips/o32.S | 17 +++++++++++++++++
++ 2 files changed, 34 insertions(+)
++
++--- a/libffi/src/mips/n32.S
+++++ b/libffi/src/mips/n32.S
++@@ -107,6 +107,16 @@ loadregs:
++ 
++ 	REG_L	t6, 3*FFI_SIZEOF_ARG($fp)  # load the flags word into t6.
++ 
+++#ifdef __mips_soft_float
+++	REG_L	a0, 0*FFI_SIZEOF_ARG(t9)
+++	REG_L	a1, 1*FFI_SIZEOF_ARG(t9)
+++	REG_L	a2, 2*FFI_SIZEOF_ARG(t9)
+++	REG_L	a3, 3*FFI_SIZEOF_ARG(t9)
+++	REG_L	a4, 4*FFI_SIZEOF_ARG(t9)
+++	REG_L	a5, 5*FFI_SIZEOF_ARG(t9)
+++	REG_L	a6, 6*FFI_SIZEOF_ARG(t9)
+++	REG_L	a7, 7*FFI_SIZEOF_ARG(t9)
+++#else
++ 	and	t4, t6, ((1<<FFI_FLAG_BITS)-1)
++ 	REG_L	a0, 0*FFI_SIZEOF_ARG(t9)
++ 	beqz	t4, arg1_next
++@@ -193,6 +203,7 @@ arg7_next:
++ arg8_doublep:	
++  	l.d	$f19, 7*FFI_SIZEOF_ARG(t9)	
++ arg8_next:	
+++#endif
++ 
++ callit:		
++ 	# Load the function pointer
++@@ -214,6 +225,7 @@ retint:
++ 	b	epilogue
++ 
++ retfloat:
+++#ifndef __mips_soft_float
++ 	bne     t6, FFI_TYPE_FLOAT, retdouble
++ 	jal	t9
++ 	REG_L	t4, 4*FFI_SIZEOF_ARG($fp)
++@@ -272,6 +284,7 @@ retstruct_f_d:
++ 	s.s	$f0, 0(t4)
++ 	s.d	$f2, 8(t4)
++ 	b	epilogue
+++#endif
++ 
++ retstruct_d_soft:
++ 	bne	t6, FFI_TYPE_STRUCT_D_SOFT, retstruct_f_soft
++@@ -429,6 +442,7 @@ ffi_closure_N32:
++ 	REG_S	a6, A6_OFF2($sp)
++ 	REG_S	a7, A7_OFF2($sp)
++ 
+++#ifndef __mips_soft_float
++ 	# Store all possible float/double registers.
++ 	s.d	$f12, F12_OFF2($sp)
++ 	s.d	$f13, F13_OFF2($sp)
++@@ -438,6 +452,7 @@ ffi_closure_N32:
++ 	s.d	$f17, F17_OFF2($sp)
++ 	s.d	$f18, F18_OFF2($sp)
++ 	s.d	$f19, F19_OFF2($sp)
+++#endif
++ 
++ 	# Call ffi_closure_mips_inner_N32 to do the real work.
++ 	LA	t9, ffi_closure_mips_inner_N32
++@@ -458,6 +473,7 @@ cls_retint:
++ 	b	cls_epilogue
++ 
++ cls_retfloat:
+++#ifndef __mips_soft_float
++ 	bne     v0, FFI_TYPE_FLOAT, cls_retdouble
++ 	l.s	$f0, V0_OFF2($sp)
++ 	b	cls_epilogue
++@@ -500,6 +516,7 @@ cls_retstruct_f_d:
++ 	l.s	$f0, V0_OFF2($sp)
++ 	l.d	$f2, V1_OFF2($sp)
++ 	b	cls_epilogue
+++#endif
++ 	
++ cls_retstruct_small2:	
++ 	REG_L	v0, V0_OFF2($sp)
++--- a/libffi/src/mips/o32.S
+++++ b/libffi/src/mips/o32.S
++@@ -82,13 +82,16 @@ sixteen:
++ 		
++ 	ADDU	$sp, 4 * FFI_SIZEOF_ARG		# adjust $sp to new args
++ 
+++#ifndef __mips_soft_float
++ 	bnez	t0, pass_d			# make it quick for int
+++#endif
++ 	REG_L	a0, 0*FFI_SIZEOF_ARG($sp)	# just go ahead and load the
++ 	REG_L	a1, 1*FFI_SIZEOF_ARG($sp)	# four regs.
++ 	REG_L	a2, 2*FFI_SIZEOF_ARG($sp)
++ 	REG_L	a3, 3*FFI_SIZEOF_ARG($sp)
++ 	b	call_it
++ 
+++#ifndef __mips_soft_float
++ pass_d:
++ 	bne	t0, FFI_ARGS_D, pass_f
++ 	l.d	$f12, 0*FFI_SIZEOF_ARG($sp)	# load $fp regs from args
++@@ -130,6 +133,7 @@ pass_f_d:
++  #	bne	t0, FFI_ARGS_F_D, call_it
++ 	l.s	$f12, 0*FFI_SIZEOF_ARG($sp)	# load $fp regs from args
++ 	l.d	$f14, 2*FFI_SIZEOF_ARG($sp)	# passing double and float
+++#endif
++ 
++ call_it:	
++ 	# Load the function pointer
++@@ -158,14 +162,23 @@ retfloat:
++ 	bne     t2, FFI_TYPE_FLOAT, retdouble
++ 	jalr	t9
++ 	REG_L	t0, SIZEOF_FRAME + 4*FFI_SIZEOF_ARG($fp)
+++#ifndef __mips_soft_float
++ 	s.s	$f0, 0(t0)
+++#else
+++	REG_S v0, 0(t0)
+++#endif
++ 	b	epilogue
++ 
++ retdouble:	
++ 	bne	t2, FFI_TYPE_DOUBLE, noretval
++ 	jalr	t9
++ 	REG_L	t0, SIZEOF_FRAME + 4*FFI_SIZEOF_ARG($fp)
+++#ifndef __mips_soft_float
++ 	s.d	$f0, 0(t0)
+++#else
+++	REG_S v1, 4(t0)
+++	REG_S v0, 0(t0)
+++#endif
++ 	b	epilogue
++ 	
++ noretval:	
++@@ -261,9 +274,11 @@ $LCFI7:
++ 	li	$13, 1		# FFI_O32
++ 	bne	$16, $13, 1f	# Skip fp save if FFI_O32_SOFT_FLOAT
++ 	
+++#ifndef __mips_soft_float
++ 	# Store all possible float/double registers.
++ 	s.d	$f12, FA_0_0_OFF2($fp)
++ 	s.d	$f14, FA_1_0_OFF2($fp)
+++#endif
++ 1:	
++ 	# Call ffi_closure_mips_inner_O32 to do the work.
++ 	la	t9, ffi_closure_mips_inner_O32
++@@ -281,6 +296,7 @@ $LCFI7:
++ 	li	$13, 1		# FFI_O32
++ 	bne	$16, $13, 1f	# Skip fp restore if FFI_O32_SOFT_FLOAT
++ 
+++#ifndef __mips_soft_float
++ 	li	$9, FFI_TYPE_FLOAT
++ 	l.s	$f0, V0_OFF2($fp)
++ 	beq	$8, $9, closure_done
++@@ -288,6 +304,7 @@ $LCFI7:
++ 	li	$9, FFI_TYPE_DOUBLE
++ 	l.d	$f0, V0_OFF2($fp)
++ 	beq	$8, $9, closure_done
+++#endif
++ 1:	
++ 	REG_L	$3, V1_OFF2($fp)
++ 	REG_L	$2, V0_OFF2($fp)
+diff --git a/toolchain/gcc/patches-8.x/960-gotools-fix-compilation-when-making-cross-compiler.patch b/toolchain/gcc/patches-8.x/960-gotools-fix-compilation-when-making-cross-compiler.patch
+new file mode 100644
+index 0000000000..1dd05080d3
+--- /dev/null
++++ b/toolchain/gcc/patches-8.x/960-gotools-fix-compilation-when-making-cross-compiler.patch
+@@ -0,0 +1,67 @@
++From dda6b050cd74a352670787a294596a9c56c21327 Mon Sep 17 00:00:00 2001
++From: Yousong Zhou <yszhou4tech@gmail.com>
++Date: Fri, 4 May 2018 18:20:53 +0800
++Subject: [PATCH] gotools: fix compilation when making cross compiler
++
++libgo is "the runtime support library for the Go programming language.
++This library is intended for use with the Go frontend."
++
++gccgo will link target files with libgo.so which depends on libgcc_s.so.1, but
++the linker will complain that it cannot find it.  That's because shared libgcc
++is not present in the install directory yet.  libgo.so was made without problem
++because gcc will emit -lgcc_s when compiled with -shared option.  When gotools
++were being made, it was supplied with -static-libgcc thus no link option was
++provided.  Check LIBGO in gcc/go/gcc-spec.c for how gccgo make a builtin spec
++for linking with libgo.so
++
++- GccgoCrossCompilation, https://github.com/golang/go/wiki/GccgoCrossCompilation
++- Cross-building instructions, http://www.eglibc.org/archives/patches/msg00078.html
++
++When 3-pass GCC compilation is used, shared libgcc runtime libraries will be
++available after gcc pass2 completed and will meet the gotools link requirement
++at gcc pass3
++---
++ gotools/Makefile.am | 4 +++-
++ gotools/Makefile.in | 4 +++-
++ 2 files changed, 6 insertions(+), 2 deletions(-)
++
++--- a/gotools/Makefile.am
+++++ b/gotools/Makefile.am
++@@ -26,6 +26,7 @@ PWD_COMMAND = $${PWDCMD-pwd}
++ STAMP = echo timestamp >
++ 
++ libgodir = ../$(target_noncanonical)/libgo
+++libgccdir = ../$(target_noncanonical)/libgcc
++ LIBGODEP = $(libgodir)/libgo.la
++ 
++ LIBGOTOOL = $(libgodir)/libgotool.a
++@@ -41,7 +42,8 @@ GOCFLAGS = $(CFLAGS_FOR_TARGET)
++ GOCOMPILE = $(GOCOMPILER) $(GOCFLAGS)
++ 
++ AM_GOCFLAGS = -I $(libgodir)
++-AM_LDFLAGS = -L $(libgodir) -L $(libgodir)/.libs
+++AM_LDFLAGS = -L $(libgodir) -L $(libgodir)/.libs \
+++	-L $(libgccdir) -L $(libgccdir)/.libs -lgcc_s
++ GOLINK = $(GOCOMPILER) $(GOCFLAGS) $(AM_GOCFLAGS) $(LDFLAGS) $(AM_LDFLAGS) -o $@
++ 
++ libgosrcdir = $(srcdir)/../libgo/go
++--- a/gotools/Makefile.in
+++++ b/gotools/Makefile.in
++@@ -263,6 +263,7 @@ mkinstalldirs = $(SHELL) $(toplevel_srcd
++ PWD_COMMAND = $${PWDCMD-pwd}
++ STAMP = echo timestamp >
++ libgodir = ../$(target_noncanonical)/libgo
+++libgccdir = ../$(target_noncanonical)/libgcc
++ LIBGODEP = $(libgodir)/libgo.la
++ LIBGOTOOL = $(libgodir)/libgotool.a
++ @NATIVE_FALSE@GOCOMPILER = $(GOC)
++@@ -271,7 +272,8 @@ LIBGOTOOL = $(libgodir)/libgotool.a
++ @NATIVE_TRUE@GOCOMPILER = $(GOC_FOR_TARGET) $(XGCC_FLAGS_FOR_TARGET)
++ GOCOMPILE = $(GOCOMPILER) $(GOCFLAGS)
++ AM_GOCFLAGS = -I $(libgodir)
++-AM_LDFLAGS = -L $(libgodir) -L $(libgodir)/.libs
+++AM_LDFLAGS = -L $(libgodir) -L $(libgodir)/.libs \
+++	-L $(libgccdir) -L $(libgccdir)/.libs -lgcc_s
++ GOLINK = $(GOCOMPILER) $(GOCFLAGS) $(AM_GOCFLAGS) $(LDFLAGS) $(AM_LDFLAGS) -o $@
++ libgosrcdir = $(srcdir)/../libgo/go
++ cmdsrcdir = $(libgosrcdir)/cmd
+-- 
+2.38.1
+
