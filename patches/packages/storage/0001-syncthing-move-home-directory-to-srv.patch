@@ -1,19 +1,23 @@
 From a271effaaf8bcaf86f8175e5ad96969757d4c4fd Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
 Date: Wed, 12 Aug 2020 16:35:07 +0200
-Subject: [PATCH] syncthing: move home directory to /srv
+Subject: [PATCH] syncthing: move home and logfile directories to /srv
 
 Turris uses /srv and has support for easy mounting of drives to that
 location.
----
- utils/syncthing/files/etc/config/syncthing | 2 +-
- utils/syncthing/files/etc/init.d/syncthing | 2 +-
- 2 files changed, 2 insertions(+), 2 deletions(-)
 
-diff --git a/utils/syncthing/files/etc/config/syncthing b/utils/syncthing/files/etc/config/syncthing
-index 291675d40..75e04caa5 100644
---- a/utils/syncthing/files/etc/config/syncthing
-+++ b/utils/syncthing/files/etc/config/syncthing
+[rebase, move logfile directory as well, update commit message
+accordingly]
+Signed-off-by: Šimon Bořek <simon.borek@nic.cz>
+---
+ utils/syncthing/files/syncthing.conf | 4 ++--
+ utils/syncthing/files/syncthing.init | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/utils/syncthing/files/syncthing.conf b/utils/syncthing/files/syncthing.conf
+index 193f5e9ea..a23a01ef2 100644
+--- a/utils/syncthing/files/syncthing.conf
++++ b/utils/syncthing/files/syncthing.conf
 @@ -10,7 +10,7 @@ config syncthing 'syncthing'
  	#   be readable/writable by the user specified in
  	#   'option user'.
@@ -23,19 +27,30 @@ index 291675d40..75e04caa5 100644
  
  	# Changes to "niceness"/macprocs are not picked up by "reload_config"
  	#   nor by "restart": the service has to be stopped/started
-diff --git a/utils/syncthing/files/etc/init.d/syncthing b/utils/syncthing/files/etc/init.d/syncthing
-index f77aad8ae..9fafd6913 100755
---- a/utils/syncthing/files/etc/init.d/syncthing
-+++ b/utils/syncthing/files/etc/init.d/syncthing
-@@ -26,7 +26,7 @@ start_service() {
+@@ -24,7 +24,7 @@ config syncthing 'syncthing'
+ 	# Running as 'root' is possible, but not recommended
+ 	option user 'syncthing'
  
-   config_get user syncthing user 'root'
-   config_get gui_address syncthing gui_address "http://127.0.0.1:8384"
--  config_get home syncthing home "/etc/syncthing"
-+  config_get home syncthing home "/srv/syncthing"
- 
-   # For backwards compatibility
-   IDX_DB=$(readlink -n "$home"/index-v0.14.0.db)
+-	option logfile '/etc/syncthing/syncthing.log'
++	option logfile '/srv/syncthing/syncthing.log'
+ 	option log_max_old_files 7
+ 	# Size in bytes
+ 	option log_max_size 1048576
+diff --git a/utils/syncthing/files/syncthing.init b/utils/syncthing/files/syncthing.init
+index 3ec81e593..4c754002b 100644
+--- a/utils/syncthing/files/syncthing.init
++++ b/utils/syncthing/files/syncthing.init
+@@ -47,8 +47,8 @@ start_service() {
+ 	# Options with default value different with the syncthing should be defined explicitly here
+ 	local enabled=0
+ 	local gui_address="http://0.0.0.0:8384"
+-	local home="/etc/syncthing"
+-	local logfile="/etc/syncthing/syncthing.log"
++	local home="/srv/syncthing"
++	local logfile="/srv/syncthing/syncthing.log"
+ 	local macprocs=0
+ 	local nice=0
+ 	local user="syncthing"
 -- 
-2.28.0
+2.38.1
 
