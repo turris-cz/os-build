@@ -1,11 +1,11 @@
-From 4d5c9962e81bbc0254346944bdf464255ba899e0 Mon Sep 17 00:00:00 2001
+From 30614c589c78322dd6488cd88769df1e94254e65 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Sun, 25 Sep 2022 14:10:15 +0200
+Date: Tue, 29 Nov 2022 14:29:40 +0100
 Subject: [PATCH] Generic hack patches 5.15
 
 ---
  .../generic/hack-5.15/204-module_strip.patch  |  212 ++
- .../generic/hack-5.15/205-kconfig-exit.patch  |   20 +
+ ...-abort-configuration-on-unset-symbol.patch |   41 +
  .../210-darwin_scripts_include.patch          | 3053 +++++++++++++++++
  .../211-darwin-uuid-typedef-clash.patch       |   22 +
  .../hack-5.15/212-tools_portability.patch     |  110 +
@@ -13,25 +13,22 @@ Subject: [PATCH] Generic hack patches 5.15
  .../hack-5.15/220-arm-gc_sections.patch       |  123 +
  .../hack-5.15/221-module_exports.patch        |  126 +
  .../hack-5.15/230-openwrt_lzma_options.patch  |   34 +
- .../hack-5.15/249-udp-tunnel-selection.patch  |   20 +
  .../hack-5.15/250-netfilter_depends.patch     |   27 +
  .../linux/generic/hack-5.15/251-kconfig.patch |  199 ++
- .../generic/hack-5.15/252-SATA_PMP.patch      |   23 +
  .../generic/hack-5.15/253-ksmbd-config.patch  |   32 +
  .../hack-5.15/259-regmap_dynamic.patch        |  144 +
  .../260-crypto_test_dependencies.patch        |   52 +
  .../hack-5.15/261-lib-arc4-unhide.patch       |   24 +
  .../generic/hack-5.15/280-rfkill-stubs.patch  |   84 +
  ...cache-use-more-efficient-cache-blast.patch |   64 +
- .../301-mips_image_cmdline_hack.patch         |   38 +
  .../321-powerpc_crtsavres_prereq.patch        |   38 +
  ...rans-call-add-disks-after-mtd-device.patch |   98 +
  .../410-block-fit-partition-parser.patch      |  214 ++
- .../420-mtd-set-rootfs-to-be-root-dev.patch   |   39 +
+ ...upport-OpenWrt-s-MTD_ROOTFS_ROOT_DEV.patch |   24 +
  ...ers-add-nvmem-support-to-cmdlinepart.patch |  120 +
  .../hack-5.15/430-mtk-bmt-support.patch       |   33 +
- .../generic/hack-5.15/531-debloat_lzma.patch  | 1040 ++++++
  .../hack-5.15/600-bridge_offload.patch        |  846 +++++
+ ...of_net-add-mac-address-ascii-support.patch |  112 +
  ...lter-connmark-introduce-set-dscpmark.patch |  212 ++
  ...-netfilter-add-xt_FLOWOFFLOAD-target.patch |  860 +++++
  .../hack-5.15/651-wireless_mesh_header.patch  |   24 +
@@ -49,8 +46,8 @@ Subject: [PATCH] Generic hack patches 5.15
  ...et-add-RTL8152-binding-documentation.patch |   54 +
  .../hack-5.15/773-bgmac-add-srab-switch.patch |   98 +
  .../780-usb-net-MeigLink_modem_support.patch  |   43 +
+ .../790-SFP-GE-T-ignore-TX_FAULT.patch        |   65 +
  .../800-GPIO-add-named-gpio-exports.patch     |  162 +
- .../hack-5.15/800-ubnt-ledbar-driver.patch    |   29 +
  .../hack-5.15/901-debloat_sock_diag.patch     |  162 +
  .../generic/hack-5.15/902-debloat_proc.patch  |  408 +++
  .../hack-5.15/904-debloat_dma_buf.patch       |   92 +
@@ -58,9 +55,9 @@ Subject: [PATCH] Generic hack patches 5.15
  .../911-kobject_add_broadcast_uevent.patch    |   76 +
  .../hack-5.15/920-device_tree_cmdline.patch   |   21 +
  ...vert-driver-core-Set-fw_devlink-on-b.patch |   30 +
- 55 files changed, 10119 insertions(+)
+ 51 files changed, 9087 insertions(+)
  create mode 100644 target/linux/generic/hack-5.15/204-module_strip.patch
- create mode 100644 target/linux/generic/hack-5.15/205-kconfig-exit.patch
+ create mode 100644 target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch
  create mode 100644 target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
  create mode 100644 target/linux/generic/hack-5.15/211-darwin-uuid-typedef-clash.patch
  create mode 100644 target/linux/generic/hack-5.15/212-tools_portability.patch
@@ -68,25 +65,22 @@ Subject: [PATCH] Generic hack patches 5.15
  create mode 100644 target/linux/generic/hack-5.15/220-arm-gc_sections.patch
  create mode 100644 target/linux/generic/hack-5.15/221-module_exports.patch
  create mode 100644 target/linux/generic/hack-5.15/230-openwrt_lzma_options.patch
- create mode 100644 target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch
  create mode 100644 target/linux/generic/hack-5.15/250-netfilter_depends.patch
  create mode 100644 target/linux/generic/hack-5.15/251-kconfig.patch
- create mode 100644 target/linux/generic/hack-5.15/252-SATA_PMP.patch
  create mode 100644 target/linux/generic/hack-5.15/253-ksmbd-config.patch
  create mode 100644 target/linux/generic/hack-5.15/259-regmap_dynamic.patch
  create mode 100644 target/linux/generic/hack-5.15/260-crypto_test_dependencies.patch
  create mode 100644 target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
  create mode 100644 target/linux/generic/hack-5.15/280-rfkill-stubs.patch
  create mode 100644 target/linux/generic/hack-5.15/300-MIPS-r4k_cache-use-more-efficient-cache-blast.patch
- create mode 100644 target/linux/generic/hack-5.15/301-mips_image_cmdline_hack.patch
  create mode 100644 target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch
  create mode 100644 target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
  create mode 100644 target/linux/generic/hack-5.15/410-block-fit-partition-parser.patch
- create mode 100644 target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
+ create mode 100644 target/linux/generic/hack-5.15/420-mtd-support-OpenWrt-s-MTD_ROOTFS_ROOT_DEV.patch
  create mode 100644 target/linux/generic/hack-5.15/421-drivers-mtd-parsers-add-nvmem-support-to-cmdlinepart.patch
  create mode 100644 target/linux/generic/hack-5.15/430-mtk-bmt-support.patch
- create mode 100644 target/linux/generic/hack-5.15/531-debloat_lzma.patch
  create mode 100644 target/linux/generic/hack-5.15/600-bridge_offload.patch
+ create mode 100644 target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch
  create mode 100644 target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch
  create mode 100644 target/linux/generic/hack-5.15/650-netfilter-add-xt_FLOWOFFLOAD-target.patch
  create mode 100644 target/linux/generic/hack-5.15/651-wireless_mesh_header.patch
@@ -104,8 +98,8 @@ Subject: [PATCH] Generic hack patches 5.15
  create mode 100644 target/linux/generic/hack-5.15/761-dt-bindings-net-add-RTL8152-binding-documentation.patch
  create mode 100644 target/linux/generic/hack-5.15/773-bgmac-add-srab-switch.patch
  create mode 100644 target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
+ create mode 100644 target/linux/generic/hack-5.15/790-SFP-GE-T-ignore-TX_FAULT.patch
  create mode 100644 target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
- create mode 100644 target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
  create mode 100644 target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
  create mode 100644 target/linux/generic/hack-5.15/902-debloat_proc.patch
  create mode 100644 target/linux/generic/hack-5.15/904-debloat_dma_buf.patch
@@ -116,7 +110,7 @@ Subject: [PATCH] Generic hack patches 5.15
 
 diff --git a/target/linux/generic/hack-5.15/204-module_strip.patch b/target/linux/generic/hack-5.15/204-module_strip.patch
 new file mode 100644
-index 0000000000..dee240d9f9
+index 0000000000..979daa4727
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/204-module_strip.patch
 @@ -0,0 +1,212 @@
@@ -265,7 +259,7 @@ index 0000000000..dee240d9f9
 + 
 +--- a/scripts/mod/modpost.c
 ++++ b/scripts/mod/modpost.c
-+@@ -2034,7 +2034,9 @@ static void read_symbols(const char *mod
++@@ -2036,7 +2036,9 @@ static void read_symbols(const char *mod
 + 		symname = remove_dot(info.strtab + sym->st_name);
 + 
 + 		handle_symbol(mod, &info, sym, symname);
@@ -275,7 +269,7 @@ index 0000000000..dee240d9f9
 + 	}
 + 
 + 	for (sym = info.symtab_start; sym < info.symtab_stop; sym++) {
-+@@ -2213,8 +2215,10 @@ static void add_header(struct buffer *b,
++@@ -2215,8 +2217,10 @@ static void add_header(struct buffer *b,
 + 	buf_printf(b, "BUILD_SALT;\n");
 + 	buf_printf(b, "BUILD_LTO_INFO;\n");
 + 	buf_printf(b, "\n");
@@ -286,7 +280,7 @@ index 0000000000..dee240d9f9
 + 	buf_printf(b, "\n");
 + 	buf_printf(b, "__visible struct module __this_module\n");
 + 	buf_printf(b, "__section(\".gnu.linkonce.this_module\") = {\n");
-+@@ -2231,8 +2235,10 @@ static void add_header(struct buffer *b,
++@@ -2233,8 +2237,10 @@ static void add_header(struct buffer *b,
 + 
 + static void add_intree_flag(struct buffer *b, int is_intree)
 + {
@@ -297,7 +291,7 @@ index 0000000000..dee240d9f9
 + }
 + 
 + /* Cannot check for assembler */
-+@@ -2245,8 +2251,10 @@ static void add_retpoline(struct buffer
++@@ -2247,8 +2253,10 @@ static void add_retpoline(struct buffer
 + 
 + static void add_staging_flag(struct buffer *b, const char *name)
 + {
@@ -308,7 +302,7 @@ index 0000000000..dee240d9f9
 + }
 + 
 + /**
-+@@ -2326,11 +2334,13 @@ static void add_depends(struct buffer *b
++@@ -2328,11 +2336,13 @@ static void add_depends(struct buffer *b
 + 
 + static void add_srcversion(struct buffer *b, struct module *mod)
 + {
@@ -322,7 +316,7 @@ index 0000000000..dee240d9f9
 + }
 + 
 + static void write_buf(struct buffer *b, const char *fname)
-+@@ -2579,7 +2589,9 @@ int main(int argc, char **argv)
++@@ -2581,7 +2591,9 @@ int main(int argc, char **argv)
 + 		add_staging_flag(&buf, mod->name);
 + 		add_versions(&buf, mod);
 + 		add_depends(&buf, mod);
@@ -332,32 +326,53 @@ index 0000000000..dee240d9f9
 + 		add_srcversion(&buf, mod);
 + 
 + 		sprintf(fname, "%s.mod.c", mod->name);
-diff --git a/target/linux/generic/hack-5.15/205-kconfig-exit.patch b/target/linux/generic/hack-5.15/205-kconfig-exit.patch
+diff --git a/target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch b/target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch
 new file mode 100644
-index 0000000000..9f3bb8f311
+index 0000000000..a87c7a5116
 --- /dev/null
-+++ b/target/linux/generic/hack-5.15/205-kconfig-exit.patch
-@@ -0,0 +1,20 @@
-+From 300d26562ce4dc427154cb247beb75db4b1f0774 Mon Sep 17 00:00:00 2001
-+From: OpenWrt community <openwrt-devel@lists.openwrt.org>
-+Date: Wed, 13 Jul 2022 13:29:57 +0200
-+Subject: [PATCH] scripts/Kconfig: Kconfig exit
++++ b/target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch
+@@ -0,0 +1,41 @@
++From 310e8e04a05d9eb43fa9dd7f00143300afcaa37a Mon Sep 17 00:00:00 2001
++From: David Bauer <mail@david-bauer.net>
++Date: Fri, 11 Nov 2022 13:33:44 +0100
++Subject: [PATCH] kconfig: abort configuration on unset symbol
 +
++When a target configuration has unset Kconfig symbols, the build will
++fail when OpenWrt is compiled with V=s and stdin is connected to a tty.
++
++In case OpenWrt is compiled without either of these preconditions, the
++build will succeed with the symbols in question being unset.
++
++Modify the kernel configuration in a way it fails on unset symbols
++regardless of the aforementioned preconditions.
++
++Signed-off-by: David Bauer <mail@david-bauer.net>
 +---
-+ scripts/kconfig/conf.c | 2 ++
-+ 1 file changed, 2 insertions(+)
++ scripts/kconfig/conf.c | 6 ++++++
++ 1 file changed, 6 insertions(+)
 +
 +--- a/scripts/kconfig/conf.c
 ++++ b/scripts/kconfig/conf.c
-+@@ -435,6 +435,8 @@ static int conf_sym(struct menu *menu)
-+ 				break;
-+ 			continue;
-+ 		case 0:
-++			if (!sym_has_value(sym) && !tty_stdio && getenv("FAIL_ON_UNCONFIGURED"))
++@@ -341,6 +341,9 @@ static int conf_askvalue(struct symbol *
++ 		}
++ 		/* fall through */
++ 	default:
+++		if (!tty_stdio && getenv("FAIL_ON_UNCONFIGURED")) {
+++			exit(1);
+++		}
++ 		fflush(stdout);
++ 		xfgets(line, sizeof(line), stdin);
++ 		break;
++@@ -523,6 +526,9 @@ static int conf_choice(struct menu *menu
++ 			}
++ 			/* fall through */
++ 		case oldaskconfig:
+++			if (!tty_stdio && getenv("FAIL_ON_UNCONFIGURED")) {
 ++				exit(1);
-+ 			newval = oldval;
-+ 			break;
-+ 		case '?':
+++			}
++ 			fflush(stdout);
++ 			xfgets(line, sizeof(line), stdin);
++ 			strip(line);
 diff --git a/target/linux/generic/hack-5.15/210-darwin_scripts_include.patch b/target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
 new file mode 100644
 index 0000000000..be6adc0d11
@@ -3722,7 +3737,7 @@ index 0000000000..0aa3eb840c
 + 	. = __stubs_lma + SIZEOF(.stubs);				\
 diff --git a/target/linux/generic/hack-5.15/221-module_exports.patch b/target/linux/generic/hack-5.15/221-module_exports.patch
 new file mode 100644
-index 0000000000..204027d769
+index 0000000000..405dc5f78c
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/221-module_exports.patch
 @@ -0,0 +1,126 @@
@@ -3758,7 +3773,7 @@ index 0000000000..204027d769
 + /* Align . to a 8 byte boundary equals to maximum function alignment. */
 + #define ALIGN_FUNCTION()  . = ALIGN(8)
 + 
-+@@ -484,14 +494,14 @@
++@@ -485,14 +495,14 @@
 + 	/* Kernel symbol table: Normal symbols */			\
 + 	__ksymtab         : AT(ADDR(__ksymtab) - LOAD_OFFSET) {		\
 + 		__start___ksymtab = .;					\
@@ -3775,7 +3790,7 @@ index 0000000000..204027d769
 + 		__stop___ksymtab_gpl = .;				\
 + 	}								\
 + 									\
-+@@ -511,7 +521,7 @@
++@@ -512,7 +522,7 @@
 + 									\
 + 	/* Kernel symbol table: strings */				\
 +         __ksymtab_strings : AT(ADDR(__ksymtab_strings) - LOAD_OFFSET) {	\
@@ -3784,7 +3799,7 @@ index 0000000000..204027d769
 + 	}								\
 + 									\
 + 	/* __*init sections */						\
-+@@ -1018,6 +1028,8 @@
++@@ -1017,6 +1027,8 @@
 + 
 + #define COMMON_DISCARDS							\
 + 	SANITIZER_DISCARDS						\
@@ -3892,32 +3907,6 @@ index 0000000000..f9361b060b
 + 
 + quiet_cmd_lzo = LZO     $@
 +       cmd_lzo = { cat $(real-prereqs) | $(KLZOP) -9; $(size_append); } > $@
-diff --git a/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch b/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch
-new file mode 100644
-index 0000000000..5e154004d0
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/249-udp-tunnel-selection.patch
-@@ -0,0 +1,20 @@
-+From 4487708144118bfd5e1b1da7003a486951fb9c5a Mon Sep 17 00:00:00 2001
-+From: OpenWrt community <openwrt-devel@lists.openwrt.org>
-+Date: Wed, 13 Jul 2022 13:31:51 +0200
-+Subject: [PATCH] net/ipv4: add udp tunnel tristate string
-+
-+---
-+ net/ipv4/Kconfig | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
-+
-+--- a/net/ipv4/Kconfig
-++++ b/net/ipv4/Kconfig
-+@@ -315,7 +315,7 @@ config NET_IPVTI
-+ 	  on top.
-+ 
-+ config NET_UDP_TUNNEL
-+-	tristate
-++	tristate "IP: UDP tunneling support"
-+ 	select NET_IP_TUNNEL
-+ 	default n
-+ 
 diff --git a/target/linux/generic/hack-5.15/250-netfilter_depends.patch b/target/linux/generic/hack-5.15/250-netfilter_depends.patch
 new file mode 100644
 index 0000000000..d9a2b81d74
@@ -4156,35 +4145,6 @@ index 0000000000..5a8a820252
 + 
 + config SND_JACK
 + 	bool
-diff --git a/target/linux/generic/hack-5.15/252-SATA_PMP.patch b/target/linux/generic/hack-5.15/252-SATA_PMP.patch
-new file mode 100644
-index 0000000000..6502d1d6ed
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/252-SATA_PMP.patch
-@@ -0,0 +1,23 @@
-+From 8c817e33be829c7249c2cfd59ff48ad5fac6a31d Mon Sep 17 00:00:00 2001
-+From: Sungbo Eo <mans0n@gorani.run>
-+Date: Fri, 7 Jul 2017 17:09:21 +0200
-+Subject: [PATCH] kconfig: solidify SATA_PMP config
-+
-+SATA_PMP option in kernel config file disappears for every kernel_oldconfig refresh.
-+To prevent this, SATA_HOST is now selected automatically when SATA_PMP is enabled.
-+This patch can be dropped if SATA_MV is ever re-added into the config.
-+---
-+ drivers/ata/Kconfig | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
-+
-+--- a/drivers/ata/Kconfig
-++++ b/drivers/ata/Kconfig
-+@@ -112,7 +112,7 @@ config SATA_ZPODD
-+ 
-+ config SATA_PMP
-+ 	bool "SATA Port Multiplier support"
-+-	depends on SATA_HOST
-++	select SATA_HOST
-+ 	default y
-+ 	help
-+ 	  This option adds support for SATA Port Multipliers
 diff --git a/target/linux/generic/hack-5.15/253-ksmbd-config.patch b/target/linux/generic/hack-5.15/253-ksmbd-config.patch
 new file mode 100644
 index 0000000000..a29cf3bf61
@@ -4621,50 +4581,6 @@ index 0000000000..f21f200136
 + 	}								\
 + }
 + 
-diff --git a/target/linux/generic/hack-5.15/301-mips_image_cmdline_hack.patch b/target/linux/generic/hack-5.15/301-mips_image_cmdline_hack.patch
-new file mode 100644
-index 0000000000..15e233aceb
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/301-mips_image_cmdline_hack.patch
-@@ -0,0 +1,38 @@
-+From: John Crispin <john@phrozen.org>
-+Subject: hack: kernel: add generic image_cmdline hack to MIPS targets
-+
-+lede-commit: d59f5b3a987a48508257a0ddbaeadc7909f9f976
-+Signed-off-by: Gabor Juhos <juhosg@openwrt.org>
-+---
-+ arch/mips/Kconfig       | 4 ++++
-+ arch/mips/kernel/head.S | 6 ++++++
-+ 2 files changed, 10 insertions(+)
-+
-+--- a/arch/mips/Kconfig
-++++ b/arch/mips/Kconfig
-+@@ -1180,6 +1180,10 @@ config MIPS_MSC
-+ config SYNC_R4K
-+ 	bool
-+ 
-++config IMAGE_CMDLINE_HACK
-++	bool "OpenWrt specific image command line hack"
-++	default n
-++
-+ config NO_IOPORT_MAP
-+ 	def_bool n
-+ 
-+--- a/arch/mips/kernel/head.S
-++++ b/arch/mips/kernel/head.S
-+@@ -79,6 +79,12 @@ FEXPORT(__kernel_entry)
-+ 	j	kernel_entry
-+ #endif /* CONFIG_BOOT_RAW */
-+ 
-++#ifdef CONFIG_IMAGE_CMDLINE_HACK
-++	.ascii	"CMDLINE:"
-++EXPORT(__image_cmdline)
-++	.fill	0x400
-++#endif /* CONFIG_IMAGE_CMDLINE_HACK */
-++
-+ 	__REF
-+ 
-+ NESTED(kernel_entry, 16, sp)			# kernel entry point
 diff --git a/target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch b/target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch
 new file mode 100644
 index 0000000000..f1942e2037
@@ -4711,7 +4627,7 @@ index 0000000000..f1942e2037
 + KBUILD_LDFLAGS	+= -EL
 diff --git a/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch b/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
 new file mode 100644
-index 0000000000..011f790fa7
+index 0000000000..65772cc195
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
 @@ -0,0 +1,98 @@
@@ -4786,7 +4702,7 @@ index 0000000000..011f790fa7
 + 	unsigned long flags;
 +--- a/drivers/mtd/mtdcore.c
 ++++ b/drivers/mtd/mtdcore.c
-+@@ -31,6 +31,7 @@
++@@ -32,6 +32,7 @@
 + 
 + #include <linux/mtd/mtd.h>
 + #include <linux/mtd/partitions.h>
@@ -4794,7 +4710,7 @@ index 0000000000..011f790fa7
 + 
 + #include "mtdcore.h"
 + 
-+@@ -1073,6 +1074,8 @@ int mtd_device_parse_register(struct mtd
++@@ -1079,6 +1080,8 @@ int mtd_device_parse_register(struct mtd
 + 
 + 	ret = mtd_otp_nvmem_add(mtd);
 + 
@@ -5033,51 +4949,36 @@ index 0000000000..96c89f41c4
 + 	SOLARIS_X86_PARTITION =	0x82,	/* also Linux swap partitions */
 + 	NEW_SOLARIS_X86_PARTITION = 0xbf,
 + 
-diff --git a/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch b/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
+diff --git a/target/linux/generic/hack-5.15/420-mtd-support-OpenWrt-s-MTD_ROOTFS_ROOT_DEV.patch b/target/linux/generic/hack-5.15/420-mtd-support-OpenWrt-s-MTD_ROOTFS_ROOT_DEV.patch
 new file mode 100644
-index 0000000000..90254c63bf
+index 0000000000..15531df49e
 --- /dev/null
-+++ b/target/linux/generic/hack-5.15/420-mtd-set-rootfs-to-be-root-dev.patch
-@@ -0,0 +1,39 @@
-+From: Gabor Juhos <juhosg@openwrt.org>
-+Subject: kernel/3.1[02]: move MTD root device setup code to mtdcore
++++ b/target/linux/generic/hack-5.15/420-mtd-support-OpenWrt-s-MTD_ROOTFS_ROOT_DEV.patch
+@@ -0,0 +1,24 @@
++From: =?UTF-8?q?Rafa=C5=82=20Mi=C5=82ecki?= <rafal@milecki.pl>
++Date: Mon, 7 Nov 2022 23:48:24 +0100
++Subject: [PATCH] mtd: support OpenWrt's MTD_ROOTFS_ROOT_DEV
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
 +
-+The current code only allows to automatically set
-+root device on MTD partitions. Move the code to MTD
-+core to allow to use it with all MTD devices.
++This allows setting ROOT_DEV to MTD partition named "rootfs".
 +
-+Signed-off-by: Gabor Juhos <juhosg@openwrt.org>
++Signed-off-by: Rafał Miłecki <rafal@milecki.pl>
 +---
-+ drivers/mtd/mtdcore.c | 10 ++++++++++
-+ 1 file changed, 10 insertions(+)
 +
 +--- a/drivers/mtd/mtdcore.c
 ++++ b/drivers/mtd/mtdcore.c
-+@@ -27,6 +27,7 @@
-+ #include <linux/reboot.h>
-+ #include <linux/leds.h>
-+ #include <linux/debugfs.h>
-++#include <linux/root_dev.h>
-+ #include <linux/nvmem-provider.h>
++@@ -759,7 +759,8 @@ int add_mtd_device(struct mtd_info *mtd)
 + 
-+ #include <linux/mtd/mtd.h>
-+@@ -768,6 +769,16 @@ int add_mtd_device(struct mtd_info *mtd)
-+ 	   of this try_ nonsense, and no bitching about it
-+ 	   either. :) */
-+ 	__module_get(THIS_MODULE);
-++
-++	if (!strcmp(mtd->name, "rootfs") &&
-++	    IS_ENABLED(CONFIG_MTD_ROOTFS_ROOT_DEV) &&
-++	    ROOT_DEV == 0) {
-++		unsigned int index = mtd->index;
-++		pr_notice("mtd: device %d (%s) set to be root filesystem\n",
-++			  mtd->index, mtd->name);
-++		ROOT_DEV = MKDEV(MTD_BLOCK_MAJOR, index);
-++	}
-++
-+ 	return 0;
++ 	mutex_unlock(&mtd_table_mutex);
 + 
-+ fail_nvmem_add:
++-	if (of_find_property(mtd_get_of_node(mtd), "linux,rootfs", NULL)) {
+++	if (of_find_property(mtd_get_of_node(mtd), "linux,rootfs", NULL) ||
+++	    (IS_ENABLED(CONFIG_MTD_ROOTFS_ROOT_DEV) && !strcmp(mtd->name, "rootfs") && ROOT_DEV == 0)) {
++ 		if (IS_BUILTIN(CONFIG_MTD)) {
++ 			pr_info("mtd: setting mtd%d (%s) as root device\n", mtd->index, mtd->name);
++ 			ROOT_DEV = MKDEV(MTD_BLOCK_MAJOR, mtd->index);
 diff --git a/target/linux/generic/hack-5.15/421-drivers-mtd-parsers-add-nvmem-support-to-cmdlinepart.patch b/target/linux/generic/hack-5.15/421-drivers-mtd-parsers-add-nvmem-support-to-cmdlinepart.patch
 new file mode 100644
 index 0000000000..965a331a19
@@ -5243,1052 +5144,6 @@ index 0000000000..2a83f46e0e
 + 
 + obj-y	+= onenand/
 + obj-y	+= raw/
-diff --git a/target/linux/generic/hack-5.15/531-debloat_lzma.patch b/target/linux/generic/hack-5.15/531-debloat_lzma.patch
-new file mode 100644
-index 0000000000..2f70eee3e9
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/531-debloat_lzma.patch
-@@ -0,0 +1,1040 @@
-+From 3fd297761ac246c54d7723c57fca95c112b99465 Mon Sep 17 00:00:00 2001
-+From: Felix Fietkau <nbd@nbd.name>
-+Date: Sat, 15 Jul 2017 21:15:44 +0200
-+Subject: lzma: de-bloat the lzma library used by jffs2
-+
-+lede-commit: 3fd1dd08fbcbb78b34efefd32c3032e5c99108d6
-+Signed-off-by: Felix Fietkau <nbd@nbd.name>
-+---
-+ include/linux/lzma/LzFind.h  |  17 ---
-+ include/linux/lzma/LzmaDec.h | 101 ---------------
-+ include/linux/lzma/LzmaEnc.h |  20 ---
-+ lib/lzma/LzFind.c            | 287 ++++---------------------------------------
-+ lib/lzma/LzmaDec.c           |  86 +------------
-+ lib/lzma/LzmaEnc.c           | 172 ++------------------------
-+ 6 files changed, 42 insertions(+), 641 deletions(-)
-+
-+--- a/include/linux/lzma/LzFind.h
-++++ b/include/linux/lzma/LzFind.h
-+@@ -55,11 +55,6 @@ typedef struct _CMatchFinder
-+ 
-+ #define Inline_MatchFinder_GetNumAvailableBytes(p) ((p)->streamPos - (p)->pos)
-+ 
-+-int MatchFinder_NeedMove(CMatchFinder *p);
-+-Byte *MatchFinder_GetPointerToCurrentPos(CMatchFinder *p);
-+-void MatchFinder_MoveBlock(CMatchFinder *p);
-+-void MatchFinder_ReadIfRequired(CMatchFinder *p);
-+-
-+ void MatchFinder_Construct(CMatchFinder *p);
-+ 
-+ /* Conditions:
-+@@ -70,12 +65,6 @@ int MatchFinder_Create(CMatchFinder *p,
-+     UInt32 keepAddBufferBefore, UInt32 matchMaxLen, UInt32 keepAddBufferAfter,
-+     ISzAlloc *alloc);
-+ void MatchFinder_Free(CMatchFinder *p, ISzAlloc *alloc);
-+-void MatchFinder_Normalize3(UInt32 subValue, CLzRef *items, UInt32 numItems);
-+-void MatchFinder_ReduceOffsets(CMatchFinder *p, UInt32 subValue);
-+-
-+-UInt32 * GetMatchesSpec1(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byte *buffer, CLzRef *son,
-+-    UInt32 _cyclicBufferPos, UInt32 _cyclicBufferSize, UInt32 _cutValue,
-+-    UInt32 *distances, UInt32 maxLen);
-+ 
-+ /*
-+ Conditions:
-+@@ -102,12 +91,6 @@ typedef struct _IMatchFinder
-+ 
-+ void MatchFinder_CreateVTable(CMatchFinder *p, IMatchFinder *vTable);
-+ 
-+-void MatchFinder_Init(CMatchFinder *p);
-+-UInt32 Bt3Zip_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances);
-+-UInt32 Hc3Zip_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances);
-+-void Bt3Zip_MatchFinder_Skip(CMatchFinder *p, UInt32 num);
-+-void Hc3Zip_MatchFinder_Skip(CMatchFinder *p, UInt32 num);
-+-
-+ #ifdef __cplusplus
-+ }
-+ #endif
-+--- a/include/linux/lzma/LzmaDec.h
-++++ b/include/linux/lzma/LzmaDec.h
-+@@ -31,14 +31,6 @@ typedef struct _CLzmaProps
-+   UInt32 dicSize;
-+ } CLzmaProps;
-+ 
-+-/* LzmaProps_Decode - decodes properties
-+-Returns:
-+-  SZ_OK
-+-  SZ_ERROR_UNSUPPORTED - Unsupported properties
-+-*/
-+-
-+-SRes LzmaProps_Decode(CLzmaProps *p, const Byte *data, unsigned size);
-+-
-+ 
-+ /* ---------- LZMA Decoder state ---------- */
-+ 
-+@@ -70,8 +62,6 @@ typedef struct
-+ 
-+ #define LzmaDec_Construct(p) { (p)->dic = 0; (p)->probs = 0; }
-+ 
-+-void LzmaDec_Init(CLzmaDec *p);
-+-
-+ /* There are two types of LZMA streams:
-+      0) Stream with end mark. That end mark adds about 6 bytes to compressed size.
-+      1) Stream without end mark. You must know exact uncompressed size to decompress such stream. */
-+@@ -108,97 +98,6 @@ typedef enum
-+ 
-+ /* ELzmaStatus is used only as output value for function call */
-+ 
-+-
-+-/* ---------- Interfaces ---------- */
-+-
-+-/* There are 3 levels of interfaces:
-+-     1) Dictionary Interface
-+-     2) Buffer Interface
-+-     3) One Call Interface
-+-   You can select any of these interfaces, but don't mix functions from different
-+-   groups for same object. */
-+-
-+-
-+-/* There are two variants to allocate state for Dictionary Interface:
-+-     1) LzmaDec_Allocate / LzmaDec_Free
-+-     2) LzmaDec_AllocateProbs / LzmaDec_FreeProbs
-+-   You can use variant 2, if you set dictionary buffer manually.
-+-   For Buffer Interface you must always use variant 1.
-+-
-+-LzmaDec_Allocate* can return:
-+-  SZ_OK
-+-  SZ_ERROR_MEM         - Memory allocation error
-+-  SZ_ERROR_UNSUPPORTED - Unsupported properties
-+-*/
-+-
-+-SRes LzmaDec_AllocateProbs(CLzmaDec *p, const Byte *props, unsigned propsSize, ISzAlloc *alloc);
-+-void LzmaDec_FreeProbs(CLzmaDec *p, ISzAlloc *alloc);
-+-
-+-SRes LzmaDec_Allocate(CLzmaDec *state, const Byte *prop, unsigned propsSize, ISzAlloc *alloc);
-+-void LzmaDec_Free(CLzmaDec *state, ISzAlloc *alloc);
-+-
-+-/* ---------- Dictionary Interface ---------- */
-+-
-+-/* You can use it, if you want to eliminate the overhead for data copying from
-+-   dictionary to some other external buffer.
-+-   You must work with CLzmaDec variables directly in this interface.
-+-
-+-   STEPS:
-+-     LzmaDec_Constr()
-+-     LzmaDec_Allocate()
-+-     for (each new stream)
-+-     {
-+-       LzmaDec_Init()
-+-       while (it needs more decompression)
-+-       {
-+-         LzmaDec_DecodeToDic()
-+-         use data from CLzmaDec::dic and update CLzmaDec::dicPos
-+-       }
-+-     }
-+-     LzmaDec_Free()
-+-*/
-+-
-+-/* LzmaDec_DecodeToDic
-+-
-+-   The decoding to internal dictionary buffer (CLzmaDec::dic).
-+-   You must manually update CLzmaDec::dicPos, if it reaches CLzmaDec::dicBufSize !!!
-+-
-+-finishMode:
-+-  It has meaning only if the decoding reaches output limit (dicLimit).
-+-  LZMA_FINISH_ANY - Decode just dicLimit bytes.
-+-  LZMA_FINISH_END - Stream must be finished after dicLimit.
-+-
-+-Returns:
-+-  SZ_OK
-+-    status:
-+-      LZMA_STATUS_FINISHED_WITH_MARK
-+-      LZMA_STATUS_NOT_FINISHED
-+-      LZMA_STATUS_NEEDS_MORE_INPUT
-+-      LZMA_STATUS_MAYBE_FINISHED_WITHOUT_MARK
-+-  SZ_ERROR_DATA - Data error
-+-*/
-+-
-+-SRes LzmaDec_DecodeToDic(CLzmaDec *p, SizeT dicLimit,
-+-    const Byte *src, SizeT *srcLen, ELzmaFinishMode finishMode, ELzmaStatus *status);
-+-
-+-
-+-/* ---------- Buffer Interface ---------- */
-+-
-+-/* It's zlib-like interface.
-+-   See LzmaDec_DecodeToDic description for information about STEPS and return results,
-+-   but you must use LzmaDec_DecodeToBuf instead of LzmaDec_DecodeToDic and you don't need
-+-   to work with CLzmaDec variables manually.
-+-
-+-finishMode:
-+-  It has meaning only if the decoding reaches output limit (*destLen).
-+-  LZMA_FINISH_ANY - Decode just destLen bytes.
-+-  LZMA_FINISH_END - Stream must be finished after (*destLen).
-+-*/
-+-
-+-SRes LzmaDec_DecodeToBuf(CLzmaDec *p, Byte *dest, SizeT *destLen,
-+-    const Byte *src, SizeT *srcLen, ELzmaFinishMode finishMode, ELzmaStatus *status);
-+-
-+-
-+ /* ---------- One Call Interface ---------- */
-+ 
-+ /* LzmaDecode
-+--- a/include/linux/lzma/LzmaEnc.h
-++++ b/include/linux/lzma/LzmaEnc.h
-+@@ -31,9 +31,6 @@ typedef struct _CLzmaEncProps
-+ } CLzmaEncProps;
-+ 
-+ void LzmaEncProps_Init(CLzmaEncProps *p);
-+-void LzmaEncProps_Normalize(CLzmaEncProps *p);
-+-UInt32 LzmaEncProps_GetDictSize(const CLzmaEncProps *props2);
-+-
-+ 
-+ /* ---------- CLzmaEncHandle Interface ---------- */
-+ 
-+@@ -53,26 +50,9 @@ CLzmaEncHandle LzmaEnc_Create(ISzAlloc *
-+ void LzmaEnc_Destroy(CLzmaEncHandle p, ISzAlloc *alloc, ISzAlloc *allocBig);
-+ SRes LzmaEnc_SetProps(CLzmaEncHandle p, const CLzmaEncProps *props);
-+ SRes LzmaEnc_WriteProperties(CLzmaEncHandle p, Byte *properties, SizeT *size);
-+-SRes LzmaEnc_Encode(CLzmaEncHandle p, ISeqOutStream *outStream, ISeqInStream *inStream,
-+-    ICompressProgress *progress, ISzAlloc *alloc, ISzAlloc *allocBig);
-+ SRes LzmaEnc_MemEncode(CLzmaEncHandle p, Byte *dest, SizeT *destLen, const Byte *src, SizeT srcLen,
-+     int writeEndMark, ICompressProgress *progress, ISzAlloc *alloc, ISzAlloc *allocBig);
-+ 
-+-/* ---------- One Call Interface ---------- */
-+-
-+-/* LzmaEncode
-+-Return code:
-+-  SZ_OK               - OK
-+-  SZ_ERROR_MEM        - Memory allocation error
-+-  SZ_ERROR_PARAM      - Incorrect paramater
-+-  SZ_ERROR_OUTPUT_EOF - output buffer overflow
-+-  SZ_ERROR_THREAD     - errors in multithreading functions (only for Mt version)
-+-*/
-+-
-+-SRes LzmaEncode(Byte *dest, SizeT *destLen, const Byte *src, SizeT srcLen,
-+-    const CLzmaEncProps *props, Byte *propsEncoded, SizeT *propsSize, int writeEndMark,
-+-    ICompressProgress *progress, ISzAlloc *alloc, ISzAlloc *allocBig);
-+-
-+ #ifdef __cplusplus
-+ }
-+ #endif
-+--- a/lib/lzma/LzFind.c
-++++ b/lib/lzma/LzFind.c
-+@@ -14,9 +14,15 @@
-+ 
-+ #define kStartMaxLen 3
-+ 
-++#if 0
-++#define DIRECT_INPUT	p->directInput
-++#else
-++#define DIRECT_INPUT	1
-++#endif
-++
-+ static void LzInWindow_Free(CMatchFinder *p, ISzAlloc *alloc)
-+ {
-+-  if (!p->directInput)
-++  if (!DIRECT_INPUT)
-+   {
-+     alloc->Free(alloc, p->bufferBase);
-+     p->bufferBase = 0;
-+@@ -28,7 +34,7 @@ static void LzInWindow_Free(CMatchFinder
-+ static int LzInWindow_Create(CMatchFinder *p, UInt32 keepSizeReserv, ISzAlloc *alloc)
-+ {
-+   UInt32 blockSize = p->keepSizeBefore + p->keepSizeAfter + keepSizeReserv;
-+-  if (p->directInput)
-++  if (DIRECT_INPUT)
-+   {
-+     p->blockSize = blockSize;
-+     return 1;
-+@@ -42,12 +48,12 @@ static int LzInWindow_Create(CMatchFinde
-+   return (p->bufferBase != 0);
-+ }
-+ 
-+-Byte *MatchFinder_GetPointerToCurrentPos(CMatchFinder *p) { return p->buffer; }
-+-Byte MatchFinder_GetIndexByte(CMatchFinder *p, Int32 index) { return p->buffer[index]; }
-++static Byte *MatchFinder_GetPointerToCurrentPos(CMatchFinder *p) { return p->buffer; }
-++static Byte MatchFinder_GetIndexByte(CMatchFinder *p, Int32 index) { return p->buffer[index]; }
-+ 
-+-UInt32 MatchFinder_GetNumAvailableBytes(CMatchFinder *p) { return p->streamPos - p->pos; }
-++static UInt32 MatchFinder_GetNumAvailableBytes(CMatchFinder *p) { return p->streamPos - p->pos; }
-+ 
-+-void MatchFinder_ReduceOffsets(CMatchFinder *p, UInt32 subValue)
-++static void MatchFinder_ReduceOffsets(CMatchFinder *p, UInt32 subValue)
-+ {
-+   p->posLimit -= subValue;
-+   p->pos -= subValue;
-+@@ -58,7 +64,7 @@ static void MatchFinder_ReadBlock(CMatch
-+ {
-+   if (p->streamEndWasReached || p->result != SZ_OK)
-+     return;
-+-  if (p->directInput)
-++  if (DIRECT_INPUT)
-+   {
-+     UInt32 curSize = 0xFFFFFFFF - p->streamPos;
-+     if (curSize > p->directInputRem)
-+@@ -89,7 +95,7 @@ static void MatchFinder_ReadBlock(CMatch
-+   }
-+ }
-+ 
-+-void MatchFinder_MoveBlock(CMatchFinder *p)
-++static void MatchFinder_MoveBlock(CMatchFinder *p)
-+ {
-+   memmove(p->bufferBase,
-+     p->buffer - p->keepSizeBefore,
-+@@ -97,22 +103,14 @@ void MatchFinder_MoveBlock(CMatchFinder
-+   p->buffer = p->bufferBase + p->keepSizeBefore;
-+ }
-+ 
-+-int MatchFinder_NeedMove(CMatchFinder *p)
-++static int MatchFinder_NeedMove(CMatchFinder *p)
-+ {
-+-  if (p->directInput)
-++  if (DIRECT_INPUT)
-+     return 0;
-+   /* if (p->streamEndWasReached) return 0; */
-+   return ((size_t)(p->bufferBase + p->blockSize - p->buffer) <= p->keepSizeAfter);
-+ }
-+ 
-+-void MatchFinder_ReadIfRequired(CMatchFinder *p)
-+-{
-+-  if (p->streamEndWasReached)
-+-    return;
-+-  if (p->keepSizeAfter >= p->streamPos - p->pos)
-+-    MatchFinder_ReadBlock(p);
-+-}
-+-
-+ static void MatchFinder_CheckAndMoveAndRead(CMatchFinder *p)
-+ {
-+   if (MatchFinder_NeedMove(p))
-+@@ -268,7 +266,7 @@ static void MatchFinder_SetLimits(CMatch
-+   p->posLimit = p->pos + limit;
-+ }
-+ 
-+-void MatchFinder_Init(CMatchFinder *p)
-++static void MatchFinder_Init(CMatchFinder *p)
-+ {
-+   UInt32 i;
-+   for (i = 0; i < p->hashSizeSum; i++)
-+@@ -287,7 +285,7 @@ static UInt32 MatchFinder_GetSubValue(CM
-+   return (p->pos - p->historySize - 1) & kNormalizeMask;
-+ }
-+ 
-+-void MatchFinder_Normalize3(UInt32 subValue, CLzRef *items, UInt32 numItems)
-++static void MatchFinder_Normalize3(UInt32 subValue, CLzRef *items, UInt32 numItems)
-+ {
-+   UInt32 i;
-+   for (i = 0; i < numItems; i++)
-+@@ -319,38 +317,7 @@ static void MatchFinder_CheckLimits(CMat
-+   MatchFinder_SetLimits(p);
-+ }
-+ 
-+-static UInt32 * Hc_GetMatchesSpec(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byte *cur, CLzRef *son,
-+-    UInt32 _cyclicBufferPos, UInt32 _cyclicBufferSize, UInt32 cutValue,
-+-    UInt32 *distances, UInt32 maxLen)
-+-{
-+-  son[_cyclicBufferPos] = curMatch;
-+-  for (;;)
-+-  {
-+-    UInt32 delta = pos - curMatch;
-+-    if (cutValue-- == 0 || delta >= _cyclicBufferSize)
-+-      return distances;
-+-    {
-+-      const Byte *pb = cur - delta;
-+-      curMatch = son[_cyclicBufferPos - delta + ((delta > _cyclicBufferPos) ? _cyclicBufferSize : 0)];
-+-      if (pb[maxLen] == cur[maxLen] && *pb == *cur)
-+-      {
-+-        UInt32 len = 0;
-+-        while (++len != lenLimit)
-+-          if (pb[len] != cur[len])
-+-            break;
-+-        if (maxLen < len)
-+-        {
-+-          *distances++ = maxLen = len;
-+-          *distances++ = delta - 1;
-+-          if (len == lenLimit)
-+-            return distances;
-+-        }
-+-      }
-+-    }
-+-  }
-+-}
-+-
-+-UInt32 * GetMatchesSpec1(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byte *cur, CLzRef *son,
-++static UInt32 * GetMatchesSpec1(UInt32 lenLimit, UInt32 curMatch, UInt32 pos, const Byte *cur, CLzRef *son,
-+     UInt32 _cyclicBufferPos, UInt32 _cyclicBufferSize, UInt32 cutValue,
-+     UInt32 *distances, UInt32 maxLen)
-+ {
-+@@ -460,10 +427,10 @@ static void SkipMatchesSpec(UInt32 lenLi
-+   p->buffer++; \
-+   if (++p->pos == p->posLimit) MatchFinder_CheckLimits(p);
-+ 
-+-#define MOVE_POS_RET MOVE_POS return offset;
-+-
-+ static void MatchFinder_MovePos(CMatchFinder *p) { MOVE_POS; }
-+ 
-++#define MOVE_POS_RET MatchFinder_MovePos(p); return offset;
-++
-+ #define GET_MATCHES_HEADER2(minLen, ret_op) \
-+   UInt32 lenLimit; UInt32 hashValue; const Byte *cur; UInt32 curMatch; \
-+   lenLimit = p->lenLimit; { if (lenLimit < minLen) { MatchFinder_MovePos(p); ret_op; }} \
-+@@ -479,62 +446,7 @@ static void MatchFinder_MovePos(CMatchFi
-+   distances + offset, maxLen) - distances); MOVE_POS_RET;
-+ 
-+ #define SKIP_FOOTER \
-+-  SkipMatchesSpec(lenLimit, curMatch, MF_PARAMS(p)); MOVE_POS;
-+-
-+-static UInt32 Bt2_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+-{
-+-  UInt32 offset;
-+-  GET_MATCHES_HEADER(2)
-+-  HASH2_CALC;
-+-  curMatch = p->hash[hashValue];
-+-  p->hash[hashValue] = p->pos;
-+-  offset = 0;
-+-  GET_MATCHES_FOOTER(offset, 1)
-+-}
-+-
-+-UInt32 Bt3Zip_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+-{
-+-  UInt32 offset;
-+-  GET_MATCHES_HEADER(3)
-+-  HASH_ZIP_CALC;
-+-  curMatch = p->hash[hashValue];
-+-  p->hash[hashValue] = p->pos;
-+-  offset = 0;
-+-  GET_MATCHES_FOOTER(offset, 2)
-+-}
-+-
-+-static UInt32 Bt3_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+-{
-+-  UInt32 hash2Value, delta2, maxLen, offset;
-+-  GET_MATCHES_HEADER(3)
-+-
-+-  HASH3_CALC;
-+-
-+-  delta2 = p->pos - p->hash[hash2Value];
-+-  curMatch = p->hash[kFix3HashSize + hashValue];
-+-
-+-  p->hash[hash2Value] =
-+-  p->hash[kFix3HashSize + hashValue] = p->pos;
-+-
-+-
-+-  maxLen = 2;
-+-  offset = 0;
-+-  if (delta2 < p->cyclicBufferSize && *(cur - delta2) == *cur)
-+-  {
-+-    for (; maxLen != lenLimit; maxLen++)
-+-      if (cur[(ptrdiff_t)maxLen - delta2] != cur[maxLen])
-+-        break;
-+-    distances[0] = maxLen;
-+-    distances[1] = delta2 - 1;
-+-    offset = 2;
-+-    if (maxLen == lenLimit)
-+-    {
-+-      SkipMatchesSpec(lenLimit, curMatch, MF_PARAMS(p));
-+-      MOVE_POS_RET;
-+-    }
-+-  }
-+-  GET_MATCHES_FOOTER(offset, maxLen)
-+-}
-++  SkipMatchesSpec(lenLimit, curMatch, MF_PARAMS(p)); MatchFinder_MovePos(p);
-+ 
-+ static UInt32 Bt4_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+ {
-+@@ -583,108 +495,6 @@ static UInt32 Bt4_MatchFinder_GetMatches
-+   GET_MATCHES_FOOTER(offset, maxLen)
-+ }
-+ 
-+-static UInt32 Hc4_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+-{
-+-  UInt32 hash2Value, hash3Value, delta2, delta3, maxLen, offset;
-+-  GET_MATCHES_HEADER(4)
-+-
-+-  HASH4_CALC;
-+-
-+-  delta2 = p->pos - p->hash[                hash2Value];
-+-  delta3 = p->pos - p->hash[kFix3HashSize + hash3Value];
-+-  curMatch = p->hash[kFix4HashSize + hashValue];
-+-
-+-  p->hash[                hash2Value] =
-+-  p->hash[kFix3HashSize + hash3Value] =
-+-  p->hash[kFix4HashSize + hashValue] = p->pos;
-+-
-+-  maxLen = 1;
-+-  offset = 0;
-+-  if (delta2 < p->cyclicBufferSize && *(cur - delta2) == *cur)
-+-  {
-+-    distances[0] = maxLen = 2;
-+-    distances[1] = delta2 - 1;
-+-    offset = 2;
-+-  }
-+-  if (delta2 != delta3 && delta3 < p->cyclicBufferSize && *(cur - delta3) == *cur)
-+-  {
-+-    maxLen = 3;
-+-    distances[offset + 1] = delta3 - 1;
-+-    offset += 2;
-+-    delta2 = delta3;
-+-  }
-+-  if (offset != 0)
-+-  {
-+-    for (; maxLen != lenLimit; maxLen++)
-+-      if (cur[(ptrdiff_t)maxLen - delta2] != cur[maxLen])
-+-        break;
-+-    distances[offset - 2] = maxLen;
-+-    if (maxLen == lenLimit)
-+-    {
-+-      p->son[p->cyclicBufferPos] = curMatch;
-+-      MOVE_POS_RET;
-+-    }
-+-  }
-+-  if (maxLen < 3)
-+-    maxLen = 3;
-+-  offset = (UInt32)(Hc_GetMatchesSpec(lenLimit, curMatch, MF_PARAMS(p),
-+-    distances + offset, maxLen) - (distances));
-+-  MOVE_POS_RET
-+-}
-+-
-+-UInt32 Hc3Zip_MatchFinder_GetMatches(CMatchFinder *p, UInt32 *distances)
-+-{
-+-  UInt32 offset;
-+-  GET_MATCHES_HEADER(3)
-+-  HASH_ZIP_CALC;
-+-  curMatch = p->hash[hashValue];
-+-  p->hash[hashValue] = p->pos;
-+-  offset = (UInt32)(Hc_GetMatchesSpec(lenLimit, curMatch, MF_PARAMS(p),
-+-    distances, 2) - (distances));
-+-  MOVE_POS_RET
-+-}
-+-
-+-static void Bt2_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+-{
-+-  do
-+-  {
-+-    SKIP_HEADER(2)
-+-    HASH2_CALC;
-+-    curMatch = p->hash[hashValue];
-+-    p->hash[hashValue] = p->pos;
-+-    SKIP_FOOTER
-+-  }
-+-  while (--num != 0);
-+-}
-+-
-+-void Bt3Zip_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+-{
-+-  do
-+-  {
-+-    SKIP_HEADER(3)
-+-    HASH_ZIP_CALC;
-+-    curMatch = p->hash[hashValue];
-+-    p->hash[hashValue] = p->pos;
-+-    SKIP_FOOTER
-+-  }
-+-  while (--num != 0);
-+-}
-+-
-+-static void Bt3_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+-{
-+-  do
-+-  {
-+-    UInt32 hash2Value;
-+-    SKIP_HEADER(3)
-+-    HASH3_CALC;
-+-    curMatch = p->hash[kFix3HashSize + hashValue];
-+-    p->hash[hash2Value] =
-+-    p->hash[kFix3HashSize + hashValue] = p->pos;
-+-    SKIP_FOOTER
-+-  }
-+-  while (--num != 0);
-+-}
-+-
-+ static void Bt4_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+ {
-+   do
-+@@ -701,61 +511,12 @@ static void Bt4_MatchFinder_Skip(CMatchF
-+   while (--num != 0);
-+ }
-+ 
-+-static void Hc4_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+-{
-+-  do
-+-  {
-+-    UInt32 hash2Value, hash3Value;
-+-    SKIP_HEADER(4)
-+-    HASH4_CALC;
-+-    curMatch = p->hash[kFix4HashSize + hashValue];
-+-    p->hash[                hash2Value] =
-+-    p->hash[kFix3HashSize + hash3Value] =
-+-    p->hash[kFix4HashSize + hashValue] = p->pos;
-+-    p->son[p->cyclicBufferPos] = curMatch;
-+-    MOVE_POS
-+-  }
-+-  while (--num != 0);
-+-}
-+-
-+-void Hc3Zip_MatchFinder_Skip(CMatchFinder *p, UInt32 num)
-+-{
-+-  do
-+-  {
-+-    SKIP_HEADER(3)
-+-    HASH_ZIP_CALC;
-+-    curMatch = p->hash[hashValue];
-+-    p->hash[hashValue] = p->pos;
-+-    p->son[p->cyclicBufferPos] = curMatch;
-+-    MOVE_POS
-+-  }
-+-  while (--num != 0);
-+-}
-+-
-+ void MatchFinder_CreateVTable(CMatchFinder *p, IMatchFinder *vTable)
-+ {
-+   vTable->Init = (Mf_Init_Func)MatchFinder_Init;
-+   vTable->GetIndexByte = (Mf_GetIndexByte_Func)MatchFinder_GetIndexByte;
-+   vTable->GetNumAvailableBytes = (Mf_GetNumAvailableBytes_Func)MatchFinder_GetNumAvailableBytes;
-+   vTable->GetPointerToCurrentPos = (Mf_GetPointerToCurrentPos_Func)MatchFinder_GetPointerToCurrentPos;
-+-  if (!p->btMode)
-+-  {
-+-    vTable->GetMatches = (Mf_GetMatches_Func)Hc4_MatchFinder_GetMatches;
-+-    vTable->Skip = (Mf_Skip_Func)Hc4_MatchFinder_Skip;
-+-  }
-+-  else if (p->numHashBytes == 2)
-+-  {
-+-    vTable->GetMatches = (Mf_GetMatches_Func)Bt2_MatchFinder_GetMatches;
-+-    vTable->Skip = (Mf_Skip_Func)Bt2_MatchFinder_Skip;
-+-  }
-+-  else if (p->numHashBytes == 3)
-+-  {
-+-    vTable->GetMatches = (Mf_GetMatches_Func)Bt3_MatchFinder_GetMatches;
-+-    vTable->Skip = (Mf_Skip_Func)Bt3_MatchFinder_Skip;
-+-  }
-+-  else
-+-  {
-+-    vTable->GetMatches = (Mf_GetMatches_Func)Bt4_MatchFinder_GetMatches;
-+-    vTable->Skip = (Mf_Skip_Func)Bt4_MatchFinder_Skip;
-+-  }
-++  vTable->GetMatches = (Mf_GetMatches_Func)Bt4_MatchFinder_GetMatches;
-++  vTable->Skip = (Mf_Skip_Func)Bt4_MatchFinder_Skip;
-+ }
-+--- a/lib/lzma/LzmaDec.c
-++++ b/lib/lzma/LzmaDec.c
-+@@ -682,7 +682,7 @@ static void LzmaDec_InitRc(CLzmaDec *p,
-+   p->needFlush = 0;
-+ }
-+ 
-+-void LzmaDec_InitDicAndState(CLzmaDec *p, Bool initDic, Bool initState)
-++static void LzmaDec_InitDicAndState(CLzmaDec *p, Bool initDic, Bool initState)
-+ {
-+   p->needFlush = 1;
-+   p->remainLen = 0;
-+@@ -698,7 +698,7 @@ void LzmaDec_InitDicAndState(CLzmaDec *p
-+     p->needInitState = 1;
-+ }
-+ 
-+-void LzmaDec_Init(CLzmaDec *p)
-++static void LzmaDec_Init(CLzmaDec *p)
-+ {
-+   p->dicPos = 0;
-+   LzmaDec_InitDicAndState(p, True, True);
-+@@ -716,7 +716,7 @@ static void LzmaDec_InitStateReal(CLzmaD
-+   p->needInitState = 0;
-+ }
-+ 
-+-SRes LzmaDec_DecodeToDic(CLzmaDec *p, SizeT dicLimit, const Byte *src, SizeT *srcLen,
-++static SRes LzmaDec_DecodeToDic(CLzmaDec *p, SizeT dicLimit, const Byte *src, SizeT *srcLen,
-+     ELzmaFinishMode finishMode, ELzmaStatus *status)
-+ {
-+   SizeT inSize = *srcLen;
-+@@ -837,65 +837,13 @@ SRes LzmaDec_DecodeToDic(CLzmaDec *p, Si
-+   return (p->code == 0) ? SZ_OK : SZ_ERROR_DATA;
-+ }
-+ 
-+-SRes LzmaDec_DecodeToBuf(CLzmaDec *p, Byte *dest, SizeT *destLen, const Byte *src, SizeT *srcLen, ELzmaFinishMode finishMode, ELzmaStatus *status)
-+-{
-+-  SizeT outSize = *destLen;
-+-  SizeT inSize = *srcLen;
-+-  *srcLen = *destLen = 0;
-+-  for (;;)
-+-  {
-+-    SizeT inSizeCur = inSize, outSizeCur, dicPos;
-+-    ELzmaFinishMode curFinishMode;
-+-    SRes res;
-+-    if (p->dicPos == p->dicBufSize)
-+-      p->dicPos = 0;
-+-    dicPos = p->dicPos;
-+-    if (outSize > p->dicBufSize - dicPos)
-+-    {
-+-      outSizeCur = p->dicBufSize;
-+-      curFinishMode = LZMA_FINISH_ANY;
-+-    }
-+-    else
-+-    {
-+-      outSizeCur = dicPos + outSize;
-+-      curFinishMode = finishMode;
-+-    }
-+-
-+-    res = LzmaDec_DecodeToDic(p, outSizeCur, src, &inSizeCur, curFinishMode, status);
-+-    src += inSizeCur;
-+-    inSize -= inSizeCur;
-+-    *srcLen += inSizeCur;
-+-    outSizeCur = p->dicPos - dicPos;
-+-    memcpy(dest, p->dic + dicPos, outSizeCur);
-+-    dest += outSizeCur;
-+-    outSize -= outSizeCur;
-+-    *destLen += outSizeCur;
-+-    if (res != 0)
-+-      return res;
-+-    if (outSizeCur == 0 || outSize == 0)
-+-      return SZ_OK;
-+-  }
-+-}
-+-
-+-void LzmaDec_FreeProbs(CLzmaDec *p, ISzAlloc *alloc)
-++static void LzmaDec_FreeProbs(CLzmaDec *p, ISzAlloc *alloc)
-+ {
-+   alloc->Free(alloc, p->probs);
-+   p->probs = 0;
-+ }
-+ 
-+-static void LzmaDec_FreeDict(CLzmaDec *p, ISzAlloc *alloc)
-+-{
-+-  alloc->Free(alloc, p->dic);
-+-  p->dic = 0;
-+-}
-+-
-+-void LzmaDec_Free(CLzmaDec *p, ISzAlloc *alloc)
-+-{
-+-  LzmaDec_FreeProbs(p, alloc);
-+-  LzmaDec_FreeDict(p, alloc);
-+-}
-+-
-+-SRes LzmaProps_Decode(CLzmaProps *p, const Byte *data, unsigned size)
-++static SRes LzmaProps_Decode(CLzmaProps *p, const Byte *data, unsigned size)
-+ {
-+   UInt32 dicSize;
-+   Byte d;
-+@@ -935,7 +883,7 @@ static SRes LzmaDec_AllocateProbs2(CLzma
-+   return SZ_OK;
-+ }
-+ 
-+-SRes LzmaDec_AllocateProbs(CLzmaDec *p, const Byte *props, unsigned propsSize, ISzAlloc *alloc)
-++static SRes LzmaDec_AllocateProbs(CLzmaDec *p, const Byte *props, unsigned propsSize, ISzAlloc *alloc)
-+ {
-+   CLzmaProps propNew;
-+   RINOK(LzmaProps_Decode(&propNew, props, propsSize));
-+@@ -943,28 +891,6 @@ SRes LzmaDec_AllocateProbs(CLzmaDec *p,
-+   p->prop = propNew;
-+   return SZ_OK;
-+ }
-+-
-+-SRes LzmaDec_Allocate(CLzmaDec *p, const Byte *props, unsigned propsSize, ISzAlloc *alloc)
-+-{
-+-  CLzmaProps propNew;
-+-  SizeT dicBufSize;
-+-  RINOK(LzmaProps_Decode(&propNew, props, propsSize));
-+-  RINOK(LzmaDec_AllocateProbs2(p, &propNew, alloc));
-+-  dicBufSize = propNew.dicSize;
-+-  if (p->dic == 0 || dicBufSize != p->dicBufSize)
-+-  {
-+-    LzmaDec_FreeDict(p, alloc);
-+-    p->dic = (Byte *)alloc->Alloc(alloc, dicBufSize);
-+-    if (p->dic == 0)
-+-    {
-+-      LzmaDec_FreeProbs(p, alloc);
-+-      return SZ_ERROR_MEM;
-+-    }
-+-  }
-+-  p->dicBufSize = dicBufSize;
-+-  p->prop = propNew;
-+-  return SZ_OK;
-+-}
-+ 
-+ SRes LzmaDecode(Byte *dest, SizeT *destLen, const Byte *src, SizeT *srcLen,
-+     const Byte *propData, unsigned propSize, ELzmaFinishMode finishMode,
-+--- a/lib/lzma/LzmaEnc.c
-++++ b/lib/lzma/LzmaEnc.c
-+@@ -53,7 +53,7 @@ void LzmaEncProps_Init(CLzmaEncProps *p)
-+   p->writeEndMark = 0;
-+ }
-+ 
-+-void LzmaEncProps_Normalize(CLzmaEncProps *p)
-++static void LzmaEncProps_Normalize(CLzmaEncProps *p)
-+ {
-+   int level = p->level;
-+   if (level < 0) level = 5;
-+@@ -76,7 +76,7 @@ void LzmaEncProps_Normalize(CLzmaEncProp
-+       #endif
-+ }
-+ 
-+-UInt32 LzmaEncProps_GetDictSize(const CLzmaEncProps *props2)
-++static UInt32 __maybe_unused LzmaEncProps_GetDictSize(const CLzmaEncProps *props2)
-+ {
-+   CLzmaEncProps props = *props2;
-+   LzmaEncProps_Normalize(&props);
-+@@ -93,7 +93,7 @@ UInt32 LzmaEncProps_GetDictSize(const CL
-+ 
-+ #define BSR2_RET(pos, res) { unsigned long i; _BitScanReverse(&i, (pos)); res = (i + i) + ((pos >> (i - 1)) & 1); }
-+ 
-+-UInt32 GetPosSlot1(UInt32 pos)
-++static UInt32 GetPosSlot1(UInt32 pos)
-+ {
-+   UInt32 res;
-+   BSR2_RET(pos, res);
-+@@ -107,7 +107,7 @@ UInt32 GetPosSlot1(UInt32 pos)
-+ #define kNumLogBits (9 + (int)sizeof(size_t) / 2)
-+ #define kDicLogSizeMaxCompress ((kNumLogBits - 1) * 2 + 7)
-+ 
-+-void LzmaEnc_FastPosInit(Byte *g_FastPos)
-++static void LzmaEnc_FastPosInit(Byte *g_FastPos)
-+ {
-+   int c = 2, slotFast;
-+   g_FastPos[0] = 0;
-+@@ -339,58 +339,6 @@ typedef struct
-+   CSaveState saveState;
-+ } CLzmaEnc;
-+ 
-+-void LzmaEnc_SaveState(CLzmaEncHandle pp)
-+-{
-+-  CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  CSaveState *dest = &p->saveState;
-+-  int i;
-+-  dest->lenEnc = p->lenEnc;
-+-  dest->repLenEnc = p->repLenEnc;
-+-  dest->state = p->state;
-+-
-+-  for (i = 0; i < kNumStates; i++)
-+-  {
-+-    memcpy(dest->isMatch[i], p->isMatch[i], sizeof(p->isMatch[i]));
-+-    memcpy(dest->isRep0Long[i], p->isRep0Long[i], sizeof(p->isRep0Long[i]));
-+-  }
-+-  for (i = 0; i < kNumLenToPosStates; i++)
-+-    memcpy(dest->posSlotEncoder[i], p->posSlotEncoder[i], sizeof(p->posSlotEncoder[i]));
-+-  memcpy(dest->isRep, p->isRep, sizeof(p->isRep));
-+-  memcpy(dest->isRepG0, p->isRepG0, sizeof(p->isRepG0));
-+-  memcpy(dest->isRepG1, p->isRepG1, sizeof(p->isRepG1));
-+-  memcpy(dest->isRepG2, p->isRepG2, sizeof(p->isRepG2));
-+-  memcpy(dest->posEncoders, p->posEncoders, sizeof(p->posEncoders));
-+-  memcpy(dest->posAlignEncoder, p->posAlignEncoder, sizeof(p->posAlignEncoder));
-+-  memcpy(dest->reps, p->reps, sizeof(p->reps));
-+-  memcpy(dest->litProbs, p->litProbs, (0x300 << p->lclp) * sizeof(CLzmaProb));
-+-}
-+-
-+-void LzmaEnc_RestoreState(CLzmaEncHandle pp)
-+-{
-+-  CLzmaEnc *dest = (CLzmaEnc *)pp;
-+-  const CSaveState *p = &dest->saveState;
-+-  int i;
-+-  dest->lenEnc = p->lenEnc;
-+-  dest->repLenEnc = p->repLenEnc;
-+-  dest->state = p->state;
-+-
-+-  for (i = 0; i < kNumStates; i++)
-+-  {
-+-    memcpy(dest->isMatch[i], p->isMatch[i], sizeof(p->isMatch[i]));
-+-    memcpy(dest->isRep0Long[i], p->isRep0Long[i], sizeof(p->isRep0Long[i]));
-+-  }
-+-  for (i = 0; i < kNumLenToPosStates; i++)
-+-    memcpy(dest->posSlotEncoder[i], p->posSlotEncoder[i], sizeof(p->posSlotEncoder[i]));
-+-  memcpy(dest->isRep, p->isRep, sizeof(p->isRep));
-+-  memcpy(dest->isRepG0, p->isRepG0, sizeof(p->isRepG0));
-+-  memcpy(dest->isRepG1, p->isRepG1, sizeof(p->isRepG1));
-+-  memcpy(dest->isRepG2, p->isRepG2, sizeof(p->isRepG2));
-+-  memcpy(dest->posEncoders, p->posEncoders, sizeof(p->posEncoders));
-+-  memcpy(dest->posAlignEncoder, p->posAlignEncoder, sizeof(p->posAlignEncoder));
-+-  memcpy(dest->reps, p->reps, sizeof(p->reps));
-+-  memcpy(dest->litProbs, p->litProbs, (0x300 << dest->lclp) * sizeof(CLzmaProb));
-+-}
-+-
-+ SRes LzmaEnc_SetProps(CLzmaEncHandle pp, const CLzmaEncProps *props2)
-+ {
-+   CLzmaEnc *p = (CLzmaEnc *)pp;
-+@@ -600,7 +548,7 @@ static void LitEnc_EncodeMatched(CRangeE
-+   while (symbol < 0x10000);
-+ }
-+ 
-+-void LzmaEnc_InitPriceTables(UInt32 *ProbPrices)
-++static void LzmaEnc_InitPriceTables(UInt32 *ProbPrices)
-+ {
-+   UInt32 i;
-+   for (i = (1 << kNumMoveReducingBits) / 2; i < kBitModelTotal; i += (1 << kNumMoveReducingBits))
-+@@ -1676,7 +1624,7 @@ static void FillDistancesPrices(CLzmaEnc
-+   p->matchPriceCount = 0;
-+ }
-+ 
-+-void LzmaEnc_Construct(CLzmaEnc *p)
-++static void LzmaEnc_Construct(CLzmaEnc *p)
-+ {
-+   RangeEnc_Construct(&p->rc);
-+   MatchFinder_Construct(&p->matchFinderBase);
-+@@ -1709,7 +1657,7 @@ CLzmaEncHandle LzmaEnc_Create(ISzAlloc *
-+   return p;
-+ }
-+ 
-+-void LzmaEnc_FreeLits(CLzmaEnc *p, ISzAlloc *alloc)
-++static void LzmaEnc_FreeLits(CLzmaEnc *p, ISzAlloc *alloc)
-+ {
-+   alloc->Free(alloc, p->litProbs);
-+   alloc->Free(alloc, p->saveState.litProbs);
-+@@ -1717,7 +1665,7 @@ void LzmaEnc_FreeLits(CLzmaEnc *p, ISzAl
-+   p->saveState.litProbs = 0;
-+ }
-+ 
-+-void LzmaEnc_Destruct(CLzmaEnc *p, ISzAlloc *alloc, ISzAlloc *allocBig)
-++static void LzmaEnc_Destruct(CLzmaEnc *p, ISzAlloc *alloc, ISzAlloc *allocBig)
-+ {
-+   #ifndef _7ZIP_ST
-+   MatchFinderMt_Destruct(&p->matchFinderMt, allocBig);
-+@@ -1947,7 +1895,7 @@ static SRes LzmaEnc_Alloc(CLzmaEnc *p, U
-+   return SZ_OK;
-+ }
-+ 
-+-void LzmaEnc_Init(CLzmaEnc *p)
-++static void LzmaEnc_Init(CLzmaEnc *p)
-+ {
-+   UInt32 i;
-+   p->state = 0;
-+@@ -2005,7 +1953,7 @@ void LzmaEnc_Init(CLzmaEnc *p)
-+   p->lpMask = (1 << p->lp) - 1;
-+ }
-+ 
-+-void LzmaEnc_InitPrices(CLzmaEnc *p)
-++static void LzmaEnc_InitPrices(CLzmaEnc *p)
-+ {
-+   if (!p->fastMode)
-+   {
-+@@ -2037,26 +1985,6 @@ static SRes LzmaEnc_AllocAndInit(CLzmaEn
-+   return SZ_OK;
-+ }
-+ 
-+-static SRes LzmaEnc_Prepare(CLzmaEncHandle pp, ISeqOutStream *outStream, ISeqInStream *inStream,
-+-    ISzAlloc *alloc, ISzAlloc *allocBig)
-+-{
-+-  CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  p->matchFinderBase.stream = inStream;
-+-  p->needInit = 1;
-+-  p->rc.outStream = outStream;
-+-  return LzmaEnc_AllocAndInit(p, 0, alloc, allocBig);
-+-}
-+-
-+-SRes LzmaEnc_PrepareForLzma2(CLzmaEncHandle pp,
-+-    ISeqInStream *inStream, UInt32 keepWindowSize,
-+-    ISzAlloc *alloc, ISzAlloc *allocBig)
-+-{
-+-  CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  p->matchFinderBase.stream = inStream;
-+-  p->needInit = 1;
-+-  return LzmaEnc_AllocAndInit(p, keepWindowSize, alloc, allocBig);
-+-}
-+-
-+ static void LzmaEnc_SetInputBuf(CLzmaEnc *p, const Byte *src, SizeT srcLen)
-+ {
-+   p->matchFinderBase.directInput = 1;
-+@@ -2064,7 +1992,7 @@ static void LzmaEnc_SetInputBuf(CLzmaEnc
-+   p->matchFinderBase.directInputRem = srcLen;
-+ }
-+ 
-+-SRes LzmaEnc_MemPrepare(CLzmaEncHandle pp, const Byte *src, SizeT srcLen,
-++static SRes LzmaEnc_MemPrepare(CLzmaEncHandle pp, const Byte *src, SizeT srcLen,
-+     UInt32 keepWindowSize, ISzAlloc *alloc, ISzAlloc *allocBig)
-+ {
-+   CLzmaEnc *p = (CLzmaEnc *)pp;
-+@@ -2074,7 +2002,7 @@ SRes LzmaEnc_MemPrepare(CLzmaEncHandle p
-+   return LzmaEnc_AllocAndInit(p, keepWindowSize, alloc, allocBig);
-+ }
-+ 
-+-void LzmaEnc_Finish(CLzmaEncHandle pp)
-++static void LzmaEnc_Finish(CLzmaEncHandle pp)
-+ {
-+   #ifndef _7ZIP_ST
-+   CLzmaEnc *p = (CLzmaEnc *)pp;
-+@@ -2107,53 +2035,6 @@ static size_t MyWrite(void *pp, const vo
-+   return size;
-+ }
-+ 
-+-
-+-UInt32 LzmaEnc_GetNumAvailableBytes(CLzmaEncHandle pp)
-+-{
-+-  const CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  return p->matchFinder.GetNumAvailableBytes(p->matchFinderObj);
-+-}
-+-
-+-const Byte *LzmaEnc_GetCurBuf(CLzmaEncHandle pp)
-+-{
-+-  const CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  return p->matchFinder.GetPointerToCurrentPos(p->matchFinderObj) - p->additionalOffset;
-+-}
-+-
-+-SRes LzmaEnc_CodeOneMemBlock(CLzmaEncHandle pp, Bool reInit,
-+-    Byte *dest, size_t *destLen, UInt32 desiredPackSize, UInt32 *unpackSize)
-+-{
-+-  CLzmaEnc *p = (CLzmaEnc *)pp;
-+-  UInt64 nowPos64;
-+-  SRes res;
-+-  CSeqOutStreamBuf outStream;
-+-
-+-  outStream.funcTable.Write = MyWrite;
-+-  outStream.data = dest;
-+-  outStream.rem = *destLen;
-+-  outStream.overflow = False;
-+-
-+-  p->writeEndMark = False;
-+-  p->finished = False;
-+-  p->result = SZ_OK;
-+-
-+-  if (reInit)
-+-    LzmaEnc_Init(p);
-+-  LzmaEnc_InitPrices(p);
-+-  nowPos64 = p->nowPos64;
-+-  RangeEnc_Init(&p->rc);
-+-  p->rc.outStream = &outStream.funcTable;
-+-
-+-  res = LzmaEnc_CodeOneBlock(p, True, desiredPackSize, *unpackSize);
-+-
-+-  *unpackSize = (UInt32)(p->nowPos64 - nowPos64);
-+-  *destLen -= outStream.rem;
-+-  if (outStream.overflow)
-+-    return SZ_ERROR_OUTPUT_EOF;
-+-
-+-  return res;
-+-}
-+-
-+ static SRes LzmaEnc_Encode2(CLzmaEnc *p, ICompressProgress *progress)
-+ {
-+   SRes res = SZ_OK;
-+@@ -2184,13 +2065,6 @@ static SRes LzmaEnc_Encode2(CLzmaEnc *p,
-+   return res;
-+ }
-+ 
-+-SRes LzmaEnc_Encode(CLzmaEncHandle pp, ISeqOutStream *outStream, ISeqInStream *inStream, ICompressProgress *progress,
-+-    ISzAlloc *alloc, ISzAlloc *allocBig)
-+-{
-+-  RINOK(LzmaEnc_Prepare(pp, outStream, inStream, alloc, allocBig));
-+-  return LzmaEnc_Encode2((CLzmaEnc *)pp, progress);
-+-}
-+-
-+ SRes LzmaEnc_WriteProperties(CLzmaEncHandle pp, Byte *props, SizeT *size)
-+ {
-+   CLzmaEnc *p = (CLzmaEnc *)pp;
-+@@ -2247,25 +2121,3 @@ SRes LzmaEnc_MemEncode(CLzmaEncHandle pp
-+     return SZ_ERROR_OUTPUT_EOF;
-+   return res;
-+ }
-+-
-+-SRes LzmaEncode(Byte *dest, SizeT *destLen, const Byte *src, SizeT srcLen,
-+-    const CLzmaEncProps *props, Byte *propsEncoded, SizeT *propsSize, int writeEndMark,
-+-    ICompressProgress *progress, ISzAlloc *alloc, ISzAlloc *allocBig)
-+-{
-+-  CLzmaEnc *p = (CLzmaEnc *)LzmaEnc_Create(alloc);
-+-  SRes res;
-+-  if (p == 0)
-+-    return SZ_ERROR_MEM;
-+-
-+-  res = LzmaEnc_SetProps(p, props);
-+-  if (res == SZ_OK)
-+-  {
-+-    res = LzmaEnc_WriteProperties(p, propsEncoded, propsSize);
-+-    if (res == SZ_OK)
-+-      res = LzmaEnc_MemEncode(p, dest, destLen, src, srcLen,
-+-          writeEndMark, progress, alloc, allocBig);
-+-  }
-+-
-+-  LzmaEnc_Destroy(p, alloc, allocBig);
-+-  return res;
-+-}
 diff --git a/target/linux/generic/hack-5.15/600-bridge_offload.patch b/target/linux/generic/hack-5.15/600-bridge_offload.patch
 new file mode 100644
 index 0000000000..9d71a741b2
@@ -7141,6 +5996,124 @@ index 0000000000..9d71a741b2
 + 	tunnel_dst = rcu_dereference(vlan->tinfo.tunnel_dst);
 + 	if (tunnel_dst && dst_hold_safe(&tunnel_dst->dst))
 + 		skb_dst_set(skb, &tunnel_dst->dst);
+diff --git a/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch b/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch
+new file mode 100644
+index 0000000000..83483751f8
+--- /dev/null
++++ b/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch
+@@ -0,0 +1,112 @@
++From: Yousong Zhou <yszhou4tech@gmail.com>
++Subject: [PATCH] ath79: add nvmem cell mac-address-ascii support
++
++This is needed for devices with mac address stored in ascii format, e.g.
++HiWiFi HC6361 to be ported in the following patch.
++
++Submitted-by: Yousong Zhou <yszhou4tech@gmail.com>
++---
++ net/ethernet/eth.c                            | 83 ++++++++++++------
++ 1 files changed, 72 insertions(+), 11 deletions(-)
++
++--- a/net/ethernet/eth.c
+++++ b/net/ethernet/eth.c
++@@ -538,6 +538,63 @@ int eth_platform_get_mac_address(struct
++ }
++ EXPORT_SYMBOL(eth_platform_get_mac_address);
++ 
+++static void *nvmem_cell_get_mac_address(struct nvmem_cell *cell)
+++{
+++	size_t len;
+++	void *mac;
+++
+++	mac = nvmem_cell_read(cell, &len);
+++	if (IS_ERR(mac))
+++		return PTR_ERR(mac);
+++	if (len != ETH_ALEN) {
+++		kfree(mac);
+++		return ERR_PTR(-EINVAL);
+++	}
+++	return mac;
+++}
+++
+++static void *nvmem_cell_get_mac_address_ascii(struct nvmem_cell *cell)
+++{
+++	size_t len;
+++	int ret;
+++	void *mac_ascii;
+++	u8 *mac;
+++
+++	mac_ascii = nvmem_cell_read(cell, &len);
+++	if (IS_ERR(mac_ascii))
+++		return PTR_ERR(mac_ascii);
+++	if (len != ETH_ALEN*2+5) {
+++		kfree(mac_ascii);
+++		return ERR_PTR(-EINVAL);
+++	}
+++	mac = kmalloc(ETH_ALEN, GFP_KERNEL);
+++	if (!mac) {
+++		kfree(mac_ascii);
+++		return ERR_PTR(-ENOMEM);
+++	}
+++	ret = sscanf(mac_ascii, "%2hhx:%2hhx:%2hhx:%2hhx:%2hhx:%2hhx",
+++				&mac[0], &mac[1], &mac[2],
+++				&mac[3], &mac[4], &mac[5]);
+++	kfree(mac_ascii);
+++	if (ret == ETH_ALEN)
+++		return mac;
+++	kfree(mac);
+++	return ERR_PTR(-EINVAL);
+++}
+++
+++static struct nvmem_cell_mac_address_property {
+++	char *name;
+++	void *(*read)(struct nvmem_cell *);
+++} nvmem_cell_mac_address_properties[] = {
+++	{
+++		.name = "mac-address",
+++		.read = nvmem_cell_get_mac_address,
+++	}, {
+++		.name = "mac-address-ascii",
+++		.read = nvmem_cell_get_mac_address_ascii,
+++	},
+++};
+++
++ /**
++  * nvmem_get_mac_address - Obtain the MAC address from an nvmem cell named
++  * 'mac-address' associated with given device.
++@@ -551,19 +608,23 @@ int nvmem_get_mac_address(struct device
++ {
++ 	struct nvmem_cell *cell;
++ 	const void *mac;
++-	size_t len;
+++	struct nvmem_cell_mac_address_property *property;
+++	int i;
++ 
++-	cell = nvmem_cell_get(dev, "mac-address");
++-	if (IS_ERR(cell))
++-		return PTR_ERR(cell);
++-
++-	mac = nvmem_cell_read(cell, &len);
++-	nvmem_cell_put(cell);
++-
++-	if (IS_ERR(mac))
++-		return PTR_ERR(mac);
+++	for (i = 0; i < ARRAY_SIZE(nvmem_cell_mac_address_properties); i++) {
+++		property = &nvmem_cell_mac_address_properties[i];
+++		cell = nvmem_cell_get(dev, property->name);
+++		if (IS_ERR(cell)) {
+++			if (i == ARRAY_SIZE(nvmem_cell_mac_address_properties) - 1)
+++				return PTR_ERR(cell);
+++			continue;
+++		}
+++		mac = property->read(cell);
+++		nvmem_cell_put(cell);
+++		break;
+++	}
++ 
++-	if (len != ETH_ALEN || !is_valid_ether_addr(mac)) {
+++	if (!is_valid_ether_addr(mac)) {
++ 		kfree(mac);
++ 		return -EINVAL;
++ 	}
 diff --git a/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch b/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch
 new file mode 100644
 index 0000000000..2d3fe01a75
@@ -8257,7 +7230,7 @@ index 0000000000..12a031ec84
 + #  define LL_MAX_HEADER 96
 diff --git a/target/linux/generic/hack-5.15/660-fq_codel_defaults.patch b/target/linux/generic/hack-5.15/660-fq_codel_defaults.patch
 new file mode 100644
-index 0000000000..5541c0bc89
+index 0000000000..a57a045f4a
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/660-fq_codel_defaults.patch
 @@ -0,0 +1,27 @@
@@ -8276,7 +7249,7 @@ index 0000000000..5541c0bc89
 +
 +--- a/net/sched/sch_fq_codel.c
 ++++ b/net/sched/sch_fq_codel.c
-+@@ -469,7 +469,11 @@ static int fq_codel_init(struct Qdisc *s
++@@ -467,7 +467,11 @@ static int fq_codel_init(struct Qdisc *s
 + 
 + 	sch->limit = 10*1024;
 + 	q->flows_cnt = 1024;
@@ -8290,7 +7263,7 @@ index 0000000000..5541c0bc89
 + 	INIT_LIST_HEAD(&q->new_flows);
 diff --git a/target/linux/generic/hack-5.15/661-kernel-ct-size-the-hashtable-more-adequately.patch b/target/linux/generic/hack-5.15/661-kernel-ct-size-the-hashtable-more-adequately.patch
 new file mode 100644
-index 0000000000..134e2100c8
+index 0000000000..683aa8a8df
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/661-kernel-ct-size-the-hashtable-more-adequately.patch
 @@ -0,0 +1,25 @@
@@ -8310,7 +7283,7 @@ index 0000000000..134e2100c8
 +
 +--- a/net/netfilter/nf_conntrack_core.c
 ++++ b/net/netfilter/nf_conntrack_core.c
-+@@ -2727,7 +2727,7 @@ int nf_conntrack_init_start(void)
++@@ -2735,7 +2735,7 @@ int nf_conntrack_init_start(void)
 + 
 + 	if (!nf_conntrack_htable_size) {
 + 		nf_conntrack_htable_size
@@ -8485,7 +7458,7 @@ index 0000000000..ffa44f0960
 + 	if (err)
 diff --git a/target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch b/target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch
 new file mode 100644
-index 0000000000..65d8f47521
+index 0000000000..29050d38ea
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/720-net-phy-add-aqr-phys.patch
 @@ -0,0 +1,142 @@
@@ -8511,7 +7484,7 @@ index 0000000000..65d8f47521
 + 
 + #define MDIO_PHYXS_VEND_IF_STATUS		0xe812
 + #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_MASK	GENMASK(7, 3)
-+@@ -372,6 +374,49 @@ static int aqr107_read_rate(struct phy_d
++@@ -381,6 +383,49 @@ static int aqr107_read_rate(struct phy_d
 + 	return 0;
 + }
 + 
@@ -8561,7 +7534,7 @@ index 0000000000..65d8f47521
 + static int aqr107_read_status(struct phy_device *phydev)
 + {
 + 	int val, ret;
-+@@ -502,7 +547,7 @@ static void aqr107_chip_info(struct phy_
++@@ -511,7 +556,7 @@ static void aqr107_chip_info(struct phy_
 + 	build_id = FIELD_GET(VEND1_GLOBAL_RSVD_STAT1_FW_BUILD_ID, val);
 + 	prov_id = FIELD_GET(VEND1_GLOBAL_RSVD_STAT1_PROV_ID, val);
 + 
@@ -8570,7 +7543,7 @@ index 0000000000..65d8f47521
 + 		   fw_major, fw_minor, build_id, prov_id);
 + }
 + 
-+@@ -674,6 +719,24 @@ static struct phy_driver aqr_driver[] =
++@@ -719,6 +764,24 @@ static struct phy_driver aqr_driver[] =
 + 	.link_change_notify = aqr107_link_change_notify,
 + },
 + {
@@ -8595,7 +7568,7 @@ index 0000000000..65d8f47521
 + 	PHY_ID_MATCH_MODEL(PHY_ID_AQCS109),
 + 	.name		= "Aquantia AQCS109",
 + 	.probe		= aqr107_probe,
-+@@ -699,6 +762,24 @@ static struct phy_driver aqr_driver[] =
++@@ -744,6 +807,24 @@ static struct phy_driver aqr_driver[] =
 + 	.handle_interrupt = aqr_handle_interrupt,
 + 	.read_status	= aqr_read_status,
 + },
@@ -8620,7 +7593,7 @@ index 0000000000..65d8f47521
 + };
 + 
 + module_phy_driver(aqr_driver);
-+@@ -709,8 +790,10 @@ static struct mdio_device_id __maybe_unu
++@@ -754,8 +835,10 @@ static struct mdio_device_id __maybe_unu
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR105) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR106) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR107) },
@@ -8633,7 +7606,7 @@ index 0000000000..65d8f47521
 + 
 diff --git a/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 new file mode 100644
-index 0000000000..206e16cb17
+index 0000000000..81993e3569
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/721-net-add-packet-mangeling.patch
 @@ -0,0 +1,178 @@
@@ -8710,7 +7683,7 @@ index 0000000000..206e16cb17
 +  */
 +--- a/include/linux/skbuff.h
 ++++ b/include/linux/skbuff.h
-+@@ -2852,6 +2852,10 @@ static inline int pskb_trim(struct sk_bu
++@@ -2854,6 +2854,10 @@ static inline int pskb_trim(struct sk_bu
 + 	return (len < skb->len) ? __pskb_trim(skb, len) : 0;
 + }
 + 
@@ -8721,7 +7694,7 @@ index 0000000000..206e16cb17
 + /**
 +  *	pskb_trim_unique - remove end from a paged unique (not cloned) buffer
 +  *	@skb: buffer to alter
-+@@ -3002,16 +3006,6 @@ static inline struct sk_buff *dev_alloc_
++@@ -3004,16 +3008,6 @@ static inline struct sk_buff *dev_alloc_
 + }
 + 
 + 
@@ -8817,7 +7790,7 @@ index 0000000000..206e16cb17
 + 	eth = (struct ethhdr *)skb->data;
 diff --git a/target/linux/generic/hack-5.15/722-net-phy-aquantia-enable-AQR112-and-AQR412.patch b/target/linux/generic/hack-5.15/722-net-phy-aquantia-enable-AQR112-and-AQR412.patch
 new file mode 100644
-index 0000000000..f1901853e1
+index 0000000000..211696c568
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/722-net-phy-aquantia-enable-AQR112-and-AQR412.patch
 @@ -0,0 +1,154 @@
@@ -8850,9 +7823,9 @@ index 0000000000..f1901853e1
 + #define PHY_ID_AQR813	0x31c31cb2
 + 
 + #define MDIO_PHYXS_VEND_IF_STATUS		0xe812
-+@@ -126,6 +128,29 @@
-+ #define VEND1_GLOBAL_INT_VEND_MASK_GLOBAL2	BIT(1)
-+ #define VEND1_GLOBAL_INT_VEND_MASK_GLOBAL3	BIT(0)
++@@ -135,6 +137,29 @@
++ #define AQR107_OP_IN_PROG_SLEEP		1000
++ #define AQR107_OP_IN_PROG_TIMEOUT	100000
 + 
 ++/* registers in MDIO_MMD_VEND1 region */
 ++#define AQUANTIA_VND1_GLOBAL_SC			0x000
@@ -8880,7 +7853,7 @@ index 0000000000..f1901853e1
 + struct aqr107_hw_stat {
 + 	const char *name;
 + 	int reg;
-+@@ -257,6 +282,51 @@ static int aqr_config_aneg(struct phy_de
++@@ -266,6 +291,51 @@ static int aqr_config_aneg(struct phy_de
 + 	return genphy_c45_check_and_restart_aneg(phydev, changed);
 + }
 + 
@@ -8932,7 +7905,7 @@ index 0000000000..f1901853e1
 + static int aqr_config_intr(struct phy_device *phydev)
 + {
 + 	bool en = phydev->interrupts == PHY_INTERRUPT_ENABLED;
-+@@ -780,6 +850,30 @@ static struct phy_driver aqr_driver[] =
++@@ -825,6 +895,30 @@ static struct phy_driver aqr_driver[] =
 + 	.get_stats	= aqr107_get_stats,
 + 	.link_change_notify = aqr107_link_change_notify,
 + },
@@ -8963,7 +7936,7 @@ index 0000000000..f1901853e1
 + };
 + 
 + module_phy_driver(aqr_driver);
-+@@ -790,9 +884,11 @@ static struct mdio_device_id __maybe_unu
++@@ -835,9 +929,11 @@ static struct mdio_device_id __maybe_unu
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR105) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR106) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR107) },
@@ -8977,7 +7950,7 @@ index 0000000000..f1901853e1
 + };
 diff --git a/target/linux/generic/hack-5.15/723-net-phy-aquantia-fix-system-side-protocol-mi.patch b/target/linux/generic/hack-5.15/723-net-phy-aquantia-fix-system-side-protocol-mi.patch
 new file mode 100644
-index 0000000000..d99b4951b8
+index 0000000000..7d16c8aa28
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/723-net-phy-aquantia-fix-system-side-protocol-mi.patch
 @@ -0,0 +1,34 @@
@@ -8997,7 +7970,7 @@ index 0000000000..d99b4951b8
 +
 +--- a/drivers/net/phy/aquantia_main.c
 ++++ b/drivers/net/phy/aquantia_main.c
-+@@ -315,10 +315,16 @@ static int aqr_config_aneg_set_prot(stru
++@@ -324,10 +324,16 @@ static int aqr_config_aneg_set_prot(stru
 + 	phy_write_mmd(phydev, MDIO_MMD_VEND1, AQUANTIA_VND1_GSTART_RATE,
 + 		      aquantia_syscfg[if_type].start_rate);
 + 
@@ -9017,7 +7990,7 @@ index 0000000000..d99b4951b8
 + 	phy_write_mmd(phydev, MDIO_MMD_VEND1, AQUANTIA_VND1_GLOBAL_SC, 0);
 diff --git a/target/linux/generic/hack-5.15/724-net-phy-aquantia-Add-AQR113-driver-support.patch b/target/linux/generic/hack-5.15/724-net-phy-aquantia-Add-AQR113-driver-support.patch
 new file mode 100644
-index 0000000000..634288c780
+index 0000000000..d03c3430fa
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/724-net-phy-aquantia-Add-AQR113-driver-support.patch
 @@ -0,0 +1,43 @@
@@ -9041,7 +8014,7 @@ index 0000000000..634288c780
 + #define PHY_ID_AQR113C	0x31c31c12
 + #define PHY_ID_AQCS109	0x03a1b5c2
 + #define PHY_ID_AQR405	0x03a1b4b0
-+@@ -869,6 +870,14 @@ static struct phy_driver aqr_driver[] =
++@@ -914,6 +915,14 @@ static struct phy_driver aqr_driver[] =
 + 	.get_stats	= aqr107_get_stats,
 + },
 + {
@@ -9056,7 +8029,7 @@ index 0000000000..634288c780
 + 	PHY_ID_MATCH_MODEL(PHY_ID_AQR412),
 + 	.name		= "Aquantia AQR412",
 + 	.probe		= aqr107_probe,
-+@@ -891,6 +900,7 @@ static struct mdio_device_id __maybe_unu
++@@ -936,6 +945,7 @@ static struct mdio_device_id __maybe_unu
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR106) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR107) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR112) },
@@ -9066,7 +8039,7 @@ index 0000000000..634288c780
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR405) },
 diff --git a/target/linux/generic/hack-5.15/725-net-phy-aquantia-add-PHY_IDs-for-AQR112-variants.patch b/target/linux/generic/hack-5.15/725-net-phy-aquantia-add-PHY_IDs-for-AQR112-variants.patch
 new file mode 100644
-index 0000000000..f7ccc454e9
+index 0000000000..9821c0c86e
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/725-net-phy-aquantia-add-PHY_IDs-for-AQR112-variants.patch
 @@ -0,0 +1,63 @@
@@ -9093,7 +8066,7 @@ index 0000000000..f7ccc454e9
 + #define PHY_ID_AQR113	0x31c31c40
 + #define PHY_ID_AQR113C	0x31c31c12
 + #define PHY_ID_AQCS109	0x03a1b5c2
-+@@ -870,6 +872,30 @@ static struct phy_driver aqr_driver[] =
++@@ -915,6 +917,30 @@ static struct phy_driver aqr_driver[] =
 + 	.get_stats	= aqr107_get_stats,
 + },
 + {
@@ -9124,7 +8097,7 @@ index 0000000000..f7ccc454e9
 + 	PHY_ID_MATCH_MODEL(PHY_ID_AQR113),
 + 	.name		= "Aquantia AQR113",
 + 	.config_aneg	= aqr_config_aneg,
-+@@ -900,6 +926,8 @@ static struct mdio_device_id __maybe_unu
++@@ -945,6 +971,8 @@ static struct mdio_device_id __maybe_unu
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR106) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR107) },
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQR112) },
@@ -9135,7 +8108,7 @@ index 0000000000..f7ccc454e9
 + 	{ PHY_ID_MATCH_MODEL(PHY_ID_AQCS109) },
 diff --git a/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch b/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch
 new file mode 100644
-index 0000000000..c54332f71c
+index 0000000000..c315dcf8ff
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/760-net-usb-r8152-add-LED-configuration-from-OF.patch
 @@ -0,0 +1,74 @@
@@ -9163,7 +8136,7 @@ index 0000000000..c54332f71c
 + #include <linux/crc32.h>
 + #include <linux/if_vlan.h>
 + #include <linux/uaccess.h>
-+@@ -6861,6 +6862,22 @@ static void rtl_tally_reset(struct r8152
++@@ -6864,6 +6865,22 @@ static void rtl_tally_reset(struct r8152
 + 	ocp_write_word(tp, MCU_TYPE_PLA, PLA_RSTTALLY, ocp_data);
 + }
 + 
@@ -9186,7 +8159,7 @@ index 0000000000..c54332f71c
 + static void r8152b_init(struct r8152 *tp)
 + {
 + 	u32 ocp_data;
-+@@ -6902,6 +6919,8 @@ static void r8152b_init(struct r8152 *tp
++@@ -6905,6 +6922,8 @@ static void r8152b_init(struct r8152 *tp
 + 	ocp_data = ocp_read_word(tp, MCU_TYPE_USB, USB_USB_CTRL);
 + 	ocp_data &= ~(RX_AGG_DISABLE | RX_ZERO_EN);
 + 	ocp_write_word(tp, MCU_TYPE_USB, USB_USB_CTRL, ocp_data);
@@ -9195,7 +8168,7 @@ index 0000000000..c54332f71c
 + }
 + 
 + static void r8153_init(struct r8152 *tp)
-+@@ -7042,6 +7061,8 @@ static void r8153_init(struct r8152 *tp)
++@@ -7045,6 +7064,8 @@ static void r8153_init(struct r8152 *tp)
 + 		tp->coalesce = COALESCE_SLOW;
 + 		break;
 + 	}
@@ -9204,7 +8177,7 @@ index 0000000000..c54332f71c
 + }
 + 
 + static void r8153b_init(struct r8152 *tp)
-+@@ -7124,6 +7145,8 @@ static void r8153b_init(struct r8152 *tp
++@@ -7127,6 +7148,8 @@ static void r8153b_init(struct r8152 *tp
 + 	rtl_tally_reset(tp);
 + 
 + 	tp->coalesce = 15000;	/* 15 us */
@@ -9379,7 +8352,7 @@ index 0000000000..1e4fc446ce
 + struct bgmac *bgmac_alloc(struct device *dev);
 diff --git a/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
 new file mode 100644
-index 0000000000..096f143a2e
+index 0000000000..eb11d9b700
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/780-usb-net-MeigLink_modem_support.patch
 @@ -0,0 +1,43 @@
@@ -9405,8 +8378,8 @@ index 0000000000..096f143a2e
 + 	{QMI_FIXED_INTF(0x0408, 0xea42, 4)},	/* Yota / Megafon M100-1 */
 +--- a/drivers/usb/serial/option.c
 ++++ b/drivers/usb/serial/option.c
-+@@ -243,6 +243,8 @@ static void option_instat_callback(struc
-+ #define UBLOX_PRODUCT_R6XX			0x90fa
++@@ -244,6 +244,8 @@ static void option_instat_callback(struc
++ #define UBLOX_PRODUCT_R410M			0x90b2
 + /* These Yuga products use Qualcomm's vendor ID */
 + #define YUGA_PRODUCT_CLM920_NC5			0x9625
 ++/* These MeigLink products use Qualcomm's vendor ID */
@@ -9414,8 +8387,8 @@ index 0000000000..096f143a2e
 + 
 + #define QUECTEL_VENDOR_ID			0x2c7c
 + /* These Quectel products use Quectel's vendor ID */
-+@@ -1140,6 +1142,11 @@ static const struct usb_device_id option
-+ 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EG95, 0xff, 0, 0) },
++@@ -1155,6 +1157,11 @@ static const struct usb_device_id option
++ 	  .driver_info = ZLP },
 + 	{ USB_DEVICE(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_BG96),
 + 	  .driver_info = RSVD(4) },
 ++	/* Meiglink products using Qualcomm vendor ID */
@@ -9426,6 +8399,77 @@ index 0000000000..096f143a2e
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0xff, 0xff),
 + 	  .driver_info = RSVD(1) | RSVD(2) | RSVD(3) | RSVD(4) | NUMEP2 },
 + 	{ USB_DEVICE_AND_INTERFACE_INFO(QUECTEL_VENDOR_ID, QUECTEL_PRODUCT_EP06, 0xff, 0, 0) },
+diff --git a/target/linux/generic/hack-5.15/790-SFP-GE-T-ignore-TX_FAULT.patch b/target/linux/generic/hack-5.15/790-SFP-GE-T-ignore-TX_FAULT.patch
+new file mode 100644
+index 0000000000..83b2c304e2
+--- /dev/null
++++ b/target/linux/generic/hack-5.15/790-SFP-GE-T-ignore-TX_FAULT.patch
+@@ -0,0 +1,65 @@
++From 7cc39a6bedbd85f3ff7e16845f310e4ce8d9833f Mon Sep 17 00:00:00 2001
++From: Daniel Golle <daniel@makrotopia.org>
++Date: Tue, 6 Sep 2022 00:31:19 +0100
++Subject: [PATCH] net: sfp: add quirk for ATS SFP-GE-T 1000Base-TX module
++To: netdev@vger.kernel.org,
++    linux-kernel@vger.kernel.org,
++    Russell King <linux@armlinux.org.uk>,
++    Andrew Lunn <andrew@lunn.ch>,
++    Heiner Kallweit <hkallweit1@gmail.com>
++Cc: David S. Miller <davem@davemloft.net>,
++    Eric Dumazet <edumazet@google.com>,
++    Jakub Kicinski <kuba@kernel.org>,
++    Paolo Abeni <pabeni@redhat.com>,
++    Josef Schlehofer <pepe.schlehofer@gmail.com>
++
++This copper module comes with broken TX_FAULT indicator which must be
++ignored for it to work. Implement ignoring TX_FAULT state bit also
++during reset/insertion and mute the warning telling the user that the
++module indicates TX_FAULT.
++
++Co-authored-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Signed-off-by: Daniel Golle <daniel@makrotopia.org>
++---
++ drivers/net/phy/sfp.c | 14 +++++++++++---
++ 1 file changed, 11 insertions(+), 3 deletions(-)
++
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -373,6 +373,11 @@ static const struct sfp_quirk sfp_quirks
++ 		.modes = sfp_quirk_2500basex,
++ 		.fixup = sfp_fixup_ignore_tx_fault,
++ 	}, {
+++		// OEM SFP-GE-T is 1000Base-T module
+++		.vendor = "OEM",
+++		.part = "SFP-GE-T",
+++		.fixup = sfp_fixup_ignore_tx_fault,
+++	}, {
++ 		// Lantech 8330-262D-E can operate at 2500base-X, but
++ 		// incorrectly report 2500MBd NRZ in their EEPROM
++ 		.vendor = "Lantech",
++@@ -2306,7 +2311,8 @@ static void sfp_sm_main(struct sfp *sfp,
++ 			 * or t_start_up, so assume there is a fault.
++ 			 */
++ 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
++-				     sfp->sm_fault_retries == N_FAULT_INIT);
+++				     !sfp->tx_fault_ignore &&
+++				     (sfp->sm_fault_retries == N_FAULT_INIT));
++ 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
++ 	init_done:
++ 			sfp->sm_phy_retries = R_PHY_RETRY;
++@@ -2529,10 +2535,12 @@ static void sfp_check_state(struct sfp *
++ 	mutex_lock(&sfp->st_mutex);
++ 	state = sfp_get_state(sfp);
++ 	changed = state ^ sfp->state;
++-	if (sfp->tx_fault_ignore)
+++	if (sfp->tx_fault_ignore) {
++ 		changed &= SFP_F_PRESENT | SFP_F_LOS;
++-	else
+++		state &= ~SFP_F_TX_FAULT;
+++	} else {
++ 		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
+++	}
++ 
++ 	for (i = 0; i < GPIO_MAX; i++)
++ 		if (changed & BIT(i))
 diff --git a/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch b/target/linux/generic/hack-5.15/800-GPIO-add-named-gpio-exports.patch
 new file mode 100644
 index 0000000000..9fde1eaabb
@@ -9594,41 +8638,6 @@ index 0000000000..9fde1eaabb
 + EXPORT_SYMBOL_GPL(gpiod_export);
 + 
 + static int match_export(struct device *dev, const void *desc)
-diff --git a/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch b/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
-new file mode 100644
-index 0000000000..146e6ae2f5
---- /dev/null
-+++ b/target/linux/generic/hack-5.15/800-ubnt-ledbar-driver.patch
-@@ -0,0 +1,29 @@
-+--- a/drivers/leds/Kconfig
-++++ b/drivers/leds/Kconfig
-+@@ -876,6 +876,16 @@ source "drivers/leds/blink/Kconfig"
-+ comment "Flash and Torch LED drivers"
-+ source "drivers/leds/flash/Kconfig"
-+ 
-++config LEDS_UBNT_LEDBAR
-++	tristate "LED support for Ubiquiti UniFi 6 LR"
-++	depends on LEDS_CLASS && I2C && OF
-++	help
-++	  This option enables support for the Ubiquiti LEDBAR
-++	  LED driver.
-++
-++	  To compile this driver as a module, choose M here: the module
-++	  will be called leds-ubnt-ledbar.
-++
-+ comment "LED Triggers"
-+ source "drivers/leds/trigger/Kconfig"
-+ 
-+--- a/drivers/leds/Makefile
-++++ b/drivers/leds/Makefile
-+@@ -87,6 +87,7 @@ obj-$(CONFIG_LEDS_TURRIS_OMNIA)		+= leds
-+ obj-$(CONFIG_LEDS_WM831X_STATUS)	+= leds-wm831x-status.o
-+ obj-$(CONFIG_LEDS_WM8350)		+= leds-wm8350.o
-+ obj-$(CONFIG_LEDS_WRAP)			+= leds-wrap.o
-++obj-$(CONFIG_LEDS_UBNT_LEDBAR)		+= leds-ubnt-ledbar.o
-+ 
-+ # LED SPI Drivers
-+ obj-$(CONFIG_LEDS_CR0014114)		+= leds-cr0014114.o
 diff --git a/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch b/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
 new file mode 100644
 index 0000000000..ab629d598f

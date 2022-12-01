@@ -112,7 +112,7 @@ index 0000000000..c0c274d278
 +@@ -300,6 +300,71 @@ static int phylink_parse_fixedlink(struct phylink *pl,
 + 	return 0;
 + }
-+ 
++
 ++static void phylink_update_phy_modes(struct phylink *pl,
 ++				     struct fwnode_handle *fwnode)
 ++{
@@ -184,13 +184,13 @@ index 0000000000..c0c274d278
 +@@ -911,6 +976,8 @@ struct phylink *phylink_create(struct phylink_config *config,
 + 	__set_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state);
 + 	timer_setup(&pl->link_poll, phylink_fixed_poll, 0);
-+ 
++
 ++	phylink_update_phy_modes(pl, fwnode);
 ++
 + 	bitmap_fill(pl->supported, __ETHTOOL_LINK_MODE_MASK_NBITS);
 + 	linkmode_copy(pl->link_config.advertising, pl->supported);
 + 	phylink_validate(pl, pl->supported, &pl->link_config);
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-02-net-phylink-pass-supported-PHY-interface-modes-to-ph.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-02-net-phylink-pass-supported-PHY-interface-modes-to-ph.patch
@@ -226,7 +226,7 @@ index 0000000000..a528045987
 +@@ -1195,6 +1195,10 @@ int phylink_connect_phy(struct phylink *pl, struct phy_device *phy)
 + 		pl->link_config.interface = pl->link_interface;
 + 	}
-+ 
++
 ++	/* Set the PHY's host supported interfaces */
 ++	phy_interface_copy(phy->host_interfaces,
 ++			   pl->config->supported_interfaces);
@@ -237,7 +237,7 @@ index 0000000000..a528045987
 +@@ -1264,6 +1268,10 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 + 	if (!phy_dev)
 + 		return -ENODEV;
-+ 
++
 ++	/* Set the PHY's host supported interfaces */
 ++	phy_interface_copy(phy_dev->host_interfaces,
 ++			   pl->config->supported_interfaces);
@@ -248,7 +248,7 @@ index 0000000000..a528045987
 +@@ -2448,6 +2456,8 @@ static bool phylink_phy_no_inband(struct phy_device *phy)
 + 		(phy->c45_ids.device_ids[1] & 0xfffffff0) == 0xae025150;
 + }
-+ 
++
 ++static DECLARE_PHY_INTERFACE_MASK(phylink_sfp_interfaces);
 ++
 + static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
@@ -257,7 +257,7 @@ index 0000000000..a528045987
 +@@ -2469,6 +2479,10 @@ static int phylink_sfp_connect_phy(void *upstream, struct phy_device *phy)
 + 	else
 + 		mode = MLO_AN_INBAND;
-+ 
++
 ++	/* Set the PHY's host supported interfaces */
 ++	phy_interface_and(phy->host_interfaces, phylink_sfp_interfaces,
 ++			  pl->config->supported_interfaces);
@@ -268,7 +268,7 @@ index 0000000000..a528045987
 +@@ -2852,4 +2866,18 @@ void phylink_mii_c45_pcs_get_state(struct mdio_device *pcs,
 + }
 + EXPORT_SYMBOL_GPL(phylink_mii_c45_pcs_get_state);
-+ 
++
 ++static int __init phylink_init(void)
 ++{
 ++	__set_bit(PHY_INTERFACE_MODE_USXGMII, phylink_sfp_interfaces);
@@ -291,7 +291,7 @@ index 0000000000..a528045987
 +@@ -169,6 +169,12 @@ static inline bool phy_interface_empty(const unsigned long *intf)
 + 	return bitmap_empty(intf, PHY_INTERFACE_MODE_MAX);
 + }
-+ 
++
 ++static inline void phy_interface_copy(unsigned long *dst,
 ++				      const unsigned long *src)
 ++{
@@ -312,14 +312,14 @@ index 0000000000..a528045987
 +@@ -658,6 +665,9 @@ struct phy_device {
 + 	/* used with phy_speed_down */
 + 	__ETHTOOL_DECLARE_LINK_MODE_MASK(adv_old);
-+ 
++
 ++	/* host supported PHY interface types */
 ++	DECLARE_PHY_INTERFACE_MASK(host_interfaces);
 ++
 + 	/* Energy efficient ethernet modes which should be prohibited */
 + 	u32 eee_broken_modes;
-+ 
-+-- 
++
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-03-net-phy-marvell10g-add-downshift-tunable-support.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-03-net-phy-marvell10g-add-downshift-tunable-support.patch
@@ -358,7 +358,7 @@ index 0000000000..4ccb537861
 +@@ -33,6 +34,8 @@
 + #define MV_PHY_ALASKA_NBT_QUIRK_MASK	0xfffffffe
 + #define MV_PHY_ALASKA_NBT_QUIRK_REV	(MARVELL_PHY_ID_88X3310 | 0xa)
-+ 
++
 ++#define MV_VERSION(a,b,c,d) ((a) << 24 | (b) << 16 | (c) << 8 | (d))
 ++
 + enum {
@@ -367,7 +367,7 @@ index 0000000000..4ccb537861
 +@@ -62,6 +65,15 @@ enum {
 + 	MV_PCS_CSCR1_MDIX_MDIX	= 0x0020,
 + 	MV_PCS_CSCR1_MDIX_AUTO	= 0x0060,
-+ 
++
 ++	MV_PCS_DSC1		= 0x8003,
 ++	MV_PCS_DSC1_ENABLE	= BIT(9),
 ++	MV_PCS_DSC1_10GBT	= 0x01c0,
@@ -382,7 +382,7 @@ index 0000000000..4ccb537861
 + 	MV_PCS_CSSR1_SPD1_SPD2	= 0xc000,
 +@@ -125,6 +137,7 @@ enum {
 + };
-+ 
++
 + struct mv3310_chip {
 ++	bool (*has_downshift)(struct phy_device *phydev);
 + 	void (*init_supported_interfaces)(unsigned long *mask);
@@ -390,16 +390,16 @@ index 0000000000..4ccb537861
 + 	int (*init_interface)(struct phy_device *phydev, int mactype);
 +@@ -138,6 +151,7 @@ struct mv3310_priv {
 + 	DECLARE_BITMAP(supported_interfaces, PHY_INTERFACE_MODE_MAX);
-+ 
++
 + 	u32 firmware_ver;
 ++	bool has_downshift;
 + 	bool rate_match;
 + 	phy_interface_t const_interface;
-+ 
++
 +@@ -330,6 +344,71 @@ static int mv3310_reset(struct phy_device *phydev, u32 unit)
 + 					 5000, 100000, true);
 + }
-+ 
++
 ++static int mv3310_get_downshift(struct phy_device *phydev, u8 *ds)
 ++{
 ++	struct mv3310_priv *priv = dev_get_drvdata(&phydev->mdio.dev);
@@ -471,7 +471,7 @@ index 0000000000..4ccb537861
 +@@ -448,6 +527,9 @@ static int mv3310_probe(struct phy_device *phydev)
 + 		    priv->firmware_ver >> 24, (priv->firmware_ver >> 16) & 255,
 + 		    (priv->firmware_ver >> 8) & 255, priv->firmware_ver & 255);
-+ 
++
 ++	if (chip->has_downshift)
 ++		priv->has_downshift = chip->has_downshift(phydev);
 ++
@@ -480,7 +480,7 @@ index 0000000000..4ccb537861
 + 	if (ret)
 +@@ -616,7 +698,16 @@ static int mv3310_config_init(struct phy_device *phydev)
 + 	}
-+ 
++
 + 	/* Enable EDPD mode - saving 600mW */
 +-	return mv3310_set_edpd(phydev, ETHTOOL_PHY_EDPD_DFLT_TX_MSECS);
 ++	err = mv3310_set_edpd(phydev, ETHTOOL_PHY_EDPD_DFLT_TX_MSECS);
@@ -494,7 +494,7 @@ index 0000000000..4ccb537861
 ++
 ++	return 0;
 + }
-+ 
++
 + static int mv3310_get_features(struct phy_device *phydev)
 +@@ -886,6 +977,8 @@ static int mv3310_get_tunable(struct phy_device *phydev,
 + 			      struct ethtool_tunable *tuna, void *data)
@@ -517,7 +517,7 @@ index 0000000000..4ccb537861
 +@@ -904,6 +999,14 @@ static int mv3310_set_tunable(struct phy_device *phydev,
 + 	}
 + }
-+ 
++
 ++static bool mv3310_has_downshift(struct phy_device *phydev)
 ++{
 ++	struct mv3310_priv *priv = dev_get_drvdata(&phydev->mdio.dev);
@@ -531,7 +531,7 @@ index 0000000000..4ccb537861
 + 	__set_bit(PHY_INTERFACE_MODE_SGMII, mask);
 +@@ -943,6 +1046,7 @@ static void mv2111_init_supported_interfaces(unsigned long *mask)
 + }
-+ 
++
 + static const struct mv3310_chip mv3310_type = {
 ++	.has_downshift = mv3310_has_downshift,
 + 	.init_supported_interfaces = mv3310_init_supported_interfaces,
@@ -539,13 +539,13 @@ index 0000000000..4ccb537861
 + 	.init_interface = mv3310_init_interface,
 +@@ -953,6 +1057,7 @@ static const struct mv3310_chip mv3310_type = {
 + };
-+ 
++
 + static const struct mv3310_chip mv3340_type = {
 ++	.has_downshift = mv3310_has_downshift,
 + 	.init_supported_interfaces = mv3340_init_supported_interfaces,
 + 	.get_mactype = mv3310_get_mactype,
 + 	.init_interface = mv3340_init_interface,
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-04-net-phy-marvell10g-Use-generic-macro-for-supported-i.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-04-net-phy-marvell10g-Use-generic-macro-for-supported-i.patch
@@ -579,14 +579,14 @@ index 0000000000..76f3479f3a
 ++++ b/drivers/net/phy/marvell10g.c
 +@@ -148,7 +148,7 @@ struct mv3310_chip {
 + };
-+ 
++
 + struct mv3310_priv {
 +-	DECLARE_BITMAP(supported_interfaces, PHY_INTERFACE_MODE_MAX);
 ++	DECLARE_PHY_INTERFACE_MASK(supported_interfaces);
-+ 
++
 + 	u32 firmware_ver;
 + 	bool has_downshift;
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-05-net-phy-marvell10g-Use-tabs-instead-of-spaces-for-in.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-05-net-phy-marvell10g-Use-tabs-instead-of-spaces-for-in.patch
@@ -643,7 +643,7 @@ index 0000000000..2d931ba43e
 + 	/* Temperature control/read registers (88X3310 only) */
 + 	MV_V2_TEMP_CTRL		= 0xf08a,
 + 	MV_V2_TEMP_CTRL_MASK	= 0xc000,
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-06-net-phy-marvell10g-select-host-interface-configurati.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-06-net-phy-marvell10g-select-host-interface-configurati.patch
@@ -702,7 +702,7 @@ index 0000000000..b40e361036
 +@@ -96,6 +96,11 @@ enum {
 + 	MV_PCS_PORT_INFO_NPORTS_MASK	= 0x0380,
 + 	MV_PCS_PORT_INFO_NPORTS_SHIFT	= 7,
-+ 
++
 ++	/* SerDes reinitialization 88E21X0 */
 ++	MV_AN_21X0_SERDES_CTRL2	= 0x800f,
 ++	MV_AN_21X0_SERDES_CTRL2_AUTO_INIT_DIS	= BIT(13),
@@ -718,12 +718,12 @@ index 0000000000..b40e361036
 ++	int (*set_mactype)(struct phy_device *phydev, int mactype);
 ++	int (*select_mactype)(unsigned long *interfaces);
 + 	int (*init_interface)(struct phy_device *phydev, int mactype);
-+ 
++
 + #ifdef CONFIG_HWMON
 +@@ -593,6 +600,49 @@ static int mv2110_get_mactype(struct phy_device *phydev)
 + 	return mactype & MV_PMA_21X0_PORT_CTRL_MACTYPE_MASK;
 + }
-+ 
++
 ++static int mv2110_set_mactype(struct phy_device *phydev, int mactype)
 ++{
 ++	int err, val;
@@ -773,7 +773,7 @@ index 0000000000..b40e361036
 +@@ -604,6 +654,46 @@ static int mv3310_get_mactype(struct phy_device *phydev)
 + 	return mactype & MV_V2_33X0_PORT_CTRL_MACTYPE_MASK;
 + }
-+ 
++
 ++static int mv3310_set_mactype(struct phy_device *phydev, int mactype)
 ++{
 ++	int ret;
@@ -823,7 +823,7 @@ index 0000000000..b40e361036
 + 	const struct mv3310_chip *chip = to_mv3310_chip(phydev);
 ++	DECLARE_PHY_INTERFACE_MASK(interfaces);
 + 	int err, mactype;
-+ 
++
 +-	/* Check that the PHY interface type is compatible */
 +-	if (!test_bit(phydev->interface, priv->supported_interfaces))
 ++	/* In case host didn't provide supported interfaces */
@@ -834,12 +834,12 @@ index 0000000000..b40e361036
 ++			  priv->supported_interfaces);
 ++	if (phy_interface_empty(interfaces))
 + 		return -ENODEV;
-+ 
++
 + 	phydev->mdix_ctrl = ETH_TP_MDI_AUTO;
 +@@ -687,9 +783,15 @@ static int mv3310_config_init(struct phy_device *phydev)
 + 	if (err)
 + 		return err;
-+ 
++
 +-	mactype = chip->get_mactype(phydev);
 +-	if (mactype < 0)
 +-		return mactype;
@@ -852,7 +852,7 @@ index 0000000000..b40e361036
 ++		if (err)
 ++			return err;
 ++	}
-+ 
++
 + 	err = chip->init_interface(phydev, mactype);
 + 	if (err) {
 +@@ -1049,6 +1151,8 @@ static const struct mv3310_chip mv3310_type = {
@@ -862,7 +862,7 @@ index 0000000000..b40e361036
 ++	.set_mactype = mv3310_set_mactype,
 ++	.select_mactype = mv3310_select_mactype,
 + 	.init_interface = mv3310_init_interface,
-+ 
++
 + #ifdef CONFIG_HWMON
 +@@ -1060,6 +1164,8 @@ static const struct mv3310_chip mv3340_type = {
 + 	.has_downshift = mv3310_has_downshift,
@@ -871,7 +871,7 @@ index 0000000000..b40e361036
 ++	.set_mactype = mv3310_set_mactype,
 ++	.select_mactype = mv3310_select_mactype,
 + 	.init_interface = mv3340_init_interface,
-+ 
++
 + #ifdef CONFIG_HWMON
 +@@ -1070,6 +1176,8 @@ static const struct mv3310_chip mv3340_type = {
 + static const struct mv3310_chip mv2110_type = {
@@ -880,7 +880,7 @@ index 0000000000..b40e361036
 ++	.set_mactype = mv2110_set_mactype,
 ++	.select_mactype = mv2110_select_mactype,
 + 	.init_interface = mv2110_init_interface,
-+ 
++
 + #ifdef CONFIG_HWMON
 +@@ -1080,6 +1188,8 @@ static const struct mv3310_chip mv2110_type = {
 + static const struct mv3310_chip mv2111_type = {
@@ -889,9 +889,9 @@ index 0000000000..b40e361036
 ++	.set_mactype = mv2110_set_mactype,
 ++	.select_mactype = mv2110_select_mactype,
 + 	.init_interface = mv2110_init_interface,
-+ 
++
 + #ifdef CONFIG_HWMON
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-07-net-phylink-allow-attaching-phy-for-SFP-modules-on-8.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-07-net-phylink-allow-attaching-phy-for-SFP-modules-on-8.patch
@@ -933,19 +933,19 @@ index 0000000000..bd9f2b6ae0
 +-		     phy_interface_mode_is_8023z(interface))))
 ++		     phy_interface_mode_is_8023z(interface) && !pl->sfp_bus)))
 + 		return -EINVAL;
-+ 
++
 + 	if (pl->phydev)
 +@@ -2347,9 +2347,6 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
 + 		    phylink_an_mode_str(mode), phy_modes(config.interface),
 + 		    __ETHTOOL_LINK_MODE_MASK_NBITS, support);
-+ 
++
 +-	if (phy_interface_mode_is_8023z(iface) && pl->phydev)
 +-		return -EINVAL;
 +-
 + 	changed = !linkmode_equal(pl->supported, support) ||
 + 		  !linkmode_equal(pl->link_config.advertising,
 + 				  config.advertising);
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-08-net-sfp-create-destroy-I2C-mdiobus-before-PHY-probe-.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-08-net-sfp-create-destroy-I2C-mdiobus-before-PHY-probe-.patch
@@ -993,7 +993,7 @@ index 0000000000..8ce0a3fcd0
 + 	const struct sff_data *type;
 + 	size_t i2c_block_size;
 +@@ -532,9 +533,6 @@ static int sfp_i2c_write(struct sfp *sfp, bool a2, u8 dev_addr, void *buf,
-+ 
++
 + static int sfp_i2c_configure(struct sfp *sfp, struct i2c_adapter *i2c)
 + {
 +-	struct mii_bus *i2c_mii;
@@ -1001,11 +1001,11 @@ index 0000000000..8ce0a3fcd0
 +-
 + 	if (!i2c_check_functionality(i2c, I2C_FUNC_I2C))
 + 		return -EINVAL;
-+ 
++
 +@@ -542,7 +540,15 @@ static int sfp_i2c_configure(struct sfp *sfp, struct i2c_adapter *i2c)
 + 	sfp->read = sfp_i2c_read;
 + 	sfp->write = sfp_i2c_write;
-+ 
++
 +-	i2c_mii = mdio_i2c_alloc(sfp->dev, i2c);
 ++	return 0;
 ++}
@@ -1018,11 +1018,11 @@ index 0000000000..8ce0a3fcd0
 ++	i2c_mii = mdio_i2c_alloc(sfp->dev, sfp->i2c);
 + 	if (IS_ERR(i2c_mii))
 + 		return PTR_ERR(i2c_mii);
-+ 
++
 +@@ -560,6 +566,12 @@ static int sfp_i2c_configure(struct sfp *sfp, struct i2c_adapter *i2c)
 + 	return 0;
 + }
-+ 
++
 ++static void sfp_i2c_mdiobus_destroy(struct sfp *sfp)
 ++{
 ++	mdiobus_unregister(sfp->i2c_mii);
@@ -1035,7 +1035,7 @@ index 0000000000..8ce0a3fcd0
 +@@ -1724,6 +1736,14 @@ static void sfp_sm_fault(struct sfp *sfp, unsigned int next_state, bool warn)
 + 	}
 + }
-+ 
++
 ++static int sfp_sm_add_mdio_bus(struct sfp *sfp)
 ++{
 ++	if (sfp->mdio_protocol != MDIO_I2C_NONE)
@@ -1050,7 +1050,7 @@ index 0000000000..8ce0a3fcd0
 +@@ -1739,19 +1759,19 @@ static int sfp_sm_probe_for_phy(struct sfp *sfp)
 + {
 + 	int err = 0;
-+ 
++
 +-	switch (sfp->id.base.extended_cc) {
 +-	case SFF8024_ECC_10GBASE_T_SFI:
 +-	case SFF8024_ECC_10GBASE_T_SR:
@@ -1060,7 +1060,7 @@ index 0000000000..8ce0a3fcd0
 ++	switch (sfp->mdio_protocol) {
 ++	case MDIO_I2C_NONE:
 + 		break;
-+ 
++
 +-	default:
 +-		if (sfp->id.base.e1000_base_t)
 +-			err = sfp_sm_probe_phy(sfp, false);
@@ -1075,11 +1075,11 @@ index 0000000000..8ce0a3fcd0
 ++
 + 	return err;
 + }
-+ 
++
 +@@ -2073,6 +2093,16 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
 + 	if (sfp->quirk && sfp->quirk->fixup)
 + 		sfp->quirk->fixup(sfp);
-+ 
++
 ++	if (sfp->id.base.extended_cc == SFF8024_ECC_10GBASE_T_SFI ||
 ++	    sfp->id.base.extended_cc == SFF8024_ECC_10GBASE_T_SR ||
 ++	    sfp->id.base.extended_cc == SFF8024_ECC_5GBASE_T ||
@@ -1092,7 +1092,7 @@ index 0000000000..8ce0a3fcd0
 ++
 + 	return 0;
 + }
-+ 
++
 +@@ -2244,6 +2274,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
 + 			sfp_module_stop(sfp->sfp_bus);
 + 		if (sfp->mod_phy)
@@ -1122,7 +1122,7 @@ index 0000000000..8ce0a3fcd0
 +@@ -11,6 +11,12 @@ struct device;
 + struct i2c_adapter;
 + struct mii_bus;
-+ 
++
 ++enum mdio_i2c_proto {
 ++	MDIO_I2C_NONE,
 ++	MDIO_I2C_MARVELL_C22,
@@ -1130,9 +1130,9 @@ index 0000000000..8ce0a3fcd0
 ++};
 ++
 + struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c);
-+ 
++
 + #endif
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-09-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-09-net-phy-mdio-i2c-support-I2C-MDIO-protocol-for-RollB.patch
@@ -1189,13 +1189,13 @@ index 0000000000..2806501dd0
 + #include <linux/mdio/mdio-i2c.h>
 + #include <linux/phy.h>
 ++#include <linux/sfp.h>
-+ 
++
 + /*
 +  * I2C bus addresses 0x50 and 0x51 are normally an EEPROM, which is
 +@@ -28,7 +30,7 @@ static unsigned int i2c_mii_phy_addr(int phy_id)
 + 	return phy_id + 0x40;
 + }
-+ 
++
 +-static int i2c_mii_read(struct mii_bus *bus, int phy_id, int reg)
 ++static int i2c_mii_read_default(struct mii_bus *bus, int phy_id, int reg)
 + {
@@ -1204,7 +1204,7 @@ index 0000000000..2806501dd0
 +@@ -62,7 +64,8 @@ static int i2c_mii_read(struct mii_bus *bus, int phy_id, int reg)
 + 	return data[0] << 8 | data[1];
 + }
-+ 
++
 +-static int i2c_mii_write(struct mii_bus *bus, int phy_id, int reg, u16 val)
 ++static int i2c_mii_write_default(struct mii_bus *bus, int phy_id, int reg,
 ++				 u16 val)
@@ -1214,7 +1214,7 @@ index 0000000000..2806501dd0
 +@@ -91,9 +94,288 @@ static int i2c_mii_write(struct mii_bus *bus, int phy_id, int reg, u16 val)
 + 	return ret < 0 ? ret : 0;
 + }
-+ 
++
 +-struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c)
 ++/* RollBall SFPs do not access internal PHY via I2C address 0x56, but
 ++ * instead via address 0x51, when SFP page is set to 0x03 and password to
@@ -1498,17 +1498,17 @@ index 0000000000..2806501dd0
 + {
 + 	struct mii_bus *mii;
 ++	int ret;
-+ 
++
 + 	if (!i2c_check_functionality(i2c, I2C_FUNC_I2C))
 + 		return ERR_PTR(-EINVAL);
 +@@ -104,10 +386,28 @@ struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c)
-+ 
++
 + 	snprintf(mii->id, MII_BUS_ID_SIZE, "i2c:%s", dev_name(parent));
 + 	mii->parent = parent;
 +-	mii->read = i2c_mii_read;
 +-	mii->write = i2c_mii_write;
 + 	mii->priv = i2c;
-+ 
++
 ++	switch (protocol) {
 ++	case MDIO_I2C_ROLLBALL:
 ++		ret = i2c_mii_init_rollball(i2c);
@@ -1539,12 +1539,12 @@ index 0000000000..2806501dd0
 +@@ -548,7 +548,7 @@ static int sfp_i2c_mdiobus_create(struct sfp *sfp)
 + 	struct mii_bus *i2c_mii;
 + 	int ret;
-+ 
++
 +-	i2c_mii = mdio_i2c_alloc(sfp->dev, sfp->i2c);
 ++	i2c_mii = mdio_i2c_alloc(sfp->dev, sfp->i2c, sfp->mdio_protocol);
 + 	if (IS_ERR(i2c_mii))
 + 		return PTR_ERR(i2c_mii);
-+ 
++
 +@@ -1770,6 +1770,10 @@ static int sfp_sm_probe_for_phy(struct sfp *sfp)
 + 	case MDIO_I2C_C45:
 + 		err = sfp_sm_probe_phy(sfp, true);
@@ -1554,7 +1554,7 @@ index 0000000000..2806501dd0
 ++		err = -EOPNOTSUPP;
 ++		break;
 + 	}
-+ 
++
 + 	return err;
 +diff --git a/include/linux/mdio/mdio-i2c.h b/include/linux/mdio/mdio-i2c.h
 +index 3bde1a555a49..65b550a6fc32 100644
@@ -1566,13 +1566,13 @@ index 0000000000..2806501dd0
 + 	MDIO_I2C_C45,
 ++	MDIO_I2C_ROLLBALL,
 + };
-+ 
++
 +-struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c);
 ++struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c,
 ++			       enum mdio_i2c_proto protocol);
-+ 
++
 + #endif
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-10-net-sfp-add-support-for-multigig-RollBall-transceive.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-10-net-sfp-add-support-for-multigig-RollBall-transceive.patch
@@ -1611,7 +1611,7 @@ index 0000000000..1d775870a1
 +@@ -130,6 +130,12 @@ bool sfp_may_have_phy(struct sfp_bus *bus, const struct sfp_eeprom_id *id)
 + 		}
 + 	}
-+ 
++
 ++	if (((!memcmp(id->base.vendor_name, "OEM             ", 16) ||
 ++	      !memcmp(id->base.vendor_name, "Turris          ", 16)) &&
 ++	     (!memcmp(id->base.vendor_pn, "SFP-10G-T       ", 16) ||
@@ -1632,9 +1632,9 @@ index 0000000000..1d775870a1
 ++#define T_WAIT_ROLLBALL		msecs_to_jiffies(25000)
 + #define T_START_UP		msecs_to_jiffies(300)
 + #define T_START_UP_BAD_GPON	msecs_to_jiffies(60000)
-+ 
++
 +@@ -205,8 +206,11 @@ static const enum gpiod_flags gpio_flags[] = {
-+ 
++
 + /* SFP modules appear to always have their PHY configured for bus address
 +  * 0x56 (which with mdio-i2c, translates to a PHY address of 22).
 ++ * RollBall SFPs access phy via SFP Enhanced Digital Diagnostic Interface
@@ -1643,7 +1643,7 @@ index 0000000000..1d775870a1
 +-#define SFP_PHY_ADDR	22
 ++#define SFP_PHY_ADDR		22
 ++#define SFP_PHY_ADDR_ROLLBALL	17
-+ 
++
 + struct sff_data {
 + 	unsigned int gpios;
 +@@ -252,6 +256,7 @@ struct sfp {
@@ -1652,18 +1652,18 @@ index 0000000000..1d775870a1
 + 	unsigned int module_t_start_up;
 ++	unsigned int module_t_wait;
 + 	bool tx_fault_ignore;
-+ 
++
 + 	const struct sfp_quirk *quirk;
 +@@ -1636,12 +1641,12 @@ static void sfp_sm_phy_detach(struct sfp *sfp)
 + 	sfp->mod_phy = NULL;
 + }
-+ 
++
 +-static int sfp_sm_probe_phy(struct sfp *sfp, bool is_c45)
 ++static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
 + {
 + 	struct phy_device *phy;
 + 	int err;
-+ 
++
 +-	phy = get_phy_device(sfp->i2c_mii, SFP_PHY_ADDR, is_c45);
 ++	phy = get_phy_device(sfp->i2c_mii, addr, is_c45);
 + 	if (phy == ERR_PTR(-ENODEV))
@@ -1671,27 +1671,27 @@ index 0000000000..1d775870a1
 + 	if (IS_ERR(phy)) {
 +@@ -1764,15 +1769,15 @@ static int sfp_sm_probe_for_phy(struct sfp *sfp)
 + 		break;
-+ 
++
 + 	case MDIO_I2C_MARVELL_C22:
 +-		err = sfp_sm_probe_phy(sfp, false);
 ++		err = sfp_sm_probe_phy(sfp, SFP_PHY_ADDR, false);
 + 		break;
-+ 
++
 + 	case MDIO_I2C_C45:
 +-		err = sfp_sm_probe_phy(sfp, true);
 ++		err = sfp_sm_probe_phy(sfp, SFP_PHY_ADDR, true);
 + 		break;
-+ 
++
 + 	case MDIO_I2C_ROLLBALL:
 +-		err = -EOPNOTSUPP;
 ++		err = sfp_sm_probe_phy(sfp, SFP_PHY_ADDR_ROLLBALL, true);
 + 		break;
 + 	}
-+ 
++
 +@@ -2097,7 +2102,20 @@ static int sfp_sm_mod_probe(struct sfp *sfp, bool report)
 + 	if (sfp->quirk && sfp->quirk->fixup)
 + 		sfp->quirk->fixup(sfp);
-+ 
++
 +-	if (sfp->id.base.extended_cc == SFF8024_ECC_10GBASE_T_SFI ||
 ++	sfp->module_t_wait = T_WAIT;
 ++
@@ -1711,7 +1711,7 @@ index 0000000000..1d775870a1
 + 	    sfp->id.base.extended_cc == SFF8024_ECC_5GBASE_T ||
 + 	    sfp->id.base.extended_cc == SFF8024_ECC_2_5GBASE_T)
 +@@ -2303,9 +2321,10 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
-+ 
++
 + 		/* We need to check the TX_FAULT state, which is not defined
 + 		 * while TX_DISABLE is asserted. The earliest we want to do
 +-		 * anything (such as probe for a PHY) is 50ms.
@@ -1721,7 +1721,7 @@ index 0000000000..1d775870a1
 +-		sfp_sm_next(sfp, SFP_S_WAIT, T_WAIT);
 ++		sfp_sm_next(sfp, SFP_S_WAIT, sfp->module_t_wait);
 + 		break;
-+ 
++
 + 	case SFP_S_WAIT:
 +@@ -2319,8 +2338,8 @@ static void sfp_sm_main(struct sfp *sfp, unsigned int event)
 + 			 * deasserting.
@@ -1733,8 +1733,8 @@ index 0000000000..1d775870a1
 ++				timeout -= sfp->module_t_wait;
 + 			else
 + 				timeout = 1;
-+ 
-+-- 
++
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-11-net-sfp-augment-SFP-parsing-with-phy_interface_t-bit.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-11-net-sfp-augment-SFP-parsing-with-phy_interface_t-bit.patch
@@ -1780,7 +1780,7 @@ index 0000000000..bda0114281
 +--- a/drivers/net/phy/marvell-88x2222.c
 ++++ b/drivers/net/phy/marvell-88x2222.c
 +@@ -478,6 +478,7 @@ static int mv2222_config_init(struct phy_device *phydev)
-+ 
++
 + static int mv2222_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 + {
 ++	DECLARE_PHY_INTERFACE_MASK(interfaces);
@@ -1790,18 +1790,18 @@ index 0000000000..bda0114281
 +@@ -489,7 +490,7 @@ static int mv2222_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 + 	priv = (struct mv2222_data *)phydev->priv;
 + 	dev = &phydev->mdio.dev;
-+ 
++
 +-	sfp_parse_support(phydev->sfp_bus, id, sfp_supported);
 ++	sfp_parse_support(phydev->sfp_bus, id, sfp_supported, interfaces);
 + 	sfp_interface = sfp_select_interface(phydev->sfp_bus, sfp_supported);
-+ 
++
 + 	dev_info(dev, "%s SFP module inserted\n", phy_modes(sfp_interface));
 +diff --git a/drivers/net/phy/marvell.c b/drivers/net/phy/marvell.c
 +index 4d726ee03ce2..288befc9f44b 100644
 +--- a/drivers/net/phy/marvell.c
 ++++ b/drivers/net/phy/marvell.c
 +@@ -2806,6 +2806,7 @@ static int marvell_probe(struct phy_device *phydev)
-+ 
++
 + static int m88e1510_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
 + {
 ++	DECLARE_PHY_INTERFACE_MASK(interfaces);
@@ -1809,13 +1809,13 @@ index 0000000000..bda0114281
 + 	phy_interface_t interface;
 + 	struct device *dev;
 +@@ -2817,7 +2818,7 @@ static int m88e1510_sfp_insert(void *upstream, const struct sfp_eeprom_id *id)
-+ 
++
 + 	dev = &phydev->mdio.dev;
-+ 
++
 +-	sfp_parse_support(phydev->sfp_bus, id, supported);
 ++	sfp_parse_support(phydev->sfp_bus, id, supported, interfaces);
 + 	interface = sfp_select_interface(phydev->sfp_bus, supported);
-+ 
++
 + 	dev_info(dev, "%s SFP module inserted\n", phy_modes(interface));
 +diff --git a/drivers/net/phy/marvell10g.c b/drivers/net/phy/marvell10g.c
 +index b16e67b352bf..c07d51907418 100644
@@ -1827,18 +1827,18 @@ index 0000000000..bda0114281
 + 	__ETHTOOL_DECLARE_LINK_MODE_MASK(support) = { 0, };
 ++	DECLARE_PHY_INTERFACE_MASK(interfaces);
 + 	phy_interface_t iface;
-+ 
++
 +-	sfp_parse_support(phydev->sfp_bus, id, support);
 ++	sfp_parse_support(phydev->sfp_bus, id, support, interfaces);
 + 	iface = sfp_select_interface(phydev->sfp_bus, support);
-+ 
++
 + 	if (iface != PHY_INTERFACE_MODE_10GBASER) {
 +diff --git a/drivers/net/phy/phylink.c b/drivers/net/phy/phylink.c
 +index f1fad9e18d03..7d0b7a2e69d8 100644
 +--- a/drivers/net/phy/phylink.c
 ++++ b/drivers/net/phy/phylink.c
 +@@ -77,6 +77,7 @@ struct phylink {
-+ 
++
 + 	struct sfp_bus *sfp_bus;
 + 	bool sfp_may_have_phy;
 ++	DECLARE_PHY_INTERFACE_MASK(sfp_interfaces);
@@ -1847,13 +1847,13 @@ index 0000000000..bda0114281
 + };
 +@@ -2385,7 +2386,8 @@ static int phylink_sfp_module_insert(void *upstream,
 + 	ASSERT_RTNL();
-+ 
++
 + 	linkmode_zero(support);
 +-	sfp_parse_support(pl->sfp_bus, id, support);
 ++	phy_interface_zero(pl->sfp_interfaces);
 ++	sfp_parse_support(pl->sfp_bus, id, support, pl->sfp_interfaces);
 + 	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, support);
-+ 
++
 + 	/* If this module may have a PHY connecting later, defer until later */
 +diff --git a/drivers/net/phy/sfp-bus.c b/drivers/net/phy/sfp-bus.c
 +index 22dba5895ef6..98af41843cce 100644
@@ -1877,7 +1877,7 @@ index 0000000000..bda0114281
 + 	__ETHTOOL_DECLARE_LINK_MODE_MASK(modes) = { 0, };
 +@@ -177,27 +179,41 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 	}
-+ 
++
 + 	/* Set ethtool support from the compliance fields. */
 +-	if (id->base.e10g_base_sr)
 ++	if (id->base.e10g_base_sr) {
@@ -1912,7 +1912,7 @@ index 0000000000..bda0114281
 ++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
 ++		__set_bit(PHY_INTERFACE_MODE_SGMII, interfaces);
 + 	}
-+ 
++
 + 	/* 1000Base-PX or 1000Base-BX10 */
 + 	if ((id->base.e_base_px || id->base.e_base_bx10) &&
 +-	    br_min <= 1300 && br_max >= 1200)
@@ -1920,7 +1920,7 @@ index 0000000000..bda0114281
 + 		phylink_set(modes, 1000baseX_Full);
 ++		__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
 ++	}
-+ 
++
 + 	/* 100Base-FX, 100Base-LX, 100Base-PX, 100Base-BX10 */
 + 	if (id->base.e100_base_fx || id->base.e100_base_lx)
 +@@ -210,21 +226,30 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
@@ -1957,7 +1957,7 @@ index 0000000000..bda0114281
 ++			__set_bit(PHY_INTERFACE_MODE_10GBASER, interfaces);
 + 		}
 + 	}
-+ 
++
 +@@ -249,12 +274,15 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 	case SFF8024_ECC_10GBASE_T_SFI:
 + 	case SFF8024_ECC_10GBASE_T_SR:
@@ -1989,7 +1989,7 @@ index 0000000000..bda0114281
 ++			__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
 ++		}
 + 	}
-+ 
++
 + 	/* If we haven't discovered any modes that this module supports, try
 +@@ -283,14 +315,18 @@ void sfp_parse_support(struct sfp_bus *bus, const struct sfp_eeprom_id *id,
 + 	 * 2500BASE-X, so we allow some slack here.
@@ -2006,20 +2006,20 @@ index 0000000000..bda0114281
 ++			__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
 ++		}
 + 	}
-+ 
++
 + 	if (bus->sfp_quirk && bus->sfp_quirk->modes)
 +-		bus->sfp_quirk->modes(id, modes);
 ++		bus->sfp_quirk->modes(id, modes, interfaces);
-+ 
++
 + 	linkmode_or(support, support, modes);
-+ 
++
 +diff --git a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
 +index 49e69f1d9b1b..02c55fdae8be 100644
 +--- a/drivers/net/phy/sfp.c
 ++++ b/drivers/net/phy/sfp.c
 +@@ -333,13 +333,15 @@ static void sfp_fixup_halny_gsfp(struct sfp *sfp)
 + }
-+ 
++
 + static void sfp_quirk_2500basex(const struct sfp_eeprom_id *id,
 +-				unsigned long *modes)
 ++				unsigned long *modes, unsigned long *interfaces)
@@ -2027,7 +2027,7 @@ index 0000000000..bda0114281
 + 	linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, modes);
 ++	__set_bit(PHY_INTERFACE_MODE_2500BASEX, interfaces);
 + }
-+ 
++
 + static void sfp_quirk_ubnt_uf_instant(const struct sfp_eeprom_id *id,
 +-				      unsigned long *modes)
 ++				      unsigned long *modes,
@@ -2041,7 +2041,7 @@ index 0000000000..bda0114281
 + 	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseX_Full_BIT, modes);
 ++	__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
 + }
-+ 
++
 + static const struct sfp_quirk sfp_quirks[] = {
 +diff --git a/drivers/net/phy/sfp.h b/drivers/net/phy/sfp.h
 +index 7ad06deae76c..6cf1643214d3 100644
@@ -2056,7 +2056,7 @@ index 0000000000..bda0114281
 ++		      unsigned long *interfaces);
 + 	void (*fixup)(struct sfp *sfp);
 + };
-+ 
++
 +diff --git a/include/linux/sfp.h b/include/linux/sfp.h
 +index 302094b855fb..d1f343853b6c 100644
 +--- a/include/linux/sfp.h
@@ -2069,9 +2069,9 @@ index 0000000000..bda0114281
 ++		       unsigned long *support, unsigned long *interfaces);
 + phy_interface_t sfp_select_interface(struct sfp_bus *bus,
 + 				     unsigned long *link_modes);
-+ 
++
 +@@ -568,7 +568,8 @@ static inline bool sfp_may_have_phy(struct sfp_bus *bus,
-+ 
++
 + static inline void sfp_parse_support(struct sfp_bus *bus,
 + 				     const struct sfp_eeprom_id *id,
 +-				     unsigned long *support)
@@ -2079,8 +2079,8 @@ index 0000000000..bda0114281
 ++				     unsigned long *interfaces)
 + {
 + }
-+ 
-+-- 
++
++--
 +2.35.1
 +
 diff --git a/target/linux/mvebu/patches-5.15/706-TurrisSFP-12-net-phylink-use-phy_interface_t-bitmaps-for-optical-.patch b/target/linux/mvebu/patches-5.15/706-TurrisSFP-12-net-phylink-use-phy_interface_t-bitmaps-for-optical-.patch
@@ -2112,7 +2112,7 @@ index 0000000000..c1adcacf27
 +@@ -2296,6 +2296,42 @@ static void phylink_sfp_detach(void *upstream, struct sfp_bus *bus)
 + 	pl->netdev->sfp_bus = NULL;
 + }
-+ 
++
 ++static const phy_interface_t phylink_sfp_interface_preference[] = {
 ++	PHY_INTERFACE_MODE_USXGMII,
 ++	PHY_INTERFACE_MODE_10GBASER,
@@ -2155,7 +2155,7 @@ index 0000000000..c1adcacf27
 +@@ -2377,25 +2413,102 @@ static int phylink_sfp_config(struct phylink *pl, u8 mode,
 + 	return ret;
 + }
-+ 
++
 ++static int phylink_sfp_config_nophy(struct phylink *pl)
 ++{
 ++	__ETHTOOL_DECLARE_LINK_MODE_MASK(support);
@@ -2239,9 +2239,9 @@ index 0000000000..c1adcacf27
 + {
 + 	struct phylink *pl = upstream;
 +-	unsigned long *support = pl->sfp_support;
-+ 
++
 + 	ASSERT_RTNL();
-+ 
++
 +-	linkmode_zero(support);
 ++	linkmode_zero(pl->sfp_support);
 + 	phy_interface_zero(pl->sfp_interfaces);
@@ -2249,29 +2249,29 @@ index 0000000000..c1adcacf27
 +-	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, support);
 ++	sfp_parse_support(pl->sfp_bus, id, pl->sfp_support, pl->sfp_interfaces);
 ++	pl->sfp_port = sfp_parse_port(pl->sfp_bus, id, pl->sfp_support);
-+ 
++
 + 	/* If this module may have a PHY connecting later, defer until later */
 + 	pl->sfp_may_have_phy = sfp_may_have_phy(pl->sfp_bus, id);
 + 	if (pl->sfp_may_have_phy)
 + 		return 0;
-+ 
++
 +-	return phylink_sfp_config(pl, MLO_AN_INBAND, support, support);
 ++	return phylink_sfp_config_nophy(pl);
 + }
-+ 
++
 + static int phylink_sfp_module_start(void *upstream)
 +@@ -2414,8 +2527,7 @@ static int phylink_sfp_module_start(void *upstream)
 + 	if (!pl->sfp_may_have_phy)
 + 		return 0;
-+ 
++
 +-	return phylink_sfp_config(pl, MLO_AN_INBAND,
 +-				  pl->sfp_support, pl->sfp_support);
 ++	return phylink_sfp_config_nophy(pl);
 + }
-+ 
++
 + static void phylink_sfp_module_stop(void *upstream)
 +@@ -2867,13 +2979,11 @@ EXPORT_SYMBOL_GPL(phylink_mii_c45_pcs_get_state);
-+ 
++
 + static int __init phylink_init(void)
 + {
 +-	__set_bit(PHY_INTERFACE_MODE_USXGMII, phylink_sfp_interfaces);
@@ -2286,12 +2286,12 @@ index 0000000000..c1adcacf27
 ++	for (i = 0; i < ARRAY_SIZE(phylink_sfp_interface_preference); ++i)
 ++		__set_bit(phylink_sfp_interface_preference[i],
 ++			  phylink_sfp_interfaces);
-+ 
++
 + 	return 0;
 + }
-+-- 
++--
 +2.35.1
 +
--- 
+--
 2.35.1
 
