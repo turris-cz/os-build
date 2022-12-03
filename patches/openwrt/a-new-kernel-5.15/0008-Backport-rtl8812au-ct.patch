@@ -1,12 +1,14 @@
-From bd8f3ba211a7ed71600054cdcb22a73b5fba4991 Mon Sep 17 00:00:00 2001
+From ab62fde0e7a8a150928da4e2caa8f7538e62be5f Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Mon, 23 May 2022 09:16:31 +0200
-Subject: [PATCH 8/8] Backport rtl8812au-ct
+Date: Sat, 3 Dec 2022 12:34:59 +0100
+Subject: [PATCH] rtl8812au-ct: backport from OpenWrt master branch
 
 ---
- package/kernel/rtl8812au-ct/Makefile            |  8 ++++----
- .../rtl8812au-ct/patches/003-wireless-5.8.patch | 17 +++++------------
- 2 files changed, 9 insertions(+), 16 deletions(-)
+ package/kernel/rtl8812au-ct/Makefile          |  8 +++----
+ .../patches/003-wireless-5.8.patch            | 17 ++++---------
+ .../patches/004-remove-extern-inline.patch    | 24 +++++++++++++++++++
+ 3 files changed, 33 insertions(+), 16 deletions(-)
+ create mode 100644 package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
 
 diff --git a/package/kernel/rtl8812au-ct/Makefile b/package/kernel/rtl8812au-ct/Makefile
 index 4dab3fd232..aa2d7a2ea9 100644
@@ -75,6 +77,36 @@ index 64c5ab162b..67ebb82b38 100644
 - 	.mgmt_frame_register = cfg80211_rtw_mgmt_frame_register,
   #elif  (LINUX_VERSION_CODE>=KERNEL_VERSION(2,6,34) && LINUX_VERSION_CODE<=KERNEL_VERSION(2,6,35))
 + 	.action = cfg80211_rtw_mgmt_tx,
+diff --git a/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch b/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
+new file mode 100644
+index 0000000000..871fe10636
+--- /dev/null
++++ b/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
+@@ -0,0 +1,24 @@
++--- a/include/ieee80211.h
+++++ b/include/ieee80211.h
++@@ -1313,18 +1313,18 @@ enum ieee80211_state {
++ (((Addr[2]) & 0xff) == 0xff) && (((Addr[3]) & 0xff) == 0xff) && (((Addr[4]) & 0xff) == 0xff) && \
++ (((Addr[5]) & 0xff) == 0xff))
++ #else
++-extern __inline int is_multicast_mac_addr(const u8 *addr)
+++__inline static int is_multicast_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] != 0xff) && (0x01 & addr[0]));
++ }
++ 
++-extern __inline int is_broadcast_mac_addr(const u8 *addr)
+++__inline static int is_broadcast_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] == 0xff) && (addr[1] == 0xff) && (addr[2] == 0xff) &&   \
++ 	        (addr[3] == 0xff) && (addr[4] == 0xff) && (addr[5] == 0xff));
++ }
++ 
++-extern __inline int is_zero_mac_addr(const u8 *addr)
+++__inline static int is_zero_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] == 0x00) && (addr[1] == 0x00) && (addr[2] == 0x00) &&   \
++ 	        (addr[3] == 0x00) && (addr[4] == 0x00) && (addr[5] == 0x00));
 -- 
 2.34.1
 
