@@ -1,19 +1,19 @@
-From 7ac04393007aa8262b032e59a0c49cf895ec3834 Mon Sep 17 00:00:00 2001
+From 4f9053704e41d09aaf8696c56d2ee50a9c22229e Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Thu, 24 Nov 2022 15:12:51 +0100
+Date: Sat, 3 Dec 2022 14:30:53 +0100
 Subject: [PATCH] Backport Linux kernel modules from OpenWrt master
 
 ---
  package/kernel/linux/modules/block.mk      |  21 +-
  package/kernel/linux/modules/crypto.mk     |  25 ++-
  package/kernel/linux/modules/fs.mk         | 106 ++++++---
- package/kernel/linux/modules/hwmon.mk      |  29 +++
+ package/kernel/linux/modules/hwmon.mk      |  14 ++
  package/kernel/linux/modules/i2c.mk        |   2 +-
- package/kernel/linux/modules/iio.mk        | 117 +++++-----
+ package/kernel/linux/modules/iio.mk        | 131 ++++++-----
  package/kernel/linux/modules/input.mk      |  29 ++-
  package/kernel/linux/modules/leds.mk       |  19 ++
  package/kernel/linux/modules/lib.mk        |  10 +
- package/kernel/linux/modules/netdevices.mk | 189 ++++++++++++++--
+ package/kernel/linux/modules/netdevices.mk | 155 +++++++++++--
  package/kernel/linux/modules/netfilter.mk  |   6 +-
  package/kernel/linux/modules/netsupport.mk |  71 ++----
  package/kernel/linux/modules/nls.mk        |   6 +-
@@ -24,9 +24,7 @@ Subject: [PATCH] Backport Linux kernel modules from OpenWrt master
  package/kernel/linux/modules/video.mk      |  24 +-
  package/kernel/linux/modules/virt.mk       |  43 ++++
  package/kernel/linux/modules/w1.mk         |  17 --
- package/kernel/linux/modules/wireless.mk   |  42 ----
- 21 files changed, 703 insertions(+), 366 deletions(-)
- delete mode 100644 package/kernel/linux/modules/wireless.mk
+ 20 files changed, 668 insertions(+), 324 deletions(-)
 
 diff --git a/package/kernel/linux/modules/block.mk b/package/kernel/linux/modules/block.mk
 index 52541f2592..f6c9df0698 100644
@@ -366,32 +364,10 @@ index c746479a3b..ac2131e04a 100644
 +
 +$(eval $(call KernelPackage,pstore))
 diff --git a/package/kernel/linux/modules/hwmon.mk b/package/kernel/linux/modules/hwmon.mk
-index b75c741ba0..c8d79b622e 100644
+index bef9f14302..c8d79b622e 100644
 --- a/package/kernel/linux/modules/hwmon.mk
 +++ b/package/kernel/linux/modules/hwmon.mk
-@@ -474,6 +474,21 @@ endef
- $(eval $(call KernelPackage,hwmon-sht21))
- 
- 
-+define KernelPackage/hwmon-sht3x
-+  TITLE:=Sensiron SHT3x and compat. monitoring support
-+  KCONFIG:=CONFIG_SENSORS_SHT3x
-+  FILES:=$(LINUX_DIR)/drivers/hwmon/sht3x.ko
-+  AUTOLOAD:=$(call AutoProbe,sht3x)
-+  $(call AddDepends/hwmon,+kmod-i2c-core +kmod-lib-crc8)
-+endef
-+
-+define KernelPackage/hwmon-sht3x/description
-+ Kernel module for Sensirion SHT3x temperature and humidity sensors chip
-+endef
-+
-+$(eval $(call KernelPackage,hwmon-sht3x))
-+
-+
- define KernelPackage/hwmon-tmp102
-   TITLE:=Texas Instruments TMP102 monitoring support
-   KCONFIG:=CONFIG_SENSORS_TMP102
-@@ -519,6 +534,20 @@ endef
+@@ -534,6 +534,20 @@ endef
  $(eval $(call KernelPackage,hwmon-tmp421))
  
  
@@ -426,7 +402,7 @@ index f429763227..15fd1ccddc 100644
  endef
  
 diff --git a/package/kernel/linux/modules/iio.mk b/package/kernel/linux/modules/iio.mk
-index 6a2e040377..afd14ef47b 100644
+index 6a2e040377..c0e37f06c7 100644
 --- a/package/kernel/linux/modules/iio.mk
 +++ b/package/kernel/linux/modules/iio.mk
 @@ -25,14 +25,17 @@ endef
@@ -924,6 +900,24 @@ index 6a2e040377..afd14ef47b 100644
  endef
  
  define KernelPackage/iio-fxos8700-spi/description
+@@ -559,3 +566,17 @@ define KernelPackage/iio-fxos8700-spi/description
+ endef
+ 
+ $(eval $(call KernelPackage,iio-fxos8700-spi))
++
++define KernelPackage/iio-ti-am335x-adc
++  TITLE:= TI Sitara AM335x ADC driver
++  DEPENDS:=@TARGET_omap
++  KCONFIG:=CONFIG_TI_AM335X_ADC
++  FILES:=$(LINUX_DIR)/drivers/iio/adc/ti_am335x_adc.ko
++  AUTOLOAD:=$(call AutoProbe,ti_am335x_adc)
++  $(call AddDepends/iio,+kmod-iio-kfifo-buf)
++endef
++define KernelPackage/iio-ti-am335x-adc/description
++ Driver for the TI AM335x ADC.
++endef
++
++$(eval $(call KernelPackage,iio-ti-am335x-adc))
 diff --git a/package/kernel/linux/modules/input.mk b/package/kernel/linux/modules/input.mk
 index e870bf7f8b..6270cdeb3b 100644
 --- a/package/kernel/linux/modules/input.mk
@@ -1039,7 +1033,7 @@ index c52a8133be..81ceb1f76c 100644
    SUBMENU:=$(LIB_MENU)
    TITLE:=Object identifier registry
 diff --git a/package/kernel/linux/modules/netdevices.mk b/package/kernel/linux/modules/netdevices.mk
-index 5ca1a141a8..518d83f9a2 100644
+index abb5693f73..518d83f9a2 100644
 --- a/package/kernel/linux/modules/netdevices.mk
 +++ b/package/kernel/linux/modules/netdevices.mk
 @@ -141,7 +141,7 @@ $(eval $(call KernelPackage,mii))
@@ -1070,48 +1064,7 @@ index 5ca1a141a8..518d83f9a2 100644
    AUTOLOAD:=$(call AutoProbe,mdio-gpio)
  endef
  
-@@ -275,6 +273,40 @@ endef
- $(eval $(call KernelPackage,phy-bcm84881))
- 
- 
-+define KernelPackage/phy-marvell
-+   SUBMENU:=$(NETWORK_DEVICES_MENU)
-+   TITLE:=Marvell Gigabit Ethernet PHY driver
-+   KCONFIG:=CONFIG_MARVELL_PHY
-+   DEPENDS:=+kmod-libphy
-+   FILES:=$(LINUX_DIR)/drivers/net/phy/marvell.ko
-+   AUTOLOAD:=$(call AutoLoad,18,marvell)
-+endef
-+
-+define KernelPackage/phy-marvell/description
-+   Supports Marvell Gigabit Ethernet PHYs:
-+   * 88E1101
-+   * 88E1112
-+   * 88E1111 (incl. Finisar variant)
-+   * 88E1118
-+   * 88E1121R
-+   * 88E1145
-+   * 88E1149R
-+   * 88E1240
-+   * 88E1318S
-+   * 88E1116R
-+   * 88E1510
-+   * 88E1540
-+   * 88E1545
-+   * 88E3016
-+   * 88E6341 family
-+   * 88E6390 family
-+   * 88E6393 family
-+   * 88E1340S
-+   * 88E1548P
-+endef
-+
-+$(eval $(call KernelPackage,phy-marvell))
-+
- 
- define KernelPackage/phy-realtek
-    SUBMENU:=$(NETWORK_DEVICES_MENU)
-@@ -389,7 +421,7 @@ $(eval $(call KernelPackage,switch-rtl8306))
+@@ -423,7 +421,7 @@ $(eval $(call KernelPackage,switch-rtl8306))
  define KernelPackage/switch-rtl8366-smi
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek RTL8366 SMI switch interface support
@@ -1120,7 +1073,7 @@ index 5ca1a141a8..518d83f9a2 100644
    KCONFIG:=CONFIG_RTL8366_SMI
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366_smi.ko
    AUTOLOAD:=$(call AutoLoad,42,rtl8366_smi,1)
-@@ -408,7 +440,7 @@ define KernelPackage/switch-rtl8366rb
+@@ -442,7 +440,7 @@ define KernelPackage/switch-rtl8366rb
    DEPENDS:=+kmod-switch-rtl8366-smi
    KCONFIG:=CONFIG_RTL8366RB_PHY
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366rb.ko
@@ -1129,7 +1082,7 @@ index 5ca1a141a8..518d83f9a2 100644
  endef
  
  define KernelPackage/switch-rtl8366rb/description
-@@ -424,7 +456,7 @@ define KernelPackage/switch-rtl8366s
+@@ -458,7 +456,7 @@ define KernelPackage/switch-rtl8366s
    DEPENDS:=+kmod-switch-rtl8366-smi
    KCONFIG:=CONFIG_RTL8366S_PHY
    FILES:=$(LINUX_DIR)/drivers/net/phy/rtl8366s.ko
@@ -1138,7 +1091,7 @@ index 5ca1a141a8..518d83f9a2 100644
  endef
  
  define KernelPackage/switch-rtl8366s/description
-@@ -434,6 +466,22 @@ endef
+@@ -468,6 +466,22 @@ endef
  $(eval $(call KernelPackage,switch-rtl8366s))
  
  
@@ -1161,7 +1114,7 @@ index 5ca1a141a8..518d83f9a2 100644
  define KernelPackage/switch-rtl8367b
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Realtek RTL8367R/B switch support
-@@ -450,6 +498,22 @@ endef
+@@ -484,6 +498,22 @@ endef
  $(eval $(call KernelPackage,switch-rtl8367b))
  
  
@@ -1184,7 +1137,7 @@ index 5ca1a141a8..518d83f9a2 100644
  define KernelPackage/natsemi
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=National Semiconductor DP8381x series
-@@ -610,7 +674,7 @@ $(eval $(call KernelPackage,8139cp))
+@@ -644,7 +674,7 @@ $(eval $(call KernelPackage,8139cp))
  define KernelPackage/r8169
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=RealTek RTL-8169 PCI Gigabit Ethernet Adapter kernel support
@@ -1193,7 +1146,7 @@ index 5ca1a141a8..518d83f9a2 100644
    KCONFIG:= \
      CONFIG_R8169 \
      CONFIG_R8169_NAPI=y \
-@@ -736,7 +800,7 @@ $(eval $(call KernelPackage,igbvf))
+@@ -770,7 +800,7 @@ $(eval $(call KernelPackage,igbvf))
  define KernelPackage/ixgbe
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    TITLE:=Intel(R) 82598/82599 PCI-Express 10 Gigabit Ethernet support
@@ -1202,7 +1155,7 @@ index 5ca1a141a8..518d83f9a2 100644
    KCONFIG:=CONFIG_IXGBE \
      CONFIG_IXGBE_VXLAN=n \
      CONFIG_IXGBE_HWMON=y \
-@@ -1089,8 +1153,8 @@ define KernelPackage/of-mdio
+@@ -1123,8 +1153,8 @@ define KernelPackage/of-mdio
    DEPENDS:=+kmod-libphy +kmod-fixed-phy @!TARGET_x86
    KCONFIG:=CONFIG_OF_MDIO
    FILES:= \
@@ -1213,7 +1166,7 @@ index 5ca1a141a8..518d83f9a2 100644
    AUTOLOAD:=$(call AutoLoad,41,of_mdio)
  endef
  
-@@ -1256,6 +1320,22 @@ endef
+@@ -1290,6 +1320,22 @@ endef
  $(eval $(call KernelPackage,mlx5-core))
  
  
@@ -1236,7 +1189,7 @@ index 5ca1a141a8..518d83f9a2 100644
  define KernelPackage/qlcnic
    SUBMENU:=$(NETWORK_DEVICES_MENU)
    DEPENDS:=@PCI_SUPPORT +kmod-hwmon-core
-@@ -1285,8 +1365,7 @@ define KernelPackage/sfp
+@@ -1319,8 +1365,7 @@ define KernelPackage/sfp
  	CONFIG_MDIO_I2C
    FILES:= \
  	$(LINUX_DIR)/drivers/net/phy/sfp.ko \
@@ -1246,7 +1199,7 @@ index 5ca1a141a8..518d83f9a2 100644
    AUTOLOAD:=$(call AutoProbe,mdio-i2c sfp)
  endef
  
-@@ -1348,3 +1427,83 @@ define KernelPackage/sfc-falcon/description
+@@ -1382,3 +1427,83 @@ define KernelPackage/sfc-falcon/description
  endef
  
  $(eval $(call KernelPackage,sfc-falcon))
@@ -2186,54 +2139,6 @@ index e0f7eecb6e..9cba28da11 100644
  define KernelPackage/w1-slave-ds2413
    TITLE:=DS2413 2 Ch. Addressable Switch
    KCONFIG:= \
-diff --git a/package/kernel/linux/modules/wireless.mk b/package/kernel/linux/modules/wireless.mk
-deleted file mode 100644
-index f7a40ba10a..0000000000
---- a/package/kernel/linux/modules/wireless.mk
-+++ /dev/null
-@@ -1,42 +0,0 @@
--#
--# Copyright (C) 2006-2008 OpenWrt.org
--#
--# This is free software, licensed under the GNU General Public License v2.
--# See /LICENSE for more information.
--#
--
--WIRELESS_MENU:=Wireless Drivers
--
--define KernelPackage/net-prism54
--  SUBMENU:=$(WIRELESS_MENU)
--  TITLE:=Intersil Prism54 support
--  DEPENDS:=@PCI_SUPPORT +@DRIVER_WEXT_SUPPORT +prism54-firmware
--  KCONFIG:=CONFIG_PRISM54
--  FILES:= \
--	$(LINUX_DIR)/drivers/net/wireless/intersil/prism54/prism54.ko
--  AUTOLOAD:=$(call AutoProbe,prism54)
--endef
--
--define KernelPackage/net-prism54/description
-- Kernel modules for Intersil Prism54 support
--endef
--
--$(eval $(call KernelPackage,net-prism54))
--
--
--define KernelPackage/net-rtl8192su
--  SUBMENU:=$(WIRELESS_MENU)
--  TITLE:=RTL8192SU support (staging)
--  DEPENDS:=@USB_SUPPORT +@DRIVER_WEXT_SUPPORT +kmod-usb-core +rtl8192su-firmware
--  KCONFIG:=\
--	CONFIG_STAGING=y \
--	CONFIG_R8712U
--  FILES:=$(LINUX_DIR)/drivers/staging/rtl8712/r8712u.ko
--  AUTOLOAD:=$(call AutoProbe,r8712u)
--endef
--
--define KernelPackage/net-rtl8192su/description
-- Kernel modules for RealTek RTL8712 and RTL81XXSU fullmac support.
--endef
--
--$(eval $(call KernelPackage,net-rtl8192su))
 -- 
 2.34.1
 
