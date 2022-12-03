@@ -37,8 +37,6 @@ The original cover letter said:
 
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 ---
- ...populate-supported_interfaces-member.patch |  72 +++++++
- ...net-dsa-consolidate-phylink-creation.patch | 158 ++++++++++++++
  ...phylink_get_interfaces-with-phylink_.patch |  58 ++++++
  ...port-use-of-phylink_generic_validate.patch |  46 ++++
  ...k-convert-to-phylink_generic_validat.patch |  78 +++++++
@@ -87,17 +85,17 @@ index 0000000000..6720e5569e
 +@@ -985,8 +985,11 @@ static void dsa_port_phylink_validate(struct phylink_config *config,
 + 	struct dsa_port *dp = container_of(config, struct dsa_port, pl_config);
 + 	struct dsa_switch *ds = dp->ds;
-+ 
++
 +-	if (!ds->ops->phylink_validate)
 ++	if (!ds->ops->phylink_validate) {
 ++		if (config->mac_capabilities)
 ++			phylink_generic_validate(config, supported, state);
 + 		return;
 ++	}
-+ 
++
 + 	ds->ops->phylink_validate(ds, dp->index, supported, state);
 + }
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch b/target/linux/generic/backport-5.15/781-v5.17-5-net-dsa-hellcreek-convert-to-phylink_generic_validat.patch
@@ -135,7 +133,7 @@ index 0000000000..9c72c3e245
 +@@ -1457,14 +1457,19 @@ static void hellcreek_teardown(struct dsa_switch *ds)
 + 	dsa_devlink_resources_unregister(ds);
 + }
-+ 
++
 +-static void hellcreek_phylink_validate(struct dsa_switch *ds, int port,
 +-				       unsigned long *supported,
 +-				       struct phylink_link_state *state)
@@ -144,7 +142,7 @@ index 0000000000..9c72c3e245
 + {
 +-	__ETHTOOL_DECLARE_LINK_MODE_MASK(mask) = { 0, };
 + 	struct hellcreek *hellcreek = ds->priv;
-+ 
++
 +-	dev_dbg(hellcreek->dev, "Phylink validate for port %d\n", port);
 ++	__set_bit(PHY_INTERFACE_MODE_MII, config->supported_interfaces);
 ++	__set_bit(PHY_INTERFACE_MODE_RGMII, config->supported_interfaces);
@@ -154,7 +152,7 @@ index 0000000000..9c72c3e245
 ++	 * need it for compatibility with existing DT.
 ++	 */
 ++	__set_bit(PHY_INTERFACE_MODE_GMII, config->supported_interfaces);
-+ 
++
 + 	/* The MAC settings are a hardware configuration option and cannot be
 + 	 * changed at run time or by strapping. Therefore the attached PHYs
 +@@ -1472,12 +1477,9 @@ static void hellcreek_phylink_validate(struct dsa_switch *ds, int port,
@@ -170,7 +168,7 @@ index 0000000000..9c72c3e245
 +-	linkmode_and(state->advertising, state->advertising, mask);
 ++		config->mac_capabilities = MAC_1000FD;
 + }
-+ 
++
 + static int
 +@@ -1828,7 +1830,7 @@ static const struct dsa_switch_ops hellcreek_ds_ops = {
 + 	.get_strings	       = hellcreek_get_strings,
@@ -181,7 +179,7 @@ index 0000000000..9c72c3e245
 + 	.port_bridge_flags     = hellcreek_bridge_flags,
 + 	.port_bridge_join      = hellcreek_port_bridge_join,
 + 	.port_bridge_leave     = hellcreek_port_bridge_leave,
-+-- 
++--
 +2.35.1
 +
 diff --git a/target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch b/target/linux/generic/backport-5.15/781-v5.17-6-net-dsa-lantiq-convert-to-phylink_generic_validate.patch
@@ -217,7 +215,7 @@ index 0000000000..9473bdff3b
 +@@ -1426,114 +1426,70 @@ static int gswip_port_fdb_dump(struct dsa_switch *ds, int port,
 + 	return 0;
 + }
-+ 
++
 +-static void gswip_phylink_set_capab(unsigned long *supported,
 +-				    struct phylink_link_state *state)
 +-{
@@ -293,7 +291,7 @@ index 0000000000..9473bdff3b
 +-		dev_err(ds->dev, "Unsupported port: %i\n", port);
 +-		return;
 + 	}
-+ 
++
 +-	gswip_phylink_set_capab(supported, state);
 +-
 +-	return;
@@ -305,7 +303,7 @@ index 0000000000..9473bdff3b
 ++	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
 ++		MAC_10 | MAC_100 | MAC_1000;
 + }
-+ 
++
 +-static void gswip_xrx300_phylink_validate(struct dsa_switch *ds, int port,
 +-					  unsigned long *supported,
 +-					  struct phylink_link_state *state)
@@ -351,7 +349,7 @@ index 0000000000..9473bdff3b
 +-		dev_err(ds->dev, "Unsupported port: %i\n", port);
 +-		return;
 + 	}
-+ 
++
 +-	gswip_phylink_set_capab(supported, state);
 +-
 +-	return;
@@ -363,7 +361,7 @@ index 0000000000..9473bdff3b
 ++	config->mac_capabilities = MAC_ASYM_PAUSE | MAC_SYM_PAUSE |
 ++		MAC_10 | MAC_100 | MAC_1000;
 + }
-+ 
++
 + static void gswip_port_set_link(struct gswip_priv *priv, int port, bool link)
 +@@ -1812,7 +1768,7 @@ static const struct dsa_switch_ops gswip_xrx200_switch_ops = {
 + 	.port_fdb_add		= gswip_port_fdb_add,
@@ -383,9 +381,9 @@ index 0000000000..9473bdff3b
 + 	.phylink_mac_config	= gswip_phylink_mac_config,
 + 	.phylink_mac_link_down	= gswip_phylink_mac_link_down,
 + 	.phylink_mac_link_up	= gswip_phylink_mac_link_up,
-+-- 
++--
 +2.35.1
 +
--- 
+--
 2.35.1
 
