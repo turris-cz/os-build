@@ -1,0 +1,270 @@
+From d74039b85d2fa9e8ecd916078dba008d4d341dc1 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sun, 4 Dec 2022 18:55:03 +0100
+Subject: [PATCH] gcc: add patches for PowerPC SPE and enable obsolete
+
+This is the same as it was done for toolchain [1]
+
+[1] https://gitlab.nic.cz/turris/os/build/-/raw/b70855d09775ef2c83eb60f8e120097da753d903/patches/openwrt/to-upstream/0102-gcc-ppc-expect-sf-ld-suffix-even-with-spe-enabled.patch
+
+And also backport another commit [2], otherwise, it was not compiled.
+
+[2] https://gcc.gnu.org/git/gitweb.cgi?p=gcc.git;h=499d66aafd1f12e5fa8171b03dca6c8e3178302c
+---
+ devel/gcc/Makefile                            |   1 +
+ ...-in-linux64.h-sysv4.h-if-musl-spe-or.patch |  43 +++++
+ .../8.4.0/970-musl-spe-secure-plt.patch       |  16 ++
+ ...ass-enable-obsolete-to-gcc-configure.patch | 156 ++++++++++++++++++
+ 4 files changed, 216 insertions(+)
+ create mode 100644 devel/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+ create mode 100644 devel/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+ create mode 100644 devel/gcc/patches/8.4.0/980-pass-enable-obsolete-to-gcc-configure.patch
+
+diff --git a/devel/gcc/Makefile b/devel/gcc/Makefile
+index 240c7159c..5826af585 100644
+--- a/devel/gcc/Makefile
++++ b/devel/gcc/Makefile
+@@ -161,6 +161,7 @@ define Build/Configure
+ 			$(if $(CONFIG_LIBC_USE_GLIBC),--enable,--disable)-__cxa_atexit \
+ 			--with-default-libstdcxx-abi=gcc4-compatible \
+ 			--enable-target-optspace \
++			--enable-obsolete \
+ 			--with-gnu-ld \
+ 			--disable-nls \
+ 			--disable-libsanitizer \
+diff --git a/devel/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch b/devel/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+new file mode 100644
+index 000000000..2656b5de4
+--- /dev/null
++++ b/devel/gcc/patches/8.4.0/969-ppc-add-sf-to-ld-in-linux64.h-sysv4.h-if-musl-spe-or.patch
+@@ -0,0 +1,43 @@
++From 6c0906bc51d2bb12ef9b0f4261cf9a39425e0ff7 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
++Date: Wed, 13 Jul 2022 12:39:07 +0200
++Subject: [PATCH] add -sf suffix to the dynamic linker in linux64.h and sysv4.h if musl-spe is to be used
++
++The scope of changes and new conditions is probably larger than necessary. Further refactoring would be beneficial.
++---
++ gcc/config/powerpcspe/linux64.h | 4 ++--
++ gcc/config/powerpcspe/sysv4.h   | 2 +-
++ 2 files changed, 3 insertions(+), 3 deletions(-)
++
++diff --git a/gcc/config/powerpcspe/linux64.h b/gcc/config/powerpcspe/linux64.h
++index b3a0cc4e46c..79ad98270e7 100644
++--- a/gcc/config/powerpcspe/linux64.h
+++++ b/gcc/config/powerpcspe/linux64.h
++@@ -425,9 +425,9 @@ extern int dot_symbols;
++ #endif
++ 
++ #define MUSL_DYNAMIC_LINKER32 \
++-  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ #define MUSL_DYNAMIC_LINKER64 \
++-  "/lib/ld-musl-powerpc64" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc64" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ 
++ #define UCLIBC_DYNAMIC_LINKER32 "/lib/ld-uClibc.so.0"
++ #define UCLIBC_DYNAMIC_LINKER64 "/lib/ld64-uClibc.so.0"
++diff --git a/gcc/config/powerpcspe/sysv4.h b/gcc/config/powerpcspe/sysv4.h
++index 4f352746151..a79df9ff376 100644
++--- a/gcc/config/powerpcspe/sysv4.h
+++++ b/gcc/config/powerpcspe/sysv4.h
++@@ -783,7 +783,7 @@ ENDIAN_SELECT(" -mbig", " -mlittle", DEFAULT_ASM_ENDIAN)
++ #define GLIBC_DYNAMIC_LINKER "/lib/ld.so.1"
++ #define UCLIBC_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
++ #define MUSL_DYNAMIC_LINKER \
++-  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float:-sf}.so.1"
+++  "/lib/ld-musl-powerpc" MUSL_DYNAMIC_LINKER_E "%{msoft-float|mspe|mabi=spe|mcpu=8540|mcpu=8548:-sf}.so.1"
++ #if DEFAULT_LIBC == LIBC_UCLIBC
++ #define CHOOSE_DYNAMIC_LINKER(G, U, M) \
++   "%{mglibc:" G ";:%{mmusl:" M ";:" U "}}"
++-- 
++2.35.3
++
+diff --git a/devel/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch b/devel/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+new file mode 100644
+index 000000000..50a34a00f
+--- /dev/null
++++ b/devel/gcc/patches/8.4.0/970-musl-spe-secure-plt.patch
+@@ -0,0 +1,16 @@
++--- a/gcc/config.gcc
+++++ b/gcc/config.gcc
++@@ -2504,6 +2504,13 @@ powerpc*-*-linux*spe*)
++ 	tm_file="${tm_file} powerpcspe/linux.h glibc-stdint.h"
++ 	tmake_file="${tmake_file} powerpcspe/t-ppcos powerpcspe/t-linux"
++ 	tm_file="${tm_file} powerpcspe/linuxspe.h powerpcspe/e500.h"
+++	case ${target} in
+++		*-linux*-musl*)
+++		enable_secureplt=yes ;;
+++	esac
+++		if test x${enable_secureplt} = xyes; then
+++		tm_file="powerpcspe/secureplt.h ${tm_file}"
+++	fi
++ 	;;
++ powerpc*-*-linux*)
++ 	tm_file="${tm_file} dbxelf.h elfos.h gnu-user.h freebsd-spec.h rs6000/sysv4.h"
+diff --git a/devel/gcc/patches/8.4.0/980-pass-enable-obsolete-to-gcc-configure.patch b/devel/gcc/patches/8.4.0/980-pass-enable-obsolete-to-gcc-configure.patch
+new file mode 100644
+index 000000000..7b93439eb
+--- /dev/null
++++ b/devel/gcc/patches/8.4.0/980-pass-enable-obsolete-to-gcc-configure.patch
+@@ -0,0 +1,156 @@
++From 499d66aafd1f12e5fa8171b03dca6c8e3178302c Mon Sep 17 00:00:00 2001
++From: Alexandre Oliva <oliva@adacore.com>
++Date: Mon, 4 Nov 2019 13:40:12 +0000
++Subject: [PATCH] pass --enable-obsolete down to gcc/configure for auto-build.h
++
++Configuring GCC for obsolete targets works as long as build = host.
++When it isn't, --enable-obsolete is not passed down to the additional
++build configure started by gcc/configure, used to generate
++auto-build.h.  The build configure fails and we end up without a
++auto-build.h, but the host configure proceeds, so we only get a fatal
++failure much later, when make realizes auto-build.h is not there and
++there's no rule to create it.
++
++This patch gets the host configure to fail when the build configure
++does, leaving the temporary build configure dir behind for
++investigation.  It also arranges for --eanble-obsolete to be passed
++down to the build configure.
++
++Alas, the latter triggered a warning in the build configure because
++--enable-obsolete is not a recognized configure option.  That's not
++reported in the host configure because of the
++--disable-option-checking passed by the top-level configure, so I
++arranged for that to be passed down to the build configure as well.
++
++Finally, since my initial suspicion when investigating this failure
++was that auto-build.h had been removed after configuration and there
++was no rule to rebuild it, I'm adding rules to gcc/Makefile to get it
++created or updated as needed.  Since it is configure that creates it,
++as run by e.g. config.status --recheck, and config.status is created
++after auto-build.h, I've made config.status depend on auto-build.h,
++and added a dummy rule to create auto-build.h.  This would normally
++not be enough to create a header when needed, but since Makefile
++depends on config.status, and make first updates Makefile, it ends up
++working, as long as nothing else that Makefile depends on requires
++auto-build.h but not config.status.  The config.status dependency and
++the auto-build.h rule are only enabled in the cases in which
++auto-build.h is actually used, namely when build != host.
++
++
++for  gcc/ChangeLog
++
++	* configure.ac: Pass --enable-obsolete=* and
++	--enable-option-checking=* down to build configure, and fail
++	if it fails.  AC_SUBST HAVE_AUTO_BUILD.
++	* configure: Rebuild.
++	* Makefile.in [HAVE_AUTO_BUILD] (auto-build.h): New rule.
++	[HAVE_AUTO_BUILD] (config.status): Depend on auto-build.h.
++
++From-SVN: r277777
++---
++ gcc/Makefile.in  |  8 ++++++++
++ gcc/configure    | 13 ++++++++++---
++ gcc/configure.ac |  8 +++++++-
++ 4 files changed, 34 insertions(+), 4 deletions(-)
++
++diff --git a/gcc/Makefile.in b/gcc/Makefile.in
++index 035b58f50c0..95f054c4d4f 100644
++--- a/gcc/Makefile.in
+++++ b/gcc/Makefile.in
++@@ -1899,6 +1899,14 @@ cstamp-h: config.in config.status
++ 	CONFIG_FILES= \
++ 	LANGUAGES="$(CONFIG_LANGUAGES)" $(SHELL) config.status
++ 
+++# On configurations that require auto-build.h, it is created while
+++# running configure, so make config.status depend on it, so that
+++# config.status --recheck runs and updates or creates it.
+++@HAVE_AUTO_BUILD@auto-build.h: $(srcdir)/configure $(srcdir)/config.gcc
+++@HAVE_AUTO_BUILD@	@if test -f $@; then echo rerunning config.status to update $@; \
+++@HAVE_AUTO_BUILD@	else echo rerunning config.status to update $@; fi
+++@HAVE_AUTO_BUILD@config.status: auto-build.h
+++
++ # Really, really stupid make features, such as SUN's KEEP_STATE, may force
++ # a target to build even if it is up-to-date.  So we must verify that
++ # config.status does not exist before failing.
++diff --git a/gcc/configure b/gcc/configure
++index 9fe04293f72..6808c23d26b 100755
++--- a/gcc/configure
+++++ b/gcc/configure
++@@ -774,6 +774,7 @@ LIBINTL_DEP
++ LIBINTL
++ USE_NLS
++ get_gcc_base_ver
+++HAVE_AUTO_BUILD
++ extra_opt_files
++ extra_modes_file
++ NATIVE_SYSTEM_HEADER_DIR
++@@ -12208,6 +12209,7 @@ done
++ if test x$host = x$build
++ then
++ 	build_auto=auto-host.h
+++	HAVE_AUTO_BUILD='# '
++ else
++ 	# We create a subdir, then run autoconf in the subdir.
++ 	# To prevent recursion we set host and build for the new
++@@ -12230,7 +12232,10 @@ else
++ 	GMPINC="" CPPFLAGS="${CPPFLAGS} -DGENERATOR_FILE" \
++ 	${realsrcdir}/configure \
++ 		--enable-languages=${enable_languages-all} \
++-		--target=$target_alias --host=$build_alias --build=$build_alias
+++		${enable_obsolete+--enable-obsolete="$enable_obsolete"} \
+++		${enable_option_checking+--enable-option-checking="$enable_option_checking"} \
+++		--target=$target_alias --host=$build_alias \
+++		--build=$build_alias || exit # retaining $tempdir
++ 
++ 	# We just finished tests for the build machine, so rename
++ 	# the file auto-build.h in the gcc directory.
++@@ -12238,9 +12243,11 @@ else
++ 	cd ..
++ 	rm -rf $tempdir
++ 	build_auto=auto-build.h
+++	HAVE_AUTO_BUILD=
++ fi
++ 
++ 
+++
++ tm_file="${tm_file} defaults.h"
++ tm_p_file="${tm_p_file} tm-preds.h"
++ tm_d_file="${tm_d_file} defaults.h"
++diff --git a/gcc/configure.ac b/gcc/configure.ac
++index 0fe4e547272..1a0d68208e4 100644
++--- a/gcc/configure.ac
+++++ b/gcc/configure.ac
++@@ -1838,6 +1838,7 @@ AC_SUBST(extra_opt_files)
++ if test x$host = x$build
++ then
++ 	build_auto=auto-host.h
+++	HAVE_AUTO_BUILD='# '
++ else
++ 	# We create a subdir, then run autoconf in the subdir.
++ 	# To prevent recursion we set host and build for the new
++@@ -1860,7 +1861,10 @@ else
++ 	GMPINC="" CPPFLAGS="${CPPFLAGS} -DGENERATOR_FILE" \
++ 	${realsrcdir}/configure \
++ 		--enable-languages=${enable_languages-all} \
++-		--target=$target_alias --host=$build_alias --build=$build_alias
+++		${enable_obsolete+--enable-obsolete="$enable_obsolete"} \
+++		${enable_option_checking+--enable-option-checking="$enable_option_checking"} \
+++		--target=$target_alias --host=$build_alias \
+++		--build=$build_alias || exit # retaining $tempdir
++ 
++ 	# We just finished tests for the build machine, so rename
++ 	# the file auto-build.h in the gcc directory.
++@@ -1868,8 +1872,10 @@ else
++ 	cd ..
++ 	rm -rf $tempdir
++ 	build_auto=auto-build.h
+++	HAVE_AUTO_BUILD=
++ fi
++ AC_SUBST(build_subdir)
+++AC_SUBST(HAVE_AUTO_BUILD)
++ 
++ tm_file="${tm_file} defaults.h"
++ tm_p_file="${tm_p_file} tm-preds.h"
++-- 
++2.31.1
++
+-- 
+2.34.1
+
