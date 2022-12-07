@@ -1,4 +1,4 @@
-From 4f9053704e41d09aaf8696c56d2ee50a9c22229e Mon Sep 17 00:00:00 2001
+From 3436d656ff9e11d9132d8a2cf1ae96b52278eead Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Sat, 3 Dec 2022 14:30:53 +0100
 Subject: [PATCH] Backport Linux kernel modules from OpenWrt master
@@ -6,25 +6,24 @@ Subject: [PATCH] Backport Linux kernel modules from OpenWrt master
 ---
  package/kernel/linux/modules/block.mk      |  21 +-
  package/kernel/linux/modules/crypto.mk     |  25 ++-
- package/kernel/linux/modules/fs.mk         | 106 ++++++---
+ package/kernel/linux/modules/fs.mk         | 106 +++++++---
  package/kernel/linux/modules/hwmon.mk      |  14 ++
  package/kernel/linux/modules/i2c.mk        |   2 +-
- package/kernel/linux/modules/iio.mk        | 131 ++++++-----
+ package/kernel/linux/modules/iio.mk        | 131 +++++++-----
  package/kernel/linux/modules/input.mk      |  29 ++-
  package/kernel/linux/modules/leds.mk       |  19 ++
  package/kernel/linux/modules/lib.mk        |  10 +
- package/kernel/linux/modules/netdevices.mk | 155 +++++++++++--
+ package/kernel/linux/modules/netdevices.mk | 155 ++++++++++++--
  package/kernel/linux/modules/netfilter.mk  |   6 +-
- package/kernel/linux/modules/netsupport.mk |  71 ++----
+ package/kernel/linux/modules/netsupport.mk |  23 +--
  package/kernel/linux/modules/nls.mk        |   6 +-
- package/kernel/linux/modules/other.mk      | 245 +++++++++++++--------
+ package/kernel/linux/modules/other.mk      | 229 +++++++++++++--------
  package/kernel/linux/modules/sound.mk      |   3 +-
  package/kernel/linux/modules/spi.mk        |   5 +-
- package/kernel/linux/modules/usb.mk        |  60 ++++-
- package/kernel/linux/modules/video.mk      |  24 +-
+ package/kernel/linux/modules/usb.mk        |  60 ++++--
+ package/kernel/linux/modules/video.mk      |  24 ++-
  package/kernel/linux/modules/virt.mk       |  43 ++++
- package/kernel/linux/modules/w1.mk         |  17 --
- 20 files changed, 668 insertions(+), 324 deletions(-)
+ 19 files changed, 652 insertions(+), 259 deletions(-)
 
 diff --git a/package/kernel/linux/modules/block.mk b/package/kernel/linux/modules/block.mk
 index 52541f2592..f6c9df0698 100644
@@ -1308,49 +1307,10 @@ index 44c0e829bb..e6e2c9b637 100644
  endef
  
 diff --git a/package/kernel/linux/modules/netsupport.mk b/package/kernel/linux/modules/netsupport.mk
-index f077947a92..a8c343f44b 100644
+index 53e21c0e9f..a8c343f44b 100644
 --- a/package/kernel/linux/modules/netsupport.mk
 +++ b/package/kernel/linux/modules/netsupport.mk
-@@ -163,38 +163,6 @@ endef
- $(eval $(call KernelPackage,misdn))
- 
- 
--define KernelPackage/isdn4linux
--  SUBMENU:=$(NETWORK_SUPPORT_MENU)
--  TITLE:=Old ISDN4Linux (deprecated)
--  DEPENDS:=+kmod-ppp
--  KCONFIG:= \
--	CONFIG_ISDN=y \
--    CONFIG_ISDN_I4L \
--    CONFIG_ISDN_PPP=y \
--    CONFIG_ISDN_PPP_VJ=y \
--    CONFIG_ISDN_MPP=y \
--    CONFIG_IPPP_FILTER=y \
--    CONFIG_ISDN_PPP_BSDCOMP \
--    CONFIG_ISDN_CAPI_MIDDLEWARE=y \
--    CONFIG_ISDN_CAPI_CAPIFS_BOOL=y \
--    CONFIG_ISDN_AUDIO=y \
--    CONFIG_ISDN_TTY_FAX=y \
--    CONFIG_ISDN_X25=y \
--    CONFIG_ISDN_DIVERSION
--  FILES:= \
--    $(LINUX_DIR)/drivers/isdn/divert/dss1_divert.ko \
--	$(LINUX_DIR)/drivers/isdn/i4l/isdn.ko \
--	$(LINUX_DIR)/drivers/isdn/i4l/isdn_bsdcomp.ko
--  AUTOLOAD:=$(call AutoLoad,40,isdn isdn_bsdcomp dss1_divert)
--endef
--
--define KernelPackage/isdn4linux/description
--  This driver allows you to use an ISDN adapter for networking
--endef
--
--$(eval $(call KernelPackage,isdn4linux))
--
--
- define KernelPackage/ipip
-   SUBMENU:=$(NETWORK_SUPPORT_MENU)
-   TITLE:=IP-in-IP encapsulation
-@@ -247,10 +215,8 @@ $(eval $(call KernelPackage,ipsec))
+@@ -215,10 +215,8 @@ $(eval $(call KernelPackage,ipsec))
  IPSEC4-m = \
  	ipv4/ah4 \
  	ipv4/esp4 \
@@ -1362,7 +1322,7 @@ index f077947a92..a8c343f44b 100644
  
  define KernelPackage/ipsec4
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -260,9 +226,6 @@ define KernelPackage/ipsec4
+@@ -228,9 +226,6 @@ define KernelPackage/ipsec4
  	CONFIG_INET_AH \
  	CONFIG_INET_ESP \
  	CONFIG_INET_IPCOMP \
@@ -1372,7 +1332,7 @@ index f077947a92..a8c343f44b 100644
  	CONFIG_INET_XFRM_TUNNEL \
  	CONFIG_INET_ESP_OFFLOAD=n
    FILES:=$(foreach mod,$(IPSEC4-m),$(LINUX_DIR)/net/$(mod).ko)
-@@ -275,9 +238,6 @@ define KernelPackage/ipsec4/description
+@@ -243,9 +238,6 @@ define KernelPackage/ipsec4/description
   - ah4
   - esp4
   - ipcomp4
@@ -1382,7 +1342,7 @@ index f077947a92..a8c343f44b 100644
   - xfrm4_tunnel
  endef
  
-@@ -287,10 +247,8 @@ $(eval $(call KernelPackage,ipsec4))
+@@ -255,10 +247,8 @@ $(eval $(call KernelPackage,ipsec4))
  IPSEC6-m = \
  	ipv6/ah6 \
  	ipv6/esp6 \
@@ -1394,7 +1354,7 @@ index f077947a92..a8c343f44b 100644
  
  define KernelPackage/ipsec6
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -300,9 +258,6 @@ define KernelPackage/ipsec6
+@@ -268,9 +258,6 @@ define KernelPackage/ipsec6
  	CONFIG_INET6_AH \
  	CONFIG_INET6_ESP \
  	CONFIG_INET6_IPCOMP \
@@ -1404,7 +1364,7 @@ index f077947a92..a8c343f44b 100644
  	CONFIG_INET6_XFRM_TUNNEL \
  	CONFIG_INET6_ESP_OFFLOAD=n
    FILES:=$(foreach mod,$(IPSEC6-m),$(LINUX_DIR)/net/$(mod).ko)
-@@ -315,9 +270,6 @@ define KernelPackage/ipsec6/description
+@@ -283,9 +270,6 @@ define KernelPackage/ipsec6/description
   - ah6
   - esp6
   - ipcomp6
@@ -1414,7 +1374,7 @@ index f077947a92..a8c343f44b 100644
   - xfrm6_tunnel
  endef
  
-@@ -1235,7 +1187,8 @@ define KernelPackage/sctp
+@@ -1203,7 +1187,8 @@ define KernelPackage/sctp
       CONFIG_SCTP_DEFAULT_COOKIE_HMAC_MD5=y
    FILES:= $(LINUX_DIR)/net/sctp/sctp.ko
    AUTOLOAD:= $(call AutoLoad,32,sctp)
@@ -1424,26 +1384,6 @@ index f077947a92..a8c343f44b 100644
  endef
  
  define KernelPackage/sctp/description
-@@ -1469,3 +1422,19 @@ define KernelPackage/wireguard/description
- endef
- 
- $(eval $(call KernelPackage,wireguard))
-+
-+
-+define KernelPackage/netconsole
-+  SUBMENU:=$(NETWORK_SUPPORT_MENU)
-+  TITLE:=Network console logging support
-+  KCONFIG:=CONFIG_NETCONSOLE \
-+	  CONFIG_NETCONSOLE_DYNAMIC=n
-+  FILES:=$(LINUX_DIR)/drivers/net/netconsole.ko
-+  AUTOLOAD:=$(call AutoProbe,netconsole)
-+endef
-+
-+define KernelPackage/netconsole/description
-+  Network console logging support.
-+endef
-+
-+$(eval $(call KernelPackage,netconsole))
 diff --git a/package/kernel/linux/modules/nls.mk b/package/kernel/linux/modules/nls.mk
 index 05fce27bbc..7450ed1ce5 100644
 --- a/package/kernel/linux/modules/nls.mk
@@ -1462,7 +1402,7 @@ index 05fce27bbc..7450ed1ce5 100644
  endef
  
 diff --git a/package/kernel/linux/modules/other.mk b/package/kernel/linux/modules/other.mk
-index 204fd0599f..58dd2d6c25 100644
+index 32f4312750..58dd2d6c25 100644
 --- a/package/kernel/linux/modules/other.mk
 +++ b/package/kernel/linux/modules/other.mk
 @@ -40,6 +40,8 @@ define KernelPackage/bluetooth
@@ -1567,8 +1507,9 @@ index 204fd0599f..58dd2d6c25 100644
 - Kernel module for Microchip MCP23xxx SPI/I2C I/O expander
 +define KernelPackage/pinctrl-mcp23s08/description
 +  Kernel module for Microchip MCP23xxx I/O expander
-+endef
-+
+ endef
+ 
+-$(eval $(call KernelPackage,gpio-mcp23s08))
 +$(eval $(call KernelPackage,pinctrl-mcp23s08))
 +
 +
@@ -1582,9 +1523,8 @@ index 204fd0599f..58dd2d6c25 100644
 +  KCONFIG:=CONFIG_PINCTRL_MCP23S08_I2C
 +  FILES:=$(LINUX_DIR)/drivers/pinctrl/pinctrl-mcp23s08_i2c.ko
 +  AUTOLOAD:=$(call AutoLoad,40,pinctrl-mcp23s08-i2c)
- endef
- 
--$(eval $(call KernelPackage,gpio-mcp23s08))
++endef
++
 +define KernelPackage/pinctrl-mcp23s08-i2c/description
 +  Kernel module for Microchip MCP23xxx I/O expander via I2C
 +endef
@@ -1641,30 +1581,7 @@ index 204fd0599f..58dd2d6c25 100644
  define KernelPackage/sdhci
    SUBMENU:=$(OTHER_MENU)
    TITLE:=Secure Digital Host Controller Interface support
-@@ -647,22 +709,6 @@ endef
- 
- $(eval $(call KernelPackage,rtc-pcf2127))
- 
--define KernelPackage/rtc-pt7c4338
--  SUBMENU:=$(OTHER_MENU)
--  TITLE:=Pericom PT7C4338 RTC support
--  DEFAULT:=m if ALL_KMODS && RTC_SUPPORT
--  DEPENDS:=+kmod-i2c-core
--  KCONFIG:=CONFIG_RTC_DRV_PT7C4338 \
--	CONFIG_RTC_CLASS=y
--  FILES:=$(LINUX_DIR)/drivers/rtc/rtc-pt7c4338.ko
--  AUTOLOAD:=$(call AutoProbe,rtc-pt7c4338)
--endef
--
--define KernelPackage/rtc-pt7c4338/description
-- Kernel module for Pericom PT7C4338 i2c RTC chip
--endef
--
--$(eval $(call KernelPackage,rtc-pt7c4338))
- 
- define KernelPackage/rtc-rs5c372a
-   SUBMENU:=$(OTHER_MENU)
-@@ -931,7 +977,6 @@ $(eval $(call KernelPackage,ikconfig))
+@@ -915,7 +977,6 @@ $(eval $(call KernelPackage,ikconfig))
  define KernelPackage/zram
    SUBMENU:=$(OTHER_MENU)
    TITLE:=ZRAM
@@ -1672,7 +1589,7 @@ index 204fd0599f..58dd2d6c25 100644
    KCONFIG:= \
  	CONFIG_ZSMALLOC \
  	CONFIG_ZRAM \
-@@ -948,8 +993,31 @@ define KernelPackage/zram/description
+@@ -932,8 +993,31 @@ define KernelPackage/zram/description
   Compressed RAM block device support
  endef
  
@@ -1685,11 +1602,11 @@ index 204fd0599f..58dd2d6c25 100644
 +  config ZRAM_DEF_COMP_LZORLE
 +            bool "lzo-rle"
 +            select PACKAGE_kmod-lib-lzo
-+
+ 
 +  config ZRAM_DEF_COMP_LZO
 +            bool "lzo"
 +            select PACKAGE_kmod-lib-lzo
- 
++
 +  config ZRAM_DEF_COMP_LZ4
 +            bool "lz4"
 +            select PACKAGE_kmod-lib-lz4
@@ -1705,7 +1622,7 @@ index 204fd0599f..58dd2d6c25 100644
  
  define KernelPackage/pps
    SUBMENU:=$(OTHER_MENU)
-@@ -1142,9 +1210,7 @@ define KernelPackage/keys-trusted
+@@ -1126,9 +1210,7 @@ define KernelPackage/keys-trusted
    TITLE:=TPM trusted keys on kernel keyring
    DEPENDS:=@KERNEL_KEYS +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-sha1 +kmod-tpm
    KCONFIG:=CONFIG_TRUSTED_KEYS
@@ -1716,7 +1633,7 @@ index 204fd0599f..58dd2d6c25 100644
    AUTOLOAD:=$(call AutoLoad,01,trusted-keys,1)
  endef
  
-@@ -1162,7 +1228,8 @@ $(eval $(call KernelPackage,keys-trusted))
+@@ -1146,7 +1228,8 @@ $(eval $(call KernelPackage,keys-trusted))
  define KernelPackage/tpm
    SUBMENU:=$(OTHER_MENU)
    TITLE:=TPM Hardware Support
@@ -1726,7 +1643,7 @@ index 204fd0599f..58dd2d6c25 100644
    KCONFIG:= CONFIG_TCG_TPM
    FILES:= $(LINUX_DIR)/drivers/char/tpm/tpm.ko
    AUTOLOAD:=$(call AutoLoad,10,tpm,1)
-@@ -1225,67 +1292,51 @@ endef
+@@ -1209,67 +1292,51 @@ endef
  $(eval $(call KernelPackage,tpm-i2c-infineon))
  
  
@@ -2111,34 +2028,6 @@ index 5ed0d5dbbf..59a2d79563 100644
 +endef
 +
 +$(eval $(call KernelPackage,vfio-pci))
-diff --git a/package/kernel/linux/modules/w1.mk b/package/kernel/linux/modules/w1.mk
-index e0f7eecb6e..9cba28da11 100644
---- a/package/kernel/linux/modules/w1.mk
-+++ b/package/kernel/linux/modules/w1.mk
-@@ -160,23 +160,6 @@ endef
- $(eval $(call KernelPackage,w1-slave-ds2433))
- 
- 
--define KernelPackage/w1-slave-ds2760
--  TITLE:=Dallas 2760 battery monitor chip (HP iPAQ & others)
--  KCONFIG:= \
--	CONFIG_W1_SLAVE_DS2760 \
--	CONFIG_W1_SLAVE_DS2433_CRC=n
--  FILES:=$(W1_SLAVES_DIR)/w1_ds2760.ko
--  AUTOLOAD:=$(call AutoProbe,w1_ds2760)
--  $(call AddDepends/w1)
--endef
--
--define KernelPackage/w1-slave-ds2760/description
-- Kernel module for 1-wire DS2760 battery monitor chip support
--endef
--
--$(eval $(call KernelPackage,w1-slave-ds2760))
--
--
- define KernelPackage/w1-slave-ds2413
-   TITLE:=DS2413 2 Ch. Addressable Switch
-   KCONFIG:= \
 -- 
-2.34.1
+2.38.1
 
