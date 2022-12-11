@@ -1,7 +1,7 @@
-From 30614c589c78322dd6488cd88769df1e94254e65 Mon Sep 17 00:00:00 2001
+From 7192bc48404d4aca2a777bd80b95593b5fd2e508 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Tue, 29 Nov 2022 14:29:40 +0100
-Subject: [PATCH] Generic hack patches 5.15
+Date: Sun, 11 Dec 2022 22:07:51 +0100
+Subject: [PATCH] Backport generic hack folder for 5.15
 
 ---
  .../generic/hack-5.15/204-module_strip.patch  |  212 ++
@@ -29,7 +29,7 @@ Subject: [PATCH] Generic hack patches 5.15
  .../hack-5.15/430-mtk-bmt-support.patch       |   33 +
  .../hack-5.15/600-bridge_offload.patch        |  846 +++++
  ...of_net-add-mac-address-ascii-support.patch |  112 +
- ...lter-connmark-introduce-set-dscpmark.patch |  212 ++
+ ...lter-connmark-introduce-set-dscpmark.patch |  214 ++
  ...-netfilter-add-xt_FLOWOFFLOAD-target.patch |  860 +++++
  .../hack-5.15/651-wireless_mesh_header.patch  |   24 +
  .../hack-5.15/660-fq_codel_defaults.patch     |   27 +
@@ -55,7 +55,7 @@ Subject: [PATCH] Generic hack patches 5.15
  .../911-kobject_add_broadcast_uevent.patch    |   76 +
  .../hack-5.15/920-device_tree_cmdline.patch   |   21 +
  ...vert-driver-core-Set-fw_devlink-on-b.patch |   30 +
- 51 files changed, 9087 insertions(+)
+ 51 files changed, 9089 insertions(+)
  create mode 100644 target/linux/generic/hack-5.15/204-module_strip.patch
  create mode 100644 target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch
  create mode 100644 target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
@@ -6116,10 +6116,10 @@ index 0000000000..83483751f8
 + 	}
 diff --git a/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch b/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch
 new file mode 100644
-index 0000000000..2d3fe01a75
+index 0000000000..c368c4ae3b
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/645-netfilter-connmark-introduce-set-dscpmark.patch
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,214 @@
 +From eda40b8c8c82e0f2789d6bc8bf63846dce2e8f32 Mon Sep 17 00:00:00 2001
 +From: Kevin Darbyshire-Bryant <ldir@darbyshire-bryant.me.uk>
 +Date: Sat, 23 Mar 2019 09:29:49 +0000
@@ -6231,7 +6231,7 @@ index 0000000000..2d3fe01a75
 + 	__u8 invert;
 +--- a/net/netfilter/xt_connmark.c
 ++++ b/net/netfilter/xt_connmark.c
-+@@ -24,12 +24,13 @@ MODULE_ALIAS("ipt_connmark");
++@@ -24,13 +24,13 @@ MODULE_ALIAS("ipt_connmark");
 + MODULE_ALIAS("ip6t_connmark");
 + 
 + static unsigned int
@@ -6242,20 +6242,22 @@ index 0000000000..2d3fe01a75
 + 	u_int32_t new_targetmark;
 + 	struct nf_conn *ct;
 + 	u_int32_t newmark;
++-	u_int32_t oldmark;
 ++	u_int8_t dscp;
 + 
 + 	ct = nf_ct_get(skb, &ctinfo);
 + 	if (ct == NULL)
-+@@ -37,12 +38,24 @@ connmark_tg_shift(struct sk_buff *skb, c
++@@ -38,13 +38,24 @@ connmark_tg_shift(struct sk_buff *skb, c
 + 
 + 	switch (info->mode) {
 + 	case XT_CONNMARK_SET:
-+-		newmark = (ct->mark & ~info->ctmask) ^ info->ctmark;
++-		oldmark = READ_ONCE(ct->mark);
++-		newmark = (oldmark & ~info->ctmask) ^ info->ctmark;
 +-		if (info->shift_dir == D_SHIFT_RIGHT)
 +-			newmark >>= info->shift_bits;
 +-		else
 +-			newmark <<= info->shift_bits;
-++		newmark = ct->mark;
+++		newmark = READ_ONCE(ct->mark);
 ++		if (info->func & XT_CONNMARK_VALUE) {
 ++			newmark = (newmark & ~info->ctmask) ^ info->ctmark;
 ++			if (info->shift_dir == D_SHIFT_RIGHT)
@@ -6273,10 +6275,10 @@ index 0000000000..2d3fe01a75
 ++			newmark = (newmark & ~info->ctmark) |
 ++				  (info->ctmask | (dscp << info->shift_bits));
 ++		}
-+ 		if (ct->mark != newmark) {
-+ 			ct->mark = newmark;
++ 		if (READ_ONCE(ct->mark) != newmark) {
++ 			WRITE_ONCE(ct->mark, newmark);
 + 			nf_conntrack_event_cache(IPCT_MARK, ct);
-+@@ -81,20 +94,36 @@ static unsigned int
++@@ -83,20 +94,36 @@ static unsigned int
 + connmark_tg(struct sk_buff *skb, const struct xt_action_param *par)
 + {
 + 	const struct xt_connmark_tginfo1 *info = par->targinfo;
@@ -6315,7 +6317,7 @@ index 0000000000..2d3fe01a75
 + 
 + 	return connmark_tg_shift(skb, info);
 + }
-+@@ -165,6 +194,16 @@ static struct xt_target connmark_tg_reg[
++@@ -167,6 +194,16 @@ static struct xt_target connmark_tg_reg[
 + 		.targetsize     = sizeof(struct xt_connmark_tginfo2),
 + 		.destroy        = connmark_tg_destroy,
 + 		.me             = THIS_MODULE,
@@ -8640,7 +8642,7 @@ index 0000000000..9fde1eaabb
 + static int match_export(struct device *dev, const void *desc)
 diff --git a/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch b/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
 new file mode 100644
-index 0000000000..ab629d598f
+index 0000000000..ac502bdd16
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/901-debloat_sock_diag.patch
 @@ -0,0 +1,162 @@
@@ -8768,7 +8770,7 @@ index 0000000000..ab629d598f
 + 	u64 res;
 +--- a/net/ipv4/Kconfig
 ++++ b/net/ipv4/Kconfig
-+@@ -414,6 +414,7 @@ config INET_TUNNEL
++@@ -424,6 +424,7 @@ config INET_TUNNEL
 + 
 + config INET_DIAG
 + 	tristate "INET: socket monitoring interface"
@@ -8808,7 +8810,7 @@ index 0000000000..ab629d598f
 + 	  Support for UNIX socket monitoring interface used by the ss tool.
 diff --git a/target/linux/generic/hack-5.15/902-debloat_proc.patch b/target/linux/generic/hack-5.15/902-debloat_proc.patch
 new file mode 100644
-index 0000000000..c58370eff1
+index 0000000000..753b9705bc
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/902-debloat_proc.patch
 @@ -0,0 +1,408 @@
@@ -9155,7 +9157,7 @@ index 0000000000..c58370eff1
 + 
 +--- a/net/ipv4/fib_trie.c
 ++++ b/net/ipv4/fib_trie.c
-+@@ -3022,11 +3022,13 @@ static const struct seq_operations fib_r
++@@ -3024,11 +3024,13 @@ static const struct seq_operations fib_r
 + 
 + int __net_init fib_proc_init(struct net *net)
 + {
@@ -9171,7 +9173,7 @@ index 0000000000..c58370eff1
 + 			fib_triestat_seq_show, NULL))
 + 		goto out2;
 + 
-+@@ -3037,17 +3039,21 @@ int __net_init fib_proc_init(struct net
++@@ -3039,17 +3041,21 @@ int __net_init fib_proc_init(struct net
 + 	return 0;
 + 
 + out3:
