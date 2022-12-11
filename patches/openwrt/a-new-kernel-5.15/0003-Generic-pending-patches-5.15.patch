@@ -1,7 +1,7 @@
-From dde8512fc111ac1c1f5df602f86c4810651c109a Mon Sep 17 00:00:00 2001
+From 7a64aadb588f254e7e22b405536380b831e8aa96 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Tue, 29 Nov 2022 10:55:43 +0100
-Subject: [PATCH] Generic pending 5.15 patches
+Date: Sun, 11 Dec 2022 21:31:50 +0100
+Subject: [PATCH] Backport pending patches 5.15
 
 ---
  ...include-asm-rwonce.h-for-kernel-code.patch |   29 +
@@ -77,7 +77,6 @@ Subject: [PATCH] Generic pending 5.15 patches
  ...83-of_net-add-mac-address-to-of-tree.patch |   55 +
  ...t-do-mac-address-increment-only-once.patch |   31 +
  ...ow_offload-handle-netdevice-events-f.patch |  106 +
- ...er-nf_flow_table-add-missing-locking.patch |   39 +
  ...net-mtk_eth_soc-enable-threaded-NAPI.patch |   41 +
  ...detach-callback-to-struct-phy_driver.patch |   38 +
  ...a-tag_mtk-add-padding-for-tx-packets.patch |   29 +
@@ -121,8 +120,9 @@ Subject: [PATCH] Generic pending 5.15 patches
  .../pending-5.15/834-ledtrig-libata.patch     |  149 +
  ...40-hwrng-bcm2835-set-quality-to-1000.patch |   26 +
  ...e-main-irq_chip-structure-a-static-d.patch |  102 +
+ ...-Fix-crash-by-zero-initializing-data.patch |   30 +
  .../pending-5.15/920-mangle_bootargs.patch    |   71 +
- 118 files changed, 17345 insertions(+)
+ 118 files changed, 17336 insertions(+)
  create mode 100644 target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
  create mode 100644 target/linux/generic/pending-5.15/101-Use-stddefs.h-instead-of-compiler.h.patch
  create mode 100644 target/linux/generic/pending-5.15/102-MIPS-only-process-negative-stack-offsets-on-stack-tr.patch
@@ -196,7 +196,6 @@ Subject: [PATCH] Generic pending 5.15 patches
  create mode 100644 target/linux/generic/pending-5.15/683-of_net-add-mac-address-to-of-tree.patch
  create mode 100644 target/linux/generic/pending-5.15/684-of_net-do-mac-address-increment-only-once.patch
  create mode 100644 target/linux/generic/pending-5.15/700-netfilter-nft_flow_offload-handle-netdevice-events-f.patch
- create mode 100644 target/linux/generic/pending-5.15/701-netfilter-nf_flow_table-add-missing-locking.patch
  create mode 100644 target/linux/generic/pending-5.15/702-net-ethernet-mtk_eth_soc-enable-threaded-NAPI.patch
  create mode 100644 target/linux/generic/pending-5.15/703-phy-add-detach-callback-to-struct-phy_driver.patch
  create mode 100644 target/linux/generic/pending-5.15/705-net-dsa-tag_mtk-add-padding-for-tx-packets.patch
@@ -240,6 +239,7 @@ Subject: [PATCH] Generic pending 5.15 patches
  create mode 100644 target/linux/generic/pending-5.15/834-ledtrig-libata.patch
  create mode 100644 target/linux/generic/pending-5.15/840-hwrng-bcm2835-set-quality-to-1000.patch
  create mode 100644 target/linux/generic/pending-5.15/850-0023-PCI-aardvark-Make-main-irq_chip-structure-a-static-d.patch
+ create mode 100644 target/linux/generic/pending-5.15/870-ca8210-Fix-crash-by-zero-initializing-data.patch
  create mode 100644 target/linux/generic/pending-5.15/920-mangle_bootargs.patch
 
 diff --git a/target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch b/target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
@@ -9767,7 +9767,7 @@ index 0000000000..4b4825ae3b
 + 
 diff --git a/target/linux/generic/pending-5.15/630-packet_socket_type.patch b/target/linux/generic/pending-5.15/630-packet_socket_type.patch
 new file mode 100644
-index 0000000000..c61935ffb0
+index 0000000000..c305aca6e0
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/630-packet_socket_type.patch
 @@ -0,0 +1,138 @@
@@ -9860,7 +9860,7 @@ index 0000000000..c61935ffb0
 + 	if (!net_eq(dev_net(dev), sock_net(sk)))
 + 		goto drop;
 + 
-+@@ -3330,6 +3332,7 @@ static int packet_create(struct net *net
++@@ -3329,6 +3331,7 @@ static int packet_create(struct net *net
 + 	mutex_init(&po->pg_vec_lock);
 + 	po->rollover = NULL;
 + 	po->prot_hook.func = packet_rcv;
@@ -9868,7 +9868,7 @@ index 0000000000..c61935ffb0
 + 
 + 	if (sock->type == SOCK_PACKET)
 + 		po->prot_hook.func = packet_rcv_spkt;
-+@@ -3971,6 +3974,16 @@ packet_setsockopt(struct socket *sock, i
++@@ -3969,6 +3972,16 @@ packet_setsockopt(struct socket *sock, i
 + 		po->xmit = val ? packet_direct_xmit : dev_queue_xmit;
 + 		return 0;
 + 	}
@@ -9885,7 +9885,7 @@ index 0000000000..c61935ffb0
 + 	default:
 + 		return -ENOPROTOOPT;
 + 	}
-+@@ -4027,6 +4040,13 @@ static int packet_getsockopt(struct sock
++@@ -4025,6 +4038,13 @@ static int packet_getsockopt(struct sock
 + 	case PACKET_VNET_HDR:
 + 		val = po->has_vnet_hdr;
 + 		break;
@@ -10454,7 +10454,7 @@ index 0000000000..2f6fbd59e4
 + static struct rtnl_link_ops ip6_link_ops __read_mostly = {
 diff --git a/target/linux/generic/pending-5.15/670-ipv6-allow-rejecting-with-source-address-failed-policy.patch b/target/linux/generic/pending-5.15/670-ipv6-allow-rejecting-with-source-address-failed-policy.patch
 new file mode 100644
-index 0000000000..c58e6b545b
+index 0000000000..bb30f372eb
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/670-ipv6-allow-rejecting-with-source-address-failed-policy.patch
 @@ -0,0 +1,263 @@
@@ -10526,7 +10526,7 @@ index 0000000000..c58e6b545b
 + static void rt_fibinfo_free(struct rtable __rcu **rtp)
 +--- a/net/ipv4/fib_trie.c
 ++++ b/net/ipv4/fib_trie.c
-+@@ -2770,6 +2770,7 @@ static const char *const rtn_type_names[
++@@ -2772,6 +2772,7 @@ static const char *const rtn_type_names[
 + 	[RTN_THROW] = "THROW",
 + 	[RTN_NAT] = "NAT",
 + 	[RTN_XRESOLVE] = "XRESOLVE",
@@ -11237,54 +11237,9 @@ index 0000000000..488c6a8d92
 + }
 + 
 + module_init(nft_flow_offload_module_init);
-diff --git a/target/linux/generic/pending-5.15/701-netfilter-nf_flow_table-add-missing-locking.patch b/target/linux/generic/pending-5.15/701-netfilter-nf_flow_table-add-missing-locking.patch
-new file mode 100644
-index 0000000000..9ff393a8b7
---- /dev/null
-+++ b/target/linux/generic/pending-5.15/701-netfilter-nf_flow_table-add-missing-locking.patch
-@@ -0,0 +1,39 @@
-+From: Felix Fietkau <nbd@nbd.name>
-+Date: Sat, 19 Nov 2022 18:48:42 +0100
-+Subject: [PATCH] netfilter: nf_flow_table: add missing locking
-+
-+nf_flow_table_block_setup and the driver TC_SETUP_FT call can modify the flow
-+block cb list while they are being traversed elsewhere, causing a crash.
-+Add a write lock around the calls to protect readers
-+
-+Signed-off-by: Felix Fietkau <nbd@nbd.name>
-+---
-+
-+--- a/net/netfilter/nf_flow_table_offload.c
-++++ b/net/netfilter/nf_flow_table_offload.c
-+@@ -1074,6 +1074,7 @@ static int nf_flow_table_block_setup(str
-+ 	struct flow_block_cb *block_cb, *next;
-+ 	int err = 0;
-+ 
-++	down_write(&flowtable->flow_block_lock);
-+ 	switch (cmd) {
-+ 	case FLOW_BLOCK_BIND:
-+ 		list_splice(&bo->cb_list, &flowtable->flow_block.cb_list);
-+@@ -1088,6 +1089,7 @@ static int nf_flow_table_block_setup(str
-+ 		WARN_ON_ONCE(1);
-+ 		err = -EOPNOTSUPP;
-+ 	}
-++	up_write(&flowtable->flow_block_lock);
-+ 
-+ 	return err;
-+ }
-+@@ -1144,7 +1146,9 @@ static int nf_flow_table_offload_cmd(str
-+ 
-+ 	nf_flow_table_block_offload_init(bo, dev_net(dev), cmd, flowtable,
-+ 					 extack);
-++	down_write(&flowtable->flow_block_lock);
-+ 	err = dev->netdev_ops->ndo_setup_tc(dev, TC_SETUP_FT, bo);
-++	up_write(&flowtable->flow_block_lock);
-+ 	if (err < 0)
-+ 		return err;
-+ 
 diff --git a/target/linux/generic/pending-5.15/702-net-ethernet-mtk_eth_soc-enable-threaded-NAPI.patch b/target/linux/generic/pending-5.15/702-net-ethernet-mtk_eth_soc-enable-threaded-NAPI.patch
 new file mode 100644
-index 0000000000..3e1486962c
+index 0000000000..3be68a9e35
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/702-net-ethernet-mtk_eth_soc-enable-threaded-NAPI.patch
 @@ -0,0 +1,41 @@
@@ -11320,7 +11275,7 @@ index 0000000000..3e1486962c
 + 	}
 + 
 + 	return IRQ_HANDLED;
-+@@ -4118,6 +4118,8 @@ static int mtk_probe(struct platform_dev
++@@ -4120,6 +4120,8 @@ static int mtk_probe(struct platform_dev
 + 	 * for NAPI to work
 + 	 */
 + 	init_dummy_netdev(&eth->dummy_dev);
@@ -11331,7 +11286,7 @@ index 0000000000..3e1486962c
 + 	netif_napi_add(&eth->dummy_dev, &eth->rx_napi, mtk_napi_rx,
 diff --git a/target/linux/generic/pending-5.15/703-phy-add-detach-callback-to-struct-phy_driver.patch b/target/linux/generic/pending-5.15/703-phy-add-detach-callback-to-struct-phy_driver.patch
 new file mode 100644
-index 0000000000..976239c128
+index 0000000000..5baccf73cb
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/703-phy-add-detach-callback-to-struct-phy_driver.patch
 @@ -0,0 +1,38 @@
@@ -11348,7 +11303,7 @@ index 0000000000..976239c128
 +
 +--- a/drivers/net/phy/phy_device.c
 ++++ b/drivers/net/phy/phy_device.c
-+@@ -1746,6 +1746,9 @@ void phy_detach(struct phy_device *phyde
++@@ -1748,6 +1748,9 @@ void phy_detach(struct phy_device *phyde
 + 	struct module *ndev_owner = NULL;
 + 	struct mii_bus *bus;
 + 
@@ -12046,7 +12001,7 @@ index 0000000000..d185aed7bd
 + 	return 0;
 diff --git a/target/linux/generic/pending-5.15/731-net-ethernet-mediatek-ppe-add-support-for-flow-accou.patch b/target/linux/generic/pending-5.15/731-net-ethernet-mediatek-ppe-add-support-for-flow-accou.patch
 new file mode 100644
-index 0000000000..8bf036d006
+index 0000000000..aea6a605a9
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/731-net-ethernet-mediatek-ppe-add-support-for-flow-accou.patch
 @@ -0,0 +1,409 @@
@@ -12105,7 +12060,7 @@ index 0000000000..8bf036d006
 +
 +--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 ++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-+@@ -4088,7 +4088,9 @@ static int mtk_probe(struct platform_dev
++@@ -4090,7 +4090,9 @@ static int mtk_probe(struct platform_dev
 + 			u32 ppe_addr = eth->soc->reg_map->ppe_base + i * 0x400;
 + 
 + 			eth->ppe[i] = mtk_ppe_init(eth, eth->base + ppe_addr,
@@ -12116,7 +12071,7 @@ index 0000000000..8bf036d006
 + 			if (!eth->ppe[i]) {
 + 				err = -ENOMEM;
 + 				goto err_free_dev;
-+@@ -4211,6 +4213,7 @@ static const struct mtk_soc_data mt7622_
++@@ -4213,6 +4215,7 @@ static const struct mtk_soc_data mt7622_
 + 	.required_pctl = false,
 + 	.offload_version = 2,
 + 	.hash_offset = 2,
@@ -12124,7 +12079,7 @@ index 0000000000..8bf036d006
 + 	.foe_entry_size = sizeof(struct mtk_foe_entry) - 16,
 + 	.txrx = {
 + 		.txd_size = sizeof(struct mtk_tx_dma),
-+@@ -4248,6 +4251,7 @@ static const struct mtk_soc_data mt7629_
++@@ -4250,6 +4253,7 @@ static const struct mtk_soc_data mt7629_
 + 	.hw_features = MTK_HW_FEATURES,
 + 	.required_clks = MT7629_CLKS_BITMAP,
 + 	.required_pctl = false,
@@ -12132,7 +12087,7 @@ index 0000000000..8bf036d006
 + 	.txrx = {
 + 		.txd_size = sizeof(struct mtk_tx_dma),
 + 		.rxd_size = sizeof(struct mtk_rx_dma),
-+@@ -4268,6 +4272,7 @@ static const struct mtk_soc_data mt7986_
++@@ -4270,6 +4274,7 @@ static const struct mtk_soc_data mt7986_
 + 	.offload_version = 2,
 + 	.hash_offset = 4,
 + 	.foe_entry_size = sizeof(struct mtk_foe_entry),
@@ -12638,7 +12593,7 @@ index 0000000000..c6526a39a8
 + #define MTK_RX_ETH_HLEN		(VLAN_ETH_HLEN + ETH_FCS_LEN)
 diff --git a/target/linux/generic/pending-5.15/732-03-net-ethernet-mtk_eth_soc-avoid-port_mg-assignment-on.patch b/target/linux/generic/pending-5.15/732-03-net-ethernet-mtk_eth_soc-avoid-port_mg-assignment-on.patch
 new file mode 100644
-index 0000000000..116ae011f0
+index 0000000000..2e9594c872
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/732-03-net-ethernet-mtk_eth_soc-avoid-port_mg-assignment-on.patch
 @@ -0,0 +1,52 @@
@@ -12656,7 +12611,7 @@ index 0000000000..116ae011f0
 +
 +--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 ++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-+@@ -4197,7 +4197,7 @@ static const struct mtk_soc_data mt7621_
++@@ -4199,7 +4199,7 @@ static const struct mtk_soc_data mt7621_
 + 	.hw_features = MTK_HW_FEATURES,
 + 	.required_clks = MT7621_CLKS_BITMAP,
 + 	.required_pctl = false,
@@ -12665,7 +12620,7 @@ index 0000000000..116ae011f0
 + 	.hash_offset = 2,
 + 	.foe_entry_size = sizeof(struct mtk_foe_entry) - 16,
 + 	.txrx = {
-+@@ -4237,7 +4237,7 @@ static const struct mtk_soc_data mt7623_
++@@ -4239,7 +4239,7 @@ static const struct mtk_soc_data mt7623_
 + 	.hw_features = MTK_HW_FEATURES,
 + 	.required_clks = MT7623_CLKS_BITMAP,
 + 	.required_pctl = true,
@@ -12696,7 +12651,7 @@ index 0000000000..116ae011f0
 + 
 diff --git a/target/linux/generic/pending-5.15/732-04-net-ethernet-mtk_eth_soc-implement-multi-queue-suppo.patch b/target/linux/generic/pending-5.15/732-04-net-ethernet-mtk_eth_soc-implement-multi-queue-suppo.patch
 new file mode 100644
-index 0000000000..fd1898586f
+index 0000000000..0e817cd272
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/732-04-net-ethernet-mtk_eth_soc-implement-multi-queue-suppo.patch
 @@ -0,0 +1,654 @@
@@ -13181,7 +13136,7 @@ index 0000000000..fd1898586f
 + static int mtk_open(struct net_device *dev)
 + {
 + 	struct mtk_mac *mac = netdev_priv(dev);
-+@@ -2970,7 +3125,8 @@ static int mtk_open(struct net_device *d
++@@ -2972,7 +3127,8 @@ static int mtk_open(struct net_device *d
 + 		refcount_inc(&eth->dma_refcnt);
 + 
 + 	phylink_start(mac->phylink);
@@ -13191,7 +13146,7 @@ index 0000000000..fd1898586f
 + 	return 0;
 + }
 + 
-+@@ -3486,8 +3642,12 @@ static int mtk_unreg_dev(struct mtk_eth
++@@ -3488,8 +3644,12 @@ static int mtk_unreg_dev(struct mtk_eth
 + 	int i;
 + 
 + 	for (i = 0; i < MTK_MAC_COUNT; i++) {
@@ -13204,7 +13159,7 @@ index 0000000000..fd1898586f
 + 		unregister_netdev(eth->netdev[i]);
 + 	}
 + 
-+@@ -3703,6 +3863,23 @@ static int mtk_set_rxnfc(struct net_devi
++@@ -3705,6 +3865,23 @@ static int mtk_set_rxnfc(struct net_devi
 + 	return ret;
 + }
 + 
@@ -13228,7 +13183,7 @@ index 0000000000..fd1898586f
 + static const struct ethtool_ops mtk_ethtool_ops = {
 + 	.get_link_ksettings	= mtk_get_link_ksettings,
 + 	.set_link_ksettings	= mtk_set_link_ksettings,
-+@@ -3738,6 +3915,7 @@ static const struct net_device_ops mtk_n
++@@ -3740,6 +3917,7 @@ static const struct net_device_ops mtk_n
 + 	.ndo_setup_tc		= mtk_eth_setup_tc,
 + 	.ndo_bpf		= mtk_xdp,
 + 	.ndo_xdp_xmit		= mtk_xdp_xmit,
@@ -13236,7 +13191,7 @@ index 0000000000..fd1898586f
 + };
 + 
 + static int mtk_add_mac(struct mtk_eth *eth, struct device_node *np)
-+@@ -3747,6 +3925,7 @@ static int mtk_add_mac(struct mtk_eth *e
++@@ -3749,6 +3927,7 @@ static int mtk_add_mac(struct mtk_eth *e
 + 	struct phylink *phylink;
 + 	struct mtk_mac *mac;
 + 	int id, err;
@@ -13244,7 +13199,7 @@ index 0000000000..fd1898586f
 + 
 + 	if (!_id) {
 + 		dev_err(eth->dev, "missing mac id\n");
-+@@ -3764,7 +3943,10 @@ static int mtk_add_mac(struct mtk_eth *e
++@@ -3766,7 +3945,10 @@ static int mtk_add_mac(struct mtk_eth *e
 + 		return -EINVAL;
 + 	}
 + 
@@ -13256,7 +13211,7 @@ index 0000000000..fd1898586f
 + 	if (!eth->netdev[id]) {
 + 		dev_err(eth->dev, "alloc_etherdev failed\n");
 + 		return -ENOMEM;
-+@@ -3861,6 +4043,11 @@ static int mtk_add_mac(struct mtk_eth *e
++@@ -3863,6 +4045,11 @@ static int mtk_add_mac(struct mtk_eth *e
 + 	else
 + 		eth->netdev[id]->max_mtu = MTK_MAX_RX_LENGTH_2K - MTK_RX_ETH_HLEN;
 + 
@@ -13593,7 +13548,7 @@ index 0000000000..0478cb528e
 + 		return 0;
 diff --git a/target/linux/generic/pending-5.15/732-09-net-ethernet-mtk_eth_soc-fix-VLAN-rx-hardware-accele.patch b/target/linux/generic/pending-5.15/732-09-net-ethernet-mtk_eth_soc-fix-VLAN-rx-hardware-accele.patch
 new file mode 100644
-index 0000000000..c109067802
+index 0000000000..933112c17a
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/732-09-net-ethernet-mtk_eth_soc-fix-VLAN-rx-hardware-accele.patch
 @@ -0,0 +1,192 @@
@@ -13734,7 +13689,7 @@ index 0000000000..c109067802
 + 
 + 	err = phylink_of_phy_connect(mac->phylink, mac->of_node, 0);
 + 	if (err) {
-+@@ -3417,6 +3473,10 @@ static int mtk_hw_init(struct mtk_eth *e
++@@ -3419,6 +3475,10 @@ static int mtk_hw_init(struct mtk_eth *e
 + 	 */
 + 	val = mtk_r32(eth, MTK_CDMQ_IG_CTRL);
 + 	mtk_w32(eth, val | MTK_CDMQ_STAG_EN, MTK_CDMQ_IG_CTRL);
@@ -13745,7 +13700,7 @@ index 0000000000..c109067802
 + 
 + 	/* Enable RX VLan Offloading */
 + 	mtk_w32(eth, 1, MTK_CDMP_EG_CTRL);
-+@@ -3634,6 +3694,12 @@ static int mtk_free_dev(struct mtk_eth *
++@@ -3636,6 +3696,12 @@ static int mtk_free_dev(struct mtk_eth *
 + 		free_netdev(eth->netdev[i]);
 + 	}
 + 
@@ -13902,7 +13857,7 @@ index 0000000000..f89ad6adb1
 + #define MTK_HW_FEATURES_MT7628	(NETIF_F_SG | NETIF_F_RXCSUM)
 diff --git a/target/linux/generic/pending-5.15/732-12-net-ethernet-mtk_eth_soc-drop-packets-to-WDMA-if-the.patch b/target/linux/generic/pending-5.15/732-12-net-ethernet-mtk_eth_soc-drop-packets-to-WDMA-if-the.patch
 new file mode 100644
-index 0000000000..9fa384e6fa
+index 0000000000..6568e890d2
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/732-12-net-ethernet-mtk_eth_soc-drop-packets-to-WDMA-if-the.patch
 @@ -0,0 +1,37 @@
@@ -13919,7 +13874,7 @@ index 0000000000..9fa384e6fa
 +
 +--- a/drivers/net/ethernet/mediatek/mtk_eth_soc.c
 ++++ b/drivers/net/ethernet/mediatek/mtk_eth_soc.c
-+@@ -3529,9 +3529,12 @@ static int mtk_hw_init(struct mtk_eth *e
++@@ -3531,9 +3531,12 @@ static int mtk_hw_init(struct mtk_eth *e
 + 	mtk_w32(eth, 0x21021000, MTK_FE_INT_GRP);
 + 
 + 	if (MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_V2)) {
@@ -14003,7 +13958,7 @@ index 0000000000..0664e0106f
 + 		block_cb = flow_block_cb_lookup(f->block, cb, dev);
 diff --git a/target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch b/target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch
 new file mode 100644
-index 0000000000..42f98e6aff
+index 0000000000..c3a879e5ab
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch
 @@ -0,0 +1,181 @@
@@ -14120,7 +14075,7 @@ index 0000000000..42f98e6aff
 + 	err = phylink_of_phy_connect(mac->phylink, mac->of_node, 0);
 + 	if (err) {
 + 		netdev_err(dev, "%s: could not attach PHY: %d\n", __func__,
-+@@ -3215,6 +3160,35 @@ static int mtk_open(struct net_device *d
++@@ -3217,6 +3162,35 @@ static int mtk_open(struct net_device *d
 + 	phylink_start(mac->phylink);
 + 	netif_tx_start_all_queues(dev);
 + 
@@ -14156,7 +14111,7 @@ index 0000000000..42f98e6aff
 + 	return 0;
 + }
 + 
-+@@ -3508,10 +3482,9 @@ static int mtk_hw_init(struct mtk_eth *e
++@@ -3510,10 +3484,9 @@ static int mtk_hw_init(struct mtk_eth *e
 + 	if (!MTK_HAS_CAPS(eth->soc->caps, MTK_NETSYS_V2)) {
 + 		val = mtk_r32(eth, MTK_CDMP_IG_CTRL);
 + 		mtk_w32(eth, val | MTK_CDMP_STAG_EN, MTK_CDMP_IG_CTRL);
@@ -14169,7 +14124,7 @@ index 0000000000..42f98e6aff
 + 
 + 	/* set interrupt delays based on current Net DIM sample */
 + 	mtk_dim_rx(&eth->rx_dim.work);
-+@@ -4132,7 +4105,7 @@ static int mtk_add_mac(struct mtk_eth *e
++@@ -4134,7 +4107,7 @@ static int mtk_add_mac(struct mtk_eth *e
 + 		eth->netdev[id]->hw_features |= NETIF_F_LRO;
 + 
 + 	eth->netdev[id]->vlan_features = eth->soc->hw_features &
@@ -18218,6 +18173,42 @@ index 0000000000..e180a385e1
 + 	of_node_put(pcie_intc_node);
 + 	return ret;
 + }
+diff --git a/target/linux/generic/pending-5.15/870-ca8210-Fix-crash-by-zero-initializing-data.patch b/target/linux/generic/pending-5.15/870-ca8210-Fix-crash-by-zero-initializing-data.patch
+new file mode 100644
+index 0000000000..1fbf78dd3d
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/870-ca8210-Fix-crash-by-zero-initializing-data.patch
+@@ -0,0 +1,30 @@
++From 1e24c54da257ab93cff5826be8a793b014a5dc9c Mon Sep 17 00:00:00 2001
++From: Hauke Mehrtens <hauke@hauke-m.de>
++Date: Mon, 21 Nov 2022 01:22:01 +0100
++Subject: ca8210: Fix crash by zero initializing data
++
++The struct cas_control embeds multiple generic SPI structures and we
++have to make sure these structures are initialized to default values.
++This driver does not set all attributes. When using kmalloc before some
++attributes were not initialized and contained random data which caused
++random crashes at bootup.
++
++Fixes: ded845a781a5 ("ieee802154: Add CA8210 IEEE 802.15.4 device driver")
++Signed-off-by: Hauke Mehrtens <hauke@hauke-m.de>
++Link: https://lore.kernel.org/r/20221121002201.1339636-1-hauke@hauke-m.de
++Signed-off-by: Stefan Schmidt <stefan@datenfreihafen.org>
++---
++ drivers/net/ieee802154/ca8210.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++--- a/drivers/net/ieee802154/ca8210.c
+++++ b/drivers/net/ieee802154/ca8210.c
++@@ -927,7 +927,7 @@ static int ca8210_spi_transfer(
++ 
++ 	dev_dbg(&spi->dev, "%s called\n", __func__);
++ 
++-	cas_ctl = kmalloc(sizeof(*cas_ctl), GFP_ATOMIC);
+++	cas_ctl = kzalloc(sizeof(*cas_ctl), GFP_ATOMIC);
++ 	if (!cas_ctl)
++ 		return -ENOMEM;
++ 
 diff --git a/target/linux/generic/pending-5.15/920-mangle_bootargs.patch b/target/linux/generic/pending-5.15/920-mangle_bootargs.patch
 new file mode 100644
 index 0000000000..2a02efe0aa
