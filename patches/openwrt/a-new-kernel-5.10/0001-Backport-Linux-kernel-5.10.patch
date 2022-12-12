@@ -1032,7 +1032,6 @@ Subject: [PATCH] Backport Linux kernel 5.10
  create mode 100644 target/linux/mpc85xx/patches-5.10/105-powerpc-85xx-panda-support.patch
  create mode 100644 target/linux/mpc85xx/patches-5.10/106-powerpc-85xx-ws-ap3710i-support.patch
  create mode 100644 target/linux/mpc85xx/patches-5.10/107-powerpc-85xx-add-ws-ap3825i-support.patch
- create mode 100644 target/linux/mpc85xx/patches-5.10/900-powerpc-bootwrapper-disable-uImage-generation.patch
 
 diff --git a/target/linux/generic/backport-5.10/005-v5.17-01-Kbuild-use-Wdeclaration-after-statement.patch b/target/linux/generic/backport-5.10/005-v5.17-01-Kbuild-use-Wdeclaration-after-statement.patch
 new file mode 100644
@@ -83737,54 +83736,6 @@ index 0000000000..1829a78ec4
 + obj-$(CONFIG_CORENET_GENERIC)   += corenet_generic.o
 + obj-$(CONFIG_FB_FSL_DIU)	+= t1042rdb_diu.o
 + obj-$(CONFIG_RED_15W_REV1)	+= red15w_rev1.o
-diff --git a/target/linux/mpc85xx/patches-5.10/900-powerpc-bootwrapper-disable-uImage-generation.patch b/target/linux/mpc85xx/patches-5.10/900-powerpc-bootwrapper-disable-uImage-generation.patch
-new file mode 100644
-index 0000000000..0f784a1051
---- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.10/900-powerpc-bootwrapper-disable-uImage-generation.patch
-@@ -0,0 +1,42 @@
-+From d43ab14605510d9d2bd257a8cd70f24ada4621b0 Mon Sep 17 00:00:00 2001
-+From: David Bauer <mail@david-bauer.net>
-+Date: Sat, 29 Feb 2020 14:27:04 +0100
-+Subject: [PATCH] powerpc: bootwrapper: disable uImage generation
-+
-+Due to CONFIG_KERNEL_XZ symbol, the bootwrapper code tries to
-+instruct the mkimage to use the xz compression, which isn't
-+supported. This disables the uImage generation, as OpenWrt
-+generates individual uImages for each board using it's own
-+toolchain.
-+
-+Signed-off-by: David Bauer <mail@david-bauer.net>
-+---
-+ arch/powerpc/boot/Makefile | 9 ---------
-+ 1 file changed, 9 deletions(-)
-+
-+--- a/arch/powerpc/boot/Makefile
-++++ b/arch/powerpc/boot/Makefile
-+@@ -265,7 +265,6 @@ image-$(CONFIG_PPC_CHRP)		+= zImage.chrp
-+ image-$(CONFIG_PPC_EFIKA)		+= zImage.chrp
-+ image-$(CONFIG_PPC_PMAC)		+= zImage.pmac
-+ image-$(CONFIG_PPC_HOLLY)		+= dtbImage.holly
-+-image-$(CONFIG_DEFAULT_UIMAGE)		+= uImage
-+ image-$(CONFIG_EPAPR_BOOT)		+= zImage.epapr
-+ 
-+ #
-+@@ -396,15 +395,6 @@ $(obj)/dtbImage.%: vmlinux $(wrapperbits
-+ $(obj)/vmlinux.strip: vmlinux
-+ 	$(STRIP) -s -R .comment $< -o $@
-+ 
-+-$(obj)/uImage: vmlinux $(wrapperbits) FORCE
-+-	$(call if_changed,wrap,uboot)
-+-
-+-$(obj)/uImage.initrd.%: vmlinux $(obj)/dts/%.dtb $(wrapperbits) FORCE
-+-	$(call if_changed,wrap,uboot-$*,,$(obj)/dts/$*.dtb,$(obj)/ramdisk.image.gz)
-+-
-+-$(obj)/uImage.%: vmlinux $(obj)/dts/%.dtb $(wrapperbits) FORCE
-+-	$(call if_changed,wrap,uboot-$*,,$(obj)/dts/$*.dtb)
-+-
-+ $(obj)/cuImage.initrd.%: vmlinux $(obj)/dts/%.dtb $(wrapperbits) FORCE
-+ 	$(call if_changed,wrap,cuboot-$*,,$(obj)/dts/$*.dtb,$(obj)/ramdisk.image.gz)
-+ 
 -- 
 2.34.1
 
