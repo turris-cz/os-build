@@ -1,6 +1,6 @@
-From 7192bc48404d4aca2a777bd80b95593b5fd2e508 Mon Sep 17 00:00:00 2001
+From b934e6c50e6a67cad0ca2fdf65dff593f60537a8 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Sun, 11 Dec 2022 22:07:51 +0100
+Date: Mon, 19 Dec 2022 16:01:26 +0100
 Subject: [PATCH] Backport generic hack folder for 5.15
 
 ---
@@ -20,6 +20,7 @@ Subject: [PATCH] Backport generic hack folder for 5.15
  .../260-crypto_test_dependencies.patch        |   52 +
  .../hack-5.15/261-lib-arc4-unhide.patch       |   24 +
  .../generic/hack-5.15/280-rfkill-stubs.patch  |   84 +
+ ...v88e6xxx-depend-on-PTP-conditionally.patch |   44 +
  ...cache-use-more-efficient-cache-blast.patch |   64 +
  .../321-powerpc_crtsavres_prereq.patch        |   38 +
  ...rans-call-add-disks-after-mtd-device.patch |   98 +
@@ -55,7 +56,7 @@ Subject: [PATCH] Backport generic hack folder for 5.15
  .../911-kobject_add_broadcast_uevent.patch    |   76 +
  .../hack-5.15/920-device_tree_cmdline.patch   |   21 +
  ...vert-driver-core-Set-fw_devlink-on-b.patch |   30 +
- 51 files changed, 9089 insertions(+)
+ 52 files changed, 9133 insertions(+)
  create mode 100644 target/linux/generic/hack-5.15/204-module_strip.patch
  create mode 100644 target/linux/generic/hack-5.15/205-kconfig-abort-configuration-on-unset-symbol.patch
  create mode 100644 target/linux/generic/hack-5.15/210-darwin_scripts_include.patch
@@ -72,6 +73,7 @@ Subject: [PATCH] Backport generic hack folder for 5.15
  create mode 100644 target/linux/generic/hack-5.15/260-crypto_test_dependencies.patch
  create mode 100644 target/linux/generic/hack-5.15/261-lib-arc4-unhide.patch
  create mode 100644 target/linux/generic/hack-5.15/280-rfkill-stubs.patch
+ create mode 100644 target/linux/generic/hack-5.15/290-net-dsa-mv88e6xxx-depend-on-PTP-conditionally.patch
  create mode 100644 target/linux/generic/hack-5.15/300-MIPS-r4k_cache-use-more-efficient-cache-blast.patch
  create mode 100644 target/linux/generic/hack-5.15/321-powerpc_crtsavres_prereq.patch
  create mode 100644 target/linux/generic/hack-5.15/402-mtd-blktrans-call-add-disks-after-mtd-device.patch
@@ -4511,6 +4513,56 @@ index 0000000000..7a650d132e
 +-obj-$(CONFIG_RFKILL)		+= rfkill.o
 ++obj-$(CONFIG_RFKILL_FULL)	+= rfkill.o
 + obj-$(CONFIG_RFKILL_GPIO)	+= rfkill-gpio.o
+diff --git a/target/linux/generic/hack-5.15/290-net-dsa-mv88e6xxx-depend-on-PTP-conditionally.patch b/target/linux/generic/hack-5.15/290-net-dsa-mv88e6xxx-depend-on-PTP-conditionally.patch
+new file mode 100644
+index 0000000000..86b03d156e
+--- /dev/null
++++ b/target/linux/generic/hack-5.15/290-net-dsa-mv88e6xxx-depend-on-PTP-conditionally.patch
+@@ -0,0 +1,44 @@
++From e6866ed4219b8c7754dcd3eb1a654f6f524b0e56 Mon Sep 17 00:00:00 2001
++From: "Johnny S. Lee" <foss@jsl.io>
++Date: Thu, 15 Dec 2022 17:49:04 +0800
++Subject: [PATCH] net: dsa: mv88e6xxx: depend on PTP conditionally
++
++PTP hardware timestamping related objects are not linked when PTP
++support for MV88E6xxx (NET_DSA_MV88E6XXX_PTP) is disabled, therefore
++NET_DSA_MV88E6XXX should not depend on PTP_1588_CLOCK_OPTIONAL
++regardless of NET_DSA_MV88E6XXX_PTP.
++
++Instead, condition more strictly on how NET_DSA_MV88E6XXX_PTP's
++dependencies are met, making sure that it cannot be enabled when
++NET_DSA_MV88E6XXX=y and PTP_1588_CLOCK=m.
++
++In other words, this commit allows NET_DSA_MV88E6XXX to be built-in
++while PTP_1588_CLOCK is a module, as long as NET_DSA_MV88E6XXX_PTP is
++prevented from being enabled.
++
++Fixes: e5f31552674e ("ethernet: fix PTP_1588_CLOCK dependencies")
++Signed-off-by: Johnny S. Lee <foss@jsl.io>
++---
++ drivers/net/dsa/mv88e6xxx/Kconfig | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++--- a/drivers/net/dsa/mv88e6xxx/Kconfig
+++++ b/drivers/net/dsa/mv88e6xxx/Kconfig
++@@ -2,7 +2,6 @@
++ config NET_DSA_MV88E6XXX
++ 	tristate "Marvell 88E6xxx Ethernet switch fabric support"
++ 	depends on NET_DSA
++-	depends on PTP_1588_CLOCK_OPTIONAL
++ 	select IRQ_DOMAIN
++ 	select NET_DSA_TAG_EDSA
++ 	select NET_DSA_TAG_DSA
++@@ -13,7 +12,8 @@ config NET_DSA_MV88E6XXX
++ config NET_DSA_MV88E6XXX_PTP
++ 	bool "PTP support for Marvell 88E6xxx"
++ 	default n
++-	depends on NET_DSA_MV88E6XXX && PTP_1588_CLOCK
+++	depends on (NET_DSA_MV88E6XXX = y && PTP_1588_CLOCK = y) || \
+++	           (NET_DSA_MV88E6XXX = m && PTP_1588_CLOCK)
++ 	help
++ 	  Say Y to enable PTP hardware timestamping on Marvell 88E6xxx switch
++ 	  chips that support it.
 diff --git a/target/linux/generic/hack-5.15/300-MIPS-r4k_cache-use-more-efficient-cache-blast.patch b/target/linux/generic/hack-5.15/300-MIPS-r4k_cache-use-more-efficient-cache-blast.patch
 new file mode 100644
 index 0000000000..f21f200136
@@ -5998,7 +6050,7 @@ index 0000000000..9d71a741b2
 + 		skb_dst_set(skb, &tunnel_dst->dst);
 diff --git a/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch b/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch
 new file mode 100644
-index 0000000000..83483751f8
+index 0000000000..4ab05b4ea6
 --- /dev/null
 +++ b/target/linux/generic/hack-5.15/601-of_net-add-mac-address-ascii-support.patch
 @@ -0,0 +1,112 @@
@@ -6026,7 +6078,7 @@ index 0000000000..83483751f8
 ++
 ++	mac = nvmem_cell_read(cell, &len);
 ++	if (IS_ERR(mac))
-++		return PTR_ERR(mac);
+++		return mac;
 ++	if (len != ETH_ALEN) {
 ++		kfree(mac);
 ++		return ERR_PTR(-EINVAL);
@@ -6043,7 +6095,7 @@ index 0000000000..83483751f8
 ++
 ++	mac_ascii = nvmem_cell_read(cell, &len);
 ++	if (IS_ERR(mac_ascii))
-++		return PTR_ERR(mac_ascii);
+++		return mac_ascii;
 ++	if (len != ETH_ALEN*2+5) {
 ++		kfree(mac_ascii);
 ++		return ERR_PTR(-EINVAL);
