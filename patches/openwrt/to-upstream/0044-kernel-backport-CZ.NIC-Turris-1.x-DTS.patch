@@ -1,21 +1,21 @@
-From 6df5a8345f75ec63b465ff4575713d6a01f9316b Mon Sep 17 00:00:00 2001
+From 38dfceb52e53de48c56dd761d35a884ebd52593e Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Thu, 14 Jul 2022 10:15:18 +0200
+Date: Thu, 22 Dec 2022 10:39:59 +0100
 Subject: [PATCH] kernel: backport CZ.NIC Turris 1.x DTS
 
 Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
 ---
- .../900-v5.20-powerpc-add-Turris-1x-dts.patch | 508 ++++++++++++++++++
- 1 file changed, 508 insertions(+)
+ .../900-v5.20-powerpc-add-Turris-1x-dts.patch | 530 ++++++++++++++++++
+ 1 file changed, 530 insertions(+)
  create mode 100644 target/linux/generic/backport-5.15/900-v5.20-powerpc-add-Turris-1x-dts.patch
 
 diff --git a/target/linux/generic/backport-5.15/900-v5.20-powerpc-add-Turris-1x-dts.patch b/target/linux/generic/backport-5.15/900-v5.20-powerpc-add-Turris-1x-dts.patch
 new file mode 100644
-index 0000000000..b87db861cc
+index 0000000000..8eaaf37261
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/900-v5.20-powerpc-add-Turris-1x-dts.patch
-@@ -0,0 +1,508 @@
-+From 54c15ec3b738c6086f2be001dae962ec412640e5 Mon Sep 17 00:00:00 2001
+@@ -0,0 +1,530 @@
++From 1581cd4dab415f0834d9d217a434add69c58ddc6 Mon Sep 17 00:00:00 2001
 +From: Pali Rohár <pali@kernel.org>
 +Date: Fri, 24 Jun 2022 10:55:50 +0200
 +Subject: powerpc: dts: Add DTS file for CZ.NIC Turris 1.x routers
@@ -35,16 +35,16 @@ index 0000000000..b87db861cc
 +Signed-off-by: Michael Ellerman <mpe@ellerman.id.au>
 +Link: https://lore.kernel.org/r/20220624085550.20570-1-pali@kernel.org
 +---
-+ arch/powerpc/boot/dts/turris1x.dts | 475 +++++++++++++++++++++++++++++++++++++
-+ 1 file changed, 475 insertions(+)
++ arch/powerpc/boot/dts/turris1x.dts | 497 +++++++++++++++++++++++++++++
++ 1 file changed, 497 insertions(+)
 + create mode 100644 arch/powerpc/boot/dts/turris1x.dts
 +
 +diff --git a/arch/powerpc/boot/dts/turris1x.dts b/arch/powerpc/boot/dts/turris1x.dts
 +new file mode 100644
-+index 0000000000000..c76b628cf0262
++index 000000000000..e9cda34a140e
 +--- /dev/null
 ++++ b/arch/powerpc/boot/dts/turris1x.dts
-+@@ -0,0 +1,475 @@
++@@ -0,0 +1,497 @@
 ++// SPDX-License-Identifier: GPL-2.0+
 ++/*
 ++ * Turris 1.x Device Tree Source
@@ -116,6 +116,20 @@ index 0000000000..b87db861cc
 ++				interrupt-parent = <&gpio>;
 ++				interrupts = <12 IRQ_TYPE_LEVEL_LOW>, /* GPIO12 - ALERT pin */
 ++					     <13 IRQ_TYPE_LEVEL_LOW>; /* GPIO13 - CRIT pin */
+++				#address-cells = <1>;
+++				#size-cells = <0>;
+++
+++				/* Local temperature sensor (SA56004ED internal) */
+++				channel@0 {
+++					reg = <0>;
+++					label = "board";
+++				};
+++
+++				/* Remote temperature sensor (D+/D- connected to P2020 CPU Temperature Diode) */
+++				channel@1 {
+++					reg = <1>;
+++					label = "cpu";
+++				};
 ++			};
 ++
 ++			/* DDR3 SPD/EEPROM */
@@ -379,7 +393,7 @@ index 0000000000..b87db861cc
 ++			 * Turris CPLD firmware is open source and available at:
 ++			 * https://gitlab.nic.cz/turris/hw/turris_cpld/-/blob/master/CZ_NIC_Router_CPLD.v
 ++			 */
-++			compatible = "cznic,turris1x-cpld", "fsl,p1021rdb-pc-cpld", "simple-bus";
+++			compatible = "cznic,turris1x-cpld", "fsl,p1021rdb-pc-cpld", "simple-bus", "syscon";
 ++			reg = <0x3 0x0 0x30>;
 ++			#address-cells = <1>;
 ++			#size-cells = <1>;
@@ -397,6 +411,14 @@ index 0000000000..b87db861cc
 ++				compatible = "maxim,max6370";
 ++				reg = <0x02 0x01>;
 ++				gpios = <&gpio 11 GPIO_ACTIVE_LOW>;
+++			};
+++
+++			reboot@d {
+++				compatible = "syscon-reboot";
+++				reg = <0x0d 0x01>;
+++				offset = <0x0d>;
+++				mask = <0x01>;
+++				value = <0x01>;
 ++			};
 ++
 ++			led-controller@13 {
@@ -521,7 +543,7 @@ index 0000000000..b87db861cc
 ++
 ++/include/ "fsl/p2020si-post.dtsi"
 +-- 
-+cgit 
++2.34.1
 +
 -- 
 2.34.1
