@@ -1,0 +1,51 @@
+From 718197001148a24ecf15ef807263c708854581bf Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Wed, 28 Dec 2022 22:59:30 +0100
+Subject: [PATCH] hostapd: Add support for card specific hacks
+
+Hacky way to allow to override any settings for individual cards. This
+makes it possible to fix configuration of cards that wrongly report
+their capabilities.
+
+Proper way is to somehow integrate it upfront, override reading of
+possible capabilities and disable the options in all UIs and properly
+report options that are not supported.
+
+That would be quite some complex work and would take quite some time.
+But this solution is simple enough and allows us to correct wrong
+settings and make problematic cards work again.
+---
+ package/network/services/hostapd/files/hostapd.sh | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/package/network/services/hostapd/files/hostapd.sh b/package/network/services/hostapd/files/hostapd.sh
+index 3c08d55c5d..284ce50812 100644
+--- a/package/network/services/hostapd/files/hostapd.sh
++++ b/package/network/services/hostapd/files/hostapd.sh
+@@ -129,6 +129,11 @@ hostapd_prepare_device_config() {
+ 	set_default airtime_mode 0
+ 	set_default cell_density 0
+ 
++	local card_id="$(cat /sys/class/ieee80211/${phy}/device/vendor)-$(cat /sys/class/ieee80211/${phy}/device/device)"
++	if [ -r /lib/netifd/wireless/hacks/${card_id}-device ]; then
++		. /lib/netifd/wireless/hacks/${card_id}-device
++	fi
++
+ 	[ -n "$country" ] && {
+ 		append base_cfg "country_code=$country" "$N"
+ 		[ -n "$country3" ] && append base_cfg "country3=$country3" "$N"
+@@ -546,6 +551,11 @@ hostapd_set_bss_options() {
+ 	set_default airtime_bss_limit 0
+ 	set_default eap_server 0
+ 
++	local card_id="$(cat /sys/class/ieee80211/${phy}/device/vendor)-$(cat /sys/class/ieee80211/${phy}/device/device)"
++	if [ -r /lib/netifd/wireless/hacks/${card_id}-bss ]; then
++		. /lib/netifd/wireless/hacks/${card_id}-bss
++	fi
++
+ 	append bss_conf "ctrl_interface=/var/run/hostapd"
+ 	if [ "$isolate" -gt 0 ]; then
+ 		append bss_conf "ap_isolate=$isolate" "$N"
+-- 
+2.39.0
+
