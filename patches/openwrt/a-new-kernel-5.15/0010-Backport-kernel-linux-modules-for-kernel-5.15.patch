@@ -1,35 +1,37 @@
-From 2ac9f9e3cd9092305e5fd007e1bec91ea21ad1e4 Mon Sep 17 00:00:00 2001
+From b05205666520bba13e13beaba804a35a95a27f04 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Tue, 13 Dec 2022 11:47:02 +0100
+Date: Sat, 7 Jan 2023 06:48:28 +0100
 Subject: [PATCH] Backport kernel/linux/modules for kernel 5.15
 
+From OpenWrt master branch: ebe2b7190b7d8815a588eaf8a5cfdf9edfd85c36
+("kernel: modules: package Marvell gigE PHY driver")
 ---
  .../linux/files/sysctl-nf-conntrack.conf      |   1 -
- package/kernel/linux/modules/block.mk         |  64 ++--
+ package/kernel/linux/modules/block.mk         |  41 +--
  package/kernel/linux/modules/can.mk           |   2 +-
- package/kernel/linux/modules/crypto.mk        | 119 +++---
- package/kernel/linux/modules/fs.mk            | 125 +++++-
- package/kernel/linux/modules/gpio-cascade.mk  |  20 +
+ package/kernel/linux/modules/crypto.mk        |  97 +++---
+ package/kernel/linux/modules/fs.mk            | 125 ++++++-
+ package/kernel/linux/modules/gpio-cascade.mk  |  20 ++
  package/kernel/linux/modules/hwmon.mk         |  90 ++++-
  package/kernel/linux/modules/i2c.mk           |  29 ++
- package/kernel/linux/modules/iio.mk           | 142 ++++---
+ package/kernel/linux/modules/iio.mk           | 128 ++++---
  package/kernel/linux/modules/input.mk         |  31 +-
  package/kernel/linux/modules/leds.mk          |  85 +++++
- package/kernel/linux/modules/lib.mk           |  27 +-
+ package/kernel/linux/modules/lib.mk           |  23 +-
  package/kernel/linux/modules/multiplexer.mk   |  34 ++
- package/kernel/linux/modules/netdevices.mk    | 310 ++++++++++++++-
- package/kernel/linux/modules/netfilter.mk     | 151 ++++++--
- package/kernel/linux/modules/netsupport.mk    | 358 +++++++++++++-----
+ package/kernel/linux/modules/netdevices.mk    | 310 ++++++++++++++++-
+ package/kernel/linux/modules/netfilter.mk     | 134 +++++--
+ package/kernel/linux/modules/netsupport.mk    | 326 ++++++++++++++----
  package/kernel/linux/modules/nls.mk           |   6 +-
- package/kernel/linux/modules/other.mk         | 289 ++++++++------
+ package/kernel/linux/modules/other.mk         | 269 ++++++++++-----
  package/kernel/linux/modules/sound.mk         |  11 +-
  package/kernel/linux/modules/spi.mk           |   5 +-
- package/kernel/linux/modules/usb.mk           | 198 ++++++++--
+ package/kernel/linux/modules/usb.mk           | 198 +++++++++--
  package/kernel/linux/modules/video.mk         |  51 ++-
  package/kernel/linux/modules/virt.mk          |  48 ++-
- package/kernel/linux/modules/w1.mk            |  19 +-
- package/kernel/linux/modules/wireless.mk      |  42 --
- 25 files changed, 1726 insertions(+), 531 deletions(-)
+ package/kernel/linux/modules/w1.mk            |   2 +-
+ package/kernel/linux/modules/wireless.mk      |  42 ---
+ 25 files changed, 1662 insertions(+), 446 deletions(-)
  create mode 100644 package/kernel/linux/modules/gpio-cascade.mk
  create mode 100644 package/kernel/linux/modules/multiplexer.mk
  delete mode 100644 package/kernel/linux/modules/wireless.mk
@@ -47,7 +49,7 @@ index 37baf5fd6f..c6a0ef362b 100644
  net.netfilter.nf_conntrack_udp_timeout=60
  net.netfilter.nf_conntrack_udp_timeout_stream=180
 diff --git a/package/kernel/linux/modules/block.mk b/package/kernel/linux/modules/block.mk
-index 373c9fbaab..f6c9df0698 100644
+index bb077ab643..f6c9df0698 100644
 --- a/package/kernel/linux/modules/block.mk
 +++ b/package/kernel/linux/modules/block.mk
 @@ -90,21 +90,6 @@ endef
@@ -99,35 +101,7 @@ index 373c9fbaab..f6c9df0698 100644
  endef
  
  define KernelPackage/loop/description
-@@ -508,16 +493,41 @@ endef
- $(eval $(call KernelPackage,nbd))
- 
- 
-+define KernelPackage/nvme
-+  SUBMENU:=$(BLOCK_MENU)
-+  TITLE:=NVM Express block device
-+  DEPENDS:=@PCI_SUPPORT
-+  KCONFIG:= \
-+	CONFIG_NVME_CORE \
-+	CONFIG_BLK_DEV_NVME \
-+	CONFIG_NVME_MULTIPATH=n \
-+	CONFIG_NVME_HWMON=n
-+  FILES:= \
-+	$(LINUX_DIR)/drivers/nvme/host/nvme-core.ko \
-+	$(LINUX_DIR)/drivers/nvme/host/nvme.ko
-+  AUTOLOAD:=$(call AutoLoad,30,nvme-core nvme)
-+endef
-+
-+define KernelPackage/nvme/description
-+ Kernel module for NVM Express solid state drives directly
-+ connected to the PCI or PCI Express bus.
-+endef
-+
-+$(eval $(call KernelPackage,nvme))
-+
-+
- define KernelPackage/scsi-core
-   SUBMENU:=$(BLOCK_MENU)
+@@ -536,11 +521,13 @@ define KernelPackage/scsi-core
    TITLE:=SCSI device support
    KCONFIG:= \
  	CONFIG_SCSI \
@@ -142,7 +116,7 @@ index 373c9fbaab..f6c9df0698 100644
  endef
  
  $(eval $(call KernelPackage,scsi-core))
-@@ -537,16 +547,24 @@ endef
+@@ -560,16 +547,24 @@ endef
  $(eval $(call KernelPackage,scsi-generic))
  
  
@@ -185,7 +159,7 @@ index 3060fc0966..9cdebb9091 100644
  
  define KernelPackage/can-flexcan/description
 diff --git a/package/kernel/linux/modules/crypto.mk b/package/kernel/linux/modules/crypto.mk
-index 4e0a73ccf2..83048e50d3 100644
+index 4261e0693c..83048e50d3 100644
 --- a/package/kernel/linux/modules/crypto.mk
 +++ b/package/kernel/linux/modules/crypto.mk
 @@ -40,7 +40,9 @@ define KernelPackage/crypto-aead
@@ -331,29 +305,7 @@ index 4e0a73ccf2..83048e50d3 100644
    KCONFIG:= \
  	CONFIG_CRYPTO_MANAGER \
  	CONFIG_CRYPTO_MANAGER2
-@@ -601,7 +634,8 @@ define KernelPackage/crypto-md5
-   DEPENDS:=+kmod-crypto-hash
-   KCONFIG:= \
- 	CONFIG_CRYPTO_MD5 \
--	CONFIG_CRYPTO_MD5_OCTEON
-+	CONFIG_CRYPTO_MD5_OCTEON \
-+	CONFIG_CRYPTO_MD5_PPC
-   FILES:=$(LINUX_DIR)/crypto/md5.ko
-   AUTOLOAD:=$(call AutoLoad,09,md5)
-   $(call AddDepends/crypto)
-@@ -612,6 +646,11 @@ define KernelPackage/crypto-md5/octeon
-   AUTOLOAD+=$(call AutoLoad,09,octeon-md5)
- endef
- 
-+define KernelPackage/crypto-md5/mpc85xx
-+  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/md5-ppc.ko
-+  AUTOLOAD+=$(call AutoLoad,09,md5-ppc)
-+endef
-+
- $(eval $(call KernelPackage,crypto-md5))
- 
- 
-@@ -631,6 +670,7 @@ define KernelPackage/crypto-misc
+@@ -637,6 +670,7 @@ define KernelPackage/crypto-misc
    TITLE:=Other CryptoAPI modules
    DEPENDS:=+kmod-crypto-xts
    KCONFIG:= \
@@ -361,7 +313,7 @@ index 4e0a73ccf2..83048e50d3 100644
  	CONFIG_CRYPTO_CAMELLIA_X86_64 \
  	CONFIG_CRYPTO_BLOWFISH_X86_64 \
  	CONFIG_CRYPTO_TWOFISH_X86_64 \
-@@ -653,7 +693,7 @@ define KernelPackage/crypto-misc
+@@ -659,7 +693,7 @@ define KernelPackage/crypto-misc
  	CONFIG_CRYPTO_KHAZAD \
  	CONFIG_CRYPTO_SERPENT \
  	CONFIG_CRYPTO_TEA \
@@ -370,7 +322,7 @@ index 4e0a73ccf2..83048e50d3 100644
  	CONFIG_CRYPTO_TWOFISH \
  	CONFIG_CRYPTO_TWOFISH_COMMON \
  	CONFIG_CRYPTO_TWOFISH_586 \
-@@ -666,7 +706,7 @@ define KernelPackage/crypto-misc
+@@ -672,7 +706,7 @@ define KernelPackage/crypto-misc
  	$(LINUX_DIR)/crypto/cast6_generic.ko \
  	$(LINUX_DIR)/crypto/khazad.ko \
  	$(LINUX_DIR)/crypto/tea.ko \
@@ -379,7 +331,7 @@ index 4e0a73ccf2..83048e50d3 100644
  	$(LINUX_DIR)/crypto/twofish_common.ko \
  	$(LINUX_DIR)/crypto/wp512.ko \
  	$(LINUX_DIR)/crypto/twofish_generic.ko \
-@@ -674,7 +714,7 @@ define KernelPackage/crypto-misc
+@@ -680,7 +714,7 @@ define KernelPackage/crypto-misc
  	$(LINUX_DIR)/crypto/blowfish_generic.ko \
  	$(LINUX_DIR)/crypto/serpent_generic.ko
    AUTOLOAD:=$(call AutoLoad,10,anubis camellia_generic cast_common \
@@ -388,7 +340,7 @@ index 4e0a73ccf2..83048e50d3 100644
  	wp512 blowfish_common serpent_generic)
    ifndef CONFIG_TARGET_x86
  	AUTOLOAD+= $(call AutoLoad,10,twofish_generic blowfish_generic)
-@@ -687,10 +727,10 @@ ifndef CONFIG_TARGET_x86_64
+@@ -693,10 +727,10 @@ ifndef CONFIG_TARGET_x86_64
      FILES+= \
  	$(LINUX_DIR)/arch/x86/crypto/twofish-i586.ko \
  	$(LINUX_DIR)/arch/x86/crypto/serpent-sse2-i586.ko \
@@ -401,7 +353,7 @@ index 4e0a73ccf2..83048e50d3 100644
  	serpent-sse2-i586 twofish-i586 blowfish_generic)
    endef
  endif
-@@ -741,19 +781,6 @@ endef
+@@ -747,19 +781,6 @@ endef
  $(eval $(call KernelPackage,crypto-pcbc))
  
  
@@ -421,15 +373,7 @@ index 4e0a73ccf2..83048e50d3 100644
  define KernelPackage/crypto-rsa
    TITLE:=RSA algorithm
    DEPENDS:=+kmod-crypto-manager +kmod-asn1-decoder
-@@ -823,6 +850,7 @@ define KernelPackage/crypto-sha1
- 	CONFIG_CRYPTO_SHA1_ARM \
- 	CONFIG_CRYPTO_SHA1_ARM_NEON \
- 	CONFIG_CRYPTO_SHA1_OCTEON \
-+	CONFIG_CRYPTO_SHA1_PPC_SPE \
- 	CONFIG_CRYPTO_SHA1_SSSE3
-   FILES:=$(LINUX_DIR)/crypto/sha1_generic.ko
-   AUTOLOAD:=$(call AutoLoad,09,sha1_generic)
-@@ -840,7 +868,7 @@ define KernelPackage/crypto-sha1/arm-neon
+@@ -847,7 +868,7 @@ define KernelPackage/crypto-sha1/arm-neon
    AUTOLOAD+=$(call AutoLoad,09,sha1-arm-neon)
  endef
  
@@ -438,41 +382,7 @@ index 4e0a73ccf2..83048e50d3 100644
  KernelPackage/crypto-sha1/ipq40xx=$(KernelPackage/crypto-sha1/arm-neon)
  KernelPackage/crypto-sha1/mvebu/cortexa9=$(KernelPackage/crypto-sha1/arm-neon)
  
-@@ -849,7 +877,12 @@ define KernelPackage/crypto-sha1/octeon
-   AUTOLOAD+=$(call AutoLoad,09,octeon-sha1)
- endef
- 
--KernelPackage/crypto-sha1/tegra=$(KernelPakcage/crypto-sha1/arm)
-+KernelPackage/crypto-sha1/tegra=$(KernelPackage/crypto-sha1/arm)
-+
-+define KernelPackage/crypto-sha1/mpc85xx
-+  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/sha1-ppc-spe.ko
-+  AUTOLOAD+=$(call AutoLoad,09,sha1-ppc-spe)
-+endef
- 
- define KernelPackage/crypto-sha1/x86/64
-   FILES+=$(LINUX_DIR)/arch/x86/crypto/sha1-ssse3.ko
-@@ -865,6 +898,7 @@ define KernelPackage/crypto-sha256
-   KCONFIG:= \
- 	CONFIG_CRYPTO_SHA256 \
- 	CONFIG_CRYPTO_SHA256_OCTEON \
-+	CONFIG_CRYPTO_SHA256_PPC_SPE \
- 	CONFIG_CRYPTO_SHA256_SSSE3
-   FILES:= \
- 	$(LINUX_DIR)/crypto/sha256_generic.ko \
-@@ -878,6 +912,11 @@ define KernelPackage/crypto-sha256/octeon
-   AUTOLOAD+=$(call AutoLoad,09,octeon-sha256)
- endef
- 
-+define KernelPackage/crypto-sha256/mpc85xx
-+  FILES+=$(LINUX_DIR)/arch/powerpc/crypto/sha256-ppc-spe.ko
-+  AUTOLOAD+=$(call AutoLoad,09,sha256-ppc-spe)
-+endef
-+
- define KernelPackage/crypto-sha256/x86/64
-   FILES+=$(LINUX_DIR)/arch/x86/crypto/sha256-ssse3.ko
-   AUTOLOAD+=$(call AutoLoad,09,sha256-ssse3)
-@@ -904,7 +943,7 @@ define KernelPackage/crypto-sha512/arm
+@@ -922,7 +943,7 @@ define KernelPackage/crypto-sha512/arm
    AUTOLOAD+=$(call AutoLoad,09,sha512-arm)
  endef
  
@@ -481,7 +391,7 @@ index 4e0a73ccf2..83048e50d3 100644
  KernelPackage/crypto-sha512/ipq40xx=$(KernelPackage/crypto-sha512/arm)
  KernelPackage/crypto-sha512/mvebu/cortexa9=$(KernelPackage/crypto-sha512/arm)
  
-@@ -957,16 +996,6 @@ endef
+@@ -975,16 +996,6 @@ endef
  $(eval $(call KernelPackage,crypto-user))
  
  
@@ -961,7 +871,7 @@ index ca6463c81b..15fd1ccddc 100644
    CONFIG_I2C_GPIO:drivers/i2c/busses/i2c-gpio
  
 diff --git a/package/kernel/linux/modules/iio.mk b/package/kernel/linux/modules/iio.mk
-index 7bfbd38079..c0e37f06c7 100644
+index 7bfbd38079..afd14ef47b 100644
 --- a/package/kernel/linux/modules/iio.mk
 +++ b/package/kernel/linux/modules/iio.mk
 @@ -25,14 +25,17 @@ endef
@@ -1460,24 +1370,6 @@ index 7bfbd38079..c0e37f06c7 100644
  endef
  
  define KernelPackage/iio-fxos8700-spi/description
-@@ -544,3 +566,17 @@ define KernelPackage/iio-fxos8700-spi/description
- endef
- 
- $(eval $(call KernelPackage,iio-fxos8700-spi))
-+
-+define KernelPackage/iio-ti-am335x-adc
-+  TITLE:= TI Sitara AM335x ADC driver
-+  DEPENDS:=@TARGET_omap
-+  KCONFIG:=CONFIG_TI_AM335X_ADC
-+  FILES:=$(LINUX_DIR)/drivers/iio/adc/ti_am335x_adc.ko
-+  AUTOLOAD:=$(call AutoProbe,ti_am335x_adc)
-+  $(call AddDepends/iio,+kmod-iio-kfifo-buf)
-+endef
-+define KernelPackage/iio-ti-am335x-adc/description
-+ Driver for the TI AM335x ADC.
-+endef
-+
-+$(eval $(call KernelPackage,iio-ti-am335x-adc))
 diff --git a/package/kernel/linux/modules/input.mk b/package/kernel/linux/modules/input.mk
 index c2f39ddd90..6270cdeb3b 100644
 --- a/package/kernel/linux/modules/input.mk
@@ -1661,7 +1553,7 @@ index a22ea1e5f4..7b5609a84c 100644
 +
 +$(eval $(call KernelPackage,input-leds))
 diff --git a/package/kernel/linux/modules/lib.mk b/package/kernel/linux/modules/lib.mk
-index 9a341932bd..d4d44ad8f0 100644
+index 9a341932bd..81ceb1f76c 100644
 --- a/package/kernel/linux/modules/lib.mk
 +++ b/package/kernel/linux/modules/lib.mk
 @@ -109,9 +109,10 @@ define KernelPackage/lib-lzo
@@ -1676,24 +1568,7 @@ index 9a341932bd..d4d44ad8f0 100644
  endef
  
  define KernelPackage/lib-lzo/description
-@@ -151,13 +152,15 @@ define KernelPackage/lib-lz4
-   DEPENDS:=+kmod-crypto-acompress
-   KCONFIG:= \
- 	CONFIG_CRYPTO_LZ4 \
-+	CONFIG_CRYPTO_LZ4HC \
- 	CONFIG_LZ4_COMPRESS \
- 	CONFIG_LZ4_DECOMPRESS
-   FILES:= \
- 	$(LINUX_DIR)/crypto/lz4.ko \
- 	$(LINUX_DIR)/lib/lz4/lz4_compress.ko \
-+	$(LINUX_DIR)/lib/lz4/lz4hc_compress.ko \
- 	$(LINUX_DIR)/lib/lz4/lz4_decompress.ko
--  AUTOLOAD:=$(call AutoProbe,lz4 lz4_compress lz4_decompress)
-+  AUTOLOAD:=$(call AutoProbe,lz4 lz4_compress lz4hc_compress lz4_decompress)
- endef
- 
- define KernelPackage/lib-lz4/description
-@@ -272,3 +275,23 @@ define KernelPackage/asn1-decoder
+@@ -272,3 +273,23 @@ define KernelPackage/asn1-decoder
  endef
  
  $(eval $(call KernelPackage,asn1-decoder))
@@ -2214,7 +2089,7 @@ index 901bddddea..518d83f9a2 100644
 +$(eval $(call KernelPackage,atlantic))
 +
 diff --git a/package/kernel/linux/modules/netfilter.mk b/package/kernel/linux/modules/netfilter.mk
-index b46fcebc08..e6e2c9b637 100644
+index 97153e5c43..e6e2c9b637 100644
 --- a/package/kernel/linux/modules/netfilter.mk
 +++ b/package/kernel/linux/modules/netfilter.mk
 @@ -57,7 +57,7 @@ define KernelPackage/nf-ipt6
@@ -2321,31 +2196,7 @@ index b46fcebc08..e6e2c9b637 100644
  endef
  
  define KernelPackage/nf-nathelper-extra/description
-@@ -563,23 +607,6 @@ endef
- $(eval $(call KernelPackage,nf-nathelper-extra))
- 
- 
--define KernelPackage/ipt-ulog
--  TITLE:=Module for user-space packet logging
--  KCONFIG:=$(KCONFIG_IPT_ULOG)
--  FILES:=$(foreach mod,$(IPT_ULOG-m),$(LINUX_DIR)/net/$(mod).ko)
--  AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_ULOG-m)))
--  $(call AddDepends/ipt)
--endef
--
--define KernelPackage/ipt-ulog/description
-- Netfilter (IPv4) module for user-space packet logging
-- Includes:
-- - ULOG
--endef
--
--$(eval $(call KernelPackage,ipt-ulog))
--
--
- define KernelPackage/ipt-nflog
-   TITLE:=Module for user-space packet logging
-   KCONFIG:=$(KCONFIG_IPT_NFLOG)
-@@ -645,9 +672,24 @@ endef
+@@ -628,9 +672,24 @@ endef
  
  $(eval $(call KernelPackage,ipt-led))
  
@@ -2371,7 +2222,7 @@ index b46fcebc08..e6e2c9b637 100644
    KCONFIG:=$(KCONFIG_IPT_TPROXY)
    FILES:=$(foreach mod,$(IPT_TPROXY-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(IPT_TPROXY-m)))
-@@ -1004,7 +1046,7 @@ define KernelPackage/nf-conntrack-netlink
+@@ -987,7 +1046,7 @@ define KernelPackage/nf-conntrack-netlink
    FILES:=$(LINUX_DIR)/net/netfilter/nf_conntrack_netlink.ko
    KCONFIG:=CONFIG_NF_CT_NETLINK CONFIG_NF_CONNTRACK_EVENTS=y CONFIG_NETFILTER_NETLINK_GLUE_CT=y
    AUTOLOAD:=$(call AutoProbe,nf_conntrack_netlink)
@@ -2380,7 +2231,7 @@ index b46fcebc08..e6e2c9b637 100644
  endef
  
  define KernelPackage/nf-conntrack-netlink/description
-@@ -1052,7 +1094,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
+@@ -1035,7 +1094,7 @@ $(eval $(call KernelPackage,ipt-rpfilter))
  define KernelPackage/nft-core
    SUBMENU:=$(NF_MENU)
    TITLE:=Netfilter nf_tables support
@@ -2389,7 +2240,7 @@ index b46fcebc08..e6e2c9b637 100644
    FILES:=$(foreach mod,$(NFT_CORE-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_CORE-m)))
    KCONFIG:= \
-@@ -1087,7 +1129,7 @@ define KernelPackage/nft-bridge
+@@ -1070,7 +1129,7 @@ define KernelPackage/nft-bridge
    FILES:=$(foreach mod,$(NFT_BRIDGE-m),$(LINUX_DIR)/net/$(mod).ko)
    AUTOLOAD:=$(call AutoProbe,$(notdir $(NFT_BRIDGE-m)))
    KCONFIG:= \
@@ -2398,7 +2249,7 @@ index b46fcebc08..e6e2c9b637 100644
  	$(KCONFIG_NFT_BRIDGE)
  endef
  
-@@ -1126,17 +1168,6 @@ endef
+@@ -1109,17 +1168,6 @@ endef
  $(eval $(call KernelPackage,nft-offload))
  
  
@@ -2416,7 +2267,7 @@ index b46fcebc08..e6e2c9b637 100644
  define KernelPackage/nft-netdev
    SUBMENU:=$(NF_MENU)
    TITLE:=Netfilter nf_tables netdev support
-@@ -1179,3 +1210,47 @@ define KernelPackage/nft-queue
+@@ -1162,3 +1210,47 @@ define KernelPackage/nft-queue
  endef
  
  $(eval $(call KernelPackage,nft-queue))
@@ -2465,7 +2316,7 @@ index b46fcebc08..e6e2c9b637 100644
 +
 +$(eval $(call KernelPackage,nft-xfrm))
 diff --git a/package/kernel/linux/modules/netsupport.mk b/package/kernel/linux/modules/netsupport.mk
-index 4c84bea9bb..a8c343f44b 100644
+index c3fb0340f7..a8c343f44b 100644
 --- a/package/kernel/linux/modules/netsupport.mk
 +++ b/package/kernel/linux/modules/netsupport.mk
 @@ -48,6 +48,7 @@ define KernelPackage/bonding
@@ -2476,46 +2327,7 @@ index 4c84bea9bb..a8c343f44b 100644
  endef
  
  define KernelPackage/bonding/description
-@@ -162,38 +163,6 @@ endef
- $(eval $(call KernelPackage,misdn))
- 
- 
--define KernelPackage/isdn4linux
--  SUBMENU:=$(NETWORK_SUPPORT_MENU)
--  TITLE:=Old ISDN4Linux (deprecated)
--  DEPENDS:=+kmod-ppp
--  KCONFIG:= \
--	CONFIG_ISDN=y \
--    CONFIG_ISDN_I4L \
--    CONFIG_ISDN_PPP=y \
--    CONFIG_ISDN_PPP_VJ=y \
--    CONFIG_ISDN_MPP=y \
--    CONFIG_IPPP_FILTER=y \
--    CONFIG_ISDN_PPP_BSDCOMP \
--    CONFIG_ISDN_CAPI_MIDDLEWARE=y \
--    CONFIG_ISDN_CAPI_CAPIFS_BOOL=y \
--    CONFIG_ISDN_AUDIO=y \
--    CONFIG_ISDN_TTY_FAX=y \
--    CONFIG_ISDN_X25=y \
--    CONFIG_ISDN_DIVERSION
--  FILES:= \
--    $(LINUX_DIR)/drivers/isdn/divert/dss1_divert.ko \
--	$(LINUX_DIR)/drivers/isdn/i4l/isdn.ko \
--	$(LINUX_DIR)/drivers/isdn/i4l/isdn_bsdcomp.ko
--  AUTOLOAD:=$(call AutoLoad,40,isdn isdn_bsdcomp dss1_divert)
--endef
--
--define KernelPackage/isdn4linux/description
--  This driver allows you to use an ISDN adapter for networking
--endef
--
--$(eval $(call KernelPackage,isdn4linux))
--
--
- define KernelPackage/ipip
-   SUBMENU:=$(NETWORK_SUPPORT_MENU)
-   TITLE:=IP-in-IP encapsulation
-@@ -246,10 +215,8 @@ $(eval $(call KernelPackage,ipsec))
+@@ -214,10 +215,8 @@ $(eval $(call KernelPackage,ipsec))
  IPSEC4-m = \
  	ipv4/ah4 \
  	ipv4/esp4 \
@@ -2527,7 +2339,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  define KernelPackage/ipsec4
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -259,9 +226,6 @@ define KernelPackage/ipsec4
+@@ -227,9 +226,6 @@ define KernelPackage/ipsec4
  	CONFIG_INET_AH \
  	CONFIG_INET_ESP \
  	CONFIG_INET_IPCOMP \
@@ -2537,7 +2349,7 @@ index 4c84bea9bb..a8c343f44b 100644
  	CONFIG_INET_XFRM_TUNNEL \
  	CONFIG_INET_ESP_OFFLOAD=n
    FILES:=$(foreach mod,$(IPSEC4-m),$(LINUX_DIR)/net/$(mod).ko)
-@@ -274,9 +238,6 @@ define KernelPackage/ipsec4/description
+@@ -242,9 +238,6 @@ define KernelPackage/ipsec4/description
   - ah4
   - esp4
   - ipcomp4
@@ -2547,7 +2359,7 @@ index 4c84bea9bb..a8c343f44b 100644
   - xfrm4_tunnel
  endef
  
-@@ -286,10 +247,8 @@ $(eval $(call KernelPackage,ipsec4))
+@@ -254,10 +247,8 @@ $(eval $(call KernelPackage,ipsec4))
  IPSEC6-m = \
  	ipv6/ah6 \
  	ipv6/esp6 \
@@ -2559,7 +2371,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  define KernelPackage/ipsec6
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -299,9 +258,6 @@ define KernelPackage/ipsec6
+@@ -267,9 +258,6 @@ define KernelPackage/ipsec6
  	CONFIG_INET6_AH \
  	CONFIG_INET6_ESP \
  	CONFIG_INET6_IPCOMP \
@@ -2569,7 +2381,7 @@ index 4c84bea9bb..a8c343f44b 100644
  	CONFIG_INET6_XFRM_TUNNEL \
  	CONFIG_INET6_ESP_OFFLOAD=n
    FILES:=$(foreach mod,$(IPSEC6-m),$(LINUX_DIR)/net/$(mod).ko)
-@@ -314,9 +270,6 @@ define KernelPackage/ipsec6/description
+@@ -282,9 +270,6 @@ define KernelPackage/ipsec6/description
   - ah6
   - esp6
   - ipcomp6
@@ -2579,7 +2391,7 @@ index 4c84bea9bb..a8c343f44b 100644
   - xfrm6_tunnel
  endef
  
-@@ -375,7 +328,7 @@ $(eval $(call KernelPackage,ip6-vti))
+@@ -343,7 +328,7 @@ $(eval $(call KernelPackage,ip6-vti))
  define KernelPackage/xfrm-interface
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    TITLE:=IPsec XFRM Interface
@@ -2588,7 +2400,7 @@ index 4c84bea9bb..a8c343f44b 100644
    KCONFIG:=CONFIG_XFRM_INTERFACE
    FILES:=$(LINUX_DIR)/net/xfrm/xfrm_interface.ko
    AUTOLOAD:=$(call AutoProbe,xfrm_interface)
-@@ -563,6 +516,23 @@ endef
+@@ -531,6 +516,23 @@ endef
  $(eval $(call KernelPackage,veth))
  
  
@@ -2612,7 +2424,7 @@ index 4c84bea9bb..a8c343f44b 100644
  define KernelPackage/slhc
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    HIDDEN:=1
-@@ -720,12 +690,8 @@ endef
+@@ -688,12 +690,8 @@ endef
  $(eval $(call KernelPackage,mppe))
  
  
@@ -2627,7 +2439,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  define KernelPackage/sched-core
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -736,7 +702,6 @@ define KernelPackage/sched-core
+@@ -704,7 +702,6 @@ define KernelPackage/sched-core
  	CONFIG_NET_SCH_HTB \
  	CONFIG_NET_SCH_TBF \
  	CONFIG_NET_SCH_INGRESS \
@@ -2635,7 +2447,7 @@ index 4c84bea9bb..a8c343f44b 100644
  	CONFIG_NET_CLS=y \
  	CONFIG_NET_CLS_ACT=y \
  	CONFIG_NET_CLS_BASIC \
-@@ -751,7 +716,7 @@ define KernelPackage/sched-core
+@@ -719,7 +716,7 @@ define KernelPackage/sched-core
  	CONFIG_NET_CLS_MATCHALL \
  	CONFIG_NET_EMATCH=y \
  	CONFIG_NET_EMATCH_U32
@@ -2644,7 +2456,7 @@ index 4c84bea9bb..a8c343f44b 100644
    AUTOLOAD:=$(call AutoLoad,70, $(SCHED_MODULES_CORE))
  endef
  
-@@ -762,35 +727,52 @@ endef
+@@ -730,35 +727,52 @@ endef
  $(eval $(call KernelPackage,sched-core))
  
  
@@ -2714,7 +2526,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  
  define KernelPackage/sched-act-vlan
-@@ -809,20 +791,36 @@ endef
+@@ -777,20 +791,36 @@ endef
  $(eval $(call KernelPackage,sched-act-vlan))
  
  
@@ -2759,7 +2571,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  define KernelPackage/sched-connmark
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
-@@ -834,6 +832,7 @@ define KernelPackage/sched-connmark
+@@ -802,6 +832,7 @@ define KernelPackage/sched-connmark
  endef
  $(eval $(call KernelPackage,sched-connmark))
  
@@ -2767,7 +2579,7 @@ index 4c84bea9bb..a8c343f44b 100644
  define KernelPackage/sched-ctinfo
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    TITLE:=Traffic shaper ctinfo support
-@@ -844,6 +843,55 @@ define KernelPackage/sched-ctinfo
+@@ -812,6 +843,55 @@ define KernelPackage/sched-ctinfo
  endef
  $(eval $(call KernelPackage,sched-ctinfo))
  
@@ -2823,7 +2635,7 @@ index 4c84bea9bb..a8c343f44b 100644
  define KernelPackage/sched-ipset
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    TITLE:=Traffic shaper ipset support
-@@ -858,19 +906,68 @@ endef
+@@ -826,19 +906,68 @@ endef
  $(eval $(call KernelPackage,sched-ipset))
  
  
@@ -2902,7 +2714,7 @@ index 4c84bea9bb..a8c343f44b 100644
  
  
  define KernelPackage/bpf-test
-@@ -883,24 +980,21 @@ endef
+@@ -851,24 +980,21 @@ endef
  $(eval $(call KernelPackage,bpf-test))
  
  
@@ -2931,7 +2743,7 @@ index 4c84bea9bb..a8c343f44b 100644
  	CONFIG_NET_ACT_PEDIT \
  	CONFIG_NET_ACT_SIMP \
  	CONFIG_NET_ACT_CSUM \
-@@ -968,6 +1062,24 @@ endef
+@@ -936,6 +1062,24 @@ endef
  $(eval $(call KernelPackage,tcp-hybla))
  
  
@@ -2956,7 +2768,7 @@ index 4c84bea9bb..a8c343f44b 100644
  define KernelPackage/ax25
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    TITLE:=AX25 support
-@@ -1075,7 +1187,8 @@ define KernelPackage/sctp
+@@ -1043,7 +1187,8 @@ define KernelPackage/sctp
       CONFIG_SCTP_DEFAULT_COOKIE_HMAC_MD5=y
    FILES:= $(LINUX_DIR)/net/sctp/sctp.ko
    AUTOLOAD:= $(call AutoLoad,32,sctp)
@@ -2966,7 +2778,7 @@ index 4c84bea9bb..a8c343f44b 100644
  endef
  
  define KernelPackage/sctp/description
-@@ -1259,6 +1372,31 @@ endef
+@@ -1227,6 +1372,31 @@ endef
  $(eval $(call KernelPackage,netlink-diag))
  
  
@@ -2998,7 +2810,7 @@ index 4c84bea9bb..a8c343f44b 100644
  define KernelPackage/wireguard
    SUBMENU:=$(NETWORK_SUPPORT_MENU)
    TITLE:=WireGuard secure network tunnel
-@@ -1284,3 +1422,19 @@ define KernelPackage/wireguard/description
+@@ -1252,3 +1422,19 @@ define KernelPackage/wireguard/description
  endef
  
  $(eval $(call KernelPackage,wireguard))
@@ -3036,7 +2848,7 @@ index 05fce27bbc..7450ed1ce5 100644
  endef
  
 diff --git a/package/kernel/linux/modules/other.mk b/package/kernel/linux/modules/other.mk
-index 83d998c83a..c5f944ed31 100644
+index 1b7e382a15..58dd2d6c25 100644
 --- a/package/kernel/linux/modules/other.mk
 +++ b/package/kernel/linux/modules/other.mk
 @@ -40,6 +40,8 @@ define KernelPackage/bluetooth
@@ -3183,8 +2995,9 @@ index 83d998c83a..c5f944ed31 100644
 +
 +define KernelPackage/pinctrl-mcp23s08-i2c/description
 +  Kernel module for Microchip MCP23xxx I/O expander via I2C
-+endef
-+
+ endef
+ 
+-$(eval $(call KernelPackage,gpio-mcp23s08))
 +$(eval $(call KernelPackage,pinctrl-mcp23s08-i2c))
 +
 +
@@ -3199,9 +3012,8 @@ index 83d998c83a..c5f944ed31 100644
 +
 +define KernelPackage/pinctrl-mcp23s08-spi/description
 +  Kernel module for Microchip MCP23xxx I/O expander via SPI
- endef
- 
--$(eval $(call KernelPackage,gpio-mcp23s08))
++endef
++
 +$(eval $(call KernelPackage,pinctrl-mcp23s08-spi))
  
  
@@ -3238,30 +3050,7 @@ index 83d998c83a..c5f944ed31 100644
  define KernelPackage/sdhci
    SUBMENU:=$(OTHER_MENU)
    TITLE:=Secure Digital Host Controller Interface support
-@@ -665,22 +709,6 @@ endef
- 
- $(eval $(call KernelPackage,rtc-pcf2127))
- 
--define KernelPackage/rtc-pt7c4338
--  SUBMENU:=$(OTHER_MENU)
--  TITLE:=Pericom PT7C4338 RTC support
--  DEFAULT:=m if ALL_KMODS && RTC_SUPPORT
--  DEPENDS:=+kmod-i2c-core
--  KCONFIG:=CONFIG_RTC_DRV_PT7C4338 \
--	CONFIG_RTC_CLASS=y
--  FILES:=$(LINUX_DIR)/drivers/rtc/rtc-pt7c4338.ko
--  AUTOLOAD:=$(call AutoProbe,rtc-pt7c4338)
--endef
--
--define KernelPackage/rtc-pt7c4338/description
-- Kernel module for Pericom PT7C4338 i2c RTC chip
--endef
--
--$(eval $(call KernelPackage,rtc-pt7c4338))
- 
- define KernelPackage/rtc-rs5c372a
-   SUBMENU:=$(OTHER_MENU)
-@@ -786,6 +814,41 @@ endef
+@@ -770,6 +814,41 @@ endef
  $(eval $(call KernelPackage,mtdram))
  
  
@@ -3303,7 +3092,7 @@ index 83d998c83a..c5f944ed31 100644
  define KernelPackage/serial-8250
    SUBMENU:=$(OTHER_MENU)
    TITLE:=8250 UARTs
-@@ -914,12 +977,10 @@ $(eval $(call KernelPackage,ikconfig))
+@@ -898,12 +977,10 @@ $(eval $(call KernelPackage,ikconfig))
  define KernelPackage/zram
    SUBMENU:=$(OTHER_MENU)
    TITLE:=ZRAM
@@ -3316,7 +3105,7 @@ index 83d998c83a..c5f944ed31 100644
  	CONFIG_ZRAM_WRITEBACK=n \
  	CONFIG_ZSMALLOC_STAT=n
    FILES:= \
-@@ -932,8 +993,35 @@ define KernelPackage/zram/description
+@@ -916,8 +993,31 @@ define KernelPackage/zram/description
   Compressed RAM block device support
  endef
  
@@ -3333,15 +3122,11 @@ index 83d998c83a..c5f944ed31 100644
 +  config ZRAM_DEF_COMP_LZO
 +            bool "lzo"
 +            select PACKAGE_kmod-lib-lzo
- 
++
 +  config ZRAM_DEF_COMP_LZ4
 +            bool "lz4"
 +            select PACKAGE_kmod-lib-lz4
-+
-+  config ZRAM_DEF_COMP_LZ4HC
-+            bool "lz4-hc"
-+            select PACKAGE_kmod-lib-lz4hc
-+
+ 
 +  config ZRAM_DEF_COMP_ZSTD
 +            bool "zstd"
 +            select PACKAGE_kmod-lib-zstd
@@ -3353,7 +3138,7 @@ index 83d998c83a..c5f944ed31 100644
  
  define KernelPackage/pps
    SUBMENU:=$(OTHER_MENU)
-@@ -1009,7 +1097,7 @@ $(eval $(call KernelPackage,ptp))
+@@ -993,7 +1093,7 @@ $(eval $(call KernelPackage,ptp))
  define KernelPackage/ptp-qoriq
    SUBMENU:=$(OTHER_MENU)
    TITLE:=Freescale QorIQ PTP support
@@ -3362,7 +3147,7 @@ index 83d998c83a..c5f944ed31 100644
    KCONFIG:=CONFIG_PTP_1588_CLOCK_QORIQ
    FILES:=$(LINUX_DIR)/drivers/ptp/ptp-qoriq.ko
    AUTOLOAD:=$(call AutoProbe,ptp-qoriq)
-@@ -1126,7 +1214,7 @@ define KernelPackage/keys-trusted
+@@ -1110,7 +1210,7 @@ define KernelPackage/keys-trusted
    TITLE:=TPM trusted keys on kernel keyring
    DEPENDS:=@KERNEL_KEYS +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-sha1 +kmod-tpm
    KCONFIG:=CONFIG_TRUSTED_KEYS
@@ -3371,7 +3156,7 @@ index 83d998c83a..c5f944ed31 100644
    AUTOLOAD:=$(call AutoLoad,01,trusted-keys,1)
  endef
  
-@@ -1144,7 +1232,8 @@ $(eval $(call KernelPackage,keys-trusted))
+@@ -1128,7 +1228,8 @@ $(eval $(call KernelPackage,keys-trusted))
  define KernelPackage/tpm
    SUBMENU:=$(OTHER_MENU)
    TITLE:=TPM Hardware Support
@@ -3381,7 +3166,7 @@ index 83d998c83a..c5f944ed31 100644
    KCONFIG:= CONFIG_TCG_TPM
    FILES:= $(LINUX_DIR)/drivers/char/tpm/tpm.ko
    AUTOLOAD:=$(call AutoLoad,10,tpm,1)
-@@ -1207,67 +1296,51 @@ endef
+@@ -1191,67 +1292,51 @@ endef
  $(eval $(call KernelPackage,tpm-i2c-infineon))
  
  
@@ -4047,7 +3832,7 @@ index a9a0b538ff..59a2d79563 100644
 +
 +$(eval $(call KernelPackage,vfio-pci))
 diff --git a/package/kernel/linux/modules/w1.mk b/package/kernel/linux/modules/w1.mk
-index 6ac7458e42..9cba28da11 100644
+index dba2898e47..9cba28da11 100644
 --- a/package/kernel/linux/modules/w1.mk
 +++ b/package/kernel/linux/modules/w1.mk
 @@ -83,7 +83,7 @@ $(eval $(call KernelPackage,w1-master-ds2490))
@@ -4059,30 +3844,6 @@ index 6ac7458e42..9cba28da11 100644
    KCONFIG:=CONFIG_W1_MASTER_MXC
    FILES:=$(W1_MASTERS_DIR)/mxc_w1.ko
    AUTOLOAD:=$(call AutoProbe,mxc_w1)
-@@ -160,23 +160,6 @@ endef
- $(eval $(call KernelPackage,w1-slave-ds2433))
- 
- 
--define KernelPackage/w1-slave-ds2760
--  TITLE:=Dallas 2760 battery monitor chip (HP iPAQ & others)
--  KCONFIG:= \
--	CONFIG_W1_SLAVE_DS2760 \
--	CONFIG_W1_SLAVE_DS2433_CRC=n
--  FILES:=$(W1_SLAVES_DIR)/w1_ds2760.ko
--  AUTOLOAD:=$(call AutoProbe,w1_ds2760)
--  $(call AddDepends/w1)
--endef
--
--define KernelPackage/w1-slave-ds2760/description
-- Kernel module for 1-wire DS2760 battery monitor chip support
--endef
--
--$(eval $(call KernelPackage,w1-slave-ds2760))
--
--
- define KernelPackage/w1-slave-ds2413
-   TITLE:=DS2413 2 Ch. Addressable Switch
-   KCONFIG:= \
 diff --git a/package/kernel/linux/modules/wireless.mk b/package/kernel/linux/modules/wireless.mk
 deleted file mode 100644
 index f7a40ba10a..0000000000
