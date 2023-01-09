@@ -1,0 +1,110 @@
+From 6df02b82255e35398dd65951d4342bd754e93658 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Mon, 9 Jan 2023 15:59:02 +0100
+Subject: [PATCH 1/2] mvebu: backport upstream patch to fix COMPHY reset
+
+Upstream commit [1] included in the Linux kernel version 6.2 was
+backported to Linux kernels 6.1.4, 6.0.18. It should be possible that it
+is going to be backported even to the 5.15 series, but before it happens,
+let's include it here.
+
+It was discovered that on SOC Marvell Armada 3720, which is using e.g.
+Turris MOX, and if you are also using it with older ARM Trusted Firmware
+v1.5, it is not possible to detect connected USB 3.0 devices, but they
+are working just fine when connected with USB 2.0 cable. This patch
+fixes it.
+
+[1] https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/drivers/phy/marvell/phy-mvebu-a3700-comphy.c?id=b01d622d76134e9401970ffd3fbbb9a7051f976a
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@turris.com>
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+[improve commit description, added tag to the patch]
+---
+ ...mvebu-a3700-comphy-Reset-COMPHY-regi.patch | 50 +++++++++++++++++++
+ 1 file changed, 50 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.15/710-v6.2-phy-marvell-phy-mvebu-a3700-comphy-Reset-COMPHY-regi.patch
+
+diff --git a/target/linux/mvebu/patches-5.15/710-v6.2-phy-marvell-phy-mvebu-a3700-comphy-Reset-COMPHY-regi.patch b/target/linux/mvebu/patches-5.15/710-v6.2-phy-marvell-phy-mvebu-a3700-comphy-Reset-COMPHY-regi.patch
+new file mode 100644
+index 0000000000..a852dc1fc1
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/710-v6.2-phy-marvell-phy-mvebu-a3700-comphy-Reset-COMPHY-regi.patch
+@@ -0,0 +1,50 @@
++From b01d622d76134e9401970ffd3fbbb9a7051f976a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
++Date: Tue, 20 Sep 2022 14:11:54 +0200
++Subject: [PATCH] phy: marvell: phy-mvebu-a3700-comphy: Reset COMPHY registers
++ before USB 3.0 power on
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Turris MOX board with older ARM Trusted Firmware version v1.5 is not able
++to detect any USB 3.0 device connected to USB-A port on Mox-A module after
++commit 0a6fc70d76bd ("phy: marvell: phy-mvebu-a3700-comphy: Remove broken
++reset support"). On the other hand USB 2.0 devices connected to the same
++USB-A port are working fine.
++
++It looks as if the older firmware configures COMPHY registers for USB 3.0
++somehow incompatibly for kernel driver. Experiments show that resetting
++COMPHY registers via setting SFT_RST auto-clearing bit in COMPHY_SFT_RESET
++register fixes this issue.
++
++Reset the COMPHY in mvebu_a3700_comphy_usb3_power_on() function as a first
++step after selecting COMPHY lane and USB 3.0 function. With this change
++Turris MOX board can successfully detect USB 3.0 devices again.
++
++Before the above mentioned commit this reset was implemented in PHY reset
++method, so this is the reason why there was no issue with older firmware
++version then.
++
++Fixes: 0a6fc70d76bd ("phy: marvell: phy-mvebu-a3700-comphy: Remove broken reset support")
++Reported-by: Marek Behún <kabel@kernel.org>
++Signed-off-by: Pali Rohár <pali@kernel.org>
++Tested-by: Shin'ichiro Kawasaki <shinichiro.kawasaki@wdc.com>
++Link: https://lore.kernel.org/r/20220920121154.30115-1-pali@kernel.org
++Signed-off-by: Vinod Koul <vkoul@kernel.org>
++---
++ drivers/phy/marvell/phy-mvebu-a3700-comphy.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++--- a/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
+++++ b/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
++@@ -826,6 +826,9 @@ mvebu_a3700_comphy_usb3_power_on(struct
++ 	if (ret)
++ 		return ret;
++ 
+++	/* COMPHY register reset (cleared automatically) */
+++	comphy_lane_reg_set(lane, COMPHY_SFT_RESET, SFT_RST, SFT_RST);
+++
++ 	/*
++ 	 * 0. Set PHY OTG Control(0x5d034), bit 4, Power up OTG module The
++ 	 * register belong to UTMI module, so it is set in UTMI phy driver.
+-- 
+2.34.1
+
+
+From 05344f5108306a708dd781c94582f9b8bfe5758a Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Wed, 11 Jan 2023 11:40:55 +0100
+Subject: [PATCH 2/2] Bump Linux kernel to apply MOX's fix for USB 3.0 port
+
+---
+ include/kernel-version.mk | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/kernel-version.mk b/include/kernel-version.mk
+index 1edb01df27..4b1c852a08 100644
+--- a/include/kernel-version.mk
++++ b/include/kernel-version.mk
+@@ -1,6 +1,6 @@
+ 
+ # Use the default kernel version if the Makefile doesn't override it
+-LINUX_RELEASE?=1
++LINUX_RELEASE?=2
+ 
+ ifdef CONFIG_TESTING_KERNEL
+   KERNEL_PATCHVER:=$(KERNEL_TESTING_PATCHVER)
+-- 
+2.34.1
+
