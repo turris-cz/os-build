@@ -1,16 +1,16 @@
-From a7914c6f9d267a42dbe1b8a8a510356fdfd94a1e Mon Sep 17 00:00:00 2001
+From ac1261fb367ebcb8813d2ead11f79e99c4ee46e1 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Sat, 8 Oct 2022 06:08:06 +0200
-Subject: [PATCH] uboot-mvebu: update to version 2022.10
+Date: Tue, 17 Jan 2023 23:44:27 +0100
+Subject: [PATCH] uboot-mvebu: update to version 2023.01
 
 ---
- package/boot/uboot-mvebu/Makefile             | 24 +++++++++----------
- .../patches/210-link-libcrypto-static.patch   | 14 -----------
- 2 files changed, 12 insertions(+), 26 deletions(-)
+ package/boot/uboot-mvebu/Makefile             | 36 +++++++++++--------
+ .../patches/210-link-libcrypto-static.patch   | 14 --------
+ 2 files changed, 21 insertions(+), 29 deletions(-)
  delete mode 100644 package/boot/uboot-mvebu/patches/210-link-libcrypto-static.patch
 
 diff --git a/package/boot/uboot-mvebu/Makefile b/package/boot/uboot-mvebu/Makefile
-index 37e93d1f51..274cc641d9 100644
+index 37e93d1f51..c6b2133c22 100644
 --- a/package/boot/uboot-mvebu/Makefile
 +++ b/package/boot/uboot-mvebu/Makefile
 @@ -8,10 +8,10 @@
@@ -19,37 +19,55 @@ index 37e93d1f51..274cc641d9 100644
  
 -PKG_VERSION:=2021.01
 -PKG_RELEASE:=1
-+PKG_VERSION:=2022.10
++PKG_VERSION:=2023.01
 +PKG_RELEASE:=$(AUTORELEASE)
  
 -PKG_HASH:=b407e1510a74e863b8b5cb42a24625344f0e0c2fc7582d8c866bd899367d0454
-+PKG_HASH:=50b4482a505bc281ba8470c399a3c26e145e29b23500bc35c50debd7fa46bdf8
++PKG_HASH:=69423bad380f89a0916636e89e6dcbd2e4512d584308d922d1039d1e4331950f
  
  include $(INCLUDE_DIR)/u-boot.mk
  include $(INCLUDE_DIR)/package.mk
-@@ -36,6 +36,14 @@ define U-Boot/helios4
-   UBOOT_IMAGE:=u-boot-spl.kwb
+@@ -26,14 +26,22 @@ define U-Boot/clearfog
+   NAME:=SolidRun ClearFog A1
+   BUILD_DEVICES:=solidrun_clearfog-base-a1 solidrun_clearfog-pro-a1
+   BUILD_SUBTARGET:=cortexa9
+-  UBOOT_IMAGE:=u-boot-spl.kwb
++  UBOOT_IMAGE:=u-boot-with-spl.kwb
  endef
  
+ define U-Boot/helios4
+   NAME:=Kobol Helios 4
+   BUILD_DEVICES:=kobol_helios4
+   BUILD_SUBTARGET:=cortexa9
+-  UBOOT_IMAGE:=u-boot-spl.kwb
++  UBOOT_IMAGE:=u-boot-with-spl.kwb
++endef
++
 +define U-Boot/omnia
 +  NAME:=Turris Omnia
 +  BUILD_DEVICES:=cznic_turris-omnia
 +  BUILD_SUBTARGET:=cortexa9
 +  UBOOT_CONFIG:=turris_omnia
-+  UBOOT_IMAGE:=u-boot-spl.kwb
++  UBOOT_IMAGE:=u-boot-with-spl.kwb
+ endef
+ 
+ define U-Boot/espressobin
+@@ -47,20 +55,18 @@ define U-Boot/uDPU
+   BUILD_SUBTARGET:=cortexa53
+ endef
+ 
++define U-Boot/eDPU
++  NAME:=Methode eDPU
++  BUILD_SUBTARGET:=cortexa53
 +endef
 +
- define U-Boot/espressobin
-   NAME:=Marvell ESPRESSObin
-   BUILD_SUBTARGET:=cortexa53
-@@ -50,18 +58,10 @@ endef
  UBOOT_TARGETS:= \
  	clearfog \
  	helios4 \
 +	omnia \
  	espressobin \
- 	uDPU
- 
+-	uDPU
+-
 -Build/Exports:=$(Host/Exports)
 -
 -define Build/Configure
@@ -58,10 +76,11 @@ index 37e93d1f51..274cc641d9 100644
 -
 -	$(call Build/Configure/U-Boot)
 -endef
--
++	uDPU \
++	eDPU
+ 
  define Package/u-boot/install
  	$(if $(findstring cortexa53,$(BUILD_SUBTARGET)),,$(Package/u-boot/install/default))
- endef
 diff --git a/package/boot/uboot-mvebu/patches/210-link-libcrypto-static.patch b/package/boot/uboot-mvebu/patches/210-link-libcrypto-static.patch
 deleted file mode 100644
 index eb0b05e4c6..0000000000
