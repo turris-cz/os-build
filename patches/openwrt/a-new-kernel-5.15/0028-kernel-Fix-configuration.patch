@@ -1,0 +1,170 @@
+From 5adbe98afbba6c7c5058385664ff0bf6c05a255d Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Thu, 2 Feb 2023 17:22:14 +0100
+Subject: [PATCH] kernel: Fix configuration
+
+Some kernel modules paths and dependencies were wrong, probably caused
+by backporting 5.15 kernel. Fixing it so we can build and test again.
+Compile tested for Turris Omnia.
+---
+ package/kernel/linux/modules/crypto.mk     |  1 -
+ package/kernel/linux/modules/fs.mk         | 21 ++++++++++++++++-----
+ package/kernel/linux/modules/input.mk      |  3 +--
+ package/kernel/linux/modules/lib.mk        | 11 +++++++++++
+ package/kernel/linux/modules/netsupport.mk |  2 +-
+ package/kernel/linux/modules/other.mk      |  4 ++--
+ package/kernel/linux/modules/video.mk      |  2 +-
+ 7 files changed, 32 insertions(+), 12 deletions(-)
+
+diff --git a/package/kernel/linux/modules/crypto.mk b/package/kernel/linux/modules/crypto.mk
+index 9f33a9f2bf..defc8a90b4 100644
+--- a/package/kernel/linux/modules/crypto.mk
++++ b/package/kernel/linux/modules/crypto.mk
+@@ -703,7 +703,6 @@ define KernelPackage/crypto-misc
+ 	$(LINUX_DIR)/crypto/cast6_generic.ko \
+ 	$(LINUX_DIR)/crypto/khazad.ko \
+ 	$(LINUX_DIR)/crypto/tea.ko \
+-	$(LINUX_DIR)/crypto/tgr192.ko \
+ 	$(LINUX_DIR)/crypto/twofish_common.ko \
+ 	$(LINUX_DIR)/crypto/wp512.ko \
+ 	$(LINUX_DIR)/crypto/twofish_generic.ko \
+diff --git a/package/kernel/linux/modules/fs.mk b/package/kernel/linux/modules/fs.mk
+index c746479a3b..27656cbb16 100644
+--- a/package/kernel/linux/modules/fs.mk
++++ b/package/kernel/linux/modules/fs.mk
+@@ -90,7 +90,7 @@ define KernelPackage/fs-cifs
+ 	CONFIG_CIFS \
+ 	CONFIG_CIFS_DFS_UPCALL=n \
+ 	CONFIG_CIFS_UPCALL=n
+-  FILES:=$(LINUX_DIR)/fs/cifs/cifs.ko
++  FILES:=$(LINUX_DIR)/fs/cifs/cifs.ko $(LINUX_DIR)/fs/smbfs_common/cifs_arc4.ko $(LINUX_DIR)/fs/smbfs_common/cifs_md4.ko
+   AUTOLOAD:=$(call AutoLoad,30,cifs)
+   $(call AddDepends/nls)
+   DEPENDS+= \
+@@ -104,7 +104,9 @@ define KernelPackage/fs-cifs
+     +kmod-crypto-aead \
+     +kmod-crypto-ccm \
+     +kmod-crypto-ecb \
+-    +kmod-crypto-des
++    +kmod-crypto-des \
++    +kmod-oid-registry +kmod-asn1-decoder +kmod-asn1-encoder \
++    +kmod-dnsresolver
+ endef
+ 
+ define KernelPackage/fs-cifs/description
+@@ -238,11 +240,21 @@ endef
+ 
+ $(eval $(call KernelPackage,fs-f2fs))
+ 
++define KernelPackage/fs-netfs
++  SUBMENU:=$(FS_MENU)
++  TITLE:=Network Filesystems support
++  DEPENDS:=@LINUX_5_15
++  KCONFIG:= CONFIG_NETFS_SUPPORT
++  FILES:=$(LINUX_DIR)/fs/netfs/netfs.ko
++  AUTOLOAD:=$(call AutoLoad,28,netfs)
++endef
++
++$(eval $(call KernelPackage,fs-netfs))
+ 
+ define KernelPackage/fs-fscache
+   SUBMENU:=$(FS_MENU)
+   TITLE:=General filesystem local cache manager
+-  DEPENDS:=
++  DEPENDS:=+kmod-fs-netfs
+   KCONFIG:=\
+ 	CONFIG_FSCACHE=m \
+ 	CONFIG_FSCACHE_STATS=y \
+@@ -388,8 +400,7 @@ define KernelPackage/fs-nfs-common
+   FILES:= \
+ 	$(LINUX_DIR)/fs/lockd/lockd.ko \
+ 	$(LINUX_DIR)/net/sunrpc/sunrpc.ko \
+-	$(LINUX_DIR)/fs/nfs_common/grace.ko \
+-	$(LINUX_DIR)/fs/nfs_common/nfs_ssc.ko@ge5.10
++	$(LINUX_DIR)/fs/nfs_common/grace.ko
+   AUTOLOAD:=$(call AutoLoad,30,grace sunrpc lockd)
+ endef
+ 
+diff --git a/package/kernel/linux/modules/input.mk b/package/kernel/linux/modules/input.mk
+index e870bf7f8b..80865ddcff 100644
+--- a/package/kernel/linux/modules/input.mk
++++ b/package/kernel/linux/modules/input.mk
+@@ -181,8 +181,7 @@ define KernelPackage/input-touchscreen-ads7846
+ 	CONFIG_INPUT_TOUCHSCREEN=y \
+ 	CONFIG_TOUCHSCREEN_PROPERTIES=y \
+ 	CONFIG_TOUCHSCREEN_ADS7846
+-  FILES:=$(LINUX_DIR)/drivers/input/touchscreen/ads7846.ko \
+-	$(LINUX_DIR)/drivers/input/touchscreen/of_touchscreen.ko
++  FILES:=$(LINUX_DIR)/drivers/input/touchscreen/ads7846.ko
+   AUTOLOAD:=$(call AutoProbe,ads7846)
+ endef
+ 
+diff --git a/package/kernel/linux/modules/lib.mk b/package/kernel/linux/modules/lib.mk
+index c52a8133be..e232712a07 100644
+--- a/package/kernel/linux/modules/lib.mk
++++ b/package/kernel/linux/modules/lib.mk
+@@ -274,6 +274,17 @@ endef
+ 
+ $(eval $(call KernelPackage,asn1-decoder))
+ 
++define KernelPackage/asn1-encoder
++  SUBMENU:=$(LIB_MENU)
++  TITLE:=Simple ASN1 encoder
++  KCONFIG:= CONFIG_ASN1
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/lib/asn1_encoder.ko
++endef
++
++$(eval $(call KernelPackage,asn1-encoder))
++
++
+ define KernelPackage/oid-registry
+   SUBMENU:=$(LIB_MENU)
+   TITLE:=Object identifier registry
+diff --git a/package/kernel/linux/modules/netsupport.mk b/package/kernel/linux/modules/netsupport.mk
+index 975a9f547c..17e9413940 100644
+--- a/package/kernel/linux/modules/netsupport.mk
++++ b/package/kernel/linux/modules/netsupport.mk
+@@ -1187,7 +1187,7 @@ define KernelPackage/sctp
+      CONFIG_SCTP_DEFAULT_COOKIE_HMAC_MD5=y
+   FILES:= $(LINUX_DIR)/net/sctp/sctp.ko
+   AUTOLOAD:= $(call AutoLoad,32,sctp)
+-  DEPENDS:=+kmod-lib-crc32c +kmod-crypto-md5 +kmod-crypto-hmac
++  DEPENDS:=+kmod-lib-crc32c +kmod-crypto-md5 +kmod-crypto-hmac +kmod-udptunnel4 +kmod-udptunnel6
+ endef
+ 
+ define KernelPackage/sctp/description
+diff --git a/package/kernel/linux/modules/other.mk b/package/kernel/linux/modules/other.mk
+index 03ff1ae8d4..49341ae41b 100644
+--- a/package/kernel/linux/modules/other.mk
++++ b/package/kernel/linux/modules/other.mk
+@@ -1124,11 +1124,10 @@ $(eval $(call KernelPackage,keys-encrypted))
+ define KernelPackage/keys-trusted
+   SUBMENU:=$(OTHER_MENU)
+   TITLE:=TPM trusted keys on kernel keyring
+-  DEPENDS:=@KERNEL_KEYS +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-sha1 +kmod-tpm
++  DEPENDS:=@KERNEL_KEYS +kmod-crypto-hash +kmod-crypto-hmac +kmod-crypto-sha1 +kmod-tpm +kmod-oid-registry +kmod-asn1-decoder +kmod-asn1-encoder
+   KCONFIG:=CONFIG_TRUSTED_KEYS
+   FILES:= \
+-	  $(LINUX_DIR)/security/keys/trusted.ko@lt5.10 \
+-	  $(LINUX_DIR)/security/keys/trusted-keys/trusted.ko@ge5.10
++	  $(LINUX_DIR)/security/keys/trusted-keys/trusted.ko
+   AUTOLOAD:=$(call AutoLoad,01,trusted-keys,1)
+ endef
+ 
+diff --git a/package/kernel/linux/modules/video.mk b/package/kernel/linux/modules/video.mk
+index 2a306b5f42..e5609f95ee 100644
+--- a/package/kernel/linux/modules/video.mk
++++ b/package/kernel/linux/modules/video.mk
+@@ -225,7 +225,7 @@ define KernelPackage/drm
+   SUBMENU:=$(VIDEO_MENU)
+   TITLE:=Direct Rendering Manager (DRM) support
+   HIDDEN:=1
+-  DEPENDS:=+kmod-dma-buf +kmod-i2c-core +PACKAGE_kmod-backlight:kmod-backlight
++  DEPENDS:=+kmod-dma-buf +kmod-i2c-core +PACKAGE_kmod-backlight:kmod-backlight +kmod-fb
+   KCONFIG:=CONFIG_DRM
+   FILES:= \
+ 	$(LINUX_DIR)/drivers/gpu/drm/drm.ko \
+-- 
+2.39.1
+
