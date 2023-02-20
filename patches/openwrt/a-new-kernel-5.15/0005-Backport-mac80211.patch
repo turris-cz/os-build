@@ -64,6 +64,7 @@ Subject: [PATCH] mac80211: update to 5.15.81 version
  ...-fetch-pci-init-values-through-nvmem.patch |  181 +++
  .../brcm/812-b43-add-antenna-control.patch    |    8 +-
  ...-register-wiphy-s-during-module_init.patch |   18 +-
+ ...und-bug-with-some-inconsistent-BSSes.patch |    2 +-
  ...62-brcmfmac-Disable-power-management.patch |    2 +-
  ...-in-driver-tables-with-country-codes.patch |   12 +-
  .../mac80211/patches/brcm/998-survey.patch    |   12 +-
@@ -196,7 +197,7 @@ Subject: [PATCH] mac80211: update to 5.15.81 version
  .../500-mac80211_configure_antenna_gain.patch |   66 +-
  ...the-dst-buffer-to-of_get_mac_address.patch |   29 +
  package/kernel/mac80211/realtek.mk            |   18 +
- 192 files changed, 7352 insertions(+), 13474 deletions(-)
+ 193 files changed, 7353 insertions(+), 13475 deletions(-)
  delete mode 100644 package/kernel/mac80211/files/lib/netifd/mac80211.sh
  delete mode 100644 package/kernel/mac80211/patches/ath/120-owl-loader-compat.patch
  delete mode 100644 package/kernel/mac80211/patches/ath/550-ath9k-disable-bands-via-dt.patch
@@ -360,18 +361,18 @@ Subject: [PATCH] mac80211: update to 5.15.81 version
  create mode 100644 package/kernel/mac80211/patches/subsys/782-net-next-1-of-net-pass-the-dst-buffer-to-of_get_mac_address.patch
 
 diff --git a/package/kernel/mac80211/Makefile b/package/kernel/mac80211/Makefile
-index e2505924cf..830e5052b8 100644
+index c70e71db5b..830e5052b8 100644
 --- a/package/kernel/mac80211/Makefile
 +++ b/package/kernel/mac80211/Makefile
 @@ -10,10 +10,10 @@ include $(INCLUDE_DIR)/kernel.mk
  
  PKG_NAME:=mac80211
  
--PKG_VERSION:=5.10.157-1
+-PKG_VERSION:=5.10.168-1
 +PKG_VERSION:=5.15.81-1
  PKG_RELEASE:=1
--PKG_SOURCE_URL:=@KERNEL/linux/kernel/projects/backports/stable/v5.10.157/
--PKG_HASH:=1ce937c49f2b39be00768fba83e214aad6612d469c92ccd06dc17b14e6cf3a64
+-PKG_SOURCE_URL:=@KERNEL/linux/kernel/projects/backports/stable/v5.10.168/
+-PKG_HASH:=ba43215e99b367febaad507c94423b156c7af9a415d978fbc630e9e8d6641d73
 +PKG_SOURCE_URL:=@KERNEL/linux/kernel/projects/backports/stable/v5.15.81/
 +PKG_HASH:=5227d3c35ccebacfaee6b8180b3a87b9910f3c94ee768ebc5c0fef3c86b6146d
  
@@ -2455,15 +2456,28 @@ index 4f72e62948..7b9512f741 100644
   	if (ret < 0)
   		brcmf_fw_request_done(NULL, fwctx);
   
+diff --git a/package/kernel/mac80211/patches/brcm/861-brcmfmac-workaround-bug-with-some-inconsistent-BSSes.patch b/package/kernel/mac80211/patches/brcm/861-brcmfmac-workaround-bug-with-some-inconsistent-BSSes.patch
+index e832f175f8..7b4cb250f9 100644
+--- a/package/kernel/mac80211/patches/brcm/861-brcmfmac-workaround-bug-with-some-inconsistent-BSSes.patch
++++ b/package/kernel/mac80211/patches/brcm/861-brcmfmac-workaround-bug-with-some-inconsistent-BSSes.patch
+@@ -10,7 +10,7 @@ Signed-off-by: Rafał Miłecki <zajec5@gmail.com>
+ 
+ --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+ +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
+-@@ -718,8 +718,36 @@ static struct wireless_dev *brcmf_cfg802
++@@ -715,8 +715,36 @@ static struct wireless_dev *brcmf_cfg802
+  	struct brcmf_cfg80211_info *cfg = wiphy_to_cfg(wiphy);
+  	struct brcmf_pub *drvr = cfg->pub;
+  	struct wireless_dev *wdev;
 diff --git a/package/kernel/mac80211/patches/brcm/862-brcmfmac-Disable-power-management.patch b/package/kernel/mac80211/patches/brcm/862-brcmfmac-Disable-power-management.patch
-index 774656f1fd..88465f256b 100644
+index d6e2c409f9..88465f256b 100644
 --- a/package/kernel/mac80211/patches/brcm/862-brcmfmac-Disable-power-management.patch
 +++ b/package/kernel/mac80211/patches/brcm/862-brcmfmac-Disable-power-management.patch
 @@ -14,7 +14,7 @@ Signed-off-by: Phil Elwell <phil@raspberrypi.org>
  
  --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
  +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
--@@ -2961,6 +2961,10 @@ brcmf_cfg80211_set_power_mgmt(struct wip
+-@@ -2964,6 +2964,10 @@ brcmf_cfg80211_set_power_mgmt(struct wip
 +@@ -2974,6 +2974,10 @@ brcmf_cfg80211_set_power_mgmt(struct wip
   	 * preference in cfg struct to apply this to
   	 * FW later while initializing the dongle
@@ -2502,13 +2516,13 @@ index 9658bda1c1..835c870a65 100644
   		return;
 + 
 diff --git a/package/kernel/mac80211/patches/brcm/998-survey.patch b/package/kernel/mac80211/patches/brcm/998-survey.patch
-index beaf1ac872..74aa3e3925 100644
+index 79a4578c21..74aa3e3925 100644
 --- a/package/kernel/mac80211/patches/brcm/998-survey.patch
 +++ b/package/kernel/mac80211/patches/brcm/998-survey.patch
 @@ -1,6 +1,6 @@
  --- a/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
  +++ b/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cfg80211.c
--@@ -2913,6 +2913,63 @@ done:
+-@@ -2916,6 +2916,63 @@ done:
 +@@ -2921,6 +2921,63 @@ done:
   }
   
@@ -2517,7 +2531,7 @@ index beaf1ac872..74aa3e3925 100644
   brcmf_cfg80211_dump_station(struct wiphy *wiphy, struct net_device *ndev,
   			    int idx, u8 *mac, struct station_info *sinfo)
   {
--@@ -3008,6 +3065,7 @@ static s32 brcmf_inform_single_bss(struc
+-@@ -3011,6 +3068,7 @@ static s32 brcmf_inform_single_bss(struc
 +@@ -3021,6 +3078,7 @@ static s32 brcmf_inform_single_bss(struc
   	struct brcmu_chan ch;
   	u16 channel;
@@ -2526,7 +2540,7 @@ index beaf1ac872..74aa3e3925 100644
   	u16 notify_capability;
   	u16 notify_interval;
   	u8 *notify_ie;
--@@ -3032,6 +3090,17 @@ static s32 brcmf_inform_single_bss(struc
+-@@ -3035,6 +3093,17 @@ static s32 brcmf_inform_single_bss(struc
 +@@ -3045,6 +3103,17 @@ static s32 brcmf_inform_single_bss(struc
   		band = NL80211_BAND_5GHZ;
   
@@ -2535,7 +2549,7 @@ index beaf1ac872..74aa3e3925 100644
   	bss_data.chan = ieee80211_get_channel(wiphy, freq);
   	bss_data.scan_width = NL80211_BSS_CHAN_WIDTH_20;
   	bss_data.boottime_ns = ktime_to_ns(ktime_get_boottime());
--@@ -5518,6 +5587,7 @@ static struct cfg80211_ops brcmf_cfg8021
+-@@ -5521,6 +5590,7 @@ static struct cfg80211_ops brcmf_cfg8021
 +@@ -5573,6 +5642,7 @@ static struct cfg80211_ops brcmf_cfg8021
   	.leave_ibss = brcmf_cfg80211_leave_ibss,
   	.get_station = brcmf_cfg80211_get_station,
@@ -23917,7 +23931,7 @@ index cd91a925f3..0000000000
 - 	CALL_TXH(ieee80211_tx_h_fragment);
 diff --git a/package/kernel/mac80211/patches/subsys/397-disable-mbssid.patch b/package/kernel/mac80211/patches/subsys/397-disable-mbssid.patch
 deleted file mode 100644
-index 1582be891b..0000000000
+index a8f151574e..0000000000
 --- a/package/kernel/mac80211/patches/subsys/397-disable-mbssid.patch
 +++ /dev/null
 @@ -1,44 +0,0 @@
@@ -23933,7 +23947,7 @@ index 1582be891b..0000000000
 - 			continue;
 ---- a/net/wireless/scan.c
 -+++ b/net/wireless/scan.c
--@@ -2012,6 +2012,7 @@ static const struct element
+-@@ -2013,6 +2013,7 @@ static const struct element
 - 	const struct element *next_mbssid;
 - 	const struct element *next_sub;
 - 
@@ -23941,7 +23955,7 @@ index 1582be891b..0000000000
 - 	next_mbssid = cfg80211_find_elem(WLAN_EID_MULTIPLE_BSSID,
 - 					 mbssid_end,
 - 					 ielen - (mbssid_end - ie));
--@@ -2093,6 +2094,7 @@ static void cfg80211_parse_mbssid_data(s
+-@@ -2094,6 +2095,7 @@ static void cfg80211_parse_mbssid_data(s
 - 	u16 capability;
 - 	struct cfg80211_bss *bss;
 - 
@@ -23949,7 +23963,7 @@ index 1582be891b..0000000000
 - 	if (!non_tx_data)
 - 		return;
 - 	if (!cfg80211_find_ie(WLAN_EID_MULTIPLE_BSSID, ie, ielen))
--@@ -2253,6 +2255,7 @@ cfg80211_update_notlisted_nontrans(struc
+-@@ -2254,6 +2256,7 @@ cfg80211_update_notlisted_nontrans(struc
 - 	const struct cfg80211_bss_ies *old;
 - 	size_t cpy_len;
 - 
@@ -23957,13 +23971,13 @@ index 1582be891b..0000000000
 - 	lockdep_assert_held(&wiphy_to_rdev(wiphy)->bss_lock);
 - 
 - 	ie = mgmt->u.probe_resp.variable;
--@@ -2470,6 +2473,7 @@ cfg80211_inform_bss_frame_data(struct wi
-- 
+-@@ -2472,6 +2475,7 @@ cfg80211_inform_bss_frame_data(struct wi
 - 	res = cfg80211_inform_single_bss_frame_data(wiphy, data, mgmt,
 - 						    len, gfp);
+- 
 -+	return res;
-- 	if (!res || !wiphy->support_mbssid ||
-- 	    !cfg80211_find_ie(WLAN_EID_MULTIPLE_BSSID, ie, ielen))
+- 	/* don't do any further MBSSID handling for S1G */
+- 	if (ieee80211_is_s1g_beacon(mgmt->frame_control))
 - 		return res;
 diff --git a/package/kernel/mac80211/patches/subsys/400-allow-ibss-mixed.patch b/package/kernel/mac80211/patches/subsys/400-allow-ibss-mixed.patch
 index 974595e11a..f2ed528d23 100644
@@ -24211,5 +24225,5 @@ index 75cb94d7b6..44c6c25b08 100644
    $(call KernelPackage/mac80211/Default)
    TITLE:=Realtek RTL8822BE/RTL8822CE/RTL8723DE
 -- 
-2.34.1
+2.39.2
 
