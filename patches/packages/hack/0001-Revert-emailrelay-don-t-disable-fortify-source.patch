@@ -1,0 +1,40 @@
+From b9f8cde63344d6a8c5d120c1e9955f6a8683802e Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Thu, 23 Feb 2023 00:43:13 +0100
+Subject: [PATCH] Revert "emailrelay: don't disable fortify source"
+
+For Turris OS, where we have enabled PowerPCSPE for mpc85xx target, we
+are using GCC 8, so we need to disable fortify source, otherwise, we can
+not have this package for Turris 1.x router, because it fails with:
+
+/build/staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/powerpc-openwrt-linux-muslspe/include/c++/8.4.0/ext/string_conversions.h: In function '__to_xstring.constprop':
+../../../../../staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/include/fortify/stdio.h:70:28: error: inlining failed in call to always_inline 'vsnprintf': function body can be overwritten at link time
+ _FORTIFY_FN(vsnprintf) int vsnprintf(char *__s, size_t __n, const char *__f,
+                            ^
+/build/staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/powerpc-openwrt-linux-muslspe/include/c++/8.4.0/ext/string_conversions.h:111:32: note: called from here
+       const int __len = __convf(__s, __n, __fmt, __args);
+                                ^
+lto-wrapper: fatal error: /build/staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/bin/powerpc-openwrt-linux-muslspe-g++ returned 1 exit status
+compilation terminated.
+/build/staging_dir/toolchain-powerpc_8548_gcc-8.4.0_musl/lib/gcc/powerpc-openwrt-linux-muslspe/8.4.0/../../../../powerpc-openwrt-linux-muslspe/bin/ld: error: lto-wrapper failed
+
+This reverts commit 0bd444e6948d30184bfb4839cc90e91e6b5d5ef0.
+---
+ mail/emailrelay/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/mail/emailrelay/Makefile b/mail/emailrelay/Makefile
+index 7b377438e..6a2ec6fa1 100644
+--- a/mail/emailrelay/Makefile
++++ b/mail/emailrelay/Makefile
+@@ -20,6 +20,7 @@ PKG_LICENSE:=GPL-3.0-or-later
+ PKG_LICENSE_FILES:=COPYING
+ 
+ PKG_CONFIG_DEPENDS:=CONFIG_EMAILRELAY_SUPPORT_VERBOSE_DBG CONFIG_EMAILRELAY_SSL
++PKG_FORTIFY_SOURCE:=0 #GCC8 and 9 fix
+ 
+ include $(INCLUDE_DIR)/package.mk
+ 
+-- 
+2.34.1
+
