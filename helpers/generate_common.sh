@@ -296,6 +296,7 @@ updater_ng_repodetect() {
 		awk '/^Package: updater-ng$/,/^$/ { if ($1 == "Version:") { gsub("-.*$","",$2); print $2 } }')"
 	if [ -z "$version" ]; then
 		warn "Detection of updater-ng version from repository failed. Using $DEFAULT_UPDATER_VERSION instead."
+		UPDATER_VERSION="$DEFAULT_UPDATER_VERSION"
 	else
 		UPDATER_VERSION="v$version"
 	fi
