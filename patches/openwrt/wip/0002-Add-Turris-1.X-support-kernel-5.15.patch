@@ -1,4 +1,4 @@
-From fc2fd9ae224450f539fed403820d87cace56962e Mon Sep 17 00:00:00 2001
+From 8c369df76a66b55e80c07b54160a114f241e61d3 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 5.15)
@@ -9,21 +9,20 @@ Content-Transfer-Encoding: 8bit
 Signed-off-by: Marek Behún <marek.behun@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
- package/boot/uboot-tools/files/mpc85xx     |   3 +
- .../mpc85xx/base-files/etc/board.d/02_network |   4 +
- target/linux/mpc85xx/config-5.15               |  65 ++-
- target/linux/mpc85xx/image/p2020.mk           |   9 +
- target/linux/mpc85xx/p2020/config-default     |  27 +
- 6 files changed, 569 insertions(+), 6 deletions(-)
- create mode 100644 target/linux/mpc85xx/files/arch/powerpc/boot/dts/turris1x.dts
+ package/boot/uboot-tools/files/mpc85xx        |  3 +
+ .../mpc85xx/base-files/etc/board.d/02_network |  4 ++
+ target/linux/mpc85xx/config-5.15              | 56 ++++++++++++++++++-
+ target/linux/mpc85xx/image/p2020.mk           |  9 +++
+ target/linux/mpc85xx/p2020/config-default     | 27 +++++++++
+ 5 files changed, 98 insertions(+), 1 deletion(-)
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
-index d219b57cb1..932a46af7b 100644
+index 6d389c5b57..8cd3f3bbcd 100644
 --- a/package/boot/uboot-tools/files/mpc85xx
 +++ b/package/boot/uboot-tools/files/mpc85xx
-@@ -10,6 +10,9 @@ touch /etc/config/ubootenv
+@@ -8,6 +8,9 @@ touch /etc/config/ubootenv
  board=$(board_name)
-
+ 
  case "$board" in
 +cznic,turris1x)
 +	ubootenv_add_uci_config "/dev/mtd5" "0x20000" "0x2000" "0x20000"
@@ -32,12 +31,12 @@ index d219b57cb1..932a46af7b 100644
  	ubootenv_add_uci_config "$(find_mtd_part 'cfg1')" "0x0" "0x10000" "0x20000"
  	ubootenv_add_uci_config "$(find_mtd_part 'cfg2')" "0x0" "0x10000" "0x20000"
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index 7a677ee96f..68102e7f7c 100644
+index 77e208c7fa..f5dfaefffc 100644
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-@@ -21,6 +21,10 @@ tplink,tl-wdr4900-v1)
- 	ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
- 	ucidef_set_interface_macaddr "wan" "$(macaddr_add $(mtd_get_mac_binary u-boot 0x4fc00) 1)"
+@@ -24,6 +24,10 @@ tplink,tl-wdr4900-v1)
+ watchguard,firebox-t10)
+ 	ucidef_set_interfaces_lan_wan "eth1 eth2" "eth0"
  	;;
 +cznic,turris1x)
 +	ucidef_set_interface_lan "lan1 lan2 lan3 lan4 lan5"
@@ -47,7 +46,7 @@ index 7a677ee96f..68102e7f7c 100644
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.15 b/target/linux/mpc85xx/config-5.15
-index 5700a247de..fa1307a79c 100644
+index ab2eef94cd..7f1732bcba 100644
 --- a/target/linux/mpc85xx/config-5.15
 +++ b/target/linux/mpc85xx/config-5.15
 @@ -22,6 +22,15 @@ CONFIG_BOOKE=y
@@ -186,10 +185,10 @@ index 5700a247de..fa1307a79c 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -266,3 +313,10 @@ CONFIG_WATCHDOG_CORE=y
- # CONFIG_XES_MPC85xx is not set
+@@ -267,3 +314,10 @@ CONFIG_WATCHDOG_CORE=y
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
+ # CONFIG_FIREBOX_T10 is not set
 +# CONFIG_FB_FSL_DIU is not set
 +# CONFIG_VGA_CONSOLE is not set
 +CONFIG_USB_STORAGE=y
@@ -198,7 +197,7 @@ index 5700a247de..fa1307a79c 100644
 +CONFIG_BLK_DEV_SD=y
 +CONFIG_MTD_NAND_ECC_SW_BCH=y
 diff --git a/target/linux/mpc85xx/image/p2020.mk b/target/linux/mpc85xx/image/p2020.mk
-index 79b5fa660c..e6ef38ff18 100644
+index 79b5fa660c..848d18bf77 100644
 --- a/target/linux/mpc85xx/image/p2020.mk
 +++ b/target/linux/mpc85xx/image/p2020.mk
 @@ -13,3 +13,12 @@ define Device/freescale_p2020rdb
@@ -215,10 +214,10 @@ index 79b5fa660c..e6ef38ff18 100644
 +endef
 +TARGET_DEVICES += cznic_turris1x
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index 22ab9036c7..ef32280dac 100644
+index 6d0ecc5b9e..7e2e275d13 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
-@@ -27,3 +27,30 @@ CONFIG_SOCK_RX_QUEUE_MAPPING=y
+@@ -42,3 +42,30 @@ CONFIG_TARGET_CPU_BOOL=y
  CONFIG_TREE_RCU=y
  CONFIG_TREE_SRCU=y
  CONFIG_XPS=y
@@ -249,6 +248,6 @@ index 22ab9036c7..ef32280dac 100644
 +CONFIG_UBIFS_FS_ZLIB=y
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
---
-2.34.1
+-- 
+2.39.2
 
