@@ -1,14 +1,16 @@
-From 4daafb24141b7b34cef5d85fdd86e93209b456a4 Mon Sep 17 00:00:00 2001
+From 0bcdbb1999c0c4369dc175ffc0bbcbce1c4c48c0 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Mon, 28 Nov 2022 12:33:14 +0100
 Subject: [PATCH] mt76: backport version from OpenWrt master branch
 
 ---
- package/kernel/mt76/Makefile                  | 45 ++++++++++---
+ package/kernel/mt76/Makefile                  | 45 +++++++++++---
  ...ss-the-dst-buffer-to-of_get_mac_addr.patch | 26 --------
- ...ix-encap-offload-ethernet-type-check.patch | 63 -------------------
- 3 files changed, 37 insertions(+), 97 deletions(-)
+ .../patches/100-aggregation-definitions.patch | 13 ++++
+ ...ix-encap-offload-ethernet-type-check.patch | 59 -------------------
+ 4 files changed, 50 insertions(+), 93 deletions(-)
  delete mode 100644 package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
+ create mode 100644 package/kernel/mt76/patches/100-aggregation-definitions.patch
  delete mode 100644 package/kernel/mt76/patches/101-fix-encap-offload-ethernet-type-check.patch
 
 diff --git a/package/kernel/mt76/Makefile b/package/kernel/mt76/Makefile
@@ -117,7 +119,7 @@ index 8210478c37..31c177219a 100644
  $(eval $(call KernelPackage,mt76))
 diff --git a/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch b/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
 deleted file mode 100644
-index 24b1240548..0000000000
+index ede3cca1f0..0000000000
 --- a/package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
 +++ /dev/null
 @@ -1,26 +0,0 @@
@@ -130,7 +132,7 @@ index 24b1240548..0000000000
 -
 ---- a/eeprom.c
 -+++ b/eeprom.c
--@@ -105,9 +105,15 @@ mt76_eeprom_override(struct mt76_phy *ph
+-@@ -107,9 +107,15 @@ mt76_eeprom_override(struct mt76_phy *ph
 - {
 - 	struct mt76_dev *dev = phy->dev;
 - 
@@ -168,10 +170,10 @@ index 0000000000..a88d57133f
 + 	hw->radiotap_timestamp.units_pos =
 diff --git a/package/kernel/mt76/patches/101-fix-encap-offload-ethernet-type-check.patch b/package/kernel/mt76/patches/101-fix-encap-offload-ethernet-type-check.patch
 deleted file mode 100644
-index d81aa4dfa3..0000000000
+index d3deee42ce..0000000000
 --- a/package/kernel/mt76/patches/101-fix-encap-offload-ethernet-type-check.patch
 +++ /dev/null
-@@ -1,63 +0,0 @@
+@@ -1,59 +0,0 @@
 -From: Felix Fietkau <nbd@nbd.name>
 -To: linux-wireless@vger.kernel.org
 -Cc: =?utf-8?q?Thibaut_VAR=C3=88NE?= <hacks+kernel@slashdirt.org>
@@ -191,11 +193,9 @@ index d81aa4dfa3..0000000000
 - drivers/net/wireless/mediatek/mt76/mt7921/mac.c | 4 +++-
 - 2 files changed, 6 insertions(+), 2 deletions(-)
 -
--diff --git a/drivers/net/wireless/mediatek/mt76/mt7915/mac.c b/drivers/net/wireless/mediatek/mt76/mt7915/mac.c
--index 5f4a0e811137..e353e8c44d6c 100644
 ---- a/mt7915/mac.c
 -+++ b/mt7915/mac.c
--@@ -1016,6 +1016,7 @@ mt7915_mac_write_txwi_8023(struct mt7915_dev *dev, __le32 *txwi,
+-@@ -977,6 +977,7 @@ mt7915_mac_write_txwi_8023(struct mt7915
 - 
 - 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 - 	u8 fc_type, fc_stype;
@@ -203,7 +203,7 @@ index d81aa4dfa3..0000000000
 - 	bool wmm = false;
 - 	u32 val;
 - 
--@@ -1029,7 +1030,8 @@ mt7915_mac_write_txwi_8023(struct mt7915_dev *dev, __le32 *txwi,
+-@@ -990,7 +991,8 @@ mt7915_mac_write_txwi_8023(struct mt7915
 - 	val = FIELD_PREP(MT_TXD1_HDR_FORMAT, MT_HDR_FORMAT_802_3) |
 - 	      FIELD_PREP(MT_TXD1_TID, tid);
 - 
@@ -213,11 +213,9 @@ index d81aa4dfa3..0000000000
 - 		val |= MT_TXD1_ETH_802_3;
 - 
 - 	txwi[1] |= cpu_to_le32(val);
--diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/mac.c b/drivers/net/wireless/mediatek/mt76/mt7921/mac.c
--index 368e54c53ddd..ac11e8b28f13 100644
 ---- a/mt7921/mac.c
 -+++ b/mt7921/mac.c
--@@ -814,6 +814,7 @@ mt7921_mac_write_txwi_8023(struct mt7921_dev *dev, __le32 *txwi,
+-@@ -811,6 +811,7 @@ mt7921_mac_write_txwi_8023(struct mt7921
 - {
 - 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 - 	u8 fc_type, fc_stype;
@@ -225,7 +223,7 @@ index d81aa4dfa3..0000000000
 - 	bool wmm = false;
 - 	u32 val;
 - 
--@@ -827,7 +828,8 @@ mt7921_mac_write_txwi_8023(struct mt7921_dev *dev, __le32 *txwi,
+-@@ -824,7 +825,8 @@ mt7921_mac_write_txwi_8023(struct mt7921
 - 	val = FIELD_PREP(MT_TXD1_HDR_FORMAT, MT_HDR_FORMAT_802_3) |
 - 	      FIELD_PREP(MT_TXD1_TID, tid);
 - 
@@ -236,5 +234,5 @@ index d81aa4dfa3..0000000000
 - 
 - 	txwi[1] |= cpu_to_le32(val);
 -- 
-2.34.1
+2.40.0
 
