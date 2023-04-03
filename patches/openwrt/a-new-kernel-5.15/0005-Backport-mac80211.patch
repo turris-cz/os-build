@@ -1,4 +1,4 @@
-From 799d3b4ffc93e40d00516906b4878ed8c281f666 Mon Sep 17 00:00:00 2001
+From 108dc9c3fac9c1cc69a1278e8abfbd66c3437bb0 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Thu, 8 Dec 2022 11:25:51 +0100
 Subject: [PATCH] mac80211: update to 5.15.81 version
@@ -194,10 +194,15 @@ Subject: [PATCH] mac80211: update to 5.15.81 version
  ...ate-control-for-retransmitted-frames.patch |   35 -
  .../patches/subsys/397-disable-mbssid.patch   |   44 -
  .../patches/subsys/400-allow-ibss-mixed.patch |    2 +-
+ ...orrectly-mark-FTM-frames-non-buffera.patch |   23 +-
+ ...mac80211-flush-queues-on-STA-removal.patch |    2 +-
+ ...i-mvm-support-flush-on-AP-interfaces.patch |    4 +-
+ ...3-wifi-mac80211-add-flush_sta-method.patch |    6 +-
+ ...ifi-mvm-support-new-flush_sta-method.patch |    4 +-
  .../500-mac80211_configure_antenna_gain.patch |   66 +-
  ...the-dst-buffer-to-of_get_mac_address.patch |   29 +
  package/kernel/mac80211/realtek.mk            |   18 +
- 193 files changed, 7353 insertions(+), 13475 deletions(-)
+ 198 files changed, 7367 insertions(+), 13500 deletions(-)
  delete mode 100644 package/kernel/mac80211/files/lib/netifd/mac80211.sh
  delete mode 100644 package/kernel/mac80211/patches/ath/120-owl-loader-compat.patch
  delete mode 100644 package/kernel/mac80211/patches/ath/550-ath9k-disable-bands-via-dt.patch
@@ -23992,6 +23997,167 @@ index 974595e11a..f2ed528d23 100644
   				    c->limits[j].max > 1))
   				return -EINVAL;
   
+diff --git a/package/kernel/mac80211/patches/subsys/410-wifi-ieee80211-correctly-mark-FTM-frames-non-buffera.patch b/package/kernel/mac80211/patches/subsys/410-wifi-ieee80211-correctly-mark-FTM-frames-non-buffera.patch
+index 6f72c1d5ca..ac707de53e 100644
+--- a/package/kernel/mac80211/patches/subsys/410-wifi-ieee80211-correctly-mark-FTM-frames-non-buffera.patch
++++ b/package/kernel/mac80211/patches/subsys/410-wifi-ieee80211-correctly-mark-FTM-frames-non-buffera.patch
+@@ -15,7 +15,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+ 
+ --- a/drivers/net/wireless/intel/iwlwifi/mvm/tx.c
+ +++ b/drivers/net/wireless/intel/iwlwifi/mvm/tx.c
+-@@ -604,8 +604,9 @@ static void iwl_mvm_skb_prepare_status(s
++@@ -551,8 +551,9 @@ static void iwl_mvm_skb_prepare_status(s
+  
+  static int iwl_mvm_get_ctrl_vif_queue(struct iwl_mvm *mvm,
+  				      struct ieee80211_tx_info *info,
+@@ -26,7 +26,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+  	struct iwl_mvm_vif *mvmvif =
+  		iwl_mvm_vif_from_mac80211(info->control.vif);
+  	__le16 fc = hdr->frame_control;
+-@@ -624,7 +625,7 @@ static int iwl_mvm_get_ctrl_vif_queue(st
++@@ -571,7 +572,7 @@ static int iwl_mvm_get_ctrl_vif_queue(st
+  		 * reason 7 ("Class 3 frame received from nonassociated STA").
+  		 */
+  		if (ieee80211_is_mgmt(fc) &&
+@@ -35,7 +35,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+  		     ieee80211_is_deauth(fc) || ieee80211_is_disassoc(fc)))
+  			return mvm->probe_queue;
+  
+-@@ -742,7 +743,7 @@ int iwl_mvm_tx_skb_non_sta(struct iwl_mv
++@@ -689,7 +690,7 @@ int iwl_mvm_tx_skb_non_sta(struct iwl_mv
+  			else
+  				sta_id = mvmvif->mcast_sta.sta_id;
+  
+@@ -67,7 +67,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+   * ieee80211_is_first_frag - check if IEEE80211_SCTL_FRAG is not set
+   * @seq_ctrl: frame sequence control bytes in little-endian byteorder
+   */
+-@@ -3614,6 +3600,44 @@ static inline u8 *ieee80211_get_DA(struc
++@@ -3672,6 +3658,44 @@ static inline u8 *ieee80211_get_DA(struc
+  }
+  
+  /**
+@@ -114,7 +114,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+   */
+ --- a/net/mac80211/tx.c
+ +++ b/net/mac80211/tx.c
+-@@ -501,7 +501,7 @@ ieee80211_tx_h_unicast_ps_buf(struct iee
++@@ -487,7 +487,7 @@ ieee80211_tx_h_unicast_ps_buf(struct iee
+  		int ac = skb_get_queue_mapping(tx->skb);
+  
+  		if (ieee80211_is_mgmt(hdr->frame_control) &&
+@@ -123,7 +123,7 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+  			info->flags |= IEEE80211_TX_CTL_NO_PS_BUFFER;
+  			return TX_CONTINUE;
+  		}
+-@@ -1296,7 +1296,7 @@ static struct txq_info *ieee80211_get_tx
++@@ -1282,7 +1282,7 @@ static struct txq_info *ieee80211_get_tx
+  	if (!(info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) &&
+  	    unlikely(!ieee80211_is_data_present(hdr->frame_control))) {
+  		if ((!ieee80211_is_mgmt(hdr->frame_control) ||
+@@ -132,14 +132,3 @@ Reviewed-by: Peer, Ilan <ilan.peer@intel.com>
+  		     vif->type == NL80211_IFTYPE_STATION) &&
+  		    sta && sta->uploaded) {
+  			/*
+---- a/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+-+++ b/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+-@@ -814,7 +814,7 @@ static void iwl_mvm_mac_tx(struct ieee80
+- 	if ((info->control.vif->type == NL80211_IFTYPE_AP ||
+- 	     info->control.vif->type == NL80211_IFTYPE_ADHOC) &&
+- 	    ieee80211_is_mgmt(hdr->frame_control) &&
+--	    !ieee80211_is_bufferable_mmpdu(hdr->frame_control))
+-+	    !ieee80211_is_bufferable_mmpdu(skb))
+- 		sta = NULL;
+- 
+- 	/* If there is no sta, and it's not offchannel - send through AP */
+diff --git a/package/kernel/mac80211/patches/subsys/411-wifi-mac80211-flush-queues-on-STA-removal.patch b/package/kernel/mac80211/patches/subsys/411-wifi-mac80211-flush-queues-on-STA-removal.patch
+index 0ad02585ae..3e148a9d7e 100644
+--- a/package/kernel/mac80211/patches/subsys/411-wifi-mac80211-flush-queues-on-STA-removal.patch
++++ b/package/kernel/mac80211/patches/subsys/411-wifi-mac80211-flush-queues-on-STA-removal.patch
+@@ -19,7 +19,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+ 
+ --- a/net/mac80211/sta_info.c
+ +++ b/net/mac80211/sta_info.c
+-@@ -1066,6 +1066,14 @@ static void __sta_info_destroy_part2(str
++@@ -1070,6 +1070,14 @@ static void __sta_info_destroy_part2(str
+  		WARN_ON_ONCE(ret);
+  	}
+  
+diff --git a/package/kernel/mac80211/patches/subsys/412-wifi-iwlwifi-mvm-support-flush-on-AP-interfaces.patch b/package/kernel/mac80211/patches/subsys/412-wifi-iwlwifi-mvm-support-flush-on-AP-interfaces.patch
+index f2883fdbc8..0b070b144e 100644
+--- a/package/kernel/mac80211/patches/subsys/412-wifi-iwlwifi-mvm-support-flush-on-AP-interfaces.patch
++++ b/package/kernel/mac80211/patches/subsys/412-wifi-iwlwifi-mvm-support-flush-on-AP-interfaces.patch
+@@ -12,7 +12,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+ 
+ --- a/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+ +++ b/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+-@@ -4791,9 +4791,6 @@ static void iwl_mvm_mac_flush(struct iee
++@@ -4817,9 +4817,6 @@ static void iwl_mvm_mac_flush(struct iee
+  		return;
+  	}
+  
+@@ -22,7 +22,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+  	/* Make sure we're done with the deferred traffic before flushing */
+  	flush_work(&mvm->add_stream_wk);
+  
+-@@ -4811,9 +4808,6 @@ static void iwl_mvm_mac_flush(struct iee
++@@ -4837,9 +4834,6 @@ static void iwl_mvm_mac_flush(struct iee
+  		if (mvmsta->vif != vif)
+  			continue;
+  
+diff --git a/package/kernel/mac80211/patches/subsys/413-wifi-mac80211-add-flush_sta-method.patch b/package/kernel/mac80211/patches/subsys/413-wifi-mac80211-add-flush_sta-method.patch
+index 4ec63ae883..ae2ef8352e 100644
+--- a/package/kernel/mac80211/patches/subsys/413-wifi-mac80211-add-flush_sta-method.patch
++++ b/package/kernel/mac80211/patches/subsys/413-wifi-mac80211-add-flush_sta-method.patch
+@@ -12,7 +12,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+ 
+ --- a/include/net/mac80211.h
+ +++ b/include/net/mac80211.h
+-@@ -3661,6 +3661,10 @@ enum ieee80211_reconfig_type {
++@@ -3688,6 +3688,10 @@ struct ieee80211_prep_tx_info {
+   *	Note that vif can be NULL.
+   *	The callback can sleep.
+   *
+@@ -23,7 +23,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+   * @channel_switch: Drivers that need (or want) to offload the channel
+   *	switch operation for CSAs received from the AP may implement this
+   *	callback. They must then call ieee80211_chswitch_done() to indicate
+-@@ -4065,6 +4069,8 @@ struct ieee80211_ops {
++@@ -4116,6 +4120,8 @@ struct ieee80211_ops {
+  #endif
+  	void (*flush)(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+  		      u32 queues, bool drop);
+@@ -58,7 +58,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+  				      struct ieee80211_channel_switch *ch_switch)
+ --- a/net/mac80211/sta_info.c
+ +++ b/net/mac80211/sta_info.c
+-@@ -1071,8 +1071,12 @@ static void __sta_info_destroy_part2(str
++@@ -1075,8 +1075,12 @@ static void __sta_info_destroy_part2(str
+  	 * frames sitting on hardware queues might be sent out without
+  	 * any encryption at all.
+  	 */
+diff --git a/package/kernel/mac80211/patches/subsys/414-wifi-iwlwifi-mvm-support-new-flush_sta-method.patch b/package/kernel/mac80211/patches/subsys/414-wifi-iwlwifi-mvm-support-new-flush_sta-method.patch
+index b52bbe50b8..31f60ce024 100644
+--- a/package/kernel/mac80211/patches/subsys/414-wifi-iwlwifi-mvm-support-new-flush_sta-method.patch
++++ b/package/kernel/mac80211/patches/subsys/414-wifi-iwlwifi-mvm-support-new-flush_sta-method.patch
+@@ -11,7 +11,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+ 
+ --- a/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+ +++ b/drivers/net/wireless/intel/iwlwifi/mvm/mac80211.c
+-@@ -4827,6 +4827,31 @@ static void iwl_mvm_mac_flush(struct iee
++@@ -4853,6 +4853,31 @@ static void iwl_mvm_mac_flush(struct iee
+  		iwl_trans_wait_tx_queues_empty(mvm->trans, msk);
+  }
+  
+@@ -43,7 +43,7 @@ Reviewed-by: Greenman, Gregory <gregory.greenman@intel.com>
+  static int iwl_mvm_mac_get_survey(struct ieee80211_hw *hw, int idx,
+  				  struct survey_info *survey)
+  {
+-@@ -5296,6 +5321,7 @@ const struct ieee80211_ops iwl_mvm_hw_op
++@@ -5366,6 +5391,7 @@ const struct ieee80211_ops iwl_mvm_hw_op
+  	.mgd_prepare_tx = iwl_mvm_mac_mgd_prepare_tx,
+  	.mgd_protect_tdls_discover = iwl_mvm_mac_mgd_protect_tdls_discover,
+  	.flush = iwl_mvm_mac_flush,
 diff --git a/package/kernel/mac80211/patches/subsys/500-mac80211_configure_antenna_gain.patch b/package/kernel/mac80211/patches/subsys/500-mac80211_configure_antenna_gain.patch
 index fe23a289d3..962ae93cc7 100644
 --- a/package/kernel/mac80211/patches/subsys/500-mac80211_configure_antenna_gain.patch
@@ -24225,5 +24391,5 @@ index 75cb94d7b6..44c6c25b08 100644
    $(call KernelPackage/mac80211/Default)
    TITLE:=Realtek RTL8822BE/RTL8822CE/RTL8723DE
 -- 
-2.39.2
+2.40.0
 
