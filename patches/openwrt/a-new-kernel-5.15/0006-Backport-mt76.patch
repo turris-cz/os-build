@@ -1,4 +1,4 @@
-From 0bcdbb1999c0c4369dc175ffc0bbcbce1c4c48c0 Mon Sep 17 00:00:00 2001
+From b4eb5270808b6d02c093dd468b7f2ab1c4bf56e2 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Mon, 28 Nov 2022 12:33:14 +0100
 Subject: [PATCH] mt76: backport version from OpenWrt master branch
@@ -8,7 +8,9 @@ Subject: [PATCH] mt76: backport version from OpenWrt master branch
  ...ss-the-dst-buffer-to-of_get_mac_addr.patch | 26 --------
  .../patches/100-aggregation-definitions.patch | 13 ++++
  ...ix-encap-offload-ethernet-type-check.patch | 59 -------------------
- 4 files changed, 50 insertions(+), 93 deletions(-)
+ .../kernel/mt76/patches/110-api_update.patch  |  4 +-
+ ...ifi-mt76-ignore-key-disable-commands.patch | 42 ++++++-------
+ 6 files changed, 73 insertions(+), 116 deletions(-)
  delete mode 100644 package/kernel/mt76/patches/100-Revert-of-net-pass-the-dst-buffer-to-of_get_mac_addr.patch
  create mode 100644 package/kernel/mt76/patches/100-aggregation-definitions.patch
  delete mode 100644 package/kernel/mt76/patches/101-fix-encap-offload-ethernet-type-check.patch
@@ -233,6 +235,167 @@ index d3deee42ce..0000000000
 - 		val |= MT_TXD1_ETH_802_3;
 - 
 - 	txwi[1] |= cpu_to_le32(val);
+diff --git a/package/kernel/mt76/patches/110-api_update.patch b/package/kernel/mt76/patches/110-api_update.patch
+index a42277704e..27bd6286b0 100644
+--- a/package/kernel/mt76/patches/110-api_update.patch
++++ b/package/kernel/mt76/patches/110-api_update.patch
+@@ -1,11 +1,11 @@
+ --- a/tx.c
+ +++ b/tx.c
+-@@ -326,7 +326,7 @@ mt76_tx(struct mt76_phy *phy, struct iee
++@@ -325,7 +325,7 @@ mt76_tx(struct mt76_phy *phy, struct iee
+  	if ((dev->drv->drv_flags & MT_DRV_HW_MGMT_TXQ) &&
+  	    !(info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) &&
+  	    !ieee80211_is_data(hdr->frame_control) &&
+ -	    !ieee80211_is_bufferable_mmpdu(hdr->frame_control)) {
+ +	    !ieee80211_is_bufferable_mmpdu(skb)) {
+  		qid = MT_TXQ_PSD;
+- 		skb_set_queue_mapping(skb, qid);
+  	}
++ 
+diff --git a/package/kernel/mt76/patches/120-wifi-mt76-ignore-key-disable-commands.patch b/package/kernel/mt76/patches/120-wifi-mt76-ignore-key-disable-commands.patch
+index 3f97de916e..3ac6cebca8 100644
+--- a/package/kernel/mt76/patches/120-wifi-mt76-ignore-key-disable-commands.patch
++++ b/package/kernel/mt76/patches/120-wifi-mt76-ignore-key-disable-commands.patch
+@@ -34,7 +34,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	return mt7603_wtbl_set_key(dev, wcid->idx, key);
+ --- a/mt7615/mac.c
+ +++ b/mt7615/mac.c
+-@@ -1231,8 +1231,7 @@ EXPORT_SYMBOL_GPL(mt7615_mac_set_rates);
++@@ -1178,8 +1178,7 @@ EXPORT_SYMBOL_GPL(mt7615_mac_set_rates);
+  static int
+  mt7615_mac_wtbl_update_key(struct mt7615_dev *dev, struct mt76_wcid *wcid,
+  			   struct ieee80211_key_conf *key,
+@@ -44,7 +44,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  {
+  	u32 addr = mt7615_mac_wtbl_addr(dev, wcid->idx) + 30 * 4;
+  	u8 data[32] = {};
+-@@ -1241,27 +1240,18 @@ mt7615_mac_wtbl_update_key(struct mt7615
++@@ -1188,27 +1187,18 @@ mt7615_mac_wtbl_update_key(struct mt7615
+  		return -EINVAL;
+  
+  	mt76_rr_copy(dev, addr, data, sizeof(data));
+@@ -82,7 +82,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	}
+  
+  	mt76_wr_copy(dev, addr, data, sizeof(data));
+-@@ -1272,7 +1262,7 @@ mt7615_mac_wtbl_update_key(struct mt7615
++@@ -1219,7 +1209,7 @@ mt7615_mac_wtbl_update_key(struct mt7615
+  static int
+  mt7615_mac_wtbl_update_pk(struct mt7615_dev *dev, struct mt76_wcid *wcid,
+  			  enum mt76_cipher_type cipher, u16 cipher_mask,
+@@ -91,7 +91,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  {
+  	u32 addr = mt7615_mac_wtbl_addr(dev, wcid->idx), w0, w1;
+  
+-@@ -1291,9 +1281,7 @@ mt7615_mac_wtbl_update_pk(struct mt7615_
++@@ -1238,9 +1228,7 @@ mt7615_mac_wtbl_update_pk(struct mt7615_
+  	else
+  		w0 &= ~MT_WTBL_W0_RX_IK_VALID;
+  
+@@ -102,7 +102,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  		w0 &= ~MT_WTBL_W0_KEY_IDX;
+  		w0 |= FIELD_PREP(MT_WTBL_W0_KEY_IDX, keyidx);
+  	}
+-@@ -1310,19 +1298,10 @@ mt7615_mac_wtbl_update_pk(struct mt7615_
++@@ -1257,19 +1245,10 @@ mt7615_mac_wtbl_update_pk(struct mt7615_
+  
+  static void
+  mt7615_mac_wtbl_update_cipher(struct mt7615_dev *dev, struct mt76_wcid *wcid,
+@@ -123,7 +123,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	if (cipher == MT_CIPHER_BIP_CMAC_128 &&
+  	    cipher_mask & ~BIT(MT_CIPHER_BIP_CMAC_128))
+  		return;
+-@@ -1333,8 +1312,7 @@ mt7615_mac_wtbl_update_cipher(struct mt7
++@@ -1280,8 +1259,7 @@ mt7615_mac_wtbl_update_cipher(struct mt7
+  
+  int __mt7615_mac_wtbl_set_key(struct mt7615_dev *dev,
+  			      struct mt76_wcid *wcid,
+@@ -133,7 +133,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  {
+  	enum mt76_cipher_type cipher;
+  	u16 cipher_mask = wcid->cipher;
+-@@ -1344,19 +1322,14 @@ int __mt7615_mac_wtbl_set_key(struct mt7
++@@ -1291,19 +1269,14 @@ int __mt7615_mac_wtbl_set_key(struct mt7
+  	if (cipher == MT_CIPHER_NONE)
+  		return -EOPNOTSUPP;
+  
+@@ -157,7 +157,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	if (err < 0)
+  		return err;
+  
+-@@ -1367,13 +1340,12 @@ int __mt7615_mac_wtbl_set_key(struct mt7
++@@ -1314,13 +1287,12 @@ int __mt7615_mac_wtbl_set_key(struct mt7
+  
+  int mt7615_mac_wtbl_set_key(struct mt7615_dev *dev,
+  			    struct mt76_wcid *wcid,
+@@ -175,7 +175,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	return err;
+ --- a/mt7615/main.c
+ +++ b/mt7615/main.c
+-@@ -405,18 +405,17 @@ static int mt7615_set_key(struct ieee802
++@@ -391,18 +391,17 @@ static int mt7615_set_key(struct ieee802
+  
+  	if (cmd == SET_KEY)
+  		*wcid_keyidx = idx;
+@@ -203,7 +203,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  	mt7615_mutex_release(dev);
+ --- a/mt7615/mt7615.h
+ +++ b/mt7615/mt7615.h
+-@@ -502,11 +502,9 @@ int mt7615_mac_write_txwi(struct mt7615_
++@@ -482,11 +482,9 @@ int mt7615_mac_write_txwi(struct mt7615_
+  void mt7615_mac_set_timing(struct mt7615_phy *phy);
+  int __mt7615_mac_wtbl_set_key(struct mt7615_dev *dev,
+  			      struct mt76_wcid *wcid,
+@@ -219,7 +219,7 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  
+ --- a/mt76x02_util.c
+ +++ b/mt76x02_util.c
+-@@ -453,20 +453,20 @@ int mt76x02_set_key(struct ieee80211_hw
++@@ -455,20 +455,20 @@ int mt76x02_set_key(struct ieee80211_hw
+  	msta = sta ? (struct mt76x02_sta *)sta->drv_priv : NULL;
+  	wcid = msta ? &msta->wcid : &mvif->group_wcid;
+  
+@@ -251,9 +251,9 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+  
+ --- a/mt7915/main.c
+ +++ b/mt7915/main.c
+-@@ -405,16 +405,15 @@ static int mt7915_set_key(struct ieee802
+- 
+- 	mutex_lock(&dev->mt76.mutex);
++@@ -387,16 +387,15 @@ static int mt7915_set_key(struct ieee802
++ 		mt7915_mcu_add_bss_info(phy, vif, true);
++ 	}
+  
+ -	if (cmd == SET_KEY)
+ +	if (cmd == SET_KEY) {
+@@ -271,12 +271,12 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+ -			    cmd == SET_KEY ? key : NULL);
+ -
+ +	mt76_wcid_key_setup(&dev->mt76, wcid, key);
+- 	err = mt7915_mcu_add_key(dev, vif, msta, key, cmd);
+- 
+- out:
++ 	err = mt76_connac_mcu_add_key(&dev->mt76, vif, &msta->bip,
++ 				      key, MCU_EXT_CMD(STA_REC_UPDATE),
++ 				      &msta->wcid, cmd);
+ --- a/mt7921/main.c
+ +++ b/mt7921/main.c
+-@@ -441,16 +441,15 @@ static int mt7921_set_key(struct ieee802
++@@ -463,16 +463,15 @@ static int mt7921_set_key(struct ieee802
+  
+  	mt7921_mutex_acquire(dev);
+  
+@@ -296,6 +296,6 @@ Signed-off-by: Felix Fietkau <nbd@nbd.name>
+ -			    cmd == SET_KEY ? key : NULL);
+ -
+ +	mt76_wcid_key_setup(&dev->mt76, wcid, key);
+- 	err = mt7921_mcu_add_key(dev, vif, msta, key, cmd);
+- 	if (err)
+- 		goto out;
++ 	err = mt76_connac_mcu_add_key(&dev->mt76, vif, &msta->bip,
++ 				      key, MCU_UNI_CMD(STA_REC_UPDATE),
++ 				      &msta->wcid, cmd);
 -- 
 2.40.0
 
