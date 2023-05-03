@@ -1,4 +1,4 @@
-From 7a64aadb588f254e7e22b405536380b831e8aa96 Mon Sep 17 00:00:00 2001
+From b548c20b033ac0a5f6609f1e786bb14440c73c80 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Sun, 11 Dec 2022 21:31:50 +0100
 Subject: [PATCH] Backport pending patches 5.15
@@ -102,7 +102,6 @@ Subject: [PATCH] Backport pending patches 5.15
  ..._eth_soc-work-around-issue-with-send.patch |   78 +
  ...rnet-mtk_eth_soc-set-NETIF_F_ALL_TSO.patch |   21 +
  ..._eth_soc-drop-packets-to-WDMA-if-the.patch |   37 +
- ..._eth_soc-fix-flow_offload-related-re.patch |   52 +
  ..._eth_soc-drop-generic-vlan-rx-offloa.patch |  181 +
  ...et-mtk_wed-introduce-wed-mcu-support.patch |  591 +++
  ...net-mtk_wed-introduce-wed-wo-support.patch |  737 +++
@@ -119,9 +118,8 @@ Subject: [PATCH] Backport pending patches 5.15
  .../pending-5.15/834-ledtrig-libata.patch     |  149 +
  ...40-hwrng-bcm2835-set-quality-to-1000.patch |   26 +
  ...e-main-irq_chip-structure-a-static-d.patch |  102 +
- ...-Fix-crash-by-zero-initializing-data.patch |   30 +
  .../pending-5.15/920-mangle_bootargs.patch    |   71 +
- 118 files changed, 17336 insertions(+)
+ 115 files changed, 17232 insertions(+)
  create mode 100644 target/linux/generic/pending-5.15/100-compiler.h-only-include-asm-rwonce.h-for-kernel-code.patch
  create mode 100644 target/linux/generic/pending-5.15/102-MIPS-only-process-negative-stack-offsets-on-stack-tr.patch
  create mode 100644 target/linux/generic/pending-5.15/103-kbuild-export-SUBARCH.patch
@@ -220,7 +218,6 @@ Subject: [PATCH] Backport pending patches 5.15
  create mode 100644 target/linux/generic/pending-5.15/732-10-net-ethernet-mtk_eth_soc-work-around-issue-with-send.patch
  create mode 100644 target/linux/generic/pending-5.15/732-11-net-ethernet-mtk_eth_soc-set-NETIF_F_ALL_TSO.patch
  create mode 100644 target/linux/generic/pending-5.15/732-12-net-ethernet-mtk_eth_soc-drop-packets-to-WDMA-if-the.patch
- create mode 100644 target/linux/generic/pending-5.15/732-13-net-ethernet-mtk_eth_soc-fix-flow_offload-related-re.patch
  create mode 100644 target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch
  create mode 100644 target/linux/generic/pending-5.15/733-01-net-ethernet-mtk_wed-introduce-wed-mcu-support.patch
  create mode 100644 target/linux/generic/pending-5.15/733-02-net-ethernet-mtk_wed-introduce-wed-wo-support.patch
@@ -339,7 +336,7 @@ index 0000000000..95a9656d26
 + 	}
 diff --git a/target/linux/generic/pending-5.15/103-kbuild-export-SUBARCH.patch b/target/linux/generic/pending-5.15/103-kbuild-export-SUBARCH.patch
 new file mode 100644
-index 0000000000..d378dabdda
+index 0000000000..1051c77023
 --- /dev/null
 +++ b/target/linux/generic/pending-5.15/103-kbuild-export-SUBARCH.patch
 @@ -0,0 +1,21 @@
@@ -13867,64 +13864,6 @@ index 0000000000..6568e890d2
 + 
 + /* PSE Input Queue Reservation Register*/
 + #define PSE_IQ_REV(x)		(0x140 + (((x) - 1) << 2))
-diff --git a/target/linux/generic/pending-5.15/732-13-net-ethernet-mtk_eth_soc-fix-flow_offload-related-re.patch b/target/linux/generic/pending-5.15/732-13-net-ethernet-mtk_eth_soc-fix-flow_offload-related-re.patch
-new file mode 100644
-index 0000000000..0664e0106f
---- /dev/null
-+++ b/target/linux/generic/pending-5.15/732-13-net-ethernet-mtk_eth_soc-fix-flow_offload-related-re.patch
-@@ -0,0 +1,52 @@
-+From: Felix Fietkau <nbd@nbd.name>
-+Date: Thu, 17 Nov 2022 11:58:21 +0100
-+Subject: [PATCH] net: ethernet: mtk_eth_soc: fix flow_offload related refcount
-+ bug
-+
-+Since we call flow_block_cb_decref on FLOW_BLOCK_UNBIND, we need to call
-+flow_block_cb_incref unconditionally, even for a newly allocated cb.
-+Fixes a use-after-free bug
-+
-+Fixes: 502e84e2382d ("net: ethernet: mtk_eth_soc: add flow offloading support")
-+Signed-off-by: Felix Fietkau <nbd@nbd.name>
-+---
-+
-+--- a/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-++++ b/drivers/net/ethernet/mediatek/mtk_ppe_offload.c
-+@@ -561,6 +561,7 @@ mtk_eth_setup_tc_block(struct net_device
-+ 	struct mtk_eth *eth = mac->hw;
-+ 	static LIST_HEAD(block_cb_list);
-+ 	struct flow_block_cb *block_cb;
-++	bool register_block = false;
-+ 	flow_setup_cb_t *cb;
-+ 
-+ 	if (!eth->soc->offload_version)
-+@@ -575,16 +576,20 @@ mtk_eth_setup_tc_block(struct net_device
-+ 	switch (f->command) {
-+ 	case FLOW_BLOCK_BIND:
-+ 		block_cb = flow_block_cb_lookup(f->block, cb, dev);
-+-		if (block_cb) {
-+-			flow_block_cb_incref(block_cb);
-+-			return 0;
-++		if (!block_cb) {
-++			block_cb = flow_block_cb_alloc(cb, dev, dev, NULL);
-++			if (IS_ERR(block_cb))
-++				return PTR_ERR(block_cb);
-++
-++			register_block = true;
-+ 		}
-+-		block_cb = flow_block_cb_alloc(cb, dev, dev, NULL);
-+-		if (IS_ERR(block_cb))
-+-			return PTR_ERR(block_cb);
-+ 
-+-		flow_block_cb_add(block_cb, f);
-+-		list_add_tail(&block_cb->driver_list, &block_cb_list);
-++		flow_block_cb_incref(block_cb);
-++
-++		if (register_block) {
-++			flow_block_cb_add(block_cb, f);
-++			list_add_tail(&block_cb->driver_list, &block_cb_list);
-++		}
-+ 		return 0;
-+ 	case FLOW_BLOCK_UNBIND:
-+ 		block_cb = flow_block_cb_lookup(f->block, cb, dev);
 diff --git a/target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch b/target/linux/generic/pending-5.15/732-14-net-ethernet-mtk_eth_soc-drop-generic-vlan-rx-offloa.patch
 new file mode 100644
 index 0000000000..c3a879e5ab
@@ -18220,5 +18159,5 @@ index 0000000000..2a02efe0aa
 + 	setup_command_line(command_line);
 + 	setup_nr_cpu_ids();
 -- 
-2.34.1
+2.40.0
 
