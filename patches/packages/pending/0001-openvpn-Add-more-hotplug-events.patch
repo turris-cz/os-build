@@ -1,0 +1,36 @@
+From b98bff109d675a073170888f69cefcf9d8a4e825 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Mon, 15 May 2023 14:30:29 +0200
+Subject: [PATCH] openvpn: Add more hotplug events
+
+OpenVPN supports more hooks than just 'up' and 'down'. Especially
+reacting to 'route-up' and 'route-pre-down' events could be important.
+When routing table changes, it can make sense to adapt firewall, run
+some tests or change even more routes. This change passes those events
+to hotplug, so it is easy to react to them without changing
+configuration files provided by VPN provider.
+
+https://github.com/openwrt/packages/pull/21027
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@turris.com>
+---
+ net/openvpn/files/openvpn.init | 3 +++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/net/openvpn/files/openvpn.init b/net/openvpn/files/openvpn.init
+index 380b42349..b5f612e46 100644
+--- a/net/openvpn/files/openvpn.init
++++ b/net/openvpn/files/openvpn.init
+@@ -153,6 +153,9 @@ openvpn_add_instance() {
+ 		--config "$conf" \
+ 		--up "/usr/libexec/openvpn-hotplug up $name" \
+ 		--down "/usr/libexec/openvpn-hotplug down $name" \
++		--route-up "/usr/libexec/openvpn-hotplug route-up $name" \
++		--route-pre-down "/usr/libexec/openvpn-hotplug route-pre-down $name" \
++		--ipchange "/usr/libexec/openvpn-hotplug ipchange $name" \
+ 		${up:+--setenv user_up "$up"} \
+ 		${down:+--setenv user_down "$down"} \
+ 		--script-security "${security:-2}" \
+-- 
+2.40.1
+
