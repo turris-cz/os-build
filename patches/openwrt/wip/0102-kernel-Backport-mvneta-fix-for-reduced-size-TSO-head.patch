@@ -1,0 +1,663 @@
+From 1dc5bd8d7a8c4f6da19bc215c540424e26d6fefa Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Wed, 12 Apr 2023 12:50:17 +0200
+Subject: [PATCH] kernel: Backport mvneta fix for reduced size TSO header
+ allocation
+
+This backports Russell King's series
+  net: mvneta: reduce size of TSO header  allocation
+together with two dependencies
+  net: mvneta: Delete unused variable
+  net: mvneta: fix potential double-frees in mvneta_txq_sw_deinit()
+---
+ ...16-net-mvneta-Delete-unused-variable.patch |  67 +++++++
+ ...otential-double-frees-in-mvneta_txq_.patch |  42 ++++
+ ...transmit-path-dma-unmapping-on-error.patch | 116 +++++++++++
+ ...rk-mapped-and-tso-buffers-separately.patch |  47 +++++
+ ...uf-type-to-determine-whether-to-dma-.patch |  64 ++++++
+ ...tso_build_hdr-into-mvneta_tso_put_hd.patch |  70 +++++++
+ ...cate-TSO-header-DMA-memory-in-chunks.patch | 184 ++++++++++++++++++
+ 7 files changed, 590 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/703-21-v5.16-net-mvneta-Delete-unused-variable.patch
+ create mode 100644 target/linux/generic/backport-5.15/703-22-v6.3-net-mvneta-fix-potential-double-frees-in-mvneta_txq_.patch
+ create mode 100644 target/linux/generic/pending-5.15/704-01-v6.4-net-mvneta-fix-transmit-path-dma-unmapping-on-error.patch
+ create mode 100644 target/linux/generic/pending-5.15/704-02-v6.4-net-mvneta-mark-mapped-and-tso-buffers-separately.patch
+ create mode 100644 target/linux/generic/pending-5.15/704-03-v6.4-net-mvneta-use-buf-type-to-determine-whether-to-dma-.patch
+ create mode 100644 target/linux/generic/pending-5.15/704-04-v6.4-net-mvneta-move-tso_build_hdr-into-mvneta_tso_put_hd.patch
+ create mode 100644 target/linux/generic/pending-5.15/704-05-v6.4-net-mvneta-allocate-TSO-header-DMA-memory-in-chunks.patch
+
+diff --git a/target/linux/generic/backport-5.15/703-21-v5.16-net-mvneta-Delete-unused-variable.patch b/target/linux/generic/backport-5.15/703-21-v5.16-net-mvneta-Delete-unused-variable.patch
+new file mode 100644
+index 0000000000..a01a0f4506
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/703-21-v5.16-net-mvneta-Delete-unused-variable.patch
+@@ -0,0 +1,67 @@
++From 43ed6fff01333868a1d0e19876f67c22d9939952 Mon Sep 17 00:00:00 2001
++From: Yuval Shaia <yshaia@marvell.com>
++Date: Wed, 13 Oct 2021 09:49:21 +0300
++Subject: [PATCH 1/7] net: mvneta: Delete unused variable
++
++The variable pp is not in use - delete it.
++
++Signed-off-by: Yuval Shaia <yshaia@marvell.com>
++Link: https://lore.kernel.org/r/20211013064921.26346-1-yshaia@marvell.com
++Signed-off-by: Jakub Kicinski <kuba@kernel.org>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 11 +++++------
++ 1 file changed, 5 insertions(+), 6 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 4a8869151c2e..0c30896c1351 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -1914,7 +1914,7 @@ static int mvneta_rx_refill(struct mvneta_port *pp,
++ }
++ 
++ /* Handle tx checksum */
++-static u32 mvneta_skb_tx_csum(struct mvneta_port *pp, struct sk_buff *skb)
+++static u32 mvneta_skb_tx_csum(struct sk_buff *skb)
++ {
++ 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
++ 		int ip_hdr_len = 0;
++@@ -2595,8 +2595,7 @@ static int mvneta_rx_hwbm(struct napi_struct *napi,
++ }
++ 
++ static inline void
++-mvneta_tso_put_hdr(struct sk_buff *skb,
++-		   struct mvneta_port *pp, struct mvneta_tx_queue *txq)
+++mvneta_tso_put_hdr(struct sk_buff *skb, struct mvneta_tx_queue *txq)
++ {
++ 	int hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
++ 	struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
++@@ -2604,7 +2603,7 @@ mvneta_tso_put_hdr(struct sk_buff *skb,
++ 
++ 	tx_desc = mvneta_txq_next_desc_get(txq);
++ 	tx_desc->data_size = hdr_len;
++-	tx_desc->command = mvneta_skb_tx_csum(pp, skb);
+++	tx_desc->command = mvneta_skb_tx_csum(skb);
++ 	tx_desc->command |= MVNETA_TXD_F_DESC;
++ 	tx_desc->buf_phys_addr = txq->tso_hdrs_phys +
++ 				 txq->txq_put_index * TSO_HEADER_SIZE;
++@@ -2681,7 +2680,7 @@ static int mvneta_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ 		hdr = txq->tso_hdrs + txq->txq_put_index * TSO_HEADER_SIZE;
++ 		tso_build_hdr(skb, hdr, &tso, data_left, total_len == 0);
++ 
++-		mvneta_tso_put_hdr(skb, pp, txq);
+++		mvneta_tso_put_hdr(skb, txq);
++ 
++ 		while (data_left > 0) {
++ 			int size;
++@@ -2799,7 +2798,7 @@ static netdev_tx_t mvneta_tx(struct sk_buff *skb, struct net_device *dev)
++ 	/* Get a descriptor for the first part of the packet */
++ 	tx_desc = mvneta_txq_next_desc_get(txq);
++ 
++-	tx_cmd = mvneta_skb_tx_csum(pp, skb);
+++	tx_cmd = mvneta_skb_tx_csum(skb);
++ 
++ 	tx_desc->data_size = skb_headlen(skb);
++ 
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/backport-5.15/703-22-v6.3-net-mvneta-fix-potential-double-frees-in-mvneta_txq_.patch b/target/linux/generic/backport-5.15/703-22-v6.3-net-mvneta-fix-potential-double-frees-in-mvneta_txq_.patch
+new file mode 100644
+index 0000000000..392e630a46
+--- /dev/null
++++ b/target/linux/generic/backport-5.15/703-22-v6.3-net-mvneta-fix-potential-double-frees-in-mvneta_txq_.patch
+@@ -0,0 +1,42 @@
++From 0cf39c6543469aae4a30cba354243125514ed568 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Wed, 29 Mar 2023 13:11:17 +0100
++Subject: [PATCH 2/7] net: mvneta: fix potential double-frees in
++ mvneta_txq_sw_deinit()
++
++Reported on the Turris forum, mvneta provokes kernel warnings in the
++architecture DMA mapping code when mvneta_setup_txqs() fails to
++allocate memory. This happens because when mvneta_cleanup_txqs() is
++called in the mvneta_stop() path, we leave pointers in the structure
++that have been freed.
++
++Then on mvneta_open(), we call mvneta_setup_txqs(), which starts
++allocating memory. On memory allocation failure, mvneta_cleanup_txqs()
++will walk all the queues freeing any non-NULL pointers - which includes
++pointers that were previously freed in mvneta_stop().
++
++Fix this by setting these pointers to NULL to prevent double-freeing
++of the same memory.
++
++Link: https://forum.turris.cz/t/random-kernel-exceptions-on-hbl-tos-7-0/18865/8
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 2 ++
++ 1 file changed, 2 insertions(+)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 0c30896c1351..ed0743271977 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -3481,6 +3481,8 @@ static void mvneta_txq_sw_deinit(struct mvneta_port *pp,
++ 
++ 	netdev_tx_reset_queue(nq);
++ 
+++	txq->buf               = NULL;
+++	txq->tso_hdrs          = NULL;
++ 	txq->descs             = NULL;
++ 	txq->last_desc         = 0;
++ 	txq->next_desc_to_proc = 0;
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/pending-5.15/704-01-v6.4-net-mvneta-fix-transmit-path-dma-unmapping-on-error.patch b/target/linux/generic/pending-5.15/704-01-v6.4-net-mvneta-fix-transmit-path-dma-unmapping-on-error.patch
+new file mode 100644
+index 0000000000..a548603f80
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/704-01-v6.4-net-mvneta-fix-transmit-path-dma-unmapping-on-error.patch
+@@ -0,0 +1,116 @@
++From d6d80269cf5c79f9dfe7d69f8b41a72015c89748 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 3 Apr 2023 19:30:20 +0100
++Subject: [PATCH 3/7] net: mvneta: fix transmit path dma-unmapping on error
++
++The transmit code assumes that the transmit descriptors that are used
++begin with the first descriptor in the ring, but this may not be the
++case. Fix this by providing a new function that dma-unmaps a range of
++numbered descriptor entries, and use that to do the unmapping.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 53 +++++++++++++++++----------
++ 1 file changed, 33 insertions(+), 20 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index ed0743271977..b8eda8969cb6 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -2647,14 +2647,40 @@ mvneta_tso_put_data(struct net_device *dev, struct mvneta_tx_queue *txq,
++ 	return 0;
++ }
++ 
+++static void mvneta_release_descs(struct mvneta_port *pp,
+++				 struct mvneta_tx_queue *txq,
+++				 int first, int num)
+++{
+++	int desc_idx, i;
+++
+++	desc_idx = first + num;
+++	if (desc_idx >= txq->size)
+++		desc_idx -= txq->size;
+++
+++	for (i = num; i >= 0; i--) {
+++		struct mvneta_tx_desc *tx_desc = txq->descs + desc_idx;
+++
+++		if (!IS_TSO_HEADER(txq, tx_desc->buf_phys_addr))
+++			dma_unmap_single(pp->dev->dev.parent,
+++					 tx_desc->buf_phys_addr,
+++					 tx_desc->data_size,
+++					 DMA_TO_DEVICE);
+++
+++		mvneta_txq_desc_put(txq);
+++
+++		if (desc_idx == 0)
+++			desc_idx = txq->size;
+++		desc_idx -= 1;
+++	}
+++}
+++
++ static int mvneta_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ 			 struct mvneta_tx_queue *txq)
++ {
++ 	int hdr_len, total_len, data_left;
++-	int desc_count = 0;
+++	int first_desc, desc_count = 0;
++ 	struct mvneta_port *pp = netdev_priv(dev);
++ 	struct tso_t tso;
++-	int i;
++ 
++ 	/* Count needed descriptors */
++ 	if ((txq->count + tso_count_descs(skb)) >= txq->size)
++@@ -2665,6 +2691,8 @@ static int mvneta_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ 		return 0;
++ 	}
++ 
+++	first_desc = txq->txq_put_index;
+++
++ 	/* Initialize the TSO handler, and prepare the first payload */
++ 	hdr_len = tso_start(skb, &tso);
++ 
++@@ -2705,15 +2733,7 @@ static int mvneta_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ 	/* Release all used data descriptors; header descriptors must not
++ 	 * be DMA-unmapped.
++ 	 */
++-	for (i = desc_count - 1; i >= 0; i--) {
++-		struct mvneta_tx_desc *tx_desc = txq->descs + i;
++-		if (!IS_TSO_HEADER(txq, tx_desc->buf_phys_addr))
++-			dma_unmap_single(pp->dev->dev.parent,
++-					 tx_desc->buf_phys_addr,
++-					 tx_desc->data_size,
++-					 DMA_TO_DEVICE);
++-		mvneta_txq_desc_put(txq);
++-	}
+++	mvneta_release_descs(pp, txq, first_desc, desc_count - 1);
++ 	return 0;
++ }
++ 
++@@ -2723,6 +2743,7 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
++ {
++ 	struct mvneta_tx_desc *tx_desc;
++ 	int i, nr_frags = skb_shinfo(skb)->nr_frags;
+++	int first_desc = txq->txq_put_index;
++ 
++ 	for (i = 0; i < nr_frags; i++) {
++ 		struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
++@@ -2761,15 +2782,7 @@ static int mvneta_tx_frag_process(struct mvneta_port *pp, struct sk_buff *skb,
++ 	/* Release all descriptors that were used to map fragments of
++ 	 * this packet, as well as the corresponding DMA mappings
++ 	 */
++-	for (i = i - 1; i >= 0; i--) {
++-		tx_desc = txq->descs + i;
++-		dma_unmap_single(pp->dev->dev.parent,
++-				 tx_desc->buf_phys_addr,
++-				 tx_desc->data_size,
++-				 DMA_TO_DEVICE);
++-		mvneta_txq_desc_put(txq);
++-	}
++-
+++	mvneta_release_descs(pp, txq, first_desc, i - 1);
++ 	return -ENOMEM;
++ }
++ 
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/pending-5.15/704-02-v6.4-net-mvneta-mark-mapped-and-tso-buffers-separately.patch b/target/linux/generic/pending-5.15/704-02-v6.4-net-mvneta-mark-mapped-and-tso-buffers-separately.patch
+new file mode 100644
+index 0000000000..28f0478f3f
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/704-02-v6.4-net-mvneta-mark-mapped-and-tso-buffers-separately.patch
+@@ -0,0 +1,47 @@
++From e3c77d0a1b635d114c147fd2078afb57ed558b81 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 3 Apr 2023 19:30:25 +0100
++Subject: [PATCH 4/7] net: mvneta: mark mapped and tso buffers separately
++
++Mark dma-mapped skbs and TSO buffers separately, so we can use
++buf->type to identify their differences.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 6 ++++--
++ 1 file changed, 4 insertions(+), 2 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index b8eda8969cb6..0441cc036f65 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -607,6 +607,7 @@ struct mvneta_rx_desc {
++ #endif
++ 
++ enum mvneta_tx_buf_type {
+++	MVNETA_TYPE_TSO,
++ 	MVNETA_TYPE_SKB,
++ 	MVNETA_TYPE_XDP_TX,
++ 	MVNETA_TYPE_XDP_NDO,
++@@ -1852,7 +1853,8 @@ static void mvneta_txq_bufs_free(struct mvneta_port *pp,
++ 			dma_unmap_single(pp->dev->dev.parent,
++ 					 tx_desc->buf_phys_addr,
++ 					 tx_desc->data_size, DMA_TO_DEVICE);
++-		if (buf->type == MVNETA_TYPE_SKB && buf->skb) {
+++		if ((buf->type == MVNETA_TYPE_TSO ||
+++		     buf->type == MVNETA_TYPE_SKB) && buf->skb) {
++ 			bytes_compl += buf->skb->len;
++ 			pkts_compl++;
++ 			dev_kfree_skb_any(buf->skb);
++@@ -2607,7 +2609,7 @@ mvneta_tso_put_hdr(struct sk_buff *skb, struct mvneta_tx_queue *txq)
++ 	tx_desc->command |= MVNETA_TXD_F_DESC;
++ 	tx_desc->buf_phys_addr = txq->tso_hdrs_phys +
++ 				 txq->txq_put_index * TSO_HEADER_SIZE;
++-	buf->type = MVNETA_TYPE_SKB;
+++	buf->type = MVNETA_TYPE_TSO;
++ 	buf->skb = NULL;
++ 
++ 	mvneta_txq_inc_put(txq);
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/pending-5.15/704-03-v6.4-net-mvneta-use-buf-type-to-determine-whether-to-dma-.patch b/target/linux/generic/pending-5.15/704-03-v6.4-net-mvneta-use-buf-type-to-determine-whether-to-dma-.patch
+new file mode 100644
+index 0000000000..64e44665d8
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/704-03-v6.4-net-mvneta-use-buf-type-to-determine-whether-to-dma-.patch
+@@ -0,0 +1,64 @@
++From fe2abc1abc0dfc6c13fe8f189216f00dbbb33044 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 3 Apr 2023 19:30:30 +0100
++Subject: [PATCH 5/7] net: mvneta: use buf->type to determine whether to
++ dma-unmap
++
++Now that we use a different buffer type for TSO headers, we can use
++buf->type to determine whether the original buffer was DMA-mapped or
++not. The rules are:
++
++	MVNETA_TYPE_XDP_TX - from a DMA pool, no unmap is required
++	MVNETA_TYPE_XDP_NDO - dma_map_single()'d
++	MVNETA_TYPE_SKB - normal skbuff, dma_map_single()'d
++	MVNETA_TYPE_TSO - from the TSO buffer area
++
++This means we only need to call dma_unmap_single() on the XDP_NDO and
++SKB types of buffer, and we no longer need the private IS_TSO_HEADER()
++which relies on the TSO region being contiguously allocated.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 11 ++++-------
++ 1 file changed, 4 insertions(+), 7 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index 0441cc036f65..b637f094061b 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -334,10 +334,6 @@
++ 			 MVNETA_SKB_HEADROOM))
++ #define MVNETA_MAX_RX_BUF_SIZE	(PAGE_SIZE - MVNETA_SKB_PAD)
++ 
++-#define IS_TSO_HEADER(txq, addr) \
++-	((addr >= txq->tso_hdrs_phys) && \
++-	 (addr < txq->tso_hdrs_phys + txq->size * TSO_HEADER_SIZE))
++-
++ #define MVNETA_RX_GET_BM_POOL_ID(rxd) \
++ 	(((rxd)->status & MVNETA_RXD_BM_POOL_MASK) >> MVNETA_RXD_BM_POOL_SHIFT)
++ 
++@@ -1848,8 +1844,8 @@ static void mvneta_txq_bufs_free(struct mvneta_port *pp,
++ 
++ 		mvneta_txq_inc_get(txq);
++ 
++-		if (!IS_TSO_HEADER(txq, tx_desc->buf_phys_addr) &&
++-		    buf->type != MVNETA_TYPE_XDP_TX)
+++		if (buf->type == MVNETA_TYPE_XDP_NDO ||
+++		    buf->type == MVNETA_TYPE_SKB)
++ 			dma_unmap_single(pp->dev->dev.parent,
++ 					 tx_desc->buf_phys_addr,
++ 					 tx_desc->data_size, DMA_TO_DEVICE);
++@@ -2661,8 +2657,9 @@ static void mvneta_release_descs(struct mvneta_port *pp,
++ 
++ 	for (i = num; i >= 0; i--) {
++ 		struct mvneta_tx_desc *tx_desc = txq->descs + desc_idx;
+++		struct mvneta_tx_buf *buf = &txq->buf[desc_idx];
++ 
++-		if (!IS_TSO_HEADER(txq, tx_desc->buf_phys_addr))
+++		if (buf->type == MVNETA_TYPE_SKB)
++ 			dma_unmap_single(pp->dev->dev.parent,
++ 					 tx_desc->buf_phys_addr,
++ 					 tx_desc->data_size,
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/pending-5.15/704-04-v6.4-net-mvneta-move-tso_build_hdr-into-mvneta_tso_put_hd.patch b/target/linux/generic/pending-5.15/704-04-v6.4-net-mvneta-move-tso_build_hdr-into-mvneta_tso_put_hd.patch
+new file mode 100644
+index 0000000000..b2537d1141
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/704-04-v6.4-net-mvneta-move-tso_build_hdr-into-mvneta_tso_put_hd.patch
+@@ -0,0 +1,70 @@
++From 210ca75d4949f1ace8ea53a75148806cc28224a0 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 3 Apr 2023 19:30:35 +0100
++Subject: [PATCH 6/7] net: mvneta: move tso_build_hdr() into
++ mvneta_tso_put_hdr()
++
++Move tso_build_hdr() into mvneta_tso_put_hdr() so that all the TSO
++header building code is in one place.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 22 +++++++++++-----------
++ 1 file changed, 11 insertions(+), 11 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index b637f094061b..a480ff999763 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -2592,19 +2592,24 @@ static int mvneta_rx_hwbm(struct napi_struct *napi,
++ 	return rx_done;
++ }
++ 
++-static inline void
++-mvneta_tso_put_hdr(struct sk_buff *skb, struct mvneta_tx_queue *txq)
+++static void mvneta_tso_put_hdr(struct sk_buff *skb, struct mvneta_tx_queue *txq,
+++			       struct tso_t *tso, int size, bool is_last)
++ {
++-	int hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
+++	int tso_offset, hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
++ 	struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
++ 	struct mvneta_tx_desc *tx_desc;
+++	char *hdr;
+++
+++	tso_offset = txq->txq_put_index * TSO_HEADER_SIZE;
+++
+++	hdr = txq->tso_hdrs + tso_offset;
+++	tso_build_hdr(skb, hdr, tso, size, is_last);
++ 
++ 	tx_desc = mvneta_txq_next_desc_get(txq);
++ 	tx_desc->data_size = hdr_len;
++ 	tx_desc->command = mvneta_skb_tx_csum(skb);
++ 	tx_desc->command |= MVNETA_TXD_F_DESC;
++-	tx_desc->buf_phys_addr = txq->tso_hdrs_phys +
++-				 txq->txq_put_index * TSO_HEADER_SIZE;
+++	tx_desc->buf_phys_addr = txq->tso_hdrs_phys + tso_offset;
++ 	buf->type = MVNETA_TYPE_TSO;
++ 	buf->skb = NULL;
++ 
++@@ -2697,17 +2702,12 @@ static int mvneta_tx_tso(struct sk_buff *skb, struct net_device *dev,
++ 
++ 	total_len = skb->len - hdr_len;
++ 	while (total_len > 0) {
++-		char *hdr;
++-
++ 		data_left = min_t(int, skb_shinfo(skb)->gso_size, total_len);
++ 		total_len -= data_left;
++ 		desc_count++;
++ 
++ 		/* prepare packet headers: MAC + IP + TCP */
++-		hdr = txq->tso_hdrs + txq->txq_put_index * TSO_HEADER_SIZE;
++-		tso_build_hdr(skb, hdr, &tso, data_left, total_len == 0);
++-
++-		mvneta_tso_put_hdr(skb, txq);
+++		mvneta_tso_put_hdr(skb, txq, &tso, data_left, total_len == 0);
++ 
++ 		while (data_left > 0) {
++ 			int size;
++-- 
++2.39.2
++
+diff --git a/target/linux/generic/pending-5.15/704-05-v6.4-net-mvneta-allocate-TSO-header-DMA-memory-in-chunks.patch b/target/linux/generic/pending-5.15/704-05-v6.4-net-mvneta-allocate-TSO-header-DMA-memory-in-chunks.patch
+new file mode 100644
+index 0000000000..2744a0ad8e
+--- /dev/null
++++ b/target/linux/generic/pending-5.15/704-05-v6.4-net-mvneta-allocate-TSO-header-DMA-memory-in-chunks.patch
+@@ -0,0 +1,184 @@
++From 58d50fb089da553023df5a05f5ae86feaacc7f24 Mon Sep 17 00:00:00 2001
++From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
++Date: Mon, 3 Apr 2023 19:30:40 +0100
++Subject: [PATCH 7/7] net: mvneta: allocate TSO header DMA memory in chunks
++
++Now that we no longer need to check whether the DMA address is within
++the TSO header DMA memory range for the queue, we can allocate the TSO
++header DMA memory in chunks rather than one contiguous order-6 chunk,
++which can stress the kernel's memory subsystems to allocate.
++
++Instead, use order-1 (8k) allocations, which will result in 32 order-1
++pages containing 32 TSO headers.
++
++Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
++---
++ drivers/net/ethernet/marvell/mvneta.c | 88 +++++++++++++++++++++------
++ 1 file changed, 70 insertions(+), 18 deletions(-)
++
++diff --git a/drivers/net/ethernet/marvell/mvneta.c b/drivers/net/ethernet/marvell/mvneta.c
++index a480ff999763..faf81ca347e7 100644
++--- a/drivers/net/ethernet/marvell/mvneta.c
+++++ b/drivers/net/ethernet/marvell/mvneta.c
++@@ -314,6 +314,15 @@
++ 
++ #define MVNETA_MAX_SKB_DESCS (MVNETA_MAX_TSO_SEGS * 2 + MAX_SKB_FRAGS)
++ 
+++/* The size of a TSO header page */
+++#define MVNETA_TSO_PAGE_SIZE (2 * PAGE_SIZE)
+++
+++/* Number of TSO headers per page. This should be a power of 2 */
+++#define MVNETA_TSO_PER_PAGE (MVNETA_TSO_PAGE_SIZE / TSO_HEADER_SIZE)
+++
+++/* Maximum number of TSO header pages */
+++#define MVNETA_MAX_TSO_PAGES (MVNETA_MAX_TXD / MVNETA_TSO_PER_PAGE)
+++
++ /* descriptor aligned size */
++ #define MVNETA_DESC_ALIGNED_SIZE	32
++ 
++@@ -656,10 +665,10 @@ struct mvneta_tx_queue {
++ 	int next_desc_to_proc;
++ 
++ 	/* DMA buffers for TSO headers */
++-	char *tso_hdrs;
+++	char *tso_hdrs[MVNETA_MAX_TSO_PAGES];
++ 
++ 	/* DMA address of TSO headers */
++-	dma_addr_t tso_hdrs_phys;
+++	dma_addr_t tso_hdrs_phys[MVNETA_MAX_TSO_PAGES];
++ 
++ 	/* Affinity mask for CPUs*/
++ 	cpumask_t affinity_mask;
++@@ -2592,24 +2601,71 @@ static int mvneta_rx_hwbm(struct napi_struct *napi,
++ 	return rx_done;
++ }
++ 
+++static void mvneta_free_tso_hdrs(struct mvneta_port *pp,
+++				 struct mvneta_tx_queue *txq)
+++{
+++	struct device *dev = pp->dev->dev.parent;
+++	int i;
+++
+++	for (i = 0; i < MVNETA_MAX_TSO_PAGES; i++) {
+++		if (txq->tso_hdrs[i]) {
+++			dma_free_coherent(dev, MVNETA_TSO_PAGE_SIZE,
+++					  txq->tso_hdrs[i],
+++					  txq->tso_hdrs_phys[i]);
+++			txq->tso_hdrs[i] = NULL;
+++		}
+++	}
+++}
+++
+++static int mvneta_alloc_tso_hdrs(struct mvneta_port *pp,
+++				 struct mvneta_tx_queue *txq)
+++{
+++	struct device *dev = pp->dev->dev.parent;
+++	int i, num;
+++
+++	num = DIV_ROUND_UP(txq->size, MVNETA_TSO_PER_PAGE);
+++	for (i = 0; i < num; i++) {
+++		txq->tso_hdrs[i] = dma_alloc_coherent(dev, MVNETA_TSO_PAGE_SIZE,
+++						      &txq->tso_hdrs_phys[i],
+++						      GFP_KERNEL);
+++		if (!txq->tso_hdrs[i]) {
+++			mvneta_free_tso_hdrs(pp, txq);
+++			return -ENOMEM;
+++		}
+++	}
+++
+++	return 0;
+++}
+++
+++static char *mvneta_get_tso_hdr(struct mvneta_tx_queue *txq, dma_addr_t *dma)
+++{
+++	int index, offset;
+++
+++	index = txq->txq_put_index / MVNETA_TSO_PER_PAGE;
+++	offset = (txq->txq_put_index % MVNETA_TSO_PER_PAGE) * TSO_HEADER_SIZE;
+++
+++	*dma = txq->tso_hdrs_phys[index] + offset;
+++
+++	return txq->tso_hdrs[index] + offset;
+++}
+++
++ static void mvneta_tso_put_hdr(struct sk_buff *skb, struct mvneta_tx_queue *txq,
++ 			       struct tso_t *tso, int size, bool is_last)
++ {
++-	int tso_offset, hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
+++	int hdr_len = skb_transport_offset(skb) + tcp_hdrlen(skb);
++ 	struct mvneta_tx_buf *buf = &txq->buf[txq->txq_put_index];
++ 	struct mvneta_tx_desc *tx_desc;
+++	dma_addr_t hdr_phys;
++ 	char *hdr;
++ 
++-	tso_offset = txq->txq_put_index * TSO_HEADER_SIZE;
++-
++-	hdr = txq->tso_hdrs + tso_offset;
+++	hdr = mvneta_get_tso_hdr(txq, &hdr_phys);
++ 	tso_build_hdr(skb, hdr, tso, size, is_last);
++ 
++ 	tx_desc = mvneta_txq_next_desc_get(txq);
++ 	tx_desc->data_size = hdr_len;
++ 	tx_desc->command = mvneta_skb_tx_csum(skb);
++ 	tx_desc->command |= MVNETA_TXD_F_DESC;
++-	tx_desc->buf_phys_addr = txq->tso_hdrs_phys + tso_offset;
+++	tx_desc->buf_phys_addr = hdr_phys;
++ 	buf->type = MVNETA_TYPE_TSO;
++ 	buf->skb = NULL;
++ 
++@@ -3401,7 +3457,7 @@ static void mvneta_rxq_deinit(struct mvneta_port *pp,
++ static int mvneta_txq_sw_init(struct mvneta_port *pp,
++ 			      struct mvneta_tx_queue *txq)
++ {
++-	int cpu;
+++	int cpu, err;
++ 
++ 	txq->size = pp->tx_ring_size;
++ 
++@@ -3426,11 +3482,9 @@ static int mvneta_txq_sw_init(struct mvneta_port *pp,
++ 		return -ENOMEM;
++ 
++ 	/* Allocate DMA buffers for TSO MAC/IP/TCP headers */
++-	txq->tso_hdrs = dma_alloc_coherent(pp->dev->dev.parent,
++-					   txq->size * TSO_HEADER_SIZE,
++-					   &txq->tso_hdrs_phys, GFP_KERNEL);
++-	if (!txq->tso_hdrs)
++-		return -ENOMEM;
+++	err = mvneta_alloc_tso_hdrs(pp, txq);
+++	if (err)
+++		return err;
++ 
++ 	/* Setup XPS mapping */
++ 	if (pp->neta_armada3700)
++@@ -3482,10 +3536,7 @@ static void mvneta_txq_sw_deinit(struct mvneta_port *pp,
++ 
++ 	kfree(txq->buf);
++ 
++-	if (txq->tso_hdrs)
++-		dma_free_coherent(pp->dev->dev.parent,
++-				  txq->size * TSO_HEADER_SIZE,
++-				  txq->tso_hdrs, txq->tso_hdrs_phys);
+++	mvneta_free_tso_hdrs(pp, txq);
++ 	if (txq->descs)
++ 		dma_free_coherent(pp->dev->dev.parent,
++ 				  txq->size * MVNETA_DESC_ALIGNED_SIZE,
++@@ -3494,7 +3545,6 @@ static void mvneta_txq_sw_deinit(struct mvneta_port *pp,
++ 	netdev_tx_reset_queue(nq);
++ 
++ 	txq->buf               = NULL;
++-	txq->tso_hdrs          = NULL;
++ 	txq->descs             = NULL;
++ 	txq->last_desc         = 0;
++ 	txq->next_desc_to_proc = 0;
++@@ -5547,6 +5597,8 @@ static int __init mvneta_driver_init(void)
++ {
++ 	int ret;
++ 
+++	BUILD_BUG_ON_NOT_POWER_OF_2(MVNETA_TSO_PER_PAGE);
+++
++ 	ret = cpuhp_setup_state_multi(CPUHP_AP_ONLINE_DYN, "net/mvneta:online",
++ 				      mvneta_cpu_online,
++ 				      mvneta_cpu_down_prepare);
++-- 
++2.39.2
++
+-- 
+2.39.2
+
