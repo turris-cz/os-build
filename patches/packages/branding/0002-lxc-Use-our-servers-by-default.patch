@@ -1,4 +1,4 @@
-From 97dbc1ee96333482975f9678c92da347f677a2df Mon Sep 17 00:00:00 2001
+From cc6343a717e7601cbf931354548438d16f2c298f Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <Michal@Hrusecky.net>
 Date: Wed, 30 Jan 2019 00:13:20 +0100
 Subject: [PATCH] lxc: Use our servers by default
@@ -7,16 +7,16 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  utils/lxc/Makefile                         |  1 +
  utils/lxc/files/systemd-workaround         |  4 +++
- utils/lxc/patches/030-turris-servers.patch | 39 ++++++++++++++++++++++
- 3 files changed, 44 insertions(+)
+ utils/lxc/patches/030-turris-servers.patch | 31 ++++++++++++++++++++++
+ 3 files changed, 36 insertions(+)
  create mode 100644 utils/lxc/files/systemd-workaround
  create mode 100644 utils/lxc/patches/030-turris-servers.patch
 
 diff --git a/utils/lxc/Makefile b/utils/lxc/Makefile
-index 209fc8b72..6ca59cf78 100644
+index 89a760e98..fb6edf706 100644
 --- a/utils/lxc/Makefile
 +++ b/utils/lxc/Makefile
-@@ -211,6 +211,7 @@ define Package/lxc-hooks/install
+@@ -216,6 +216,7 @@ define Package/lxc-hooks/install
  	$(CP) \
  		$(PKG_INSTALL_DIR)/usr/share/lxc/hooks/* \
  		$(1)/usr/share/lxc/hooks/
@@ -36,14 +36,12 @@ index 000000000..2e343dc68
 +}
 diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
 new file mode 100644
-index 000000000..8fc32e949
+index 000000000..dae81378a
 --- /dev/null
 +++ b/utils/lxc/patches/030-turris-servers.patch
-@@ -0,0 +1,39 @@
-+Index: lxc-2.1.1/config/etc/default.conf.unknown
-+===================================================================
-+--- lxc-2.1.1.orig/config/etc/default.conf.unknown
-++++ lxc-2.1.1/config/etc/default.conf.unknown
+@@ -0,0 +1,31 @@
++--- a/config/etc/default.conf.unknown
+++++ b/config/etc/default.conf.unknown
 +@@ -1 +1,9 @@
 +-lxc.net.0.type = empty
 ++lxc.net.0.type = veth
@@ -55,30 +53,24 @@ index 000000000..8fc32e949
 ++lxc.hook.start-host = /usr/share/lxc/hooks/systemd-workaround
 ++# Template to generate fixed MAC address
 ++lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
-+Index: lxc-2.1.1/templates/lxc-download.in
-+===================================================================
-+--- lxc-2.1.1.orig/templates/lxc-download.in
-++++ lxc-2.1.1/templates/lxc-download.in
-+@@ -30,15 +30,15 @@ DOWNLOAD_ARCH=
++--- a/templates/lxc-download.in
+++++ b/templates/lxc-download.in
++@@ -30,13 +30,13 @@ DOWNLOAD_ARCH=
 + DOWNLOAD_BUILD=
-+ DOWNLOAD_COMPAT_LEVEL=4
++ DOWNLOAD_COMPAT_LEVEL=7
 + DOWNLOAD_DIST=
 +-DOWNLOAD_FLUSH_CACHE="false"
 ++DOWNLOAD_FLUSH_CACHE="true"
 + DOWNLOAD_FORCE_CACHE="false"
 + DOWNLOAD_INTERACTIVE="false"
-+-DOWNLOAD_KEYID="0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216"
-++DOWNLOAD_SERVER="$(uci get lxc.lxc.url 2> /dev/null || echo repo.turris.cz/lxc)"
-++DOWNLOAD_KEYID="$(if [ "$DOWNLOAD_SERVER" = repo.turris.cz/lxc ]; then echo 0x96542441B2EF343B; else echo 0xE7FB0CAEC8173D669066514CBAEFF88C22F6E216; fi)"
 + DOWNLOAD_LIST_IMAGES="false"
 + DOWNLOAD_MODE="system"
-+ DOWNLOAD_READY_GPG="false"
 + DOWNLOAD_RELEASE=
 +-DOWNLOAD_SERVER="images.linuxcontainers.org"
-+ DOWNLOAD_SHOW_GPG_WARNING="true"
-+ DOWNLOAD_SHOW_HTTP_WARNING="true"
+++DOWNLOAD_SERVER="$(uci get lxc.lxc.url 2> /dev/null || echo repo.turris.cz/lxc)"
 + DOWNLOAD_TARGET="system"
-+
++ DOWNLOAD_URL=
++ DOWNLOAD_USE_CACHE="false"
 -- 
-2.30.2
+2.40.1
 
