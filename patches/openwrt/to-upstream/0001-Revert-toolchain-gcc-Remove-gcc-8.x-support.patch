@@ -1,4 +1,4 @@
-From baa9f6462f7ee5c7344c046a05fcc83a3ac975b2 Mon Sep 17 00:00:00 2001
+From 5c98c0470c4d4e2bbbac9ff1be6547ffe072441d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?=C5=A0imon=20Bo=C5=99ek?= <simon.borek@nic.cz>
 Date: Fri, 25 Nov 2022 18:43:17 +0100
 Subject: [PATCH] Revert "toolchain: gcc: Remove gcc 8.x support"
@@ -10,7 +10,7 @@ in mpc85xx devices.
 ---
  toolchain/gcc/Config.in                       |   3 +
  toolchain/gcc/Config.version                  |   5 +
- toolchain/gcc/common.mk                       |   4 +
+ toolchain/gcc/common.mk                       |   6 +-
  .../patches-8.x/002-case_insensitive.patch    |  24 +++
  .../gcc/patches-8.x/010-documentation.patch   |  35 ++++
  .../patches-8.x/110-Fix-MIPS-PR-84790.patch   |  20 +++
@@ -30,7 +30,7 @@ in mpc85xx devices.
  .../930-fix-mips-noexecstack.patch            | 111 ++++++++++++
  ...ibffi-fix-MIPS-softfloat-build-issue.patch | 168 ++++++++++++++++++
  ...mpilation-when-making-cross-compiler.patch |  67 +++++++
- 22 files changed, 862 insertions(+)
+ 22 files changed, 863 insertions(+), 1 deletion(-)
  create mode 100644 toolchain/gcc/patches-8.x/002-case_insensitive.patch
  create mode 100644 toolchain/gcc/patches-8.x/010-documentation.patch
  create mode 100644 toolchain/gcc/patches-8.x/110-Fix-MIPS-PR-84790.patch
@@ -86,7 +86,7 @@ index 7126a0c883..d844b8ad08 100644
  	default "13.1.0"	if GCC_VERSION_13
  	default "12.3.0"
 diff --git a/toolchain/gcc/common.mk b/toolchain/gcc/common.mk
-index 677fb25381..ffc07bc1ba 100644
+index 677fb25381..13671f1ff5 100644
 --- a/toolchain/gcc/common.mk
 +++ b/toolchain/gcc/common.mk
 @@ -29,6 +29,10 @@ GCC_DIR:=$(PKG_NAME)-$(PKG_VERSION)
@@ -100,6 +100,15 @@ index 677fb25381..ffc07bc1ba 100644
  ifeq ($(PKG_VERSION),11.3.0)
    PKG_HASH:=b47cf2818691f5b1e21df2bb38c795fac2cfbd640ede2d0a5e1c89e338a3ac39
  endif
+@@ -191,7 +195,7 @@ define Host/SetToolchainInfo
+ endef
+ 
+ 
+-ifeq ($(GCC_MAJOR_VERSION),11)
++ifeq ($(shell test $(GCC_MAJOR_VERSION) -lt 12; echo $$?),0)
+ 	GCC_VERSION_FILE:=gcc/version.c
+ else
+ 	GCC_VERSION_FILE:=gcc/genversion.cc
 diff --git a/toolchain/gcc/patches-8.x/002-case_insensitive.patch b/toolchain/gcc/patches-8.x/002-case_insensitive.patch
 new file mode 100644
 index 0000000000..3442076d7d
