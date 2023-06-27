@@ -439,7 +439,6 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  create mode 100644 target/linux/generic/backport-5.15/703-07-v5.16-net-phy-add-phy_interface_t-bitmap-support.patch
  create mode 100644 target/linux/generic/backport-5.15/703-08-v5.17-net-phylink-add-mac_select_pcs-method-to-phylink_mac.patch
  create mode 100644 target/linux/generic/backport-5.15/703-09-v5.17-net-phylink-add-generic-validate-implementation.patch
- create mode 100644 target/linux/generic/backport-5.15/703-10-v5.16-net-dsa-introduce-helpers-for-iterating-through-port.patch
  create mode 100644 target/linux/generic/backport-5.15/703-11-v5.17-net-phylink-add-pcs_validate-method.patch
  create mode 100644 target/linux/generic/backport-5.15/703-12-v5.17-net-phylink-add-legacy_pre_march2020-indicator.patch
  create mode 100644 target/linux/generic/backport-5.15/703-13-v5.17-net-dsa-mark-DSA-phylink-as-legacy_pre_march2020.patch
@@ -479,7 +478,6 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  create mode 100644 target/linux/generic/backport-5.15/705-09-v5.19-net-dsa-mt7530-mark-as-non-legacy.patch
  create mode 100644 target/linux/generic/backport-5.15/705-10-v5.19-net-dsa-mt753x-fix-pcs-conversion-regression.patch
  create mode 100644 target/linux/generic/backport-5.15/705-11-v6.0-net-dsa-mt7530-rework-mt7530_hw_vlan_-add-del.patch
- create mode 100644 target/linux/generic/backport-5.15/705-12-v6.0-net-dsa-mt7530-rework-mt753-01-_setup.patch
  create mode 100644 target/linux/generic/backport-5.15/705-13-v6.0-net-dsa-mt7530-get-cpu-port-via-dp-cpu_dp-instead-of.patch
  create mode 100644 target/linux/generic/backport-5.15/706-00-v6.0-net-ethernet-mtk_eth_soc-rely-on-page_pool-for-singl.patch
  create mode 100644 target/linux/generic/backport-5.15/706-01-v6.0-net-ethernet-mtk_eth_soc-add-basic-XDP-support.patch
@@ -14585,13 +14583,13 @@ index 0000000000..b254e7c0b3
 +
 +--- a/drivers/ata/ahci.h
 ++++ b/drivers/ata/ahci.h
-+@@ -240,8 +240,6 @@ enum {
-+ 							as default lpm_policy */
-+ 	AHCI_HFLAG_SUSPEND_PHYS		= (1 << 26), /* handle PHYs during
-+ 							suspend/resume */
-+-	AHCI_HFLAG_IGN_NOTSUPP_POWER_ON	= (1 << 27), /* ignore -EOPNOTSUPP
-+-							from phy_power_on() */
-+ 	AHCI_HFLAG_NO_SXS		= (1 << 28), /* SXS not supported */
++@@ -241,8 +241,6 @@ enum {
++ 						      as default lpm_policy */
++ 	AHCI_HFLAG_SUSPEND_PHYS		= BIT(26), /* handle PHYs during
++ 						      suspend/resume */
++-	AHCI_HFLAG_IGN_NOTSUPP_POWER_ON	= BIT(27), /* ignore -EOPNOTSUPP
++-						      from phy_power_on() */
++ 	AHCI_HFLAG_NO_SXS		= BIT(28), /* SXS not supported */
 + 
 + 	/* ap->flags bits */
 +--- a/drivers/ata/ahci_mvebu.c
@@ -16992,7 +16990,7 @@ index 0000000000..6ae3fb7133
 +
 +--- a/net/core/page_pool.c
 ++++ b/net/core/page_pool.c
-+@@ -36,6 +36,12 @@
++@@ -59,6 +59,12 @@ static void page_pool_producer_unlock(st
 + 		this_cpu_inc(s->__stat);						\
 + 	} while (0)
 + 
@@ -17005,7 +17003,7 @@ index 0000000000..6ae3fb7133
 + bool page_pool_get_stats(struct page_pool *pool,
 + 			 struct page_pool_stats *stats)
 + {
-+@@ -63,6 +69,7 @@ EXPORT_SYMBOL(page_pool_get_stats);
++@@ -86,6 +92,7 @@ EXPORT_SYMBOL(page_pool_get_stats);
 + #else
 + #define alloc_stat_inc(pool, __stat)
 + #define recycle_stat_inc(pool, __stat)
@@ -17013,9 +17011,9 @@ index 0000000000..6ae3fb7133
 + #endif
 + 
 + static int page_pool_init(struct page_pool *pool,
-+@@ -569,9 +576,13 @@ void page_pool_put_page_bulk(struct page
++@@ -593,9 +600,13 @@ void page_pool_put_page_bulk(struct page
 + 	/* Bulk producer into ptr_ring page_pool cache */
-+ 	page_pool_ring_lock(pool);
++ 	in_softirq = page_pool_producer_lock(pool);
 + 	for (i = 0; i < bulk_len; i++) {
 +-		if (__ptr_ring_produce(&pool->ring, data[i]))
 +-			break; /* ring full */
@@ -17026,7 +17024,7 @@ index 0000000000..6ae3fb7133
 ++		}
 + 	}
 ++	recycle_stat_add(pool, ring, i);
-+ 	page_pool_ring_unlock(pool);
++ 	page_pool_producer_unlock(pool, in_softirq);
 + 
 + 	/* Hopefully all pages was return into ptr_ring */
 diff --git a/target/linux/generic/backport-5.15/604-v5.19-net-page_pool-introduce-ethtool-stats.patch b/target/linux/generic/backport-5.15/604-v5.19-net-page_pool-introduce-ethtool-stats.patch
@@ -27260,80 +27258,6 @@ index 0000000000..f30a566c81
 + struct phylink *phylink_create(struct phylink_config *, struct fwnode_handle *,
 + 			       phy_interface_t iface,
 + 			       const struct phylink_mac_ops *mac_ops);
-diff --git a/target/linux/generic/backport-5.15/703-10-v5.16-net-dsa-introduce-helpers-for-iterating-through-port.patch b/target/linux/generic/backport-5.15/703-10-v5.16-net-dsa-introduce-helpers-for-iterating-through-port.patch
-new file mode 100644
-index 0000000000..a55623519c
---- /dev/null
-+++ b/target/linux/generic/backport-5.15/703-10-v5.16-net-dsa-introduce-helpers-for-iterating-through-port.patch
-@@ -0,0 +1,68 @@
-+From 82b318983c515f29b8b3a0dad9f6a5fe8a68a7f4 Mon Sep 17 00:00:00 2001
-+From: Vladimir Oltean <vladimir.oltean@nxp.com>
-+Date: Wed, 20 Oct 2021 20:49:49 +0300
-+Subject: [PATCH] net: dsa: introduce helpers for iterating through ports using
-+ dp
-+
-+Since the DSA conversion from the ds->ports array into the dst->ports
-+list, the DSA API has encouraged driver writers, as well as the core
-+itself, to write inefficient code.
-+
-+Currently, code that wants to filter by a specific type of port when
-+iterating, like {!unused, user, cpu, dsa}, uses the dsa_is_*_port helper.
-+Under the hood, this uses dsa_to_port which iterates again through
-+dst->ports. But the driver iterates through the port list already, so
-+the complexity is quadratic for the typical case of a single-switch
-+tree.
-+
-+This patch introduces some iteration helpers where the iterator is
-+already a struct dsa_port *dp, so that the other variant of the
-+filtering functions, dsa_port_is_{unused,user,cpu_dsa}, can be used
-+directly on the iterator. This eliminates the second lookup.
-+
-+These functions can be used both by the core and by drivers.
-+
-+Signed-off-by: Vladimir Oltean <vladimir.oltean@nxp.com>
-+Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
-+Signed-off-by: David S. Miller <davem@davemloft.net>
-+---
-+ include/net/dsa.h | 28 ++++++++++++++++++++++++++++
-+ 1 file changed, 28 insertions(+)
-+
-+--- a/include/net/dsa.h
-++++ b/include/net/dsa.h
-+@@ -476,6 +476,34 @@ static inline bool dsa_is_user_port(stru
-+ 	return dsa_to_port(ds, p)->type == DSA_PORT_TYPE_USER;
-+ }
-+ 
-++#define dsa_tree_for_each_user_port(_dp, _dst) \
-++	list_for_each_entry((_dp), &(_dst)->ports, list) \
-++		if (dsa_port_is_user((_dp)))
-++
-++#define dsa_switch_for_each_port(_dp, _ds) \
-++	list_for_each_entry((_dp), &(_ds)->dst->ports, list) \
-++		if ((_dp)->ds == (_ds))
-++
-++#define dsa_switch_for_each_port_safe(_dp, _next, _ds) \
-++	list_for_each_entry_safe((_dp), (_next), &(_ds)->dst->ports, list) \
-++		if ((_dp)->ds == (_ds))
-++
-++#define dsa_switch_for_each_port_continue_reverse(_dp, _ds) \
-++	list_for_each_entry_continue_reverse((_dp), &(_ds)->dst->ports, list) \
-++		if ((_dp)->ds == (_ds))
-++
-++#define dsa_switch_for_each_available_port(_dp, _ds) \
-++	dsa_switch_for_each_port((_dp), (_ds)) \
-++		if (!dsa_port_is_unused((_dp)))
-++
-++#define dsa_switch_for_each_user_port(_dp, _ds) \
-++	dsa_switch_for_each_port((_dp), (_ds)) \
-++		if (dsa_port_is_user((_dp)))
-++
-++#define dsa_switch_for_each_cpu_port(_dp, _ds) \
-++	dsa_switch_for_each_port((_dp), (_ds)) \
-++		if (dsa_port_is_cpu((_dp)))
-++
-+ static inline u32 dsa_user_ports(struct dsa_switch *ds)
-+ {
-+ 	u32 mask = 0;
 diff --git a/target/linux/generic/backport-5.15/703-11-v5.17-net-phylink-add-pcs_validate-method.patch b/target/linux/generic/backport-5.15/703-11-v5.17-net-phylink-add-pcs_validate-method.patch
 new file mode 100644
 index 0000000000..524ce9bd92
@@ -31020,87 +30944,6 @@ index 0000000000..5fd109329c
 + 		val = IVL_MAC | VTAG_EN | PORT_MEM(new_members) |
 + 		      VLAN_VALID;
 + 		mt7530_write(priv, MT7530_VAWD1, val);
-diff --git a/target/linux/generic/backport-5.15/705-12-v6.0-net-dsa-mt7530-rework-mt753-01-_setup.patch b/target/linux/generic/backport-5.15/705-12-v6.0-net-dsa-mt7530-rework-mt753-01-_setup.patch
-new file mode 100644
-index 0000000000..165d1d035f
---- /dev/null
-+++ b/target/linux/generic/backport-5.15/705-12-v6.0-net-dsa-mt7530-rework-mt753-01-_setup.patch
-@@ -0,0 +1,75 @@
-+From 1f0dfd443eea7fc3e818e96f7c8264913ba41859 Mon Sep 17 00:00:00 2001
-+From: Frank Wunderlich <frank-w@public-files.de>
-+Date: Fri, 10 Jun 2022 19:05:38 +0200
-+Subject: [PATCH 12/13] net: dsa: mt7530: rework mt753[01]_setup
-+
-+Enumerate available cpu-ports instead of using hardcoded constant.
-+
-+Suggested-by: Vladimir Oltean <olteanv@gmail.com>
-+Signed-off-by: Frank Wunderlich <frank-w@public-files.de>
-+Reviewed-by: Vladimir Oltean <olteanv@gmail.com>
-+Reviewed-by: Florian Fainelli <f.fainelli@gmail.com>
-+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
-+---
-+ drivers/net/dsa/mt7530.c | 25 +++++++++++++++++++++----
-+ 1 file changed, 21 insertions(+), 4 deletions(-)
-+
-+--- a/drivers/net/dsa/mt7530.c
-++++ b/drivers/net/dsa/mt7530.c
-+@@ -2090,11 +2090,12 @@ static int
-+ mt7530_setup(struct dsa_switch *ds)
-+ {
-+ 	struct mt7530_priv *priv = ds->priv;
-++	struct device_node *dn = NULL;
-+ 	struct device_node *phy_node;
-+ 	struct device_node *mac_np;
-+ 	struct mt7530_dummy_poll p;
-+ 	phy_interface_t interface;
-+-	struct device_node *dn;
-++	struct dsa_port *cpu_dp;
-+ 	u32 id, val;
-+ 	int ret, i;
-+ 
-+@@ -2102,7 +2103,19 @@ mt7530_setup(struct dsa_switch *ds)
-+ 	 * controller also is the container for two GMACs nodes representing
-+ 	 * as two netdev instances.
-+ 	 */
-+-	dn = dsa_to_port(ds, MT7530_CPU_PORT)->master->dev.of_node->parent;
-++	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-++		dn = cpu_dp->master->dev.of_node->parent;
-++		/* It doesn't matter which CPU port is found first,
-++		 * their masters should share the same parent OF node
-++		 */
-++		break;
-++	}
-++
-++	if (!dn) {
-++		dev_err(ds->dev, "parent OF node of DSA master not found");
-++		return -EINVAL;
-++	}
-++
-+ 	ds->assisted_learning_on_cpu_port = true;
-+ 	ds->mtu_enforcement_ingress = true;
-+ 
-+@@ -2264,6 +2277,7 @@ mt7531_setup(struct dsa_switch *ds)
-+ {
-+ 	struct mt7530_priv *priv = ds->priv;
-+ 	struct mt7530_dummy_poll p;
-++	struct dsa_port *cpu_dp;
-+ 	u32 val, id;
-+ 	int ret, i;
-+ 
-+@@ -2338,8 +2352,11 @@ mt7531_setup(struct dsa_switch *ds)
-+ 				 CORE_PLL_GROUP4, val);
-+ 
-+ 	/* BPDU to CPU port */
-+-	mt7530_rmw(priv, MT7531_CFC, MT7531_CPU_PMAP_MASK,
-+-		   BIT(MT7530_CPU_PORT));
-++	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-++		mt7530_rmw(priv, MT7531_CFC, MT7531_CPU_PMAP_MASK,
-++			   BIT(cpu_dp->index));
-++		break;
-++	}
-+ 	mt7530_rmw(priv, MT753X_BPC, MT753X_BPDU_PORT_FW_MASK,
-+ 		   MT753X_BPDU_CPU_ONLY);
-+ 
 diff --git a/target/linux/generic/backport-5.15/705-13-v6.0-net-dsa-mt7530-get-cpu-port-via-dp-cpu_dp-instead-of.patch b/target/linux/generic/backport-5.15/705-13-v6.0-net-dsa-mt7530-get-cpu-port-via-dp-cpu_dp-instead-of.patch
 new file mode 100644
 index 0000000000..5af91a0f7f
