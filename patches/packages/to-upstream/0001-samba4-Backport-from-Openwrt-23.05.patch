@@ -1,14 +1,14 @@
-From 74b48dd670fbfea7e902eaebf1321a40003a8daa Mon Sep 17 00:00:00 2001
-From: Michal Hrusecky <michal@hrusecky.net>
-Date: Wed, 16 Aug 2023 10:08:02 +0200
-Subject: [PATCH 1/2] samba4: Backport from Openwrt 23.05
+From 886c804469c448a4c2e422f937f8d147c3e70225 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Thu, 24 Aug 2023 08:50:25 +0200
+Subject: [PATCH] samba4: Backport from Openwrt 23.05
 
 The version we have currently is outdated and contains security issues.
 The easiest way to fix that is to update to the latest community
 maintained version.
 ---
  net/samba4/Config.in                          | 12 ++++-
- net/samba4/Makefile                           | 42 +++++++++++-------
+ net/samba4/Makefile                           | 40 ++++++++++-------
  net/samba4/patches/001-samba-4.4.0-pam.patch  | 29 ------------
  net/samba4/patches/002-dnsserver-4.7.0.patch  | 19 --------
  net/samba4/patches/006-netdb-defines.patch    | 17 -------
@@ -31,15 +31,14 @@ maintained version.
  net/samba4/waf-cross-answers/mips64el.txt     |  2 +
  net/samba4/waf-cross-answers/mipsel.txt       |  2 +
  net/samba4/waf-cross-answers/powerpc.txt      |  2 +
- net/samba4/waf-cross-answers/powerpc64.txt    | 40 +++++++++++++++++
+ net/samba4/waf-cross-answers/powerpc64.txt    |  2 +
  net/samba4/waf-cross-answers/riscv64.txt      | 40 +++++++++++++++++
  net/samba4/waf-cross-answers/x86_64.txt       |  2 +
- 27 files changed, 205 insertions(+), 145 deletions(-)
+ 27 files changed, 166 insertions(+), 144 deletions(-)
  delete mode 100644 net/samba4/patches/001-samba-4.4.0-pam.patch
  delete mode 100644 net/samba4/patches/002-dnsserver-4.7.0.patch
  delete mode 100644 net/samba4/patches/006-netdb-defines.patch
  create mode 100644 net/samba4/patches/105-perl-json-pp.patch
- create mode 100644 net/samba4/waf-cross-answers/powerpc64.txt
  create mode 100644 net/samba4/waf-cross-answers/riscv64.txt
 
 diff --git a/net/samba4/Config.in b/net/samba4/Config.in
@@ -71,7 +70,7 @@ index d287effa5..21cbb1dc2 100644
  		Commonly used VFS modules, vfs_btrfs requires kmod-fs-btrfs to be selected separately
  	default y
 diff --git a/net/samba4/Makefile b/net/samba4/Makefile
-index 392b1ac02..4144ee152 100644
+index d84caa0fc..4144ee152 100644
 --- a/net/samba4/Makefile
 +++ b/net/samba4/Makefile
 @@ -2,8 +2,8 @@
@@ -111,15 +110,6 @@ index 392b1ac02..4144ee152 100644
  	CONFIG_SAMBA4_SERVER_VFS \
  	CONFIG_SAMBA4_SERVER_VFSX \
  	CONFIG_SAMBA4_SERVER_AD_DC \
-@@ -66,7 +68,7 @@ define Package/samba4-libs
- 	+PACKAGE_libpam:libpam \
- 	+SAMBA4_SERVER_VFS:attr \
- 	+SAMBA4_SERVER_AVAHI:libavahi-client \
--	+SAMBA4_SERVER_AD_DC:python3-cryptodome +SAMBA4_SERVER_AD_DC:libopenldap +SAMBA4_SERVER_AD_DC:jansson +SAMBA4_SERVER_AD_DC:libarchive +SAMBA4_SERVER_AD_DC:acl +SAMBA4_SERVER_AD_DC:attr
-+	+SAMBA4_SERVER_AD_DC:python3-cryptodome +SAMBA4_SERVER_AD_DC:python3-markdown +SAMBA4_SERVER_AD_DC:python3-dns +SAMBA4_SERVER_AD_DC:libopenldap +SAMBA4_SERVER_AD_DC:jansson +SAMBA4_SERVER_AD_DC:libarchive +SAMBA4_SERVER_AD_DC:acl +SAMBA4_SERVER_AD_DC:attr
- endef
- 
- define Package/samba4-server
 @@ -121,13 +123,13 @@ define Package/samba4-utils
  endef
  
@@ -678,49 +668,13 @@ index 3f1b18fd4..85a105acb 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/powerpc64.txt b/net/samba4/waf-cross-answers/powerpc64.txt
-new file mode 100644
-index 000000000..0714416f8
---- /dev/null
+index 5d9af17e1..0714416f8 100644
+--- a/net/samba4/waf-cross-answers/powerpc64.txt
 +++ b/net/samba4/waf-cross-answers/powerpc64.txt
-@@ -0,0 +1,40 @@
-+Checking uname sysname type: "Linux"
-+Checking simple C program: "hello world"
-+rpath library support: OK
-+-Wl,--version-script support: OK
-+Checking getconf LFS_CFLAGS: NO
-+Checking for large file support without additional flags: OK
-+Checking correct behavior of strtoll: OK
-+Checking for working strptime: NO
-+Checking for C99 vsnprintf: "1"
-+Checking for HAVE_SHARED_MMAP: OK
-+Checking for HAVE_MREMAP: OK
-+Checking for HAVE_INCOHERENT_MMAP: NO
-+Checking for HAVE_SECURE_MKSTEMP: OK
-+Checking for HAVE_IFACE_GETIFADDRS: OK
-+Checking value of NSIG: "65"
-+Checking value of _NSIG: "65"
-+Checking value of SIGRTMAX: "64"
-+Checking value of SIGRTMIN: "35"
-+Checking for a 64-bit host to support lmdb: OK
-+Checking value of GNUTLS_CIPHER_AES_128_CFB8: "29"
-+Checking value of GNUTLS_MAC_AES_CMAC_128: "203"
-+Checking errno of iconv for illegal multibyte sequence: OK
-+Checking for kernel change notify support: OK
-+Checking for Linux kernel oplocks: OK
-+Checking for kernel share modes: OK
-+Checking whether POSIX capabilities are available: OK
-+Checking if can we convert from CP850 to UCS-2LE: OK
-+Checking if can we convert from UTF-8 to UCS-2LE: OK
-+vfs_fileid checking for statfs() and struct statfs.f_fsid: OK
-+Checking whether we can use Linux thread-specific credentials: OK
-+Checking whether fcntl locking is available: OK
-+Checking whether fcntl lock supports open file description locks: NO
-+Checking whether fcntl supports flags to send direct I/O availability signals: OK
-+Checking whether fcntl supports setting/geting hints: (-11, "")
-+Checking for the maximum value of the 'time_t' type: OK
-+Checking whether the realpath function allows a NULL argument: OK
-+Checking for ftruncate extend: OK
-+getcwd takes a NULL argument: OK
+@@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
+ Checking whether the realpath function allows a NULL argument: OK
+ Checking for ftruncate extend: OK
+ getcwd takes a NULL argument: OK
 +Checking for readlink breakage: OK
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
