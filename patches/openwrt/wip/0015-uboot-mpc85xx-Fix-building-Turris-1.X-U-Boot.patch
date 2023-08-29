@@ -1,0 +1,74 @@
+From a3dc419ebc5682f01208a647c484296a78b26d93 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 29 Aug 2023 11:34:52 +0200
+Subject: [PATCH] uboot-mpc85xx: Fix building Turris 1.X U-Boot
+
+Add missing dependency on swig/host and force bogus version of pylibftdi
+library that is used during build. Originally it used the same version
+as U-Boot it was embedded in, but that version is not valid Python
+version and as it is not installed anywhere, let's just fill-in some
+random number to make build succeed.
+---
+ package/boot/uboot-mpc85xx/Makefile           |  1 +
+ .../uboot-mpc85xx/patches/force-libfdt.patch  | 29 +++++++++++++++++--
+ 2 files changed, 28 insertions(+), 2 deletions(-)
+
+diff --git a/package/boot/uboot-mpc85xx/Makefile b/package/boot/uboot-mpc85xx/Makefile
+index a3a0c5183c..2ac7268fee 100644
+--- a/package/boot/uboot-mpc85xx/Makefile
++++ b/package/boot/uboot-mpc85xx/Makefile
+@@ -11,6 +11,8 @@ PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/u-boot.git
+ PKG_MIRROR_HASH:=d8f12dd3f5c8214e2dc6111c5dba55e9e62febb9877ebe27388d4bd3d4952801
+ PKG_SOURCE_DATE:=2022-09-27
+ PKG_SOURCE_VERSION:=turris1x-v2022.04
++PKG_BUILD_DEPENDS:=swig/host
++HOST_BUILD_DEPENDS:=swig/host
+ 
+ include $(INCLUDE_DIR)/u-boot.mk
+ include $(INCLUDE_DIR)/package.mk
+diff --git a/package/boot/uboot-mpc85xx/patches/force-libfdt.patch b/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
+index a21020baca..b516d320e0 100644
+--- a/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
++++ b/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
+@@ -1,7 +1,9 @@
+ Taken from https://github.com/openwrt/openwrt/commit/e760f065c6fd17005c5458e54d6cc0fb8356b4df#commitcomment-78364865
+ 
+---- a/Makefile
+-+++ b/Makefile
++Index: u-boot-2022-09-27-turris1x/Makefile
++===================================================================
++--- u-boot-2022-09-27-turris1x.orig/Makefile
+++++ u-boot-2022-09-27-turris1x/Makefile
+ @@ -2051,26 +2051,7 @@ endif
+  # Check dtc and pylibfdt, if DTC is provided, else build them
+  PHONY += scripts_dtc
+@@ -30,3 +32,26 @@ Taken from https://github.com/openwrt/openwrt/commit/e760f065c6fd17005c5458e54d6
+  
+  # ---------------------------------------------------------------------------
+  quiet_cmd_cpp_lds = LDS     $@
++Index: u-boot-2022-09-27-turris1x/scripts/dtc/pylibfdt/setup.py
++===================================================================
++--- u-boot-2022-09-27-turris1x.orig/scripts/dtc/pylibfdt/setup.py
+++++ u-boot-2022-09-27-turris1x/scripts/dtc/pylibfdt/setup.py
++@@ -81,8 +81,7 @@ def GetEnvFromMakefiles():
++     basedir = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
++     swig_opts = ['-I%s' % basedir]
++     makevars = ParseMakefile(os.path.join(basedir, 'Makefile'))
++-    version = '%s.%s.%s' % (makevars['VERSION'], makevars['PATCHLEVEL'],
++-                            makevars['SUBLEVEL'])
+++    version = '1.1.1'
++     makevars = ParseMakefile(os.path.join(basedir, 'libfdt', 'Makefile.libfdt'))
++     files = makevars['LIBFDT_SRCS'].split()
++     files = [os.path.join(basedir, 'libfdt', fname) for fname in files]
++@@ -96,7 +95,7 @@ progname = sys.argv[0]
++ files = os.environ.get('SOURCES', '').split()
++ cflags = os.environ.get('CPPFLAGS', '').split()
++ objdir = os.environ.get('OBJDIR')
++-version = os.environ.get('VERSION')
+++version = '1.1.1'
++ swig_opts = os.environ.get('SWIG_OPTS', '').split()
++ 
++ # If we were called directly rather than through our Makefile (which is often
+-- 
+2.41.0
+
