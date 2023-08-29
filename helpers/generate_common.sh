@@ -122,6 +122,7 @@ patch_repository() {
 	(
 		cd "$repo"
 		for patch in "$src_dir/patches/$patchdir"/*/*.patch; do
+			report "Applying patch '$(basename "$patch")' to '${patchdir}'..."
 			_git am --whitespace=nowarn --reject "$patch"
 		done
 	)
