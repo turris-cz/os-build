@@ -1,0 +1,75 @@
+From 125c8327bbf997513b0ab9d51d727033da36294b Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 29 Aug 2023 10:20:07 +0200
+Subject: [PATCH] kernel: Fix dependencies for 5.10 kernel
+
+Some dependencies are wrong in regards to 5.10 kernel after we
+backported 5.15 kernel, so let's fix them.
+---
+ package/kernel/linux/modules/fs.mk  | 17 +++++++++++------
+ package/kernel/linux/modules/lib.mk |  2 +-
+ 2 files changed, 12 insertions(+), 7 deletions(-)
+
+diff --git a/package/kernel/linux/modules/fs.mk b/package/kernel/linux/modules/fs.mk
+index 27656cbb16..6a05990e91 100644
+--- a/package/kernel/linux/modules/fs.mk
++++ b/package/kernel/linux/modules/fs.mk
+@@ -90,23 +90,27 @@ define KernelPackage/fs-cifs
+ 	CONFIG_CIFS \
+ 	CONFIG_CIFS_DFS_UPCALL=n \
+ 	CONFIG_CIFS_UPCALL=n
+-  FILES:=$(LINUX_DIR)/fs/cifs/cifs.ko $(LINUX_DIR)/fs/smbfs_common/cifs_arc4.ko $(LINUX_DIR)/fs/smbfs_common/cifs_md4.ko
++  FILES:= \
++	$(LINUX_DIR)/fs/smbfs_common/cifs_arc4.ko@ge5.15 \
++	$(LINUX_DIR)/fs/smbfs_common/cifs_md4.ko@ge5.15 \
++	$(LINUX_DIR)/fs/cifs/cifs.ko
+   AUTOLOAD:=$(call AutoLoad,30,cifs)
+   $(call AddDepends/nls)
+   DEPENDS+= \
+-    +kmod-crypto-md4 \
++    +LINUX_5_10:kmod-crypto-md4\
+     +kmod-crypto-md5 \
+     +kmod-crypto-sha256 \
+     +kmod-crypto-sha512 \
+     +kmod-crypto-cmac \
+     +kmod-crypto-hmac \
+-    +kmod-crypto-arc4 \
++    +LINUX_5_10:kmod-crypto-arc4 \
+     +kmod-crypto-aead \
+     +kmod-crypto-ccm \
+     +kmod-crypto-ecb \
+     +kmod-crypto-des \
+-    +kmod-oid-registry +kmod-asn1-decoder +kmod-asn1-encoder \
+-    +kmod-dnsresolver
++    +(LINUX_5_15):kmod-asn1-decoder \
++    +(LINUX_5_15):kmod-oid-registry \
++    +(LINUX_5_15):kmod-dnsresolver
+ endef
+ 
+ define KernelPackage/fs-cifs/description
+@@ -400,7 +404,8 @@ define KernelPackage/fs-nfs-common
+   FILES:= \
+ 	$(LINUX_DIR)/fs/lockd/lockd.ko \
+ 	$(LINUX_DIR)/net/sunrpc/sunrpc.ko \
+-	$(LINUX_DIR)/fs/nfs_common/grace.ko
++	$(LINUX_DIR)/fs/nfs_common/grace.ko \
++	$(LINUX_DIR)/fs/nfs_common/nfs_ssc.ko@lt5.15
+   AUTOLOAD:=$(call AutoLoad,30,grace sunrpc lockd)
+ endef
+ 
+diff --git a/package/kernel/linux/modules/lib.mk b/package/kernel/linux/modules/lib.mk
+index e232712a07..b11ef1bd3b 100644
+--- a/package/kernel/linux/modules/lib.mk
++++ b/package/kernel/linux/modules/lib.mk
+@@ -277,7 +277,7 @@ $(eval $(call KernelPackage,asn1-decoder))
+ define KernelPackage/asn1-encoder
+   SUBMENU:=$(LIB_MENU)
+   TITLE:=Simple ASN1 encoder
+-  KCONFIG:= CONFIG_ASN1
++  KCONFIG:= CONFIG_ASN1_ENCODER
+   HIDDEN:=1
+   FILES:=$(LINUX_DIR)/lib/asn1_encoder.ko
+ endef
+-- 
+2.41.0
+
