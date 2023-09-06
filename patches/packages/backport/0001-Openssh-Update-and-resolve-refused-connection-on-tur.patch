@@ -1,0 +1,200 @@
+From c49a0f4986913e9ea3e01a930dff9961b73d5e7a Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Wed, 6 Sep 2023 17:49:04 +0200
+Subject: [PATCH]     Openssh: Update and resolve refused connection on
+ turris1x
+
+    Previous version of Openssh v 8.9p1 refused connection on turris1x.
+    After upgrading to version 9.3p1 rel. 3 from build openwrt 23.05
+    and adjust Makefile for permitrootlogin it started to work.
+---
+ net/openssh/Makefile                          | 26 ++++++++--------
+ net/openssh/files/sshd.init                   |  5 ++++
+ net/openssh/patches/010-32bit-seccomp.patch   | 24 ---------------
+ ...ve-detection-of-fzero-call-used-regs.patch | 30 -------------------
+ 4 files changed, 19 insertions(+), 66 deletions(-)
+ delete mode 100644 net/openssh/patches/010-32bit-seccomp.patch
+ delete mode 100644 net/openssh/patches/020-improve-detection-of-fzero-call-used-regs.patch
+
+diff --git a/net/openssh/Makefile b/net/openssh/Makefile
+index 70ce3bd83..3dd394d38 100644
+--- a/net/openssh/Makefile
++++ b/net/openssh/Makefile
+@@ -8,19 +8,18 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=openssh
+-PKG_VERSION:=8.9p1
+-PKG_RELEASE:=$(AUTORELEASE)
++PKG_VERSION:=9.3p1
++PKG_RELEASE:=$(AUTORELEASE)
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_SOURCE_URL:=https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/ \
+-		https://ftp.spline.de/pub/OpenBSD/OpenSSH/portable/
+-PKG_HASH:=fd497654b7ab1686dac672fb83dfb4ba4096e8b5ffcdaccd262380ae58bec5e7
++PKG_SOURCE_URL:=https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/ \
++		https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/
++PKG_HASH:=e9baba7701a76a51f3d85a62c383a3c9dcd97fa900b859bc7db114c1868af8a8
+ 
+ PKG_LICENSE:=BSD ISC
+ PKG_LICENSE_FILES:=LICENCE
+ PKG_CPE_ID:=cpe:/a:openssh:openssh
+ 
+-PKG_FIXUP:=autoreconf
+ PKG_REMOVE_FILES:=
+ PKG_CONFIG_DEPENDS := \
+ 	CONFIG_OPENSSH_LIBFIDO2
+@@ -32,12 +31,11 @@ include $(INCLUDE_DIR)/package.mk
+ define Package/openssh/Default
+ 	SECTION:=net
+ 	CATEGORY:=Network
+-	DEPENDS:=+libopenssl +zlib
++	DEPENDS:=
+ 	TITLE:=OpenSSH
+ 	MAINTAINER:=Peter Wagner <tripolar@gmx.at>
+-	URL:=http://www.openssh.com/
++	URL:=https://www.openssh.com/
+ 	SUBMENU:=SSH
+-	VARIANT:=without-pam
+ endef
+ 
+ define Package/openssh-moduli
+@@ -52,6 +50,7 @@ endef
+ 
+ define Package/openssh-client
+ 	$(call Package/openssh/Default)
++	DEPENDS+= +libopenssl +zlib
+ 	TITLE+= client
+ 	ALTERNATIVES:=\
+ 		200:/usr/bin/ssh:/usr/libexec/ssh-openssh \
+@@ -68,7 +67,7 @@ endef
+ 
+ define Package/openssh-client-utils
+ 	$(call Package/openssh/Default)
+-	DEPENDS+= +openssh-client +openssh-keygen
++	DEPENDS+= +libopenssl +zlib +openssh-client +openssh-keygen
+ 	TITLE+= client utilities
+ endef
+ 
+@@ -78,6 +77,7 @@ endef
+ 
+ define Package/openssh-keygen
+ 	$(call Package/openssh/Default)
++	DEPENDS+= +libopenssl +zlib
+ 	TITLE+= keygen
+ endef
+ 
+@@ -87,9 +87,10 @@ endef
+ 
+ define Package/openssh-server
+ 	$(call Package/openssh/Default)
+-	DEPENDS+= +openssh-keygen +OPENSSH_LIBFIDO2:libfido2
++	DEPENDS+= +libopenssl +zlib +openssh-keygen +OPENSSH_LIBFIDO2:libfido2
+ 	TITLE+= server
+ 	USERID:=sshd=22:sshd=22
++	VARIANT:=without-pam
+ endef
+ 
+ define Package/openssh-server/config
+@@ -106,11 +107,12 @@ define Package/openssh-server/conffiles
+ /etc/ssh/ssh_host_ed25519_key.pub
+ /etc/ssh/ssh_host_rsa_key
+ /etc/ssh/ssh_host_rsa_key.pub
+ endef
+ 
+ define Package/openssh-server-pam
+ 	$(call Package/openssh/Default)
+-	DEPENDS+= +libpthread +openssh-keygen +libpam
++	DEPENDS+= +libopenssl +zlib +libpthread +openssh-keygen +libpam
+ 	TITLE+= server (with PAM support)
+ 	VARIANT:=with-pam
+ 	USERID:=sshd=22:sshd=22
+diff --git a/net/openssh/files/sshd.init b/net/openssh/files/sshd.init
+index e7735364d..0b859e146 100644
+--- a/net/openssh/files/sshd.init
++++ b/net/openssh/files/sshd.init
+@@ -27,9 +27,14 @@ start_service() {
+ 	procd_open_instance
+ 	procd_add_mdns "ssh" "tcp" "$lport"
+ 	procd_set_param command $PROG -D
++	procd_set_param respawn
+ 	procd_close_instance
+ }
+ 
++reload_service() {
++	procd_send_signal sshd
++}
++
+ shutdown() {
+ 	local pid
+ 
+diff --git a/net/openssh/patches/010-32bit-seccomp.patch b/net/openssh/patches/010-32bit-seccomp.patch
+deleted file mode 100644
+index f8f95760e..000000000
+--- a/net/openssh/patches/010-32bit-seccomp.patch
++++ /dev/null
+@@ -1,24 +0,0 @@
+-From 995cf19fbef0b10dbcf1dd8d6382cec9194e08c5 Mon Sep 17 00:00:00 2001
+-From: Darren Tucker <dtucker@dtucker.net>
+-Date: Sat, 26 Feb 2022 14:06:14 +1100
+-Subject: [PATCH] Allow ppoll_time64 in seccomp sandbox.
+-
+-Should fix sandbox violations on (some? at least i386 and armhf) 32bit
+-Linux platforms.  Patch from chutzpahu at gentoo.org and cjwatson at
+-debian.org via bz#3396.
+----
+- sandbox-seccomp-filter.c | 3 +++
+- 1 file changed, 3 insertions(+)
+-
+---- a/sandbox-seccomp-filter.c
+-+++ b/sandbox-seccomp-filter.c
+-@@ -276,6 +276,9 @@ static const struct sock_filter preauth_
+- #ifdef __NR_ppoll
+- 	SC_ALLOW(__NR_ppoll),
+- #endif
+-+#ifdef __NR_ppoll_time64
+-+	SC_ALLOW(__NR_ppoll_time64),
+-+#endif
+- #ifdef __NR_poll
+- 	SC_ALLOW(__NR_poll),
+- #endif
+diff --git a/net/openssh/patches/020-improve-detection-of-fzero-call-used-regs.patch b/net/openssh/patches/020-improve-detection-of-fzero-call-used-regs.patch
+deleted file mode 100644
+index 345bfa30d..000000000
+--- a/net/openssh/patches/020-improve-detection-of-fzero-call-used-regs.patch
++++ /dev/null
+@@ -1,30 +0,0 @@
+-From 6c4a67ece33d9551429490898bb3c793a689e913 Mon Sep 17 00:00:00 2001
+-From: Colin Watson <cjwatson@debian.org>
+-Date: Thu, 24 Feb 2022 16:04:18 +0000
+-Subject: [PATCH] Improve detection of -fzero-call-used-regs=all support
+-
+-GCC doesn't tell us whether this option is supported unless it runs into
+-the situation where it would need to emit corresponding code.
+----
+- m4/openssh.m4 | 3 +++
+- 1 file changed, 3 insertions(+)
+-
+---- a/m4/openssh.m4
+-+++ b/m4/openssh.m4
+-@@ -14,6 +14,8 @@ AC_DEFUN([OSSH_CHECK_CFLAG_COMPILE], [{
+- 	AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+- #include <stdlib.h>
+- #include <stdio.h>
+-+/* Trivial function to help test for -fzero-call-used-regs */
+-+void f(int n) {}
+- int main(int argc, char **argv) {
+- 	(void)argv;
+- 	/* Some math to catch -ftrapv problems in the toolchain */
+-@@ -21,6 +23,7 @@ int main(int argc, char **argv) {
+- 	float l = i * 2.1;
+- 	double m = l / 0.5;
+- 	long long int n = argc * 12345LL, o = 12345LL * (long long int)argc;
+-+	f(0);
+- 	printf("%d %d %d %f %f %lld %lld\n", i, j, k, l, m, n, o);
+- 	/*
+- 	 * Test fallthrough behaviour.  clang 10's -Wimplicit-fallthrough does
+-- 
+2.42.0
+
