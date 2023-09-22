@@ -1,14 +1,17 @@
-From 886c804469c448a4c2e422f937f8d147c3e70225 Mon Sep 17 00:00:00 2001
+From 0874c40de381f8d0e9a0b3fb841fba81ec6d8cd0 Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@turris.com>
-Date: Thu, 24 Aug 2023 08:50:25 +0200
-Subject: [PATCH] samba4: Backport from Openwrt 23.05
+Date: Wed, 20 Sep 2023 13:22:18 +0200
+Subject: [PATCH] samba4: update to 4.18.6
 
-The version we have currently is outdated and contains security issues.
-The easiest way to fix that is to update to the latest community
-maintained version.
+Update to the version of samba4 from 23.05 as version 4.14 is no longer
+supported by upstream since 2022-09-13:
+
+https://wiki.samba.org/index.php/Samba_Release_Planning#General_information
+
+Signed-off-by: Michal Hrusecky <michal.hrusecky@turris.com>
 ---
  net/samba4/Config.in                          | 12 ++++-
- net/samba4/Makefile                           | 40 ++++++++++-------
+ net/samba4/Makefile                           | 36 +++++++++------
  net/samba4/patches/001-samba-4.4.0-pam.patch  | 29 ------------
  net/samba4/patches/002-dnsserver-4.7.0.patch  | 19 --------
  net/samba4/patches/006-netdb-defines.patch    | 17 -------
@@ -18,6 +21,7 @@ maintained version.
  ...-14-disable-python-module-host-check.patch |  6 +--
  .../020-source3-msgsock-nvram-fix.patch       |  4 +-
  .../021-source4-msgsock-nvram-fix.patch       |  2 +-
+ ..._wafsamba-replace-echo-n-with-printf.patch | 30 -------------
  .../102-samba-4.11-unbundle-libbsd.patch      |  8 ++--
  .../103-samba-4.12-unbundle-libunwind.patch   | 44 +++++++++++--------
  net/samba4/patches/105-perl-json-pp.patch     | 20 +++++++++
@@ -34,15 +38,16 @@ maintained version.
  net/samba4/waf-cross-answers/powerpc64.txt    |  2 +
  net/samba4/waf-cross-answers/riscv64.txt      | 40 +++++++++++++++++
  net/samba4/waf-cross-answers/x86_64.txt       |  2 +
- 27 files changed, 166 insertions(+), 144 deletions(-)
+ 28 files changed, 163 insertions(+), 173 deletions(-)
  delete mode 100644 net/samba4/patches/001-samba-4.4.0-pam.patch
  delete mode 100644 net/samba4/patches/002-dnsserver-4.7.0.patch
  delete mode 100644 net/samba4/patches/006-netdb-defines.patch
+ delete mode 100644 net/samba4/patches/030_wafsamba-replace-echo-n-with-printf.patch
  create mode 100644 net/samba4/patches/105-perl-json-pp.patch
  create mode 100644 net/samba4/waf-cross-answers/riscv64.txt
 
 diff --git a/net/samba4/Config.in b/net/samba4/Config.in
-index d287effa5..21cbb1dc2 100644
+index d287effa5e312..21cbb1dc24393 100644
 --- a/net/samba4/Config.in
 +++ b/net/samba4/Config.in
 @@ -31,12 +31,22 @@ config SAMBA4_SERVER_AVAHI
@@ -70,33 +75,32 @@ index d287effa5..21cbb1dc2 100644
  		Commonly used VFS modules, vfs_btrfs requires kmod-fs-btrfs to be selected separately
  	default y
 diff --git a/net/samba4/Makefile b/net/samba4/Makefile
-index d84caa0fc..4144ee152 100644
+index d80a182602bf5..4144ee1528be9 100644
 --- a/net/samba4/Makefile
 +++ b/net/samba4/Makefile
 @@ -2,8 +2,8 @@
  include $(TOPDIR)/rules.mk
  
  PKG_NAME:=samba
--PKG_VERSION:=4.14.12
+-PKG_VERSION:=4.14.14
 -PKG_RELEASE:=$(AUTORELEASE)
 +PKG_VERSION:=4.18.0
 +PKG_RELEASE:=1
  
  PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
  PKG_SOURCE_URL:= \
-@@ -13,20 +13,22 @@ PKG_SOURCE_URL:= \
+@@ -13,7 +13,9 @@ PKG_SOURCE_URL:= \
  		http://www.nic.funet.fi/index/samba/pub/samba/stable/ \
  		http://samba.mirror.bit.nl/samba/ftp/stable/ \
  		https://download.samba.org/pub/samba/stable/
--PKG_HASH:=155d9c2dfb06a18104422987590858bfe5e9783ebebe63882e7e7f07eaaa512d
+-PKG_HASH:=abd5e9e6aa45e55114b188ba189ebdfc8fd3d7718d43f749e477ce7f791e5519
 +PKG_HASH:=70348656ef807be9c8be4465ca157cef4d99818e234253d2c684cc18b8408149
 +
 +PKG_BUILD_FLAGS:=gc-sections
  
--PKG_MAINTAINER:=Andy Walsh <andy.walsh44+github@gmail.com>
  PKG_LICENSE:=GPL-3.0-only
  PKG_LICENSE_FILES:=COPYING
- PKG_CPE_ID:=cpe:/a:samba:samba
+@@ -21,11 +23,12 @@ PKG_CPE_ID:=cpe:/a:samba:samba
  
  # samba4=(asn1_compile,compile_et) rpcsvc-proto=(rpcgen)
  HOST_BUILD_DEPENDS:=python3/host rpcsvc-proto/host perl/host perl-parse-yapp/host
@@ -110,7 +114,7 @@ index d84caa0fc..4144ee152 100644
  	CONFIG_SAMBA4_SERVER_VFS \
  	CONFIG_SAMBA4_SERVER_VFSX \
  	CONFIG_SAMBA4_SERVER_AD_DC \
-@@ -121,13 +123,13 @@ define Package/samba4-utils
+@@ -120,13 +123,13 @@ define Package/samba4-utils
  endef
  
  define Package/samba4-utils/description
@@ -127,7 +131,7 @@ index d84caa0fc..4144ee152 100644
  # dont mess with sambas private rpath!
  RSTRIP:=:
  
-@@ -178,7 +180,6 @@ CONFIGURE_ARGS += \
+@@ -177,7 +180,6 @@ CONFIGURE_ARGS += \
  		--without-automount \
  		--without-iconv \
  		--without-lttng \
@@ -135,7 +139,7 @@ index d84caa0fc..4144ee152 100644
  		--without-pam \
  		--without-systemd \
  		--without-utmp \
-@@ -203,7 +204,6 @@ HOST_CONFIGURE_ARGS += \
+@@ -202,7 +204,6 @@ HOST_CONFIGURE_ARGS += \
  		--without-automount \
  		--without-iconv \
  		--without-lttng \
@@ -143,7 +147,7 @@ index d84caa0fc..4144ee152 100644
  		--without-pam \
  		--without-systemd \
  		--without-utmp \
-@@ -215,7 +215,7 @@ HOST_CONFIGURE_ARGS += \
+@@ -214,7 +215,7 @@ HOST_CONFIGURE_ARGS += \
  
  HOST_CONFIGURE_ARGS += --disable-avahi --without-quotas --without-acl-support --without-winbind \
  	--without-ad-dc --without-json --without-libarchive --disable-python --nopyc --nopyo \
@@ -152,7 +156,7 @@ index d84caa0fc..4144ee152 100644
  
  # Optional AES-NI support - https://lists.samba.org/archive/samba-technical/2017-September/122738.html
  # Support for Nettle wasn't comitted
-@@ -232,7 +232,7 @@ CONFIGURE_ARGS += \
+@@ -231,7 +232,7 @@ CONFIGURE_ARGS += \
  		--with-privatedir=/etc/samba
  
  # features
@@ -161,7 +165,7 @@ index d84caa0fc..4144ee152 100644
  	CONFIGURE_ARGS += --with-quotas
  else
  	CONFIGURE_ARGS += --without-quotas
-@@ -247,7 +247,7 @@ ifeq ($(CONFIG_SAMBA4_SERVER_AD_DC),y)
+@@ -246,7 +247,7 @@ ifeq ($(CONFIG_SAMBA4_SERVER_AD_DC),y)
  	CONFIGURE_ARGS += --without-winbind --without-ldb-lmdb --with-acl-support
  else
  	CONFIGURE_ARGS += --without-winbind --without-ads --without-ldap --without-ldb-lmdb --without-ad-dc \
@@ -170,7 +174,7 @@ index d84caa0fc..4144ee152 100644
  endif
  
  SAMBA4_PDB_MODULES :=pdb_smbpasswd,pdb_tdbsam,
-@@ -259,7 +259,10 @@ ifdef CONFIG_KERNEL_IO_URING
+@@ -258,7 +259,10 @@ ifdef CONFIG_KERNEL_IO_URING
  	SAMBA4_VFS_MODULES_SHARED :=$(SAMBA4_VFS_MODULES_SHARED)vfs_io_uring,
  endif
  ifeq ($(CONFIG_SAMBA4_SERVER_VFS),y)
@@ -182,7 +186,7 @@ index d84caa0fc..4144ee152 100644
  ifdef CONFIG_PACKAGE_kmod-fs-btrfs
  	SAMBA4_VFS_MODULES_SHARED :=$(SAMBA4_VFS_MODULES_SHARED)vfs_btrfs,
  endif
-@@ -310,6 +313,7 @@ CONFIGURE_ARGS += --private-libraries=$(SYSTEM_PRIVATE_BUNDLED_LIBS)
+@@ -309,6 +313,7 @@ CONFIGURE_ARGS += --private-libraries=$(SYSTEM_PRIVATE_BUNDLED_LIBS)
  
  export COMPILE_ET=$(STAGING_DIR_HOSTPKG)/bin/compile_et_samba
  export ASN1_COMPILE=$(STAGING_DIR_HOSTPKG)/bin/asn1_compile_samba
@@ -190,7 +194,7 @@ index d84caa0fc..4144ee152 100644
  
  # make sure we use the hostpkg build toolset and we need to find host 'yapp'
  HOST_CONFIGURE_VARS+= \
-@@ -328,6 +332,9 @@ define Host/Prepare
+@@ -327,6 +332,9 @@ define Host/Prepare
  	$(call Host/Prepare/Default)
  	$(SED) 's,mandatory=True,mandatory=False,g' $(HOST_BUILD_DIR)/wscript_configure_system_gnutls
  	$(SED) 's,gnutls_version =.*,gnutls_version = gnutls_min_required_version,g' $(HOST_BUILD_DIR)/wscript_configure_system_gnutls
@@ -200,17 +204,7 @@ index d84caa0fc..4144ee152 100644
  endef
  define Host/Compile
  	(cd $(HOST_BUILD_DIR); \
-@@ -351,6 +358,9 @@ ifeq ($(CONFIG_SAMBA4_SERVER_AD_DC),)
- 	# unbundle iso8601
- 	$(SED) '/"iso8601":/d' $(PKG_BUILD_DIR)/third_party/wscript
- endif
-+ifeq ($(CONFIG_HOST_OS_MACOS),y)
-+	$(SED) "/^VERSION=/i sys.platform='linux'" $(PKG_BUILD_DIR)/buildtools/bin/waf
-+endif
- endef
- 
- define Build/Configure
-@@ -401,7 +411,7 @@ endef
+@@ -403,7 +411,7 @@ endef
  define Package/samba4-utils/install
  	$(INSTALL_DIR) $(1)/usr/bin
  	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/{smbstatus,smbtree,mvxattr,smbtar} $(1)/usr/bin/
@@ -221,7 +215,7 @@ index d84caa0fc..4144ee152 100644
  endef
 diff --git a/net/samba4/patches/001-samba-4.4.0-pam.patch b/net/samba4/patches/001-samba-4.4.0-pam.patch
 deleted file mode 100644
-index 72de06619..000000000
+index 72de06619880f..0000000000000
 --- a/net/samba4/patches/001-samba-4.4.0-pam.patch
 +++ /dev/null
 @@ -1,29 +0,0 @@
@@ -256,7 +250,7 @@ index 72de06619..000000000
 - #
 diff --git a/net/samba4/patches/002-dnsserver-4.7.0.patch b/net/samba4/patches/002-dnsserver-4.7.0.patch
 deleted file mode 100644
-index 0c7592f8e..000000000
+index 0c7592f8e291a..0000000000000
 --- a/net/samba4/patches/002-dnsserver-4.7.0.patch
 +++ /dev/null
 @@ -1,19 +0,0 @@
@@ -281,7 +275,7 @@ index 0c7592f8e..000000000
 - bld.SAMBA_MODULE('service_dns',
 diff --git a/net/samba4/patches/006-netdb-defines.patch b/net/samba4/patches/006-netdb-defines.patch
 deleted file mode 100644
-index a11f8d15c..000000000
+index a11f8d15c5877..0000000000000
 --- a/net/samba4/patches/006-netdb-defines.patch
 +++ /dev/null
 @@ -1,17 +0,0 @@
@@ -303,7 +297,7 @@ index a11f8d15c..000000000
 - 				     struct hostent *he,
 - 				     char *buffer,
 diff --git a/net/samba4/patches/007-libldb-fix-musl-libc-unkown-type-error.patch b/net/samba4/patches/007-libldb-fix-musl-libc-unkown-type-error.patch
-index 29928976b..da564e050 100644
+index 29928976b4a59..da564e0509a71 100644
 --- a/net/samba4/patches/007-libldb-fix-musl-libc-unkown-type-error.patch
 +++ b/net/samba4/patches/007-libldb-fix-musl-libc-unkown-type-error.patch
 @@ -15,12 +15,11 @@ Signed-off-by: Changqing Li <changqing.li@windriver.com>
@@ -322,7 +316,7 @@ index 29928976b..da564e050 100644
   /* for old gcc releases that don't have the feature test macro __has_attribute */
   #ifndef __has_attribute
 diff --git a/net/samba4/patches/009-samba-4-11-fix-host-tools-checks.patch.patch b/net/samba4/patches/009-samba-4-11-fix-host-tools-checks.patch.patch
-index 284c09d85..4f06db369 100644
+index 284c09d85a677..4f06db369420d 100644
 --- a/net/samba4/patches/009-samba-4-11-fix-host-tools-checks.patch.patch
 +++ b/net/samba4/patches/009-samba-4-11-fix-host-tools-checks.patch.patch
 @@ -1,9 +1,9 @@
@@ -368,7 +362,7 @@ index 284c09d85..4f06db369 100644
 --
 - conf.define('USING_SYSTEM_KRB5', 1)
 diff --git a/net/samba4/patches/010-samba-4-12-fix-musl_missing__nss_buflen_passwd.patch b/net/samba4/patches/010-samba-4-12-fix-musl_missing__nss_buflen_passwd.patch
-index bbc66a057..b0d08f5c8 100644
+index bbc66a0572d74..b0d08f5c8b5a1 100644
 --- a/net/samba4/patches/010-samba-4-12-fix-musl_missing__nss_buflen_passwd.patch
 +++ b/net/samba4/patches/010-samba-4-12-fix-musl_missing__nss_buflen_passwd.patch
 @@ -1,12 +1,13 @@
@@ -390,7 +384,7 @@ index bbc66a057..b0d08f5c8 100644
    * @brief Returns an absolute path to a file in the Samba modules directory.
 +  *
 diff --git a/net/samba4/patches/011-samba-4-14-disable-python-module-host-check.patch b/net/samba4/patches/011-samba-4-14-disable-python-module-host-check.patch
-index ee84f779d..d28f08b9d 100644
+index ee84f779d3b9f..d28f08b9dfd62 100644
 --- a/net/samba4/patches/011-samba-4-14-disable-python-module-host-check.patch
 +++ b/net/samba4/patches/011-samba-4-14-disable-python-module-host-check.patch
 @@ -1,8 +1,8 @@
@@ -406,7 +400,7 @@ index ee84f779d..d28f08b9d 100644
  -    if not Options.options.without_ad_dc:
  -        for module, package in ad_dc_pkgs.items():
 diff --git a/net/samba4/patches/020-source3-msgsock-nvram-fix.patch b/net/samba4/patches/020-source3-msgsock-nvram-fix.patch
-index 351f87bf7..df5f56348 100644
+index 351f87bf72428..df5f56348d4f4 100644
 --- a/net/samba4/patches/020-source3-msgsock-nvram-fix.patch
 +++ b/net/samba4/patches/020-source3-msgsock-nvram-fix.patch
 @@ -1,6 +1,6 @@
@@ -427,7 +421,7 @@ index 351f87bf7..df5f56348 100644
   		msg_ctx->event_ctx,
   		&msg_ctx->id.unique_id,
 diff --git a/net/samba4/patches/021-source4-msgsock-nvram-fix.patch b/net/samba4/patches/021-source4-msgsock-nvram-fix.patch
-index d05e7bdcc..2bd1e79c6 100644
+index d05e7bdccc487..2bd1e79c652f7 100644
 --- a/net/samba4/patches/021-source4-msgsock-nvram-fix.patch
 +++ b/net/samba4/patches/021-source4-msgsock-nvram-fix.patch
 @@ -1,6 +1,6 @@
@@ -438,8 +432,44 @@ index d05e7bdcc..2bd1e79c6 100644
   		goto fail;
   	}
   
+diff --git a/net/samba4/patches/030_wafsamba-replace-echo-n-with-printf.patch b/net/samba4/patches/030_wafsamba-replace-echo-n-with-printf.patch
+deleted file mode 100644
+index 7153110e7e857..0000000000000
+--- a/net/samba4/patches/030_wafsamba-replace-echo-n-with-printf.patch
++++ /dev/null
+@@ -1,30 +0,0 @@
+-From: https://gitlab.com/samba-team/samba/-/commit/29f11005f56ebc2202e7883ea4d9ca7e7a46d9bb
+-
+-From 29f11005f56ebc2202e7883ea4d9ca7e7a46d9bb Mon Sep 17 00:00:00 2001
+-From: "Sergey V. Lobanov" <sergey@lobanov.in>
+-Date: Thu, 10 Feb 2022 00:02:17 +0300
+-Subject: [PATCH] wafsamba: replace 'echo -n' with printf
+-
+-This patch makes samba_cross.py compatible with old bash (e.g. 3.2)
+-
+-Signed-off-by: Sergey V. Lobanov <sergey@lobanov.in>
+-Reviewed-by: Christof Schmitt <cs@samba.org>
+-Reviewed-by: Andreas Schneider <asn@samba.org>
+-
+-Autobuild-User(master): Andreas Schneider <asn@cryptomilk.org>
+-Autobuild-Date(master): Fri Feb 11 07:58:57 UTC 2022 on sn-devel-184
+----
+- buildtools/wafsamba/samba_cross.py | 2 +-
+- 1 file changed, 1 insertion(+), 1 deletion(-)
+-
+---- a/buildtools/wafsamba/samba_cross.py
+-+++ b/buildtools/wafsamba/samba_cross.py
+-@@ -134,7 +134,7 @@ class cross_Popen(Utils.subprocess.Popen
+-                 cross_answers_incomplete = True
+-                 add_answer(ca_file, msg, ans)
+-             (retcode, retstring) = ans
+--            args = ['/bin/sh', '-c', "echo -n '%s'; exit %d" % (retstring, retcode)]
+-+            args = ['/bin/sh', '-c', "printf %%s '%s'; exit %d" % (retstring, retcode)]
+-         real_Popen.__init__(*(obj, args), **kw)
+- 
+- 
 diff --git a/net/samba4/patches/102-samba-4.11-unbundle-libbsd.patch b/net/samba4/patches/102-samba-4.11-unbundle-libbsd.patch
-index 00c69bcc5..766fefc52 100644
+index 00c69bcc5064e..766fefc522b1e 100644
 --- a/net/samba4/patches/102-samba-4.11-unbundle-libbsd.patch
 +++ b/net/samba4/patches/102-samba-4.11-unbundle-libbsd.patch
 @@ -1,6 +1,6 @@
@@ -478,7 +508,7 @@ index 00c69bcc5..766fefc52 100644
   
       extra_libs = ''
 diff --git a/net/samba4/patches/103-samba-4.12-unbundle-libunwind.patch b/net/samba4/patches/103-samba-4.12-unbundle-libunwind.patch
-index 14a010c42..e680e91ba 100644
+index 14a010c426055..e680e91ba33a9 100644
 --- a/net/samba4/patches/103-samba-4.12-unbundle-libunwind.patch
 +++ b/net/samba4/patches/103-samba-4.12-unbundle-libunwind.patch
 @@ -1,23 +1,31 @@
@@ -533,7 +563,7 @@ index 14a010c42..e680e91ba 100644
 +         raise Errors.WafError(
 diff --git a/net/samba4/patches/105-perl-json-pp.patch b/net/samba4/patches/105-perl-json-pp.patch
 new file mode 100644
-index 000000000..feb8aaaf4
+index 0000000000000..feb8aaaf41003
 --- /dev/null
 +++ b/net/samba4/patches/105-perl-json-pp.patch
 @@ -0,0 +1,20 @@
@@ -558,7 +588,7 @@ index 000000000..feb8aaaf4
 + 
 +     foreach my $x (keys %$obj) {
 diff --git a/net/samba4/waf-cross-answers/aarch64.txt b/net/samba4/waf-cross-answers/aarch64.txt
-index 5d9af17e1..0714416f8 100644
+index 5d9af17e12533..0714416f88c3c 100644
 --- a/net/samba4/waf-cross-answers/aarch64.txt
 +++ b/net/samba4/waf-cross-answers/aarch64.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
@@ -569,7 +599,7 @@ index 5d9af17e1..0714416f8 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/arc.txt b/net/samba4/waf-cross-answers/arc.txt
-index 0d57fbc3a..e0635f7a8 100644
+index 0d57fbc3a1c02..e0635f7a8d936 100644
 --- a/net/samba4/waf-cross-answers/arc.txt
 +++ b/net/samba4/waf-cross-answers/arc.txt
 @@ -39,3 +39,5 @@ getcwd takes a NULL argument: OK
@@ -580,7 +610,7 @@ index 0d57fbc3a..e0635f7a8 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/arm.txt b/net/samba4/waf-cross-answers/arm.txt
-index df5f77bbc..9d07b6f27 100644
+index df5f77bbca26f..9d07b6f27bbc1 100644
 --- a/net/samba4/waf-cross-answers/arm.txt
 +++ b/net/samba4/waf-cross-answers/arm.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -591,7 +621,7 @@ index df5f77bbc..9d07b6f27 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/armeb.txt b/net/samba4/waf-cross-answers/armeb.txt
-index df5f77bbc..9d07b6f27 100644
+index df5f77bbca26f..9d07b6f27bbc1 100644
 --- a/net/samba4/waf-cross-answers/armeb.txt
 +++ b/net/samba4/waf-cross-answers/armeb.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -602,7 +632,7 @@ index df5f77bbc..9d07b6f27 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/i386.txt b/net/samba4/waf-cross-answers/i386.txt
-index df5f77bbc..9d07b6f27 100644
+index df5f77bbca26f..9d07b6f27bbc1 100644
 --- a/net/samba4/waf-cross-answers/i386.txt
 +++ b/net/samba4/waf-cross-answers/i386.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -613,7 +643,7 @@ index df5f77bbc..9d07b6f27 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/mips.txt b/net/samba4/waf-cross-answers/mips.txt
-index 04b93e589..e88772111 100644
+index 04b93e589531e..e887721116479 100644
 --- a/net/samba4/waf-cross-answers/mips.txt
 +++ b/net/samba4/waf-cross-answers/mips.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -624,7 +654,7 @@ index 04b93e589..e88772111 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/mips64.txt b/net/samba4/waf-cross-answers/mips64.txt
-index 86be3763b..73f77af37 100644
+index 86be3763bb886..73f77af37d519 100644
 --- a/net/samba4/waf-cross-answers/mips64.txt
 +++ b/net/samba4/waf-cross-answers/mips64.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
@@ -635,7 +665,7 @@ index 86be3763b..73f77af37 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/mips64el.txt b/net/samba4/waf-cross-answers/mips64el.txt
-index 86be3763b..73f77af37 100644
+index 86be3763bb886..73f77af37d519 100644
 --- a/net/samba4/waf-cross-answers/mips64el.txt
 +++ b/net/samba4/waf-cross-answers/mips64el.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
@@ -646,7 +676,7 @@ index 86be3763b..73f77af37 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/mipsel.txt b/net/samba4/waf-cross-answers/mipsel.txt
-index 04b93e589..e88772111 100644
+index 04b93e589531e..e887721116479 100644
 --- a/net/samba4/waf-cross-answers/mipsel.txt
 +++ b/net/samba4/waf-cross-answers/mipsel.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -657,7 +687,7 @@ index 04b93e589..e88772111 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/powerpc.txt b/net/samba4/waf-cross-answers/powerpc.txt
-index 3f1b18fd4..85a105acb 100644
+index 3f1b18fd4417f..85a105acbd979 100644
 --- a/net/samba4/waf-cross-answers/powerpc.txt
 +++ b/net/samba4/waf-cross-answers/powerpc.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: NO
@@ -668,7 +698,7 @@ index 3f1b18fd4..85a105acb 100644
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/powerpc64.txt b/net/samba4/waf-cross-answers/powerpc64.txt
-index 5d9af17e1..0714416f8 100644
+index 5d9af17e12533..0714416f88c3c 100644
 --- a/net/samba4/waf-cross-answers/powerpc64.txt
 +++ b/net/samba4/waf-cross-answers/powerpc64.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
@@ -680,7 +710,7 @@ index 5d9af17e1..0714416f8 100644
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/riscv64.txt b/net/samba4/waf-cross-answers/riscv64.txt
 new file mode 100644
-index 000000000..0714416f8
+index 0000000000000..0714416f88c3c
 --- /dev/null
 +++ b/net/samba4/waf-cross-answers/riscv64.txt
 @@ -0,0 +1,40 @@
@@ -726,7 +756,7 @@ index 000000000..0714416f8
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
 diff --git a/net/samba4/waf-cross-answers/x86_64.txt b/net/samba4/waf-cross-answers/x86_64.txt
-index 5d9af17e1..0714416f8 100644
+index 5d9af17e12533..0714416f88c3c 100644
 --- a/net/samba4/waf-cross-answers/x86_64.txt
 +++ b/net/samba4/waf-cross-answers/x86_64.txt
 @@ -36,3 +36,5 @@ Checking for the maximum value of the 'time_t' type: OK
@@ -736,6 +766,3 @@ index 5d9af17e1..0714416f8 100644
 +Checking for readlink breakage: OK
 +Checking for gnutls fips mode support: NO
 \ No newline at end of file
--- 
-2.41.0
-
