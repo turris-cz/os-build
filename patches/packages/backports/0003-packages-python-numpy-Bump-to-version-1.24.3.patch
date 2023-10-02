@@ -1,0 +1,154 @@
+From 378fc61c7bf2378333b95e18f01a0249c942cb37 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Fri, 29 Sep 2023 21:00:06 +0200
+Subject: [PATCH] packages: python/numpy: Bump to version 1.24.3
+
+Bump numpy to version 1.24.3 and added two patches.  First patch used for
+setuptools and wheel pinned in pyproject.toml are older than the versions
+available in the packages repo. (8d331953f34a1ed231cb24893c68606813c36824)
+Second patch is for stops numpy from reading .numpy-site.cfg in the build
+user's home directory. (3cee44d88837b5679a96f0155205ec15883d5aef)
+Added openblas support. (5cafab68ff5bddf5470e7674bb0bf8d0415e8804)
+Upgrade Cython to 0.29.32 (5b9a66cd7c437ab9d0c1e2b466739ec060f6e9d6)
+---
+ lang/python/host-pip-requirements/Cython.txt  |  2 +-
+ lang/python/numpy/Makefile                    | 58 +++++++++++++++++--
+ .../001-unpin-build-dependencies.patch        | 13 +++++
+ .../002-avoid-build-user-config-files.patch   | 11 ++++
+ 4 files changed, 77 insertions(+), 7 deletions(-)
+ create mode 100644 lang/python/numpy/patches/001-unpin-build-dependencies.patch
+ create mode 100644 lang/python/numpy/patches/002-avoid-build-user-config-files.patch
+
+diff --git a/lang/python/host-pip-requirements/Cython.txt b/lang/python/host-pip-requirements/Cython.txt
+index fb7a7f472..5de50dd85 100644
+--- a/lang/python/host-pip-requirements/Cython.txt
++++ b/lang/python/host-pip-requirements/Cython.txt
+@@ -1 +1 @@
+-Cython==0.29.21 --hash=sha256:e57acb89bd55943c8d8bf813763d20b9099cc7165c0f16b707631a7654be9cad
++Cython==0.29.32 --hash=sha256:8733cf4758b79304f2a4e39ebfac5e92341bce47bcceb26c1254398b2f8c1af7
+diff --git a/lang/python/numpy/Makefile b/lang/python/numpy/Makefile
+index 6b417a775..e4eac68ec 100644
+--- a/lang/python/numpy/Makefile
++++ b/lang/python/numpy/Makefile
+@@ -6,11 +6,11 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=numpy
+-PKG_VERSION:=1.20.2
+-PKG_RELEASE:=1
++PKG_VERSION:=1.24.3
++PKG_RELEASE:=$(AUTORELEASE)
+ 
+ PYPI_NAME:=$(PKG_NAME)
+-PKG_HASH:=878922bf5ad7550aa044aa9301d417e2d3ae50f0f577de92051d739ac6096cee
++PKG_HASH:=ab344f1bf21f140adab8e47fdbc7c35a477dc01408791f8ba00d018dd0bc5155
+ 
+ PKG_MAINTAINER:=Alexandru Ardelean <ardeleanalex@gmail.com>
+ 
+@@ -18,10 +18,15 @@ PKG_LICENSE:=BSD-3-Clause
+ PKG_LICENSE_FILES:=LICENSE.txt
+ PKG_CPE_ID:=cpe:/a:numpy:numpy
+ 
+-# yes, zip... sigh
+-PYPI_SOURCE_EXT:=zip
++PKG_CONFIG_DEPENDS:= \
++        CONFIG_NUMPY_OPENBLAS_SUPPORT
++
+ HOST_PYTHON3_PACKAGE_BUILD_DEPENDS:=Cython
+ 
++# Ensure numpy does not find openblas if openblas support is not enabled
++PYTHON3_PKG_BUILD_VARS:= \
++        $(if $(CONFIG_NUMPY_OPENBLAS_SUPPORT),,NPY_BLAS_ORDER= NPY_LAPACK_ORDER= )
++
+ include ../pypi.mk
+ include $(INCLUDE_DIR)/package.mk
+ include ../python3-package.mk
+@@ -32,7 +37,48 @@ define Package/python3-numpy
+   CATEGORY:=Languages
+   TITLE:=The fundamental package for scientific computing with Python
+   URL:=https://www.numpy.org/
+-  DEPENDS:=@!SOFT_FLOAT +INSTALL_GFORTRAN:libgfortran +python3
++  DEPENDS:=@!SOFT_FLOAT +INSTALL_GFORTRAN:libgfortran +python3 \
++	   +NUMPY_OPENBLAS_SUPPORT:openblas
++endef
++
++# We need to duplicate the omitted arhitectures same as openblas
++define Package/python3-numpy/config
++menu "Configuration"
++depends on !powerpc
++depends on !arc
++
++config NUMPY_OPENBLAS_SUPPORT
++        bool "Enable OpenBLAS support"
++        default n
++
++endmenu
++endef
++
++
++ifeq ($(ARCH),x86_64)
++# FIXME: temporary fix for x86_64 with GCC 13 + musl;
++#        numpy does not detect this compiler extension, so we just enable it
++TARGET_CFLAGS += -mavx512f
++endif
++
++
++define Build/Prepare/numpy-sitecfg
++	echo "[DEFAULT]"                                 >  $(PKG_BUILD_DIR)/site.cfg
++	echo "library_dirs = $(STAGING_DIR)/usr/lib"     >> $(PKG_BUILD_DIR)/site.cfg
++	echo "include_dirs = $(STAGING_DIR)/usr/include" >> $(PKG_BUILD_DIR)/site.cfg
++
++  ifdef CONFIG_NUMPY_OPENBLAS_SUPPORT
++	echo                                             >> $(PKG_BUILD_DIR)/site.cfg
++	echo "[openblas]"                                >> $(PKG_BUILD_DIR)/site.cfg
++	echo "libraries = openblas"                      >> $(PKG_BUILD_DIR)/site.cfg
++	echo "runtime_library_dirs = /usr/lib"           >> $(PKG_BUILD_DIR)/site.cfg
++  endif
++endef
++
++
++define Build/Prepare
++	$(call Build/Prepare/Default)
++	$(call Build/Prepare/numpy-sitecfg)
+ endef
+ 
+ define Package/python3-numpy/description
+diff --git a/lang/python/numpy/patches/001-unpin-build-dependencies.patch b/lang/python/numpy/patches/001-unpin-build-dependencies.patch
+new file mode 100644
+index 000000000..1606762b0
+--- /dev/null
++++ b/lang/python/numpy/patches/001-unpin-build-dependencies.patch
+@@ -0,0 +1,13 @@
++--- a/pyproject.toml
+++++ b/pyproject.toml
++@@ -1,8 +1,8 @@
++ [build-system]
++ # Minimum requirements for the build system to execute.
++ requires = [
++-    "setuptools==59.2.0",
++-    "wheel==0.37.0",
+++    "setuptools>=59.2.0",
+++    "wheel>=0.37.0",
++     "Cython>=0.29.30,<3.0",
++ ]
++ 
+diff --git a/lang/python/numpy/patches/002-avoid-build-user-config-files.patch b/lang/python/numpy/patches/002-avoid-build-user-config-files.patch
+new file mode 100644
+index 000000000..15c76e3dc
+--- /dev/null
++++ b/lang/python/numpy/patches/002-avoid-build-user-config-files.patch
+@@ -0,0 +1,11 @@
++--- a/numpy/distutils/system_info.py
+++++ b/numpy/distutils/system_info.py
++@@ -400,7 +400,7 @@ def get_standard_file(fname):
++         pass
++     else:
++         user_file = os.path.join(f, fname)
++-        if os.path.isfile(user_file):
+++        if "_PYTHON_HOST_PLATFORM" not in os.environ and os.path.isfile(user_file):
++             filenames.append(user_file)
++ 
++     # Local file
+-- 
+2.42.0
+
