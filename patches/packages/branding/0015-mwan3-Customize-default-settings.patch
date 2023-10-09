@@ -1,0 +1,126 @@
+From a308f620929f5872bb9b5a08047dda7b3037f27d Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 3 Oct 2023 11:26:44 +0200
+Subject: [PATCH] mwan3: Customize default settings
+
+The interface we want to use for multiwan is named gsm and we don't want
+to balance connections, but we want to have it as fallback.
+---
+ net/mwan3/files/etc/config/mwan3 | 52 ++++++++++++++------------------
+ 1 file changed, 23 insertions(+), 29 deletions(-)
+
+diff --git a/net/mwan3/files/etc/config/mwan3 b/net/mwan3/files/etc/config/mwan3
+index 54c449fdf..54c4f6b13 100644
+--- a/net/mwan3/files/etc/config/mwan3
++++ b/net/mwan3/files/etc/config/mwan3
+@@ -22,7 +22,7 @@ config interface 'wan6'
+ 	option family 'ipv6'
+ 	option reliability '2'
+ 
+-config interface 'wanb'
++config interface 'gsm'
+ 	option enabled '0'
+ 	list track_ip '8.8.4.4'
+ 	list track_ip '8.8.8.8'
+@@ -31,7 +31,7 @@ config interface 'wanb'
+ 	option family 'ipv4'
+ 	option reliability '1'
+ 
+-config interface 'wanb6'
++config interface 'gsm6'
+ 	option enabled '0'
+ 	list track_ip '2001:4860:4860::8844'
+ 	list track_ip '2001:4860:4860::8888'
+@@ -50,13 +50,13 @@ config member 'wan_m2_w3'
+ 	option metric '2'
+ 	option weight '3'
+ 
+-config member 'wanb_m1_w2'
+-	option interface 'wanb'
++config member 'gsm_m1_w2'
++	option interface 'gsm'
+ 	option metric '1'
+ 	option weight '2'
+ 
+-config member 'wanb_m2_w2'
+-	option interface 'wanb'
++config member 'gsm_m2_w2'
++	option interface 'gsm'
+ 	option metric '2'
+ 	option weight '2'
+ 
+@@ -70,13 +70,13 @@ config member 'wan6_m2_w3'
+ 	option metric '2'
+ 	option weight '3'
+ 
+-config member 'wanb6_m1_w2'
+-	option interface 'wanb6'
++config member 'gsm6_m1_w2'
++	option interface 'gsm6'
+ 	option metric '1'
+ 	option weight '2'
+ 
+-config member 'wanb6_m2_w2'
+-	option interface 'wanb6'
++config member 'gsm6_m2_w2'
++	option interface 'gsm6'
+ 	option metric '2'
+ 	option weight '2'
+ 
+@@ -84,40 +84,34 @@ config policy 'wan_only'
+ 	list use_member 'wan_m1_w3'
+ 	list use_member 'wan6_m1_w3'
+ 
+-config policy 'wanb_only'
+-	list use_member 'wanb_m1_w2'
+-	list use_member 'wanb6_m1_w2'
++config policy 'gsm_only'
++	list use_member 'gsm_m1_w2'
++	list use_member 'gsm6_m1_w2'
+ 
+ config policy 'balanced'
+ 	list use_member 'wan_m1_w3'
+-	list use_member 'wanb_m1_w2'
++	list use_member 'gsm_m1_w2'
+ 	list use_member 'wan6_m1_w3'
+-	list use_member 'wanb6_m1_w2'
++	list use_member 'gsm6_m1_w2'
+ 
+-config policy 'wan_wanb'
++config policy 'wan_gsm'
+ 	list use_member 'wan_m1_w3'
+-	list use_member 'wanb_m2_w2'
++	list use_member 'gsm_m2_w2'
+ 	list use_member 'wan6_m1_w3'
+-	list use_member 'wanb6_m2_w2'
++	list use_member 'gsm6_m2_w2'
+ 
+-config policy 'wanb_wan'
++config policy 'gsm_wan'
+ 	list use_member 'wan_m2_w3'
+-	list use_member 'wanb_m1_w2'
++	list use_member 'gsm_m1_w2'
+ 	list use_member 'wan6_m2_w3'
+-	list use_member 'wanb6_m1_w2'
+-
+-config rule 'https'
+-	option sticky '1'
+-	option dest_port '443'
+-	option proto 'tcp'
+-	option use_policy 'balanced'
++	list use_member 'gsm6_m1_w2'
+ 
+ config rule 'default_rule_v4'
+ 	option dest_ip '0.0.0.0/0'
+-	option use_policy 'balanced'
++	option use_policy 'wan_gsm'
+ 	option family 'ipv4'
+ 
+ config rule 'default_rule_v6'
+ 	option dest_ip '::/0'
+-	option use_policy 'balanced'
++	option use_policy 'wan_gsm'
+ 	option family 'ipv6'
+-- 
+2.42.0
+

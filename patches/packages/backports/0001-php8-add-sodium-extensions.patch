@@ -1,0 +1,47 @@
+From e4b6d33f27a8bb17af26183532fcc714f4447ff3 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@nic.cz>
+Date: Thu, 14 Sep 2023 09:40:13 +0200
+Subject: [PATCH] php8: add sodium extensions
+
+Add php8 sodium extension, since they're not in openwrt-21.02.
+---
+ lang/php8/Makefile | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/lang/php8/Makefile b/lang/php8/Makefile
+index e1083df2f..def6c8893 100644
+--- a/lang/php8/Makefile
++++ b/lang/php8/Makefile
+@@ -33,7 +33,7 @@ PHP8_MODULES= \
+ 	mbstring mysqli mysqlnd \
+ 	opcache openssl \
+ 	pcntl pdo pdo-mysql pdo-pgsql pdo-sqlite pgsql phar \
+-	session shmop simplexml snmp soap sockets sqlite3 sysvmsg sysvsem sysvshm \
++	session shmop simplexml snmp soap sockets sodium sqlite3 sysvmsg sysvsem sysvshm \
+ 	tokenizer \
+ 	xml xmlreader xmlwriter \
+ 	zip
+@@ -393,6 +393,12 @@ else
+   CONFIGURE_ARGS+= --disable-sockets
+ endif
+ 
++ifneq ($(SDK)$(CONFIG_PACKAGE_php8-mod-sodium),)
++  CONFIGURE_ARGS+= --with-sodium=shared,"$(STAGING_DIR)/usr"
++else
++  CONFIGURE_ARGS+= --without-sodium
++endif
++
+ ifneq ($(SDK)$(CONFIG_PACKAGE_php8-mod-sqlite3),)
+   CONFIGURE_ARGS+= --with-sqlite3=shared
+ else
+@@ -630,6 +636,7 @@ $(eval $(call BuildModule,simplexml,SimpleXML,+@PHP8_LIBXML +PACKAGE_php8-mod-si
+ $(eval $(call BuildModule,snmp,SNMP,+PACKAGE_php8-mod-snmp:libnetsnmp +PACKAGE_php8-mod-snmp:libopenssl))
+ $(eval $(call BuildModule,soap,SOAP,+@PHP8_LIBXML +PACKAGE_php8-mod-soap:libxml2))
+ $(eval $(call BuildModule,sockets,Sockets))
++$(eval $(call BuildModule,sodium,Sodium,+PACKAGE_php8-mod-sodium:libsodium,30))
+ $(eval $(call BuildModule,sqlite3,SQLite3,+PACKAGE_php8-mod-sqlite3:libsqlite3))
+ $(eval $(call BuildModule,sysvmsg,System V messages))
+ $(eval $(call BuildModule,sysvsem,System V shared memory))
+-- 
+2.42.0
+
