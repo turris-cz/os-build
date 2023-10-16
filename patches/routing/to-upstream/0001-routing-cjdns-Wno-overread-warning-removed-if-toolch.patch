@@ -1,0 +1,102 @@
+From 99465466c5fda73c4c358333db4bfc1727a7af05 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Mon, 16 Oct 2023 13:37:42 +0200
+Subject: [PATCH] routing: cjdns: Wno-overread warning removed if toolchain
+ lower than version 11
+
+Added condition to remove -Wno_overread warning if toolchain
+is lower than version 11, based on
+recommendation (https://github.com/NixOS/nixpkgs/pull/168997)
+Added two patches from openwrt stream.
+patch3.10 (1df5290b92625823bb9725a5406383116463f3ac)
+invalid-pointer (d710a7938977c84d6ea0f74b21dc50111e5e968c)
+---
+ cjdns/Makefile                              | 16 +++++++++++++-
+ cjdns/patches/030-fix-invalid-pointer.patch | 23 +++++++++++++++++++++
+ cjdns/patches/040-gyp-python_310.patch      | 15 ++++++++++++++
+ 3 files changed, 53 insertions(+), 1 deletion(-)
+ create mode 100644 cjdns/patches/030-fix-invalid-pointer.patch
+ create mode 100644 cjdns/patches/040-gyp-python_310.patch
+
+diff --git a/cjdns/Makefile b/cjdns/Makefile
+index 1f8592b..fd65838 100644
+--- a/cjdns/Makefile
++++ b/cjdns/Makefile
+@@ -74,6 +74,15 @@ ifneq ($(CONFIG_USE_UCLIBC),)
+ PKG_DO_VARS+= UCLIBC=1
+ endif
+ 
++# Avoid error during initialization package, compilee variable is empty
++ifneq (${GCC_VERSION},)
++TOOLCHAIN_CC=$(word 1, $(subst ., ,${GCC_VERSION}))
++endif
++
++# Check if version compiler is lower than ver. 11
++TARGET_CCFLAGS:=$(TARGET_CFLAGS) -U_FORTIFY_SOURCE -Wno-error=array-bounds -Wno-error=stringop-overflow $(intcmp 10,$(TOOLCHAIN_CC),-Wno-error=stringop-overread)
++
++
+ define Build/Compile
+ 	$(INSTALL_DIR) $(PKG_BUILD_DIR)/tmp
+ 	(cd $(PKG_BUILD_DIR) && \
+@@ -81,7 +95,7 @@ define Build/Compile
+ 	CC="$(TARGET_CC)" \
+ 	AR="$(TARGET_AR)" \
+ 	RANLIB="$(TARGET_RANLIB)" \
+-	CFLAGS="$(TARGET_CFLAGS) -U_FORTIFY_SOURCE -Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=stringop-overread" \
++	CFLAGS="$(TARGET_CCFLAGS)" \
+ 	LDFLAGS="$(TARGET_LDFLAGS)" \
+ 	SYSTEM="linux" \
+ 	TARGET_ARCH="$(CONFIG_ARCH)" \
+diff --git a/cjdns/patches/030-fix-invalid-pointer.patch b/cjdns/patches/030-fix-invalid-pointer.patch
+new file mode 100644
+index 0000000..ae988a9
+--- /dev/null
++++ b/cjdns/patches/030-fix-invalid-pointer.patch
+@@ -0,0 +1,23 @@
++--- a/net/SwitchPinger_admin.c
+++++ b/net/SwitchPinger_admin.c
++@@ -78,8 +78,10 @@ static void adminPing(Dict* args, void*
++     uint32_t timeout = (timeoutPtr) ? *timeoutPtr : DEFAULT_TIMEOUT;
++     uint64_t path;
++     String* err = NULL;
+++    String* pathNotParsable = String_CONST("path was not parsable.");
+++    String* noOpenSlots = String_CONST("no open slots to store ping, try later.");
++     if (pathStr->len != 19 || AddrTools_parsePath(&path, (uint8_t*) pathStr->bytes)) {
++-        err = String_CONST("path was not parsable.");
+++        err = pathNotParsable;
++     } else {
++         struct SwitchPinger_Ping* ping = SwitchPinger_newPing(path,
++                                                               data,
++@@ -89,7 +91,7 @@ static void adminPing(Dict* args, void*
++                                                               context->switchPinger);
++         if (keyPing && *keyPing) { ping->type = SwitchPinger_Type_KEYPING; }
++         if (!ping) {
++-            err = String_CONST("no open slots to store ping, try later.");
+++            err = noOpenSlots;
++         } else {
++             ping->onResponseContext = Allocator_clone(ping->pingAlloc, (&(struct Ping) {
++                 .context = context,
+diff --git a/cjdns/patches/040-gyp-python_310.patch b/cjdns/patches/040-gyp-python_310.patch
+new file mode 100644
+index 0000000..abff213
+--- /dev/null
++++ b/cjdns/patches/040-gyp-python_310.patch
+@@ -0,0 +1,15 @@
++--- a/node_build/dependencies/libuv/build/gyp/pylib/gyp/common.py
+++++ b/node_build/dependencies/libuv/build/gyp/pylib/gyp/common.py
++@@ -4,7 +4,11 @@
++ 
++ from __future__ import with_statement
++ 
++-import collections
+++try:
+++  # Python 3.10
+++  from six.moves import collections_abc as collections
+++except ImportError:
+++  import collections
++ import errno
++ import filecmp
++ import os.path
+-- 
+2.42.0
+
