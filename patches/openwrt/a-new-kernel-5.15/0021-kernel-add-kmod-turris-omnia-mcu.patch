@@ -1,0 +1,73 @@
+From 59747b69035a8764db084d8a3c9a560d2e84f66b Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Tue, 17 Oct 2023 14:09:13 +0200
+Subject: [PATCH] kernel: add kmod-turris-omnia-mcu
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add support for the MCU driver on CZ.NIC's Turris Omnia. This adds
+the ability to do a true board poweroff, and to configure various
+features other features (for example the user may configure that after
+poweroff, the router should automatically wake up at a specific time).
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ target/linux/mvebu/image/cortexa9.mk |  3 ++-
+ target/linux/mvebu/modules.mk        | 23 ++++++++++++++++++++++-
+ 2 files changed, 24 insertions(+), 2 deletions(-)
+
+diff --git a/target/linux/mvebu/image/cortexa9.mk b/target/linux/mvebu/image/cortexa9.mk
+index 2797f7870d..e162970318 100644
+--- a/target/linux/mvebu/image/cortexa9.mk
++++ b/target/linux/mvebu/image/cortexa9.mk
+@@ -41,7 +41,8 @@ define Device/cznic_turris-omnia
+   DEVICE_PACKAGES :=  \
+     mkf2fs e2fsprogs kmod-fs-vfat kmod-nls-cp437 kmod-nls-iso8859-1 \
+     wpad-basic-wolfssl kmod-ath9k kmod-ath10k-ct ath10k-firmware-qca988x-ct \
+-    partx-utils kmod-i2c-mux-pca954x kmod-leds-turris-omnia
++    partx-utils kmod-i2c-mux-pca954x kmod-leds-turris-omnia kmod-turris-omnia-mcu \
++    kmod-input-gpio-keys
+   IMAGES := $$(IMAGE_PREFIX)-sysupgrade.img.gz omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz
+   IMAGE/$$(IMAGE_PREFIX)-sysupgrade.img.gz := boot-scr | boot-img | sdcard-img | gzip | append-metadata
+   IMAGE/omnia-medkit-$$(IMAGE_PREFIX)-initramfs.tar.gz := omnia-medkit-initramfs | gzip
+diff --git a/target/linux/mvebu/modules.mk b/target/linux/mvebu/modules.mk
+index 766d1447ef..17569d9545 100644
+--- a/target/linux/mvebu/modules.mk
++++ b/target/linux/mvebu/modules.mk
+@@ -21,10 +21,31 @@ endef
+ $(eval $(call KernelPackage,linkstation-poweroff))
+ 
+ 
++define KernelPackage/turris-omnia-mcu
++  SUBMENU:=$(OTHER_MENU)
++  TITLE:=CZ.NIC's Turris Omnia MCU driver
++  DEPENDS:=@TARGET_mvebu_cortexa9
++  KCONFIG:= \
++	CONFIG_CZNIC_PLATFORMS=y \
++	CONFIG_TURRIS_OMNIA_MCU
++  FILES:=$(LINUX_DIR)/drivers/platform/cznic/turris-omnia-mcu.ko
++  AUTOLOAD:=$(call AutoLoad,59,turris-omnia-mcu,1)
++endef
++
++define KernelPackage/turris-omnia-mcu/description
++  This adds support for the features implemented by the microcontroller
++  on the CZ.NIC's Turris Omnia SOHO router, including true board
++  poweroff, the ability to configure wake up from powered off state at
++  a specific time, MCU watchdog and MCU connected GPIO pins.
++endef
++
++$(eval $(call KernelPackage,turris-omnia-mcu))
++
++
+ define KernelPackage/leds-turris-omnia
+    SUBMENU:=$(LEDS_MENU)
+    TITLE:=LED support for CZ.NIC's Turris Omnia
+-   DEPENDS:=@TARGET_mvebu_cortexa9
++   DEPENDS:=@TARGET_mvebu_cortexa9 +kmod-turris-omnia-mcu
+    KCONFIG:=CONFIG_LEDS_TURRIS_OMNIA
+    FILES:=$(LINUX_DIR)/drivers/leds/leds-turris-omnia.ko
+    AUTOLOAD:=$(call AutoLoad,60,leds-turris-omnia,1)
+-- 
+2.41.0
+

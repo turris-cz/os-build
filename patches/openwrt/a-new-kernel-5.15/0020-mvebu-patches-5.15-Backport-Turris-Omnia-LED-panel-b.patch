@@ -1,0 +1,186 @@
+From c2f935cab81ed41f84e9fe0e60bcef7db5b1b23c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Tue, 17 Oct 2023 11:18:25 +0200
+Subject: [PATCH 3/3] mvebu: patches-5.15: Backport Turris Omnia LED panel
+ brightness change interrupt support
+
+---
+ ...mnia-Add-global-LED-brightness-chang.patch |  35 +++++
+ ...a-notify-sysfs-on-MCU-global-LEDs-br.patch | 123 ++++++++++++++++++
+ 2 files changed, 158 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.15/104-v6.7-1-ARM-dts-turris-omnia-Add-global-LED-brightness-chang.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/104-v6.7-2-leds-turris-omnia-notify-sysfs-on-MCU-global-LEDs-br.patch
+
+diff --git a/target/linux/mvebu/patches-5.15/104-v6.7-1-ARM-dts-turris-omnia-Add-global-LED-brightness-chang.patch b/target/linux/mvebu/patches-5.15/104-v6.7-1-ARM-dts-turris-omnia-Add-global-LED-brightness-chang.patch
+new file mode 100644
+index 0000000000..840a33db19
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/104-v6.7-1-ARM-dts-turris-omnia-Add-global-LED-brightness-chang.patch
+@@ -0,0 +1,35 @@
++From e592d86fc0a7a2c8ae21a1055b8b1a508d2d5da9 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Tue, 15 Aug 2023 16:17:31 +0200
++Subject: [PATCH 16/17] ARM: dts: turris-omnia: Add global LED brightness
++ change interrupt
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++When global LED brightness is changed, the MCU can produce an interrupt.
++Add the description for this interrupt to the LED controller.
++
++Fixes: 26ca8b52d6e1 ("ARM: dts: add support for Turris Omnia")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ arch/arm/boot/dts/armada-385-turris-omnia.dts | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/arch/arm/boot/dts/armada-385-turris-omnia.dts b/arch/arm/boot/dts/armada-385-turris-omnia.dts
++index 60b6923d79ec..2778d5e2efd1 100644
++--- a/arch/arm/boot/dts/armada-385-turris-omnia.dts
+++++ b/arch/arm/boot/dts/armada-385-turris-omnia.dts
++@@ -224,6 +224,9 @@ led-controller@2b {
++ 				#size-cells = <0>;
++ 				status = "okay";
++ 
+++				interrupt-parent = <&mcu>;
+++				interrupts = <11 IRQ_TYPE_NONE>;
+++
++ 				/*
++ 				 * LEDs are controlled by MCU (STM32F0) at
++ 				 * address 0x2b.
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/104-v6.7-2-leds-turris-omnia-notify-sysfs-on-MCU-global-LEDs-br.patch b/target/linux/mvebu/patches-5.15/104-v6.7-2-leds-turris-omnia-notify-sysfs-on-MCU-global-LEDs-br.patch
+new file mode 100644
+index 0000000000..a43747ffc7
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/104-v6.7-2-leds-turris-omnia-notify-sysfs-on-MCU-global-LEDs-br.patch
+@@ -0,0 +1,123 @@
++From f88ea2c70c0046ef185f3e72a8a81e492a5d52ce Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Tue, 15 Aug 2023 18:25:14 +0200
++Subject: [PATCH 17/17] leds: turris-omnia: notify sysfs on MCU global LEDs
++ brightness change
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Recall that on Turris Omnia, the LED controller has a global brightness
++property, which allows the user to make the front LED panel dimmer.
++
++There is also a button on the front panel, which by default is
++configured so that pressing it changes the global brightness to a lower
++value (unless it is at 0%, in which case pressing the button changes the
++global brightness to 100%).
++
++Newer versions of the MCU firmware support informing the SOC that the
++brightness was changed by button press event via an interrupt.
++
++Now that we have the turris-omnia-mcu driver which adds support for MCU
++interrupts, add the ability to inform the userspace that the global
++brightness was changed via sysfs notification.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 38 ++++++++++++++++++++++++++++++++
++ 1 file changed, 38 insertions(+)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 9cd49833c6b2..fa80c88e18e1 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -23,6 +23,7 @@
++ 
++ #define CMD_GET_FEATURES		0x10
++ #define FEAT_LED_GAMMA_CORRECTION	BIT(5)
+++#define FEAT_BRIGHTNESS_INT		BIT(10)
++ 
++ /* LED controller commands at I2C address 0x2b */
++ #define CMD_LED_MODE			0x03
++@@ -54,6 +55,7 @@ struct omnia_leds {
++ 	struct i2c_client *client;
++ 	struct mutex lock;
++ 	bool has_gamma_correction;
+++	struct kernfs_node *brightness_kn;
++ 	struct omnia_led leds[];
++ };
++ 
++@@ -431,6 +433,24 @@ static struct attribute *omnia_led_controller_attrs[] = {
++ };
++ ATTRIBUTE_GROUPS(omnia_led_controller);
++ 
+++static irqreturn_t omnia_brightness_changed_handler(int irq, void *dev_id)
+++{
+++	struct omnia_leds *leds = dev_id;
+++	struct device *dev = &leds->client->dev;
+++
+++	if (!leds->brightness_kn) {
+++		leds->brightness_kn = sysfs_get_dirent(dev->kobj.sd,
+++						       "brightness");
+++
+++		if (!leds->brightness_kn)
+++			return IRQ_NONE;
+++	}
+++
+++	sysfs_notify_dirent(leds->brightness_kn);
+++
+++	return IRQ_HANDLED;
+++}
+++
++ static int omnia_mcu_get_features(const struct i2c_client *client)
++ {
++ 	u16 reply;
++@@ -458,6 +478,7 @@ static int omnia_leds_probe(struct i2c_client *client,
++ {
++ 	struct device *dev = &client->dev;
++ 	struct device_node *np = dev_of_node(dev), *child;
+++	bool has_brightness_interrupt;
++ 	struct omnia_leds *leds;
++ 	struct omnia_led *led;
++ 	int ret, count;
++@@ -485,6 +506,8 @@ static int omnia_leds_probe(struct i2c_client *client,
++ 		return ret;
++ 	}
++ 
+++	has_brightness_interrupt = ret & FEAT_BRIGHTNESS_INT;
+++
++ 	leds->has_gamma_correction = ret & FEAT_LED_GAMMA_CORRECTION;
++ 	if (!leds->has_gamma_correction) {
++ 		dev_info(dev,
++@@ -512,13 +535,28 @@ static int omnia_leds_probe(struct i2c_client *client,
++ 		led += ret;
++ 	}
++ 
+++	/* If MCU supports global brigthness change interrupt, handle it */
+++	if (has_brightness_interrupt) {
+++		ret = devm_request_any_context_irq(dev, client->irq,
+++						   omnia_brightness_changed_handler,
+++						   IRQF_ONESHOT,
+++						   "leds-turris-omnia", leds);
+++		if (ret < 0)
+++			return dev_err_probe(dev, ret, "Cannot request IRQ\n");
+++	}
+++
++ 	return 0;
++ }
++ 
++ static int omnia_leds_remove(struct i2c_client *client)
++ {
+++	struct omnia_leds *leds = i2c_get_clientdata(client);
++ 	u8 buf[5];
++ 
+++	/* Release global brightness sysfs node */
+++	if (leds->brightness_kn)
+++		sysfs_put(leds->brightness_kn);
+++
++ 	/* put all LEDs into default (HW triggered) mode */
++ 	omnia_cmd_write_u8(client, CMD_LED_MODE,
++ 			   CMD_LED_MODE_LED(OMNIA_BOARD_LEDS));
++-- 
++2.41.0
++
+-- 
+2.41.0
+
