@@ -1,0 +1,1229 @@
+From 3b5a1a4124b025f242e269c1ac72d0f4e306d05d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
+Date: Mon, 16 Oct 2023 10:59:27 +0200
+Subject: [PATCH 1/3] mvebu: patches-5.15: Backport Turris Omnia LED changes
+
+---
+ ...rris-omnia-convert-to-use-dev_groups.patch |  48 ++++
+ ...ia-Use-sysfs_emit-instead-of-sprintf.patch |  35 +++
+ ...omnia-Drop-unnecessary-mutex-locking.patch |  69 +++++
+ ...-turris-omnia-Do-not-use-SMBUS-calls.patch | 150 +++++++++++
+ ...a-Make-set_brightness-more-efficient.patch | 222 ++++++++++++++++
+ ...a-Support-HW-controlled-mode-via-pri.patch | 209 +++++++++++++++
+ ...a-Add-support-for-enabling-disabling.patch | 249 ++++++++++++++++++
+ ...a-Fix-brightness-setting-and-trigger.patch | 172 ++++++++++++
+ 8 files changed, 1154 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.0-leds-turris-omnia-convert-to-use-dev_groups.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.6-1-leds-turris-omnia-Use-sysfs_emit-instead-of-sprintf.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.6-2-leds-turris-omnia-Drop-unnecessary-mutex-locking.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.7-1-leds-turris-omnia-Do-not-use-SMBUS-calls.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.7-2-leds-turris-omnia-Make-set_brightness-more-efficient.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.7-3-leds-turris-omnia-Support-HW-controlled-mode-via-pri.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.7-4-leds-turris-omnia-Add-support-for-enabling-disabling.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/102-v6.7-5-leds-turris-omnia-Fix-brightness-setting-and-trigger.patch
+
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.0-leds-turris-omnia-convert-to-use-dev_groups.patch b/target/linux/mvebu/patches-5.15/102-v6.0-leds-turris-omnia-convert-to-use-dev_groups.patch
+new file mode 100644
+index 0000000000..6c7df7041e
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.0-leds-turris-omnia-convert-to-use-dev_groups.patch
+@@ -0,0 +1,48 @@
++From 7ffac542e880e77305723c15558ee1c57652f1a5 Mon Sep 17 00:00:00 2001
++From: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
++Date: Fri, 29 Jul 2022 16:03:46 +0200
++Subject: [PATCH 01/17] leds: turris-omnia: convert to use dev_groups
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The driver core supports the ability to handle the creation and removal
++of device-specific sysfs files in a race-free manner.  Take advantage of
++that by converting this driver to use this by moving the sysfs
++attributes into a group and assigning the dev_groups pointer to it.
++
++Cc: Pavel Machek <pavel@ucw.cz>
++Cc: linux-leds@vger.kernel.org
++Cc: linux-kernel@vger.kernel.org
++Reviewed-by: Marek Behún <kabel@kernel.org>
++Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
++Signed-off-by: Pavel Machek <pavel@ucw.cz>
++---
++ drivers/leds/leds-turris-omnia.c | 4 +---
++ 1 file changed, 1 insertion(+), 3 deletions(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 1adfed1c0619..eac6f4a573b2 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -239,9 +239,6 @@ static int omnia_leds_probe(struct i2c_client *client,
++ 		led += ret;
++ 	}
++ 
++-	if (devm_device_add_groups(dev, omnia_led_controller_groups))
++-		dev_warn(dev, "Could not add attribute group!\n");
++-
++ 	return 0;
++ }
++ 
++@@ -283,6 +280,7 @@ static struct i2c_driver omnia_leds_driver = {
++ 	.driver		= {
++ 		.name	= "leds-turris-omnia",
++ 		.of_match_table = of_omnia_leds_match,
+++		.dev_groups = omnia_led_controller_groups,
++ 	},
++ };
++ 
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.6-1-leds-turris-omnia-Use-sysfs_emit-instead-of-sprintf.patch b/target/linux/mvebu/patches-5.15/102-v6.6-1-leds-turris-omnia-Use-sysfs_emit-instead-of-sprintf.patch
+new file mode 100644
+index 0000000000..de1e5808fb
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.6-1-leds-turris-omnia-Use-sysfs_emit-instead-of-sprintf.patch
+@@ -0,0 +1,35 @@
++From 64a87f953bb96fb8a006e3e02530463b7e1a4e59 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 2 Aug 2023 18:07:45 +0200
++Subject: [PATCH 02/17] leds: turris-omnia: Use sysfs_emit() instead of
++ sprintf()
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Use the dedicated sysfs_emit() function instead of sprintf() in sysfs
++attribute accessor brightness_show().
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/20230802160748.11208-4-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index eac6f4a573b2..7c016f3f0f84 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -166,7 +166,7 @@ static ssize_t brightness_show(struct device *dev, struct device_attribute *a,
++ 	if (ret < 0)
++ 		return ret;
++ 
++-	return sprintf(buf, "%d\n", ret);
+++	return sysfs_emit(buf, "%d\n", ret);
++ }
++ 
++ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.6-2-leds-turris-omnia-Drop-unnecessary-mutex-locking.patch b/target/linux/mvebu/patches-5.15/102-v6.6-2-leds-turris-omnia-Drop-unnecessary-mutex-locking.patch
+new file mode 100644
+index 0000000000..168ec09b2b
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.6-2-leds-turris-omnia-Drop-unnecessary-mutex-locking.patch
+@@ -0,0 +1,69 @@
++From 4a29f3904b72a1384dac9055251080b60aa56be7 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 2 Aug 2023 18:07:43 +0200
++Subject: [PATCH 03/17] leds: turris-omnia: Drop unnecessary mutex locking
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Do not lock driver mutex in the global LED panel brightness sysfs
++accessors brightness_show() and brightness_store().
++
++The mutex locking is unnecessary here. The I2C transfers are guarded by
++I2C core locking mechanism, and the LED commands itself do not interfere
++with other commands.
++
++Fixes: 089381b27abe ("leds: initial support for Turris Omnia LEDs")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Reviewed-by: Lee Jones <lee@kernel.org>
++Link: https://lore.kernel.org/r/20230802160748.11208-2-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 11 +----------
++ 1 file changed, 1 insertion(+), 10 deletions(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 7c016f3f0f84..78cea01883c3 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -156,12 +156,9 @@ static ssize_t brightness_show(struct device *dev, struct device_attribute *a,
++ 			       char *buf)
++ {
++ 	struct i2c_client *client = to_i2c_client(dev);
++-	struct omnia_leds *leds = i2c_get_clientdata(client);
++ 	int ret;
++ 
++-	mutex_lock(&leds->lock);
++ 	ret = i2c_smbus_read_byte_data(client, CMD_LED_GET_BRIGHTNESS);
++-	mutex_unlock(&leds->lock);
++ 
++ 	if (ret < 0)
++ 		return ret;
++@@ -173,7 +170,6 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ 				const char *buf, size_t count)
++ {
++ 	struct i2c_client *client = to_i2c_client(dev);
++-	struct omnia_leds *leds = i2c_get_clientdata(client);
++ 	unsigned long brightness;
++ 	int ret;
++ 
++@@ -183,15 +179,10 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ 	if (brightness > 100)
++ 		return -EINVAL;
++ 
++-	mutex_lock(&leds->lock);
++ 	ret = i2c_smbus_write_byte_data(client, CMD_LED_SET_BRIGHTNESS,
++ 					(u8)brightness);
++-	mutex_unlock(&leds->lock);
++-
++-	if (ret < 0)
++-		return ret;
++ 
++-	return count;
+++	return ret < 0 ? ret : count;
++ }
++ static DEVICE_ATTR_RW(brightness);
++ 
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.7-1-leds-turris-omnia-Do-not-use-SMBUS-calls.patch b/target/linux/mvebu/patches-5.15/102-v6.7-1-leds-turris-omnia-Do-not-use-SMBUS-calls.patch
+new file mode 100644
+index 0000000000..ef78942b4f
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.7-1-leds-turris-omnia-Do-not-use-SMBUS-calls.patch
+@@ -0,0 +1,150 @@
++From 9eab9de4aa833e4922017c606daa5b0da7d0a2a3 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 18 Sep 2023 18:11:01 +0200
++Subject: [PATCH 04/17] leds: turris-omnia: Do not use SMBUS calls
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The leds-turris-omnia driver uses three function for I2C access:
++- i2c_smbus_write_byte_data() and i2c_smbus_read_byte_data(), which
++  cause an emulated SMBUS transfer,
++- i2c_master_send(), which causes an ordinary I2C transfer.
++
++The Turris Omnia MCU LED controller is not semantically SMBUS, it
++operates as a simple I2C bus. It does not implement any of the SMBUS
++specific features, like PEC, or procedure calls, or anything. Moreover
++the I2C controller driver also does not implement SMBUS, and so the
++emulated SMBUS procedure from drivers/i2c/i2c-core-smbus.c is used for
++the SMBUS calls, which gives an unnecessary overhead.
++
++When I first wrote the driver, I was unaware of these facts, and I
++simply used the first function that worked.
++
++Drop the I2C SMBUS calls and instead use simple I2C transfers.
++
++Fixes: 089381b27abe ("leds: initial support for Turris Omnia LEDs")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/20230918161104.20860-2-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 54 +++++++++++++++++++++++++-------
++ 1 file changed, 42 insertions(+), 12 deletions(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 78cea01883c3..a1e8553c3254 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -2,7 +2,7 @@
++ /*
++  * CZ.NIC's Turris Omnia LEDs driver
++  *
++- * 2020 by Marek Behún <kabel@kernel.org>
+++ * 2020, 2023 by Marek Behún <kabel@kernel.org>
++  */
++ 
++ #include <linux/i2c.h>
++@@ -41,6 +41,37 @@ struct omnia_leds {
++ 	struct omnia_led leds[];
++ };
++ 
+++static int omnia_cmd_write_u8(const struct i2c_client *client, u8 cmd, u8 val)
+++{
+++	u8 buf[2] = { cmd, val };
+++
+++	return i2c_master_send(client, buf, sizeof(buf));
+++}
+++
+++static int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
+++{
+++	struct i2c_msg msgs[2];
+++	u8 reply;
+++	int ret;
+++
+++	msgs[0].addr = client->addr;
+++	msgs[0].flags = 0;
+++	msgs[0].len = 1;
+++	msgs[0].buf = &cmd;
+++	msgs[1].addr = client->addr;
+++	msgs[1].flags = I2C_M_RD;
+++	msgs[1].len = 1;
+++	msgs[1].buf = &reply;
+++
+++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
+++	if (likely(ret == ARRAY_SIZE(msgs)))
+++		return reply;
+++	else if (ret < 0)
+++		return ret;
+++	else
+++		return -EIO;
+++}
+++
++ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 					     enum led_brightness brightness)
++ {
++@@ -64,7 +95,7 @@ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 	if (buf[2] || buf[3] || buf[4])
++ 		state |= CMD_LED_STATE_ON;
++ 
++-	ret = i2c_smbus_write_byte_data(leds->client, CMD_LED_STATE, state);
+++	ret = omnia_cmd_write_u8(leds->client, CMD_LED_STATE, state);
++ 	if (ret >= 0 && (state & CMD_LED_STATE_ON))
++ 		ret = i2c_master_send(leds->client, buf, 5);
++ 
++@@ -114,9 +145,9 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	cdev->brightness_set_blocking = omnia_led_brightness_set_blocking;
++ 
++ 	/* put the LED into software mode */
++-	ret = i2c_smbus_write_byte_data(client, CMD_LED_MODE,
++-					CMD_LED_MODE_LED(led->reg) |
++-					CMD_LED_MODE_USER);
+++	ret = omnia_cmd_write_u8(client, CMD_LED_MODE,
+++				 CMD_LED_MODE_LED(led->reg) |
+++				 CMD_LED_MODE_USER);
++ 	if (ret < 0) {
++ 		dev_err(dev, "Cannot set LED %pOF to software mode: %i\n", np,
++ 			ret);
++@@ -124,8 +155,8 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	}
++ 
++ 	/* disable the LED */
++-	ret = i2c_smbus_write_byte_data(client, CMD_LED_STATE,
++-					CMD_LED_STATE_LED(led->reg));
+++	ret = omnia_cmd_write_u8(client, CMD_LED_STATE,
+++				 CMD_LED_STATE_LED(led->reg));
++ 	if (ret < 0) {
++ 		dev_err(dev, "Cannot set LED %pOF brightness: %i\n", np, ret);
++ 		return ret;
++@@ -158,7 +189,7 @@ static ssize_t brightness_show(struct device *dev, struct device_attribute *a,
++ 	struct i2c_client *client = to_i2c_client(dev);
++ 	int ret;
++ 
++-	ret = i2c_smbus_read_byte_data(client, CMD_LED_GET_BRIGHTNESS);
+++	ret = omnia_cmd_read_u8(client, CMD_LED_GET_BRIGHTNESS);
++ 
++ 	if (ret < 0)
++ 		return ret;
++@@ -179,8 +210,7 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ 	if (brightness > 100)
++ 		return -EINVAL;
++ 
++-	ret = i2c_smbus_write_byte_data(client, CMD_LED_SET_BRIGHTNESS,
++-					(u8)brightness);
+++	ret = omnia_cmd_write_u8(client, CMD_LED_SET_BRIGHTNESS, brightness);
++ 
++ 	return ret < 0 ? ret : count;
++ }
++@@ -238,8 +268,8 @@ static int omnia_leds_remove(struct i2c_client *client)
++ 	u8 buf[5];
++ 
++ 	/* put all LEDs into default (HW triggered) mode */
++-	i2c_smbus_write_byte_data(client, CMD_LED_MODE,
++-				  CMD_LED_MODE_LED(OMNIA_BOARD_LEDS));
+++	omnia_cmd_write_u8(client, CMD_LED_MODE,
+++			   CMD_LED_MODE_LED(OMNIA_BOARD_LEDS));
++ 
++ 	/* set all LEDs color to [255, 255, 255] */
++ 	buf[0] = CMD_LED_COLOR;
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.7-2-leds-turris-omnia-Make-set_brightness-more-efficient.patch b/target/linux/mvebu/patches-5.15/102-v6.7-2-leds-turris-omnia-Make-set_brightness-more-efficient.patch
+new file mode 100644
+index 0000000000..0af72a91e6
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.7-2-leds-turris-omnia-Make-set_brightness-more-efficient.patch
+@@ -0,0 +1,222 @@
++From edfbaa8ac2376f4f2bebc0e981833d83fb4ad7cb Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 18 Sep 2023 18:11:02 +0200
++Subject: [PATCH 05/17] leds: turris-omnia: Make set_brightness() more
++ efficient
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Implement caching of the LED color and state values that are sent to MCU
++in order to make the set_brightness() operation more efficient by
++avoiding I2C transactions which are not needed.
++
++On Turris Omnia's MCU, which acts as the RGB LED controller, each LED
++has a RGB color, and a ON/OFF state, which are configurable via I2C
++commands CMD_LED_COLOR and CMD_LED_STATE.
++
++The CMD_LED_COLOR command sends 5 bytes and the CMD_LED_STATE command 2
++bytes over the I2C bus, which operates at 100 kHz. With I2C overhead
++this allows ~1670 color changing commands and ~3200 state changing
++commands per second (or around 1000 color + state changes per second).
++This may seem more than enough, but the issue is that the I2C bus is
++shared with another peripheral, the MCU. The MCU exposes an interrupt
++interface, and it can trigger hundreds of interrupts per second. Each
++time, we need to read the interrupt state register over this I2C bus.
++Whenever we are sending a LED color/state changing command, the
++interrupt reading is waiting.
++
++Currently, every time LED brightness or LED multi intensity is changed,
++we send a CMD_LED_STATE command, and if the computed color (brightness
++adjusted multi_intensity) is non-zero, we also send a CMD_LED_COLOR
++command.
++
++Consider for example the situation when we have a netdev trigger enabled
++for a LED. The netdev trigger does not change the LED color, only the
++brightness (either to 0 or to currently configured brightness), and so
++there is no need to send the CMD_LED_COLOR command. But each change of
++brightness to 0 sends one CMD_LED_STATE command, and each change of
++brightness to max_brightness sends one CMD_LED_STATE command and one
++CMD_LED_COLOR command:
++    set_brightness(0)   ->  CMD_LED_STATE
++    set_brightness(255) ->  CMD_LED_STATE + CMD_LED_COLOR
++                                            (unnecessary)
++
++We can avoid the unnecessary I2C transactions if we cache the values of
++state and color that are sent to the controller. If the color does not
++change from the one previously sent, there is no need to do the
++CMD_LED_COLOR I2C transaction, and if the state does not change, there
++is no need to do the CMD_LED_STATE transaction.
++
++Because we need to make sure that our cached values are consistent with
++the controller state, add explicit setting of the LED color to white at
++probe time (this is the default setting when MCU resets, but does not
++necessarily need to be the case, for example if U-Boot played with the
++LED colors).
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/20230918161104.20860-3-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 100 +++++++++++++++++++++++++------
++ 1 file changed, 82 insertions(+), 18 deletions(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index a1e8553c3254..a44df9ab14c4 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -30,6 +30,8 @@
++ struct omnia_led {
++ 	struct led_classdev_mc mc_cdev;
++ 	struct mc_subled subled_info[OMNIA_LED_NUM_CHANNELS];
+++	u8 cached_channels[OMNIA_LED_NUM_CHANNELS];
+++	bool on;
++ 	int reg;
++ };
++ 
++@@ -72,36 +74,85 @@ static int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
++ 		return -EIO;
++ }
++ 
+++static int omnia_led_send_color_cmd(const struct i2c_client *client,
+++				    struct omnia_led *led)
+++{
+++	char cmd[5];
+++	int ret;
+++	int i;
+++
+++	cmd[0] = CMD_LED_COLOR;
+++	cmd[1] = led->reg;
+++	cmd[2] = led->subled_info[0].brightness;
+++	cmd[3] = led->subled_info[1].brightness;
+++	cmd[4] = led->subled_info[2].brightness;
+++
+++	/* Send the color change command */
+++	ret = i2c_master_send(client, cmd, 5);
+++	if (ret < 0)
+++		return ret;
+++
+++	/* Cache the RGB channel brightnesses */
+++	for (i = 0; i < OMNIA_LED_NUM_CHANNELS; ++i)
+++		led->cached_channels[i] = led->subled_info[i].brightness;
+++
+++	return 0;
+++}
+++
+++/* Determine if the computed RGB channels are different from the cached ones */
+++static bool omnia_led_channels_changed(struct omnia_led *led)
+++{
+++	int i;
+++
+++	for (i = 0; i < OMNIA_LED_NUM_CHANNELS; ++i)
+++		if (led->subled_info[i].brightness != led->cached_channels[i])
+++			return true;
+++
+++	return false;
+++}
+++
++ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 					     enum led_brightness brightness)
++ {
++ 	struct led_classdev_mc *mc_cdev = lcdev_to_mccdev(cdev);
++ 	struct omnia_leds *leds = dev_get_drvdata(cdev->dev->parent);
++ 	struct omnia_led *led = to_omnia_led(mc_cdev);
++-	u8 buf[5], state;
++-	int ret;
+++	int err = 0;
++ 
++ 	mutex_lock(&leds->lock);
++ 
++-	led_mc_calc_color_components(&led->mc_cdev, brightness);
+++	/*
+++	 * Only recalculate RGB brightnesses from intensities if brightness is
+++	 * non-zero. Otherwise we won't be using them and we can save ourselves
+++	 * some software divisions (Omnia's CPU does not implement the division
+++	 * instruction).
+++	 */
+++	if (brightness) {
+++		led_mc_calc_color_components(mc_cdev, brightness);
+++
+++		/*
+++		 * Send color command only if brightness is non-zero and the RGB
+++		 * channel brightnesses changed.
+++		 */
+++		if (omnia_led_channels_changed(led))
+++			err = omnia_led_send_color_cmd(leds->client, led);
+++	}
++ 
++-	buf[0] = CMD_LED_COLOR;
++-	buf[1] = led->reg;
++-	buf[2] = mc_cdev->subled_info[0].brightness;
++-	buf[3] = mc_cdev->subled_info[1].brightness;
++-	buf[4] = mc_cdev->subled_info[2].brightness;
+++	/* Send on/off state change only if (bool)brightness changed */
+++	if (!err && !brightness != !led->on) {
+++		u8 state = CMD_LED_STATE_LED(led->reg);
++ 
++-	state = CMD_LED_STATE_LED(led->reg);
++-	if (buf[2] || buf[3] || buf[4])
++-		state |= CMD_LED_STATE_ON;
+++		if (brightness)
+++			state |= CMD_LED_STATE_ON;
++ 
++-	ret = omnia_cmd_write_u8(leds->client, CMD_LED_STATE, state);
++-	if (ret >= 0 && (state & CMD_LED_STATE_ON))
++-		ret = i2c_master_send(leds->client, buf, 5);
+++		err = omnia_cmd_write_u8(leds->client, CMD_LED_STATE, state);
+++		if (!err)
+++			led->on = !!brightness;
+++	}
++ 
++ 	mutex_unlock(&leds->lock);
++ 
++-	return ret;
+++	return err;
++ }
++ 
++ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++@@ -111,6 +162,7 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	struct device *dev = &client->dev;
++ 	struct led_classdev *cdev;
++ 	int ret, color;
+++	int i;
++ 
++ 	ret = of_property_read_u32(np, "reg", &led->reg);
++ 	if (ret || led->reg >= OMNIA_BOARD_LEDS) {
++@@ -129,11 +181,15 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	}
++ 
++ 	led->subled_info[0].color_index = LED_COLOR_ID_RED;
++-	led->subled_info[0].channel = 0;
++ 	led->subled_info[1].color_index = LED_COLOR_ID_GREEN;
++-	led->subled_info[1].channel = 1;
++ 	led->subled_info[2].color_index = LED_COLOR_ID_BLUE;
++-	led->subled_info[2].channel = 2;
+++
+++	/* Initial color is white */
+++	for (i = 0; i < OMNIA_LED_NUM_CHANNELS; ++i) {
+++		led->subled_info[i].intensity = 255;
+++		led->subled_info[i].brightness = 255;
+++		led->subled_info[i].channel = i;
+++	}
++ 
++ 	led->mc_cdev.subled_info = led->subled_info;
++ 	led->mc_cdev.num_colors = OMNIA_LED_NUM_CHANNELS;
++@@ -162,6 +218,14 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 		return ret;
++ 	}
++ 
+++	/* Set initial color and cache it */
+++	ret = omnia_led_send_color_cmd(client, led);
+++	if (ret < 0) {
+++		dev_err(dev, "Cannot set LED %pOF initial color: %i\n", np,
+++			ret);
+++		return ret;
+++	}
+++
++ 	ret = devm_led_classdev_multicolor_register_ext(dev, &led->mc_cdev,
++ 							&init_data);
++ 	if (ret < 0) {
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.7-3-leds-turris-omnia-Support-HW-controlled-mode-via-pri.patch b/target/linux/mvebu/patches-5.15/102-v6.7-3-leds-turris-omnia-Support-HW-controlled-mode-via-pri.patch
+new file mode 100644
+index 0000000000..c53b309bb4
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.7-3-leds-turris-omnia-Support-HW-controlled-mode-via-pri.patch
+@@ -0,0 +1,209 @@
++From 885141a3382b5f82ea4b6e9fc11aea2c71e2a593 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 18 Sep 2023 18:11:03 +0200
++Subject: [PATCH 06/17] leds: turris-omnia: Support HW controlled mode via
++ private trigger
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add support for enabling MCU controlled mode of the Turris Omnia LEDs
++via a LED private trigger called "omnia-mcu". Recall that private LED
++triggers will only be listed in the sysfs trigger file for LEDs that
++support them (currently there is no user of this mechanism).
++
++When in MCU controlled mode, the user can still set LED color, but the
++blinking is done by MCU, which does different things for different LEDs:
++- WAN LED is blinked according to the LED[0] pin of the WAN PHY
++- LAN LEDs are blinked according to the LED[0] output of the
++  corresponding port of the LAN switch
++- PCIe LEDs are blinked according to the logical OR of the MiniPCIe port
++  LED pins
++
++In the future I want to make the netdev trigger to transparently offload
++the blinking to the HW if user sets compatible settings for the netdev
++trigger (for LEDs associated with network devices).
++There was some work on this already, and hopefully we will be able to
++complete it sometime, but for now there are still multiple blockers for
++this, and even if there weren't, we still would not be able to configure
++HW controlled mode for the LEDs associated with MiniPCIe ports.
++
++In the meantime let's support HW controlled mode via the private LED
++trigger mechanism. If, in the future, we manage to complete the netdev
++trigger offloading, we can still keep this private trigger for backwards
++compatibility, if needed.
++
++We also set "omnia-mcu" to cdev->default_trigger, so that the MCU keeps
++control until the user first wants to take over it. If a different
++default trigger is specified in device-tree via the
++'linux,default-trigger' property, LED class will overwrite
++cdev->default_trigger, and so the DT property will be respected.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/20230918161104.20860-4-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ drivers/leds/Kconfig             |  1 +
++ drivers/leds/leds-turris-omnia.c | 98 +++++++++++++++++++++++++++++---
++ 2 files changed, 91 insertions(+), 8 deletions(-)
++
++diff --git a/drivers/leds/Kconfig b/drivers/leds/Kconfig
++index 8bf545100fb0..0d5538402447 100644
++--- a/drivers/leds/Kconfig
+++++ b/drivers/leds/Kconfig
++@@ -163,6 +163,7 @@ config LEDS_TURRIS_OMNIA
++ 	depends on I2C
++ 	depends on MACH_ARMADA_38X || COMPILE_TEST
++ 	depends on OF
+++	select LEDS_TRIGGERS
++ 	help
++ 	  This option enables basic support for the LEDs found on the front
++ 	  side of CZ.NIC's Turris Omnia router. There are 12 RGB LEDs on the
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index a44df9ab14c4..9a01025ce793 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -31,7 +31,7 @@ struct omnia_led {
++ 	struct led_classdev_mc mc_cdev;
++ 	struct mc_subled subled_info[OMNIA_LED_NUM_CHANNELS];
++ 	u8 cached_channels[OMNIA_LED_NUM_CHANNELS];
++-	bool on;
+++	bool on, hwtrig;
++ 	int reg;
++ };
++ 
++@@ -123,12 +123,14 @@ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 
++ 	/*
++ 	 * Only recalculate RGB brightnesses from intensities if brightness is
++-	 * non-zero. Otherwise we won't be using them and we can save ourselves
++-	 * some software divisions (Omnia's CPU does not implement the division
++-	 * instruction).
+++	 * non-zero (if it is zero and the LED is in HW blinking mode, we use
+++	 * max_brightness as brightness). Otherwise we won't be using them and
+++	 * we can save ourselves some software divisions (Omnia's CPU does not
+++	 * implement the division instruction).
++ 	 */
++-	if (brightness) {
++-		led_mc_calc_color_components(mc_cdev, brightness);
+++	if (brightness || led->hwtrig) {
+++		led_mc_calc_color_components(mc_cdev, brightness ?:
+++						      cdev->max_brightness);
++ 
++ 		/*
++ 		 * Send color command only if brightness is non-zero and the RGB
++@@ -138,8 +140,11 @@ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 			err = omnia_led_send_color_cmd(leds->client, led);
++ 	}
++ 
++-	/* Send on/off state change only if (bool)brightness changed */
++-	if (!err && !brightness != !led->on) {
+++	/*
+++	 * Send on/off state change only if (bool)brightness changed and the LED
+++	 * is not being blinked by HW.
+++	 */
+++	if (!err && !led->hwtrig && !brightness != !led->on) {
++ 		u8 state = CMD_LED_STATE_LED(led->reg);
++ 
++ 		if (brightness)
++@@ -155,6 +160,71 @@ static int omnia_led_brightness_set_blocking(struct led_classdev *cdev,
++ 	return err;
++ }
++ 
+++static struct led_hw_trigger_type omnia_hw_trigger_type;
+++
+++static int omnia_hwtrig_activate(struct led_classdev *cdev)
+++{
+++	struct led_classdev_mc *mc_cdev = lcdev_to_mccdev(cdev);
+++	struct omnia_leds *leds = dev_get_drvdata(cdev->dev->parent);
+++	struct omnia_led *led = to_omnia_led(mc_cdev);
+++	int err = 0;
+++
+++	mutex_lock(&leds->lock);
+++
+++	if (!led->on) {
+++		/*
+++		 * If the LED is off (brightness was set to 0), the last
+++		 * configured color was not necessarily sent to the MCU.
+++		 * Recompute with max_brightness and send if needed.
+++		 */
+++		led_mc_calc_color_components(mc_cdev, cdev->max_brightness);
+++
+++		if (omnia_led_channels_changed(led))
+++			err = omnia_led_send_color_cmd(leds->client, led);
+++	}
+++
+++	if (!err) {
+++		/* Put the LED into MCU controlled mode */
+++		err = omnia_cmd_write_u8(leds->client, CMD_LED_MODE,
+++					 CMD_LED_MODE_LED(led->reg));
+++		if (!err)
+++			led->hwtrig = true;
+++	}
+++
+++	mutex_unlock(&leds->lock);
+++
+++	return err;
+++}
+++
+++static void omnia_hwtrig_deactivate(struct led_classdev *cdev)
+++{
+++	struct omnia_leds *leds = dev_get_drvdata(cdev->dev->parent);
+++	struct omnia_led *led = to_omnia_led(lcdev_to_mccdev(cdev));
+++	int err;
+++
+++	mutex_lock(&leds->lock);
+++
+++	led->hwtrig = false;
+++
+++	/* Put the LED into software mode */
+++	err = omnia_cmd_write_u8(leds->client, CMD_LED_MODE,
+++				 CMD_LED_MODE_LED(led->reg) |
+++				 CMD_LED_MODE_USER);
+++
+++	mutex_unlock(&leds->lock);
+++
+++	if (err < 0)
+++		dev_err(cdev->dev, "Cannot put LED to software mode: %i\n",
+++			err);
+++}
+++
+++static struct led_trigger omnia_hw_trigger = {
+++	.name		= "omnia-mcu",
+++	.activate	= omnia_hwtrig_activate,
+++	.deactivate	= omnia_hwtrig_deactivate,
+++	.trigger_type	= &omnia_hw_trigger_type,
+++};
+++
++ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 			      struct device_node *np)
++ {
++@@ -199,6 +269,12 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	cdev = &led->mc_cdev.led_cdev;
++ 	cdev->max_brightness = 255;
++ 	cdev->brightness_set_blocking = omnia_led_brightness_set_blocking;
+++	cdev->trigger_type = &omnia_hw_trigger_type;
+++	/*
+++	 * Use the omnia-mcu trigger as the default trigger. It may be rewritten
+++	 * by LED class from the linux,default-trigger property.
+++	 */
+++	cdev->default_trigger = omnia_hw_trigger.name;
++ 
++ 	/* put the LED into software mode */
++ 	ret = omnia_cmd_write_u8(client, CMD_LED_MODE,
++@@ -313,6 +389,12 @@ static int omnia_leds_probe(struct i2c_client *client,
++ 
++ 	mutex_init(&leds->lock);
++ 
+++	ret = devm_led_trigger_register(dev, &omnia_hw_trigger);
+++	if (ret < 0) {
+++		dev_err(dev, "Cannot register private LED trigger: %d\n", ret);
+++		return ret;
+++	}
+++
++ 	led = &leds->leds[0];
++ 	for_each_available_child_of_node(np, child) {
++ 		ret = omnia_led_register(client, led, child);
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.7-4-leds-turris-omnia-Add-support-for-enabling-disabling.patch b/target/linux/mvebu/patches-5.15/102-v6.7-4-leds-turris-omnia-Add-support-for-enabling-disabling.patch
+new file mode 100644
+index 0000000000..8450c27ce0
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.7-4-leds-turris-omnia-Add-support-for-enabling-disabling.patch
+@@ -0,0 +1,249 @@
++From 00125699bb35ef58fffa8425e32a44a7af82cd28 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 18 Sep 2023 18:11:04 +0200
++Subject: [PATCH 07/17] leds: turris-omnia: Add support for enabling/disabling
++ HW gamma correction
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++If the MCU on Turris Omnia is running newer firmware versions, the LED
++controller supports RGB gamma correction (and enables it by default for
++newer boards).
++
++Determine whether the gamma correction setting feature is supported and
++add the ability to set it via sysfs attribute file.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Link: https://lore.kernel.org/r/20230918161104.20860-5-kabel@kernel.org
++Signed-off-by: Lee Jones <lee@kernel.org>
++---
++ .../sysfs-class-led-driver-turris-omnia       |  14 ++
++ drivers/leds/leds-turris-omnia.c              | 137 +++++++++++++++---
++ 2 files changed, 134 insertions(+), 17 deletions(-)
++
++diff --git a/Documentation/ABI/testing/sysfs-class-led-driver-turris-omnia b/Documentation/ABI/testing/sysfs-class-led-driver-turris-omnia
++index c4d46970c1cf..369b4ae8be5f 100644
++--- a/Documentation/ABI/testing/sysfs-class-led-driver-turris-omnia
+++++ b/Documentation/ABI/testing/sysfs-class-led-driver-turris-omnia
++@@ -12,3 +12,17 @@ Description:	(RW) On the front panel of the Turris Omnia router there is also
++ 		able to change this setting from software.
++ 
++ 		Format: %i
+++
+++What:		/sys/class/leds/<led>/device/gamma_correction
+++Date:		August 2023
+++KernelVersion:	6.6
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:	(RW) Newer versions of the microcontroller firmware of the
+++		Turris Omnia router support gamma correction for the RGB LEDs.
+++		This feature can be enabled/disabled by writing to this file.
+++
+++		If the feature is not supported because the MCU firmware is too
+++		old, the file always reads as 0, and writing to the file results
+++		in the EOPNOTSUPP error.
+++
+++		Format: %i
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 9a01025ce793..728efcaca162 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -15,17 +15,30 @@
++ #define OMNIA_BOARD_LEDS	12
++ #define OMNIA_LED_NUM_CHANNELS	3
++ 
++-#define CMD_LED_MODE		3
++-#define CMD_LED_MODE_LED(l)	((l) & 0x0f)
++-#define CMD_LED_MODE_USER	0x10
+++/* MCU controller commands at I2C address 0x2a */
+++#define OMNIA_MCU_I2C_ADDR		0x2a
++ 
++-#define CMD_LED_STATE		4
++-#define CMD_LED_STATE_LED(l)	((l) & 0x0f)
++-#define CMD_LED_STATE_ON	0x10
+++#define CMD_GET_STATUS_WORD		0x01
+++#define STS_FEATURES_SUPPORTED		BIT(2)
++ 
++-#define CMD_LED_COLOR		5
++-#define CMD_LED_SET_BRIGHTNESS	7
++-#define CMD_LED_GET_BRIGHTNESS	8
+++#define CMD_GET_FEATURES		0x10
+++#define FEAT_LED_GAMMA_CORRECTION	BIT(5)
+++
+++/* LED controller commands at I2C address 0x2b */
+++#define CMD_LED_MODE			0x03
+++#define CMD_LED_MODE_LED(l)		((l) & 0x0f)
+++#define CMD_LED_MODE_USER		0x10
+++
+++#define CMD_LED_STATE			0x04
+++#define CMD_LED_STATE_LED(l)		((l) & 0x0f)
+++#define CMD_LED_STATE_ON		0x10
+++
+++#define CMD_LED_COLOR			0x05
+++#define CMD_LED_SET_BRIGHTNESS		0x07
+++#define CMD_LED_GET_BRIGHTNESS		0x08
+++
+++#define CMD_SET_GAMMA_CORRECTION	0x30
+++#define CMD_GET_GAMMA_CORRECTION	0x31
++ 
++ struct omnia_led {
++ 	struct led_classdev_mc mc_cdev;
++@@ -40,6 +53,7 @@ struct omnia_led {
++ struct omnia_leds {
++ 	struct i2c_client *client;
++ 	struct mutex lock;
+++	bool has_gamma_correction;
++ 	struct omnia_led leds[];
++ };
++ 
++@@ -50,30 +64,42 @@ static int omnia_cmd_write_u8(const struct i2c_client *client, u8 cmd, u8 val)
++ 	return i2c_master_send(client, buf, sizeof(buf));
++ }
++ 
++-static int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
+++static int omnia_cmd_read_raw(struct i2c_adapter *adapter, u8 addr, u8 cmd,
+++			      void *reply, size_t len)
++ {
++ 	struct i2c_msg msgs[2];
++-	u8 reply;
++ 	int ret;
++ 
++-	msgs[0].addr = client->addr;
+++	msgs[0].addr = addr;
++ 	msgs[0].flags = 0;
++ 	msgs[0].len = 1;
++ 	msgs[0].buf = &cmd;
++-	msgs[1].addr = client->addr;
+++	msgs[1].addr = addr;
++ 	msgs[1].flags = I2C_M_RD;
++-	msgs[1].len = 1;
++-	msgs[1].buf = &reply;
+++	msgs[1].len = len;
+++	msgs[1].buf = reply;
++ 
++-	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
+++	ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
++ 	if (likely(ret == ARRAY_SIZE(msgs)))
++-		return reply;
+++		return len;
++ 	else if (ret < 0)
++ 		return ret;
++ 	else
++ 		return -EIO;
++ }
++ 
+++static int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
+++{
+++	u8 reply;
+++	int ret;
+++
+++	ret = omnia_cmd_read_raw(client->adapter, client->addr, cmd, &reply, 1);
+++	if (ret < 0)
+++		return ret;
+++
+++	return reply;
+++}
+++
++ static int omnia_led_send_color_cmd(const struct i2c_client *client,
++ 				    struct omnia_led *led)
++ {
++@@ -356,12 +382,74 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ }
++ static DEVICE_ATTR_RW(brightness);
++ 
+++static ssize_t gamma_correction_show(struct device *dev,
+++				     struct device_attribute *a, char *buf)
+++{
+++	struct i2c_client *client = to_i2c_client(dev);
+++	struct omnia_leds *leds = i2c_get_clientdata(client);
+++	int ret;
+++
+++	if (leds->has_gamma_correction) {
+++		ret = omnia_cmd_read_u8(client, CMD_GET_GAMMA_CORRECTION);
+++		if (ret < 0)
+++			return ret;
+++	} else {
+++		ret = 0;
+++	}
+++
+++	return sysfs_emit(buf, "%d\n", !!ret);
+++}
+++
+++static ssize_t gamma_correction_store(struct device *dev,
+++				      struct device_attribute *a,
+++				      const char *buf, size_t count)
+++{
+++	struct i2c_client *client = to_i2c_client(dev);
+++	struct omnia_leds *leds = i2c_get_clientdata(client);
+++	bool val;
+++	int ret;
+++
+++	if (!leds->has_gamma_correction)
+++		return -EOPNOTSUPP;
+++
+++	if (kstrtobool(buf, &val) < 0)
+++		return -EINVAL;
+++
+++	ret = omnia_cmd_write_u8(client, CMD_SET_GAMMA_CORRECTION, val);
+++
+++	return ret < 0 ? ret : count;
+++}
+++static DEVICE_ATTR_RW(gamma_correction);
+++
++ static struct attribute *omnia_led_controller_attrs[] = {
++ 	&dev_attr_brightness.attr,
+++	&dev_attr_gamma_correction.attr,
++ 	NULL,
++ };
++ ATTRIBUTE_GROUPS(omnia_led_controller);
++ 
+++static int omnia_mcu_get_features(const struct i2c_client *client)
+++{
+++	u16 reply;
+++	int err;
+++
+++	err = omnia_cmd_read_raw(client->adapter, OMNIA_MCU_I2C_ADDR,
+++				 CMD_GET_STATUS_WORD, &reply, sizeof(reply));
+++	if (err < 0)
+++		return err;
+++
+++	/* Check whether MCU firmware supports the CMD_GET_FEAUTRES command */
+++	if (!(le16_to_cpu(reply) & STS_FEATURES_SUPPORTED))
+++		return 0;
+++
+++	err = omnia_cmd_read_raw(client->adapter, OMNIA_MCU_I2C_ADDR,
+++				 CMD_GET_FEATURES, &reply, sizeof(reply));
+++	if (err < 0)
+++		return err;
+++
+++	return le16_to_cpu(reply);
+++}
+++
++ static int omnia_leds_probe(struct i2c_client *client,
++ 			    const struct i2c_device_id *id)
++ {
++@@ -387,6 +475,21 @@ static int omnia_leds_probe(struct i2c_client *client,
++ 	leds->client = client;
++ 	i2c_set_clientdata(client, leds);
++ 
+++	ret = omnia_mcu_get_features(client);
+++	if (ret < 0) {
+++		dev_err(dev, "Cannot determine MCU supported features: %d\n",
+++			ret);
+++		return ret;
+++	}
+++
+++	leds->has_gamma_correction = ret & FEAT_LED_GAMMA_CORRECTION;
+++	if (!leds->has_gamma_correction) {
+++		dev_info(dev,
+++			 "Your board's MCU firmware does not support the LED gamma correction feature.\n");
+++		dev_info(dev,
+++			 "Consider upgrading MCU firmware with the omnia-mcutool utility.\n");
+++	}
+++
++ 	mutex_init(&leds->lock);
++ 
++ 	ret = devm_led_trigger_register(dev, &omnia_hw_trigger);
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-5.15/102-v6.7-5-leds-turris-omnia-Fix-brightness-setting-and-trigger.patch b/target/linux/mvebu/patches-5.15/102-v6.7-5-leds-turris-omnia-Fix-brightness-setting-and-trigger.patch
+new file mode 100644
+index 0000000000..0e9cdb6295
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/102-v6.7-5-leds-turris-omnia-Fix-brightness-setting-and-trigger.patch
+@@ -0,0 +1,172 @@
++From 33f339b70f020273ea40fb3c5d7b65697446bd6c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 16 Oct 2023 15:28:06 +0200
++Subject: [PATCH 08/17] leds: turris-omnia: Fix brightness setting and trigger
++ activating
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++I have improperly refactored commits
++  4d5ed2621c24 ("leds: turris-omnia: Make set_brightness() more efficient")
++and
++  aaf38273cf76 ("leds: turris-omnia: Support HW controlled mode via private trigger")
++after Lee requested a change in API semantics of the new functions I
++introduced in commit
++  28350bc0ac77 ("leds: turris-omnia: Do not use SMBUS calls").
++
++Before the change, the function omnia_cmd_write_u8() returned 0 on
++success, and afterwards it returned a positive value (number of bytes
++written). The latter version was applied, but the following commits did
++not properly account for this change.
++
++This results in non-functional LED's .brightness_set_blocking() and
++trigger's .activate() methods.
++
++The main reasoning behind the semantics change was that read/write
++methods should return the number of read/written bytes on success.
++It was pointed to me [1] that this is not always true (for example the
++regmap API does not do so), and since the driver never uses this number
++of read/written bytes information, I decided to fix this issue by
++changing the functions to the original semantics (return 0 on success).
++
++[1] https://lore.kernel.org/linux-gpio/ZQnn+Gi0xVlsGCYA@smile.fi.intel.com/
++
++Fixes: 28350bc0ac77 ("leds: turris-omnia: Do not use SMBUS calls")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/leds/leds-turris-omnia.c | 37 +++++++++++++++++---------------
++ 1 file changed, 20 insertions(+), 17 deletions(-)
++
++diff --git a/drivers/leds/leds-turris-omnia.c b/drivers/leds/leds-turris-omnia.c
++index 728efcaca162..9cd49833c6b2 100644
++--- a/drivers/leds/leds-turris-omnia.c
+++++ b/drivers/leds/leds-turris-omnia.c
++@@ -60,8 +60,11 @@ struct omnia_leds {
++ static int omnia_cmd_write_u8(const struct i2c_client *client, u8 cmd, u8 val)
++ {
++ 	u8 buf[2] = { cmd, val };
+++	int ret;
+++
+++	ret = i2c_master_send(client, buf, sizeof(buf));
++ 
++-	return i2c_master_send(client, buf, sizeof(buf));
+++	return ret < 0 ? ret : 0;
++ }
++ 
++ static int omnia_cmd_read_raw(struct i2c_adapter *adapter, u8 addr, u8 cmd,
++@@ -81,7 +84,7 @@ static int omnia_cmd_read_raw(struct i2c_adapter *adapter, u8 addr, u8 cmd,
++ 
++ 	ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
++ 	if (likely(ret == ARRAY_SIZE(msgs)))
++-		return len;
+++		return 0;
++ 	else if (ret < 0)
++ 		return ret;
++ 	else
++@@ -91,11 +94,11 @@ static int omnia_cmd_read_raw(struct i2c_adapter *adapter, u8 addr, u8 cmd,
++ static int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
++ {
++ 	u8 reply;
++-	int ret;
+++	int err;
++ 
++-	ret = omnia_cmd_read_raw(client->adapter, client->addr, cmd, &reply, 1);
++-	if (ret < 0)
++-		return ret;
+++	err = omnia_cmd_read_raw(client->adapter, client->addr, cmd, &reply, 1);
+++	if (err)
+++		return err;
++ 
++ 	return reply;
++ }
++@@ -239,7 +242,7 @@ static void omnia_hwtrig_deactivate(struct led_classdev *cdev)
++ 
++ 	mutex_unlock(&leds->lock);
++ 
++-	if (err < 0)
+++	if (err)
++ 		dev_err(cdev->dev, "Cannot put LED to software mode: %i\n",
++ 			err);
++ }
++@@ -306,7 +309,7 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	ret = omnia_cmd_write_u8(client, CMD_LED_MODE,
++ 				 CMD_LED_MODE_LED(led->reg) |
++ 				 CMD_LED_MODE_USER);
++-	if (ret < 0) {
+++	if (ret) {
++ 		dev_err(dev, "Cannot set LED %pOF to software mode: %i\n", np,
++ 			ret);
++ 		return ret;
++@@ -315,7 +318,7 @@ static int omnia_led_register(struct i2c_client *client, struct omnia_led *led,
++ 	/* disable the LED */
++ 	ret = omnia_cmd_write_u8(client, CMD_LED_STATE,
++ 				 CMD_LED_STATE_LED(led->reg));
++-	if (ret < 0) {
+++	if (ret) {
++ 		dev_err(dev, "Cannot set LED %pOF brightness: %i\n", np, ret);
++ 		return ret;
++ 	}
++@@ -368,7 +371,7 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ {
++ 	struct i2c_client *client = to_i2c_client(dev);
++ 	unsigned long brightness;
++-	int ret;
+++	int err;
++ 
++ 	if (kstrtoul(buf, 10, &brightness))
++ 		return -EINVAL;
++@@ -376,9 +379,9 @@ static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++ 	if (brightness > 100)
++ 		return -EINVAL;
++ 
++-	ret = omnia_cmd_write_u8(client, CMD_LED_SET_BRIGHTNESS, brightness);
+++	err = omnia_cmd_write_u8(client, CMD_LED_SET_BRIGHTNESS, brightness);
++ 
++-	return ret < 0 ? ret : count;
+++	return err ?: count;
++ }
++ static DEVICE_ATTR_RW(brightness);
++ 
++@@ -407,7 +410,7 @@ static ssize_t gamma_correction_store(struct device *dev,
++ 	struct i2c_client *client = to_i2c_client(dev);
++ 	struct omnia_leds *leds = i2c_get_clientdata(client);
++ 	bool val;
++-	int ret;
+++	int err;
++ 
++ 	if (!leds->has_gamma_correction)
++ 		return -EOPNOTSUPP;
++@@ -415,9 +418,9 @@ static ssize_t gamma_correction_store(struct device *dev,
++ 	if (kstrtobool(buf, &val) < 0)
++ 		return -EINVAL;
++ 
++-	ret = omnia_cmd_write_u8(client, CMD_SET_GAMMA_CORRECTION, val);
+++	err = omnia_cmd_write_u8(client, CMD_SET_GAMMA_CORRECTION, val);
++ 
++-	return ret < 0 ? ret : count;
+++	return err ?: count;
++ }
++ static DEVICE_ATTR_RW(gamma_correction);
++ 
++@@ -435,7 +438,7 @@ static int omnia_mcu_get_features(const struct i2c_client *client)
++ 
++ 	err = omnia_cmd_read_raw(client->adapter, OMNIA_MCU_I2C_ADDR,
++ 				 CMD_GET_STATUS_WORD, &reply, sizeof(reply));
++-	if (err < 0)
+++	if (err)
++ 		return err;
++ 
++ 	/* Check whether MCU firmware supports the CMD_GET_FEAUTRES command */
++@@ -444,7 +447,7 @@ static int omnia_mcu_get_features(const struct i2c_client *client)
++ 
++ 	err = omnia_cmd_read_raw(client->adapter, OMNIA_MCU_I2C_ADDR,
++ 				 CMD_GET_FEATURES, &reply, sizeof(reply));
++-	if (err < 0)
+++	if (err)
++ 		return err;
++ 
++ 	return le16_to_cpu(reply);
++-- 
++2.41.0
++
+-- 
+2.41.0
+
