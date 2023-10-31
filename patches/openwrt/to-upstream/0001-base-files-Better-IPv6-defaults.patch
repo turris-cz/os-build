@@ -1,0 +1,51 @@
+From 0beb99783895f0386bf157730c61107baee05072 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Wed, 25 Oct 2023 12:52:30 +0200
+Subject: [PATCH] base-files: Better IPv6 defaults
+
+On WAN side automatically request prefix delegation. On LAN side use
+eui64 as static IPv6 identifier (::1 is an easy target) and assign also
+fe80::1 to the interface as it is common IPv6 address for a default
+gateway.
+---
+ package/base-files/files/bin/config_generate | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/package/base-files/files/bin/config_generate b/package/base-files/files/bin/config_generate
+index 38362813d1..a19b3ede79 100755
+--- a/package/base-files/files/bin/config_generate
++++ b/package/base-files/files/bin/config_generate
+@@ -173,7 +173,13 @@ generate_network() {
+ 				set network.$1.ipaddr='$ipad'
+ 				set network.$1.netmask='$netm'
+ 			EOF
+-			[ -e /proc/sys/net/ipv6 ] && uci set network.$1.ip6assign='60'
++			if [ -e /proc/sys/net/ipv6 ]; then
++				uci -q batch <<-EOF
++					set network.$1.ip6assign='60'
++					set network.$1.ip6ifaceif='eui64'
++					set network.$1.ip6addr='fe80::1'
++				EOF
++			fi
+ 		;;
+ 
+ 		dhcp)
+@@ -187,6 +193,7 @@ generate_network() {
+ 					set network.${1}6='interface'
+ 					set network.${1}6.device='$device'
+ 					set network.${1}6.proto='none'
++					set network.${1}6.reqprefix='auto'
+ 				EOF
+ 			}
+ 		;;
+@@ -204,6 +211,7 @@ generate_network() {
+ 					set network.${1}6='interface'
+ 					set network.${1}6.device='@${1}'
+ 					set network.${1}6.proto='none'
++					set network.${1}6.reqprefix='auto'
+ 				EOF
+ 			}
+ 		;;
+-- 
+2.42.0
+
