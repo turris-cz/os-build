@@ -1,4 +1,4 @@
-From dbe66d7faf02fa458fd75fdc09254f5a7efc6ac0 Mon Sep 17 00:00:00 2001
+From 015118f139c7e7ca2233c9c14ab4713a5cb3ba25 Mon Sep 17 00:00:00 2001
 From: Josef Schlehofer <pepe.schlehofer@gmail.com>
 Date: Sun, 11 Dec 2022 21:32:49 +0100
 Subject: [PATCH] Backport backported patches for Linux kernel 5.15
@@ -7,7 +7,7 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  ...ild-use-Wdeclaration-after-statement.patch |   73 +
  ...05-v5.17-02-Kbuild-move-to-std-gnu11.patch |   60 +
  ...-use-std-gnu11-for-KBUILD_USERCFLAGS.patch |   43 +
- ...-x86-arm64-add-arch_has_hw_pte_young.patch |  169 +
+ ...-x86-arm64-add-arch_has_hw_pte_young.patch |  183 +
  ...dd-CONFIG_ARCH_HAS_NONLEAF_PMD_YOUNG.patch |  111 +
  ...-03-mm-vmscan.c-refactor-shrink_node.patch |  224 +
  ...-mm-multigenerational-lru-groundwork.patch |  996 +++
@@ -113,7 +113,6 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  ...y-add-phy_interface_t-bitmap-support.patch |   61 +
  ...mac_select_pcs-method-to-phylink_mac.patch |  197 +
  ...-add-generic-validate-implementation.patch |  341 +
- ...e-helpers-for-iterating-through-port.patch |   68 +
  ...-net-phylink-add-pcs_validate-method.patch |  106 +
  ...k-add-legacy_pre_march2020-indicator.patch |   43 +
  ...-DSA-phylink-as-legacy_pre_march2020.patch |   36 +
@@ -153,7 +152,6 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  ...19-net-dsa-mt7530-mark-as-non-legacy.patch |   34 +
  ...mt753x-fix-pcs-conversion-regression.patch |  116 +
  ...t7530-rework-mt7530_hw_vlan_-add-del.patch |   87 +
- ...et-dsa-mt7530-rework-mt753-01-_setup.patch |   75 +
  ...et-cpu-port-via-dp-cpu_dp-instead-of.patch |  117 +
  ..._eth_soc-rely-on-page_pool-for-singl.patch |  330 +
  ...et-mtk_eth_soc-add-basic-XDP-support.patch |  291 +
@@ -329,7 +327,7 @@ Subject: [PATCH] Backport backported patches for Linux kernel 5.15
  ...ether-export-usbnet_cdc_zte_rx_fixup.patch |   58 +
  ...e-the-bogus-MAC-fixup-for-ZTE-device.patch |  118 +
  ...-scope-of-bogus-MAC-address-detectio.patch |   63 +
- 325 files changed, 67654 insertions(+)
+ 323 files changed, 67525 insertions(+)
  create mode 100644 target/linux/generic/backport-5.15/005-v5.17-01-Kbuild-use-Wdeclaration-after-statement.patch
  create mode 100644 target/linux/generic/backport-5.15/005-v5.17-02-Kbuild-move-to-std-gnu11.patch
  create mode 100644 target/linux/generic/backport-5.15/005-v5.17-03-Kbuild-use-std-gnu11-for-KBUILD_USERCFLAGS.patch
@@ -850,10 +848,10 @@ index 0000000000..198c9e671a
 + 
 diff --git a/target/linux/generic/backport-5.15/020-v6.1-01-mm-x86-arm64-add-arch_has_hw_pte_young.patch b/target/linux/generic/backport-5.15/020-v6.1-01-mm-x86-arm64-add-arch_has_hw_pte_young.patch
 new file mode 100644
-index 0000000000..2a4207c3b5
+index 0000000000..14ace2b9b5
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/020-v6.1-01-mm-x86-arm64-add-arch_has_hw_pte_young.patch
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,183 @@
 +From a8e6015d9534f39abc08e6804566af059e498a60 Mon Sep 17 00:00:00 2001
 +From: Yu Zhao <yuzhao@google.com>
 +Date: Wed, 4 Aug 2021 01:31:34 -0600
@@ -880,8 +878,10 @@ index 0000000000..2a4207c3b5
 + mm/memory.c                         | 14 +-------------
 + 7 files changed, 41 insertions(+), 21 deletions(-)
 +
-+--- a/arch/arm64/include/asm/cpufeature.h
-++++ b/arch/arm64/include/asm/cpufeature.h
++Index: linux-5.15.137/arch/arm64/include/asm/cpufeature.h
++===================================================================
++--- linux-5.15.137.orig/arch/arm64/include/asm/cpufeature.h
+++++ linux-5.15.137/arch/arm64/include/asm/cpufeature.h
 +@@ -808,6 +808,11 @@ static inline bool system_supports_tlb_r
 + 		cpus_have_const_cap(ARM64_HAS_TLB_RANGE);
 + }
@@ -891,11 +891,13 @@ index 0000000000..2a4207c3b5
 ++	return IS_ENABLED(CONFIG_ARM64_HW_AFDBM) && cpus_have_const_cap(ARM64_HW_AF);
 ++}
 ++
-+ extern int do_emulate_mrs(struct pt_regs *regs, u32 sys_reg, u32 rt);
++ int do_emulate_mrs(struct pt_regs *regs, u32 sys_reg, u32 rt);
++ bool try_emulate_mrs(struct pt_regs *regs, u32 isn);
 + 
-+ static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
-+--- a/arch/arm64/include/asm/pgtable.h
-++++ b/arch/arm64/include/asm/pgtable.h
++Index: linux-5.15.137/arch/arm64/include/asm/pgtable.h
++===================================================================
++--- linux-5.15.137.orig/arch/arm64/include/asm/pgtable.h
+++++ linux-5.15.137/arch/arm64/include/asm/pgtable.h
 +@@ -999,13 +999,16 @@ static inline void update_mmu_cache(stru
 +  * page after fork() + CoW for pfn mappings. We don't always have a
 +  * hardware-managed access flag on arm64.
@@ -926,8 +928,10 @@ index 0000000000..2a4207c3b5
 + }
 + #define arch_wants_old_prefaulted_pte	arch_wants_old_prefaulted_pte
 + 
-+--- a/arch/arm64/kernel/cpufeature.c
-++++ b/arch/arm64/kernel/cpufeature.c
++Index: linux-5.15.137/arch/arm64/kernel/cpufeature.c
++===================================================================
++--- linux-5.15.137.orig/arch/arm64/kernel/cpufeature.c
+++++ linux-5.15.137/arch/arm64/kernel/cpufeature.c
 +@@ -2197,6 +2197,16 @@ static const struct arm64_cpu_capabiliti
 + 		.matches = has_hw_dbm,
 + 		.cpu_enable = cpu_enable_hw_dbm,
@@ -945,8 +949,10 @@ index 0000000000..2a4207c3b5
 + #endif
 + 	{
 + 		.desc = "CRC32 instructions",
-+--- a/arch/arm64/tools/cpucaps
-++++ b/arch/arm64/tools/cpucaps
++Index: linux-5.15.137/arch/arm64/tools/cpucaps
++===================================================================
++--- linux-5.15.137.orig/arch/arm64/tools/cpucaps
+++++ linux-5.15.137/arch/arm64/tools/cpucaps
 +@@ -35,6 +35,7 @@ HAS_STAGE2_FWB
 + HAS_SYSREG_GIC_CPUIF
 + HAS_TLB_RANGE
@@ -955,8 +961,10 @@ index 0000000000..2a4207c3b5
 + HW_DBM
 + KVM_PROTECTED_MODE
 + MISMATCHED_CACHE_TYPE
-+--- a/arch/x86/include/asm/pgtable.h
-++++ b/arch/x86/include/asm/pgtable.h
++Index: linux-5.15.137/arch/x86/include/asm/pgtable.h
++===================================================================
++--- linux-5.15.137.orig/arch/x86/include/asm/pgtable.h
+++++ linux-5.15.137/arch/x86/include/asm/pgtable.h
 +@@ -1397,10 +1397,10 @@ static inline bool arch_has_pfn_modify_c
 + 	return boot_cpu_has_bug(X86_BUG_L1TF);
 + }
@@ -971,8 +979,10 @@ index 0000000000..2a4207c3b5
 + }
 + 
 + #endif	/* __ASSEMBLY__ */
-+--- a/include/linux/pgtable.h
-++++ b/include/linux/pgtable.h
++Index: linux-5.15.137/include/linux/pgtable.h
++===================================================================
++--- linux-5.15.137.orig/include/linux/pgtable.h
+++++ linux-5.15.137/include/linux/pgtable.h
 +@@ -259,6 +259,19 @@ static inline int pmdp_clear_flush_young
 + #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
 + #endif
@@ -993,8 +1003,10 @@ index 0000000000..2a4207c3b5
 + #ifndef __HAVE_ARCH_PTEP_GET_AND_CLEAR
 + static inline pte_t ptep_get_and_clear(struct mm_struct *mm,
 + 				       unsigned long address,
-+--- a/mm/memory.c
-++++ b/mm/memory.c
++Index: linux-5.15.137/mm/memory.c
++===================================================================
++--- linux-5.15.137.orig/mm/memory.c
+++++ linux-5.15.137/mm/memory.c
 +@@ -121,18 +121,6 @@ int randomize_va_space __read_mostly =
 + 					2;
 + #endif
@@ -1014,7 +1026,7 @@ index 0000000000..2a4207c3b5
 + #ifndef arch_wants_old_prefaulted_pte
 + static inline bool arch_wants_old_prefaulted_pte(void)
 + {
-+@@ -2782,7 +2770,7 @@ static inline bool cow_user_page(struct
++@@ -2791,7 +2779,7 @@ static inline int cow_user_page(struct p
 + 	 * On architectures with software "accessed" bits, we would
 + 	 * take a double page fault, so mark it accessed here.
 + 	 */
@@ -14546,7 +14558,7 @@ index 0000000000..03b6a5754d
 + 					reg = <0>;
 diff --git a/target/linux/generic/backport-5.15/346-v5.18-01-Revert-ata-ahci-mvebu-Make-SATA-PHY-optional-for-Arm.patch b/target/linux/generic/backport-5.15/346-v5.18-01-Revert-ata-ahci-mvebu-Make-SATA-PHY-optional-for-Arm.patch
 new file mode 100644
-index 0000000000..b254e7c0b3
+index 0000000000..f225a21057
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/346-v5.18-01-Revert-ata-ahci-mvebu-Make-SATA-PHY-optional-for-Arm.patch
 @@ -0,0 +1,64 @@
@@ -16968,7 +16980,7 @@ index 0000000000..41188fb7f2
 + #define recycle_stat_inc(pool, __stat)
 diff --git a/target/linux/generic/backport-5.15/603-v5.19-page_pool-Add-recycle-stats-to-page_pool_put_page_bu.patch b/target/linux/generic/backport-5.15/603-v5.19-page_pool-Add-recycle-stats-to-page_pool_put_page_bu.patch
 new file mode 100644
-index 0000000000..6ae3fb7133
+index 0000000000..f438ef3a59
 --- /dev/null
 +++ b/target/linux/generic/backport-5.15/603-v5.19-page_pool-Add-recycle-stats-to-page_pool_put_page_bu.patch
 @@ -0,0 +1,55 @@
@@ -70104,5 +70116,5 @@ index 0000000000..ebe7a43fd3
 + 	.status =	rndis_status,
 + 	.rx_fixup =	rndis_rx_fixup,
 -- 
-2.40.1
+2.42.0
 
