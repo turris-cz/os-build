@@ -1,0 +1,627 @@
+From f6d50c6f5793c3a46bb3624503cebe9c7f365ddb Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal@hrusecky.net>
+Date: Thu, 2 Nov 2023 09:30:38 +0100
+Subject: [PATCH] easycwmp: Merge various patches
+
+Upstream is dead, but there is some development in the forks, so
+cherry-picking various patches that makes sense and adopting package to
+work well with Turris OS.
+
+See https://github.com/turris-cz/easycwmp
+---
+ .../patches/0001-add-Device.PPP.patch         |  94 +++++++++++++
+ ...0002-add-OUI-and-MAC-as-SerialNumber.patch |  63 +++++++++
+ .../patches/0003-fix-UCI_SHOW-X.patch         | 121 +++++++++++++++++
+ ...0004-Fix-libcurl-related-memory-leak.patch |  66 +++++++++
+ .../patches/0005-Fix-build-with-gcc-10.patch  |  29 ++++
+ ...06-Use-Turris-specifics-if-available.patch |  55 ++++++++
+ ...-Wi-Fi-Fix-frequencies-and-add-WPA-3.patch | 127 ++++++++++++++++++
+ 7 files changed, 555 insertions(+)
+ create mode 100644 utils/easycwmp/patches/0001-add-Device.PPP.patch
+ create mode 100644 utils/easycwmp/patches/0002-add-OUI-and-MAC-as-SerialNumber.patch
+ create mode 100644 utils/easycwmp/patches/0003-fix-UCI_SHOW-X.patch
+ create mode 100644 utils/easycwmp/patches/0004-Fix-libcurl-related-memory-leak.patch
+ create mode 100644 utils/easycwmp/patches/0005-Fix-build-with-gcc-10.patch
+ create mode 100644 utils/easycwmp/patches/0006-Use-Turris-specifics-if-available.patch
+ create mode 100644 utils/easycwmp/patches/0007-Wi-Fi-Fix-frequencies-and-add-WPA-3.patch
+
+diff --git a/utils/easycwmp/patches/0001-add-Device.PPP.patch b/utils/easycwmp/patches/0001-add-Device.PPP.patch
+new file mode 100644
+index 000000000..a72efa93f
+--- /dev/null
++++ b/utils/easycwmp/patches/0001-add-Device.PPP.patch
+@@ -0,0 +1,94 @@
++From d3dcbec389a25ba9bc99f7f1706c54be7a178b96 Mon Sep 17 00:00:00 2001
++From: Maciej Hiller <mh@host24.pl>
++Date: Fri, 23 Aug 2019 11:24:47 +0200
++Subject: [PATCH 1/7] add Device.PPP.
++
++---
++ ext/openwrt/scripts/functions/tr181/ppp | 75 +++++++++++++++++++++++++
++ 1 file changed, 75 insertions(+)
++ create mode 100644 ext/openwrt/scripts/functions/tr181/ppp
++
++diff --git a/ext/openwrt/scripts/functions/tr181/ppp b/ext/openwrt/scripts/functions/tr181/ppp
++new file mode 100644
++index 0000000..7f8cd25
++--- /dev/null
+++++ b/ext/openwrt/scripts/functions/tr181/ppp
++@@ -0,0 +1,75 @@
+++#!/bin/sh
+++# Copyright (C) 2019 Maciej Hiller <maciejhpl@gmail.com>
+++
+++#############################
+++#   Entry point functuons   #
+++#############################
+++
+++prefix_list="$prefix_list $DMROOT.PPP."
+++entry_execute_method_list="$entry_execute_method_list entry_execute_method_root_PPP"
+++
+++entry_execute_method_root_PPP() {
+++	case "$1" in ""|"$DMROOT."|"$DMROOT.PPP."*)
+++		common_execute_method_obj "$DMROOT.PPP." "0"
+++		common_execute_method_obj "$DMROOT.PPP.Interface." "1" "" "" "ppp_interface_browse_instances $1"
+++		return 0
+++		;;
+++	esac
+++	return $E_INVALID_PARAMETER_NAME;
+++}
+++
+++sub_entry_PPP_Interface() {
+++	local j="$2"
+++	local iface="$3"
+++	case_param "$1" belongto "$DMROOT.PPP.Interface.$j." && {
+++		common_execute_method_obj "$DMROOT.PPP.Interface.$j." "1" "" ""
+++		common_execute_method_param  "$DMROOT.PPP.Interface.$j.Username" "1" "ppp_interface_get_Username $iface" "ppp_interface_set_Username $iface"
+++		common_execute_method_param  "$DMROOT.PPP.Interface.$j.Password" "1" "ppp_interface_get_Password $iface" "ppp_interface_set_Password $iface"
+++		return 0
+++	}
+++	return $E_INVALID_PARAMETER_NAME;
+++}
+++
+++ppp_interface_get_max_instance() {
+++	local max=$($UCI_SHOW_X network | grep "ip_int_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1)
+++	echo ${max:-0}
+++}
+++
+++ppp_interface_update_instance() {
+++	local iface="$1"
+++	local instance=$($UCI_GET $iface.ip_int_instance)
+++	if [ -z "$instance" ]; then
+++		instance=$(ppp_interface_get_max_instance)
+++		$UCI_SET $iface.ip_int_instance=$((++instance))
+++		$UCI_COMMIT
+++	fi
+++	echo $instance
+++}
+++
+++ppp_interface_browse_instances() {
+++	local iface ifaces=$($UCI_SHOW_X network | grep "network\..*='pppoe'" | cut -d "=" -f 1 | awk -F"." '{print $1"."$2}')
+++	for iface in $ifaces; do
+++		local j=$(ppp_interface_update_instance $iface)
+++		sub_entry_PPP_Interface "$1" "$j" "$iface"
+++	done
+++}
+++
+++ppp_interface_get_Username() {
+++  local username
+++  username=$($UCI_GET $1.username)
+++  echo $username
+++}
+++
+++ppp_interface_set_Username() {
+++  $UCI_SET $1.username=$2
+++}
+++
+++ppp_interface_get_Password() {
+++  local password
+++  password=$($UCI_GET $1.password)
+++  echo $password
+++}
+++
+++ppp_interface_set_Password() {
+++  $UCI_SET $1.password=$2
+++}
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0002-add-OUI-and-MAC-as-SerialNumber.patch b/utils/easycwmp/patches/0002-add-OUI-and-MAC-as-SerialNumber.patch
+new file mode 100644
+index 000000000..aa587fc27
+--- /dev/null
++++ b/utils/easycwmp/patches/0002-add-OUI-and-MAC-as-SerialNumber.patch
+@@ -0,0 +1,63 @@
++From 3d54821af27b0ca4bdf47d2e19ed5c80924fdc86 Mon Sep 17 00:00:00 2001
++From: Maciej Hiller <mh@host24.pl>
++Date: Tue, 13 Aug 2019 14:06:08 +0200
++Subject: [PATCH 2/7] add OUI and MAC as SerialNumber
++
++---
++ ext/openwrt/init.d/easycwmpd | 26 +++++++++++++++++---------
++ 1 file changed, 17 insertions(+), 9 deletions(-)
++
++diff --git a/ext/openwrt/init.d/easycwmpd b/ext/openwrt/init.d/easycwmpd
++index 38eac94..41ba6c2 100644
++--- a/ext/openwrt/init.d/easycwmpd
+++++ b/ext/openwrt/init.d/easycwmpd
++@@ -13,29 +13,37 @@ init_device_info() {
++ 	local val oval
++ 	local change=0
++ 
++-	val=`cat "/etc/device_info" | grep "DEVICE_MANUFACTURER" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g"`
++-	oval=`$UCI_GET easycwmp.@device[0].manufacturer`
+++	val=$(< /etc/device_info grep "DEVICE_MANUFACTURER" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
+++	oval=$($UCI_GET easycwmp.@device[0].manufacturer)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].manufacturer="$val"; change=1; }
++ 
++-	val=`cat "/etc/device_info" | grep "DEVICE_PRODUCT" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g"`
++-	oval=`$UCI_GET easycwmp.@device[0].product_class`
+++	val=$(< /etc/device_info grep "DEVICE_PRODUCT" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
+++	oval=$($UCI_GET easycwmp.@device[0].product_class)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].product_class="$val"; change=1; }
++ 
++-	val=`cat "/etc/device_info" | grep "DEVICE_REVISION" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g"`
++-	oval=`$UCI_GET easycwmp.@device[0].hardware_version`
+++	val=$(< /etc/device_info grep "DEVICE_REVISION" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
+++	oval=$($UCI_GET easycwmp.@device[0].hardware_version)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].hardware_version="$val"; change=1; }
++ 
++-	val=`cat "/etc/openwrt_version"`
++-	oval=`$UCI_GET easycwmp.@device[0].software_version`
+++	val=$(cat /etc/openwrt_version)
+++	oval=$($UCI_GET easycwmp.@device[0].software_version)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].software_version="$val"; change=1; }
++ 	
++ 	#The same thing here for OUI and SerialNumber
++ 
+++  val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print substr(toupper($0),1,6)}')
+++	oval=$($UCI_GET easycwmp.@device[0].oui)
+++	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].oui="$val"; change=1; }
+++
+++  val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print toupper($0)}')
+++	oval=$($UCI_GET easycwmp.@device[0].serial_number)
+++	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].serial_number="$val"; change=1; }
+++
++ 	[ "$change" = "1" ] && $UCI_COMMIT easycwmp
++ }
++ 
++ start_service() {
++-	local enable=`uci -q get easycwmp.@local[0].enable`
+++	local enable=$(uci -q get easycwmp.@local[0].enable)
++ 	if [ "$enable" == "1" ]; then
++ 		init_device_info
++ 		procd_open_instance
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0003-fix-UCI_SHOW-X.patch b/utils/easycwmp/patches/0003-fix-UCI_SHOW-X.patch
+new file mode 100644
+index 000000000..5ec3aa311
+--- /dev/null
++++ b/utils/easycwmp/patches/0003-fix-UCI_SHOW-X.patch
+@@ -0,0 +1,121 @@
++From 00a4741cd7add07b36c3b4e347f144a53a82d72a Mon Sep 17 00:00:00 2001
++From: Maciej Hiller <mh@host24.pl>
++Date: Mon, 12 Aug 2019 22:38:15 +0200
++Subject: [PATCH 3/7] fix $UCI_SHOW -X
++
++---
++ ext/openwrt/scripts/easycwmp.sh            |  1 +
++ ext/openwrt/scripts/functions/tr181/dhcpv4 |  6 +++---
++ ext/openwrt/scripts/functions/tr181/wifi   | 14 +++++++-------
++ 3 files changed, 11 insertions(+), 10 deletions(-)
++
++diff --git a/ext/openwrt/scripts/easycwmp.sh b/ext/openwrt/scripts/easycwmp.sh
++index d6443ff..0f3753f 100755
++--- a/ext/openwrt/scripts/easycwmp.sh
+++++ b/ext/openwrt/scripts/easycwmp.sh
++@@ -12,6 +12,7 @@
++ UCI_GET="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} get"
++ UCI_SET="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} set"
++ UCI_SHOW="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} show"
+++UCI_SHOW_X="/sbin/uci -X -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} show"
++ UCI_COMMIT="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} commit"
++ UCI_ADD="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} add"
++ UCI_DELETE="/sbin/uci -q ${UCI_CONFIG_DIR:+-c $UCI_CONFIG_DIR} delete"
++diff --git a/ext/openwrt/scripts/functions/tr181/dhcpv4 b/ext/openwrt/scripts/functions/tr181/dhcpv4
++index c5831e4..798a39a 100755
++--- a/ext/openwrt/scripts/functions/tr181/dhcpv4
+++++ b/ext/openwrt/scripts/functions/tr181/dhcpv4
++@@ -44,7 +44,7 @@ sub_entry_DHCPv4_Server_Pool() {
++ }
++ 
++ dhcp_pool_get_max_instance() {
++-	local max=`$UCI_SHOW -X dhcp | grep "dhcp_pool_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
+++	local max=`$UCI_SHOW_X dhcp | grep "dhcp_pool_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
++ 	echo ${max:-0}
++ }
++ 
++@@ -60,7 +60,7 @@ dhcp_pool_update_instance() {
++ }
++ 
++ dhcp_pool_browse_instances() {
++-	local pool pools=`$UCI_SHOW -X dhcp | grep "dhcp\..*=dhcp" | cut -d "=" -f 1`
+++	local pool pools=`$UCI_SHOW_X dhcp | grep "dhcp\..*=dhcp" | cut -d "=" -f 1`
++ 	for pool in $pools; do
++ 		local j=`dhcp_pool_update_instance $pool`
++ 		sub_entry_DHCPv4_Server_Pool  "$1" "$j" "$pool"
++@@ -126,7 +126,7 @@ dhcpv4server_pool_set_Interface() {
++ 	[ "$tmp" = "$2" ] && return
++ 	local instance=${tmp%.}
++ 	[ "$tmp" = "$instance" ] && return
++-	local network=`$UCI_SHOW -X network | grep "ip_int_instance=$instance" | cut -d'.' -f2`
+++	local network=`$UCI_SHOW_X network | grep "ip_int_instance=$instance" | cut -d'.' -f2`
++ 	$UCI_SET $1.interface=$network
++ 	return 0
++ }
++diff --git a/ext/openwrt/scripts/functions/tr181/wifi b/ext/openwrt/scripts/functions/tr181/wifi
++index 94b061f..7d80206 100755
++--- a/ext/openwrt/scripts/functions/tr181/wifi
+++++ b/ext/openwrt/scripts/functions/tr181/wifi
++@@ -81,12 +81,12 @@ sub_entry_WiFi_AccessPoint() {
++ 
++ 
++ wifi_radio_get_max_instance() {
++-	local max=`$UCI_SHOW -X wireless | grep "wifi_radio_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
+++	local max=`$UCI_SHOW_X wireless | grep "wifi_radio_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
++ 	echo ${max:-0}
++ }
++ 
++ wifi_iface_get_max_instance() {
++-	local max=`$UCI_SHOW -X wireless | grep "wifi_iface_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
+++	local max=`$UCI_SHOW_X wireless | grep "wifi_iface_instance" | cut -d'=' -f2 | sed 's/[^0-9]*//g' | sort -nru | head -1`
++ 	echo ${max:-0}
++ }
++ 
++@@ -113,7 +113,7 @@ wifi_iface_update_instance() {
++ }
++ 
++ wifi_radio_browse_instances() {
++-	local radio radios=`$UCI_SHOW -X wireless | grep "wireless\..*=wifi-device" | cut -d "=" -f 1`
+++	local radio radios=`$UCI_SHOW_X wireless | grep "wireless\..*=wifi-device" | cut -d "=" -f 1`
++ 	for radio in $radios; do
++ 		local j=`wifi_radio_update_instance $radio`
++ 		sub_entry_WiFi_Radio  "$1" "$j" "$radio"
++@@ -121,7 +121,7 @@ wifi_radio_browse_instances() {
++ }
++ 
++ wifi_ssid_browse_instances() {
++-	local iface ifaces=`$UCI_SHOW -X wireless | grep "wireless\..*=wifi-iface" | cut -d "=" -f 1`
+++	local iface ifaces=`$UCI_SHOW_X wireless | grep "wireless\..*=wifi-iface" | cut -d "=" -f 1`
++ 	for iface in $ifaces; do
++ 		local j=`wifi_iface_update_instance $iface`
++ 		sub_entry_WiFi_SSID  "$1" "$j" "$iface"
++@@ -129,7 +129,7 @@ wifi_ssid_browse_instances() {
++ }
++ 
++ wifi_ap_browse_instances() {
++-	local iface ifaces=`$UCI_SHOW -X wireless | grep "wireless\..*=wifi-iface" | cut -d "=" -f 1`
+++	local iface ifaces=`$UCI_SHOW_X wireless | grep "wireless\..*=wifi-iface" | cut -d "=" -f 1`
++ 	for iface in $ifaces; do
++ 		local j=`wifi_iface_update_instance $iface`
++ 		sub_entry_WiFi_AccessPoint  "$1" "$j" "$iface"
++@@ -289,7 +289,7 @@ wifi_ssid_set_LowerLayers() {
++ 	[ "$tmp" = "$2" ] && return
++ 	local instance=${tmp%.}
++ 	[ "$tmp" = "$instance" ] && return
++-	local device=`$UCI_SHOW -X wireless | grep "wifi_radio_instance=$instance" | cut -d'.' -f2`
+++	local device=`$UCI_SHOW_X wireless | grep "wifi_radio_instance=$instance" | cut -d'.' -f2`
++ 	$UCI_SET $1.device=$device
++ }
++ 
++@@ -313,7 +313,7 @@ wifi_ssid_set_X_IPInterface() {
++ 	[ "$tmp" = "$2" ] && return
++ 	local instance=${tmp%.}
++ 	[ "$tmp" = "$instance" ] && return
++-	local network=`$UCI_SHOW -X network | grep "ip_int_instance=$instance" | cut -d'.' -f2`
+++	local network=`$UCI_SHOW_X network | grep "ip_int_instance=$instance" | cut -d'.' -f2`
++ 	$UCI_SET $1.network=$network
++ }
++ 
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0004-Fix-libcurl-related-memory-leak.patch b/utils/easycwmp/patches/0004-Fix-libcurl-related-memory-leak.patch
+new file mode 100644
+index 000000000..39db16e1c
+--- /dev/null
++++ b/utils/easycwmp/patches/0004-Fix-libcurl-related-memory-leak.patch
+@@ -0,0 +1,66 @@
++From 3529842ef5ee45cceb1bb1ab099633963faa8007 Mon Sep 17 00:00:00 2001
++From: Martin Schiller <ms@dev.tdt.de>
++Date: Wed, 13 Jan 2021 07:05:57 +0100
++Subject: [PATCH 4/7] Fix libcurl related memory leak
++
++Calling curl_global_init() and curl_global_cleanup() on every
++http_client_init() / http_client_exit() leads to memory leak (at least,
++if you use it with OpenSSL).
++
++The official documentation also says that curl_global_init() should only
++be called once:
++https://ec.haxx.se/libcurl/libcurl-globalinit
++
++So this patch changes the code to call the curl_global_init() and
++curl_global_cleanup() in the main() function only once.
++
++Signed-off-by: Martin Schiller <ms@dev.tdt.de>
++---
++ src/easycwmp.c | 4 ++++
++ src/http.c     | 1 -
++ 2 files changed, 4 insertions(+), 1 deletion(-)
++
++diff --git a/src/easycwmp.c b/src/easycwmp.c
++index e413eef..b306579 100644
++--- a/src/easycwmp.c
+++++ b/src/easycwmp.c
++@@ -25,6 +25,7 @@
++ #include <fcntl.h>
++ #include <sys/stat.h>
++ #include <sys/file.h>
+++#include <curl/curl.h>
++ 
++ #include "json.h"
++ #include "easycwmp.h"
++@@ -360,6 +361,8 @@ int main (int argc, char **argv)
++ 		free(buf);
++ 	}
++ 
+++	curl_global_init( CURL_GLOBAL_ALL );
+++
++ 	log_message(NAME, L_NOTICE, "entering main loop\n");
++ 	uloop_run();
++ 
++@@ -367,6 +370,7 @@ int main (int argc, char **argv)
++ 	uloop_done();
++ 
++ 	http_client_exit();
+++	curl_global_cleanup();
++ 	xml_exit();
++ 	config_exit();
++ 	cwmp_free_deviceid();
++diff --git a/src/http.c b/src/http.c
++index ce548ec..f4cb776 100644
++--- a/src/http.c
+++++ b/src/http.c
++@@ -90,7 +90,6 @@ http_client_exit(void)
++ 	curl_easy_cleanup(curl);
++ 		curl = NULL;
++ 	}
++-	curl_global_cleanup();
++ 
++ 	if(remove(fc_cookies) < 0)
++ 		log_message(NAME, L_NOTICE, "can't remove file %s\n", fc_cookies);
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0005-Fix-build-with-gcc-10.patch b/utils/easycwmp/patches/0005-Fix-build-with-gcc-10.patch
+new file mode 100644
+index 000000000..058524eca
+--- /dev/null
++++ b/utils/easycwmp/patches/0005-Fix-build-with-gcc-10.patch
+@@ -0,0 +1,29 @@
++From ae5bc93d334ce1b3d8654a89ce035e2f9a538d15 Mon Sep 17 00:00:00 2001
++From: Martin Schiller <ms@dev.tdt.de>
++Date: Wed, 25 Aug 2021 14:00:16 +0200
++Subject: [PATCH 5/7] Fix build with gcc 10
++
++As GCC 10 now defaults to -fno-common, we need to use 'extern' in header
++files when declaring global variables.
++
++Signed-off-by: Martin Schiller <ms@dev.tdt.de>
++---
++ src/cwmp.h | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/src/cwmp.h b/src/cwmp.h
++index dcffea2..16afa9e 100644
++--- a/src/cwmp.h
+++++ b/src/cwmp.h
++@@ -142,7 +142,7 @@ struct cwmp_internal {
++ };
++ 
++ extern struct cwmp_internal *cwmp;
++-struct event_code event_code_array[__EVENT_MAX];
+++extern struct event_code event_code_array[__EVENT_MAX];
++ 
++ static void cwmp_periodic_inform(struct uloop_timeout *timeout);
++ static void cwmp_do_inform(struct uloop_timeout *timeout);
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0006-Use-Turris-specifics-if-available.patch b/utils/easycwmp/patches/0006-Use-Turris-specifics-if-available.patch
+new file mode 100644
+index 000000000..4e5169594
+--- /dev/null
++++ b/utils/easycwmp/patches/0006-Use-Turris-specifics-if-available.patch
+@@ -0,0 +1,55 @@
++From 541f8ef4a7e7688a6e002a3b2c17f9ea823a896a Mon Sep 17 00:00:00 2001
++From: Michal Hrusecky <michal.hrusecky@turris.com>
++Date: Mon, 30 Oct 2023 13:34:42 +0100
++Subject: [PATCH 6/7] Use Turris specifics if available
++
++---
++ ext/openwrt/init.d/easycwmpd | 14 +++++++++-----
++ 1 file changed, 9 insertions(+), 5 deletions(-)
++
++diff --git a/ext/openwrt/init.d/easycwmpd b/ext/openwrt/init.d/easycwmpd
++index 41ba6c2..7ae5cbd 100644
++--- a/ext/openwrt/init.d/easycwmpd
+++++ b/ext/openwrt/init.d/easycwmpd
++@@ -13,7 +13,7 @@ init_device_info() {
++ 	local val oval
++ 	local change=0
++ 
++-	val=$(< /etc/device_info grep "DEVICE_MANUFACTURER" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
+++	val=$(< /etc/device_info grep "DEVICE_MANUFACTURER=" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
++ 	oval=$($UCI_GET easycwmp.@device[0].manufacturer)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].manufacturer="$val"; change=1; }
++ 
++@@ -21,21 +21,25 @@ init_device_info() {
++ 	oval=$($UCI_GET easycwmp.@device[0].product_class)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].product_class="$val"; change=1; }
++ 
++-	val=$(< /etc/device_info grep "DEVICE_REVISION" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
+++	val=$(omnia-mcutool -v | sed -n 's|Board firmware type: ||p')
+++	[ -n "$val" ] || val=$(< /etc/device_info grep "DEVICE_REVISION" | cut -f 2 -d '=' | sed -e "s/['\"]//g" -e "s'[]:@/?#[!$&()*+,;=]'_'g")
++ 	oval=$($UCI_GET easycwmp.@device[0].hardware_version)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].hardware_version="$val"; change=1; }
++ 
++-	val=$(cat /etc/openwrt_version)
+++	val=$(cat /etc/turris-version)
+++	[ -n "$val" ] || val=$(cat /etc/openwrt_version)
++ 	oval=$($UCI_GET easycwmp.@device[0].software_version)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].software_version="$val"; change=1; }
++ 	
++ 	#The same thing here for OUI and SerialNumber
++ 
++-  val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print substr(toupper($0),1,6)}')
+++	val=$(crypto-wrapper mac-address | sed 's/':'//g' | awk '{print substr(toupper($0),1,6)}')
+++	[ -n "$val" ] || val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print substr(toupper($0),1,6)}')
++ 	oval=$($UCI_GET easycwmp.@device[0].oui)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].oui="$val"; change=1; }
++ 
++-  val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print toupper($0)}')
+++	val=$(crypto-wrapper serial-number)
+++	[ -n "$val" ] || val=$(< /sys/class/net/eth0/address sed 's/':'//g' | awk '{print toupper($0)}')
++ 	oval=$($UCI_GET easycwmp.@device[0].serial_number)
++ 	[ -n "$val" -a "$val" != "$oval" ] && { $UCI_SET easycwmp.@device[0].serial_number="$val"; change=1; }
++ 
++-- 
++2.42.0
++
+diff --git a/utils/easycwmp/patches/0007-Wi-Fi-Fix-frequencies-and-add-WPA-3.patch b/utils/easycwmp/patches/0007-Wi-Fi-Fix-frequencies-and-add-WPA-3.patch
+new file mode 100644
+index 000000000..6bd84fd39
+--- /dev/null
++++ b/utils/easycwmp/patches/0007-Wi-Fi-Fix-frequencies-and-add-WPA-3.patch
+@@ -0,0 +1,127 @@
++From b4dbfbcbbe7b1eb0085bf0dc2baf8803cabbf3bc Mon Sep 17 00:00:00 2001
++From: Michal Hrusecky <michal.hrusecky@turris.com>
++Date: Tue, 31 Oct 2023 12:43:46 +0100
++Subject: [PATCH 7/7] Wi-Fi: Fix frequencies and add WPA-3
++
++---
++ ext/openwrt/scripts/functions/tr181/wifi | 47 ++++++++++++++++++++----
++ 1 file changed, 39 insertions(+), 8 deletions(-)
++
++diff --git a/ext/openwrt/scripts/functions/tr181/wifi b/ext/openwrt/scripts/functions/tr181/wifi
++index 7d80206..1e8047a 100755
++--- a/ext/openwrt/scripts/functions/tr181/wifi
+++++ b/ext/openwrt/scripts/functions/tr181/wifi
++@@ -181,14 +181,27 @@ wifi_radio_get_Name() {
++ 	echo ${1#*.}
++ }
++ 
+++radio2phy() {
+++	local path="`$UCI_GET $1.path`"
+++	ls "/sys/devices/platform/$path/ieee80211/"
+++}
+++
++ wifi_radio_get_FrequencyBands() {
++-	local phy="phy${1#*radio}"
++-	local freq=`iw phy $phy info | grep  "MHz.*dBm" | head -1 | awk '{print $2}'`
++-	[ "${freq#24}" = "$freq" ] && echo "5GHz" || echo "2.4GHz"
+++	local phy="`radio2phy ${1}`"
+++	local freq="`iw phy $phy info | grep  "MHz.*dBm" | awk '{print $2}'`"
+++	local res=""
+++	if echo "$freq" | grep -q "^5"; then
+++		res="5GHz"
+++	elif echo "$freq" | grep -q "^2"; then
+++		[ -z "$res" ] || res="$res,"
+++		res="${res}2.4GHz"
+++	fi
+++	echo "$res"
++ }
++ 
++ wifi_radio_get_ChannelsInUse() {
++-	local freq="`iw phy phy0 info | grep  MHz.*dBm | awk -F'[][]' '{print $2}' |  tr '\n' ','`"
+++	local phy="`radio2phy ${1}`"
+++	local freq="`iw phy $phy info | grep  "MHz.*dBm" | awk -F'[][]' '{print $2}' |  tr '\n' ','`"
++ 	echo ${freq%,}
++ }
++ 
++@@ -198,7 +211,7 @@ wifi_radio_get_Channel() {
++ 	channel=`$UCI_GET $1.channel`
++ 	[ "$channel" != "" -a "$channel" != "auto" ] && { echo $channel; return; }
++ 
++-	phy="phy${1#*radio}"
+++	phy="`radio2phy ${1}`"
++ 	freq=`iw phy $phy info | grep  "MHz.*dBm" | head -1 | awk '{print $2}'`
++ 	if [ "${freq#24}" != "$freq" ]; then 
++ 		channel=`iw dev | grep "channel.*(24.*MHz)" | head -1 | awk '{print $2}'`
++@@ -228,12 +241,12 @@ wifi_radio_set_AutoChannelEnable() {
++ }
++ 
++ wifi_radio_get_OperatingStandards() {
++-	local val=`$UCI_GET $1.hwmode`
+++	local val=`$UCI_GET $1.htmode`
++ 	echo ${val#11}
++ }
++ 
++ wifi_radio_set_OperatingStandards() {
++-	$UCI_SET $1.hwmode=11$2
+++	$UCI_SET $1.htmode=11$2
++ }
++ 
++ wifi_ssid_get_Enable() {
++@@ -335,7 +348,7 @@ wifi_ap_get_Status() {
++ }
++ 
++ wifi_ap_get_ModesSupported() {
++-	echo "None,WEP-64,WEP-128,WPA-Personal,WPA2-Personal,WPA-WPA2-Personal,WPA-Enterprise,WPA2-Enterprise,WPA-WPA2-Enterprise"
+++	echo "None,WEP-64,WEP-128,WPA-Personal,WPA2-Personal,WPA-WPA2-Personal,WPA3-Personal,WP2-WPA3-Personal,WPA-Enterprise,WPA2-Enterprise,WPA-WPA2-Enterprise,WPA3-Enterprise"
++ }
++ 
++ wifi_ap_get_ModeEnabled() {
++@@ -343,6 +356,12 @@ wifi_ap_get_ModeEnabled() {
++ 	local encryption=`$UCI_GET $1.encryption`
++ 	
++ 	case "$encryption" in
+++		"sae-mixed"*)
+++			echo "WPA3-Personal"
+++			;;
+++		"sae"*)
+++			echo "WPA2-WPA3-Personal"
+++			;;
++ 		"psk2"*)
++ 			echo "WPA2-Personal"
++ 			;;
++@@ -355,6 +374,9 @@ wifi_ap_get_ModeEnabled() {
++ 		"wpa2"*)
++ 			echo "WPA2-Enterprise"
++ 			;;
+++		"wpa3"*)
+++			echo "WPA3-Enterprise"
+++			;;
++ 		"wpa-mixed"*)
++ 			echo "WPA-WPA2-Enterprise"
++ 			;;
++@@ -378,6 +400,12 @@ wifi_ap_set_ModeEnabled() {
++ 	[ "$encryption" = "$2" ] && return 0
++ 	
++ 	case "$2" in
+++		"WPA3-Personal")
+++			$UCI_SET $1.encryption="sae"
+++			;;
+++		"WPA2-WPA3-Personal")
+++			$UCI_SET $1.encryption="sae-mixed"
+++			;;
++ 		"WPA2-Personal")
++ 			$UCI_SET $1.encryption="psk2"
++ 			;;
++@@ -387,6 +415,9 @@ wifi_ap_set_ModeEnabled() {
++ 		"WPA-Personal")
++ 			$UCI_SET $1.encryption="psk"
++ 			;;
+++		"WPA3-Enterprise")
+++			$UCI_SET $1.encryption="wpa3"
+++			;;
++ 		"WPA2-Enterprise")
++ 			$UCI_SET $1.encryption="wpa2"
++ 			;;
++-- 
++2.42.0
++
+-- 
+2.42.0
+
