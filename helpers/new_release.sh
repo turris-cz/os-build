@@ -223,9 +223,14 @@ release() {
 		feeds_conf_set "$feed" "${FEEDS["$feed"]}"
 	done
 	git add ./feeds.conf
-	_release_git commit -m "Turris OS $tversion" --date="$RELEASE_DATE" -m "$(./helpers/turris-version.sh news)"
+	_release_git commit -S -m "Turris OS $tversion" --date="$RELEASE_DATE" -m "$(./helpers/turris-version.sh news)"
 	_release_git tag -s -m "Turris OS $tversion release" -m "$(./helpers/turris-version.sh news)" "v$tversion"
-
+	if [ -d packages ]; then
+		cd packages
+		git fetch
+		git checkout "$(sed -n 's|src-git-full turrispackages .*^||p' ../feeds.conf)"
+		_release_git tag -s -m "Turris OS $tversion release" -m "$(../helpers/turris-version.sh news)" "v$tversion"
+	fi
 	info "Tag $tag was created. Review changes and push it with: git push origin $tag"
 }
 
