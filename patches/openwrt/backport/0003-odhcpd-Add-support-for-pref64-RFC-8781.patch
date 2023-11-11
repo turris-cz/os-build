@@ -1,0 +1,240 @@
+From dfbf56ef06d9a612e157691a2c20b26ea72721f1 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Sat, 11 Nov 2023 13:04:26 +0100
+Subject: [PATCH] odhcpd: Add support for pref64 (RFC 8781)
+
+Backported from 23.05 commit c6bff6f1c0fbb37a21a7f54e393615bad22a72d9
+---
+ .../patches/pref64-RFC-8781-support.path      | 220 ++++++++++++++++++
+ 1 file changed, 220 insertions(+)
+ create mode 100644 package/network/services/odhcpd/patches/pref64-RFC-8781-support.path
+
+diff --git a/package/network/services/odhcpd/patches/pref64-RFC-8781-support.path b/package/network/services/odhcpd/patches/pref64-RFC-8781-support.path
+new file mode 100644
+index 0000000000..264e78b6e6
+--- /dev/null
++++ b/package/network/services/odhcpd/patches/pref64-RFC-8781-support.path
+@@ -0,0 +1,220 @@
++From c6bff6f1c0fbb37a21a7f54e393615bad22a72d9 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Ond=C5=99ej=20Caletka?= <ondrej@caletka.cz>
++Date: Sat, 4 Jun 2022 23:42:59 +0200
++Subject: [PATCH] router: Add PREF64 (RFC 8781) support
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++This option of IPv6 Router Advertisements allows devices connected to
++a IPv6-only network to discover IPv6 prefix of the NAT64 gateway.
++Devices can use this information for instance to setup client translator
++(CLAT) from IPv4 to IPv6 in 464XLAT (RFC 6877) scenario or to handle
++IPv4 address literal on application level.
++
++To enable PREF64 option, a new uci parameter ra_pref64 has to contain
++the NAT64 prefix, including prefix length. Only lengths of 96, 64, 56,
++48, 40 and 32 bits are supported. For example, to annonce the Well-Known
++Prefix:
++
++config dhcp 'lan'
++        …
++        option ra_pref64 '64:ff9b::/96'
++
++Fixes: #182
++Signed-off-by: Ondřej Caletka <ondrej@caletka.cz>
++[ remove extra space for Fixes tag ]
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++---
++ README       |  2 ++
++ src/config.c | 20 +++++++++++++++
++ src/odhcpd.h |  5 ++++
++ src/router.c | 71 +++++++++++++++++++++++++++++++++++++++++++++++++++-
++ 4 files changed, 97 insertions(+), 1 deletion(-)
++
++Index: odhcpd-2021-07-18-bc9d317f/README
++===================================================================
++--- odhcpd-2021-07-18-bc9d317f.orig/README
+++++ odhcpd-2021-07-18-bc9d317f/README
++@@ -140,6 +140,8 @@ ra_mtu			integer -			MTU to be advertise
++ 							RA messages
++ ra_dns			bool	1			Announce DNS configuration in
++ 							RA messages (RFC8106)
+++ra_pref64		string				Announce PREF64 option
+++			[IPv6 prefix]			for NAT64 prefix (RFC8781)
++ ndproxy_routing		bool	1			Learn routes from NDP
++ ndproxy_slave		bool	0			NDProxy external slave
++ prefix_filter		string	::/0			Only advertise on-link prefixes within
++Index: odhcpd-2021-07-18-bc9d317f/src/config.c
++===================================================================
++--- odhcpd-2021-07-18-bc9d317f.orig/src/config.c
+++++ odhcpd-2021-07-18-bc9d317f/src/config.c
++@@ -77,6 +77,7 @@ enum {
++ 	IFACE_ATTR_RA_HOPLIMIT,
++ 	IFACE_ATTR_RA_MTU,
++ 	IFACE_ATTR_RA_DNS,
+++	IFACE_ATTR_RA_PREF64,
++ 	IFACE_ATTR_PD_MANAGER,
++ 	IFACE_ATTR_PD_CER,
++ 	IFACE_ATTR_NDPROXY_ROUTING,
++@@ -128,6 +129,7 @@ static const struct blobmsg_policy iface
++ 	[IFACE_ATTR_RA_HOPLIMIT] = { .name = "ra_hoplimit", .type = BLOBMSG_TYPE_INT32 },
++ 	[IFACE_ATTR_RA_MTU] = { .name = "ra_mtu", .type = BLOBMSG_TYPE_INT32 },
++ 	[IFACE_ATTR_RA_DNS] = { .name = "ra_dns", .type = BLOBMSG_TYPE_BOOL },
+++	[IFACE_ATTR_RA_PREF64] = { .name = "ra_pref64", .type = BLOBMSG_TYPE_STRING },
++ 	[IFACE_ATTR_NDPROXY_ROUTING] = { .name = "ndproxy_routing", .type = BLOBMSG_TYPE_BOOL },
++ 	[IFACE_ATTR_NDPROXY_SLAVE] = { .name = "ndproxy_slave", .type = BLOBMSG_TYPE_BOOL },
++ 	[IFACE_ATTR_PREFIX_FILTER] = { .name = "prefix_filter", .type = BLOBMSG_TYPE_STRING },
++@@ -849,6 +851,24 @@ int config_parse_interface(void *data, s
++ 	if ((c = tb[IFACE_ATTR_RA_DNS]))
++ 		iface->ra_dns = blobmsg_get_bool(c);
++ 
+++	if ((c = tb[IFACE_ATTR_RA_PREF64])) {
+++		const char *str = blobmsg_get_string(c);
+++		char *astr = malloc(strlen(str) + 1);
+++		char *delim;
+++		int l;
+++
+++		if (!astr || !strcpy(astr, str) ||
+++				(delim = strchr(astr, '/')) == NULL || (*(delim++) = 0) ||
+++				sscanf(delim, "%i", &l) == 0 || l > 128 ||
+++				inet_pton(AF_INET6, astr, &iface->pref64_addr) == 0)
+++			iface->pref64_length = 0;
+++		else
+++			iface->pref64_length = l;
+++
+++		if (astr)
+++			free(astr);
+++	}
+++
++ 	if ((c = tb[IFACE_ATTR_RA_PREFERENCE])) {
++ 		const char *prio = blobmsg_get_string(c);
++ 
++Index: odhcpd-2021-07-18-bc9d317f/src/odhcpd.h
++===================================================================
++--- odhcpd-2021-07-18-bc9d317f.orig/src/odhcpd.h
+++++ odhcpd-2021-07-18-bc9d317f/src/odhcpd.h
++@@ -31,6 +31,9 @@
++ #define ND_OPT_RECURSIVE_DNS 25
++ #define ND_OPT_DNS_SEARCH 31
++ 
+++// RFC 8781 defines PREF64 option
+++#define ND_OPT_PREF64 38
+++
++ #define INFINITE_VALID(x) ((x) == 0)
++ 
++ #define _unused __attribute__((unused))
++@@ -280,6 +283,8 @@ struct interface {
++ 	bool ra_advrouter;
++ 	bool ra_useleasetime;
++ 	bool ra_dns;
+++	uint8_t pref64_length;
+++	struct in6_addr pref64_addr;
++ 	bool no_dynamic_dhcp;
++ 	uint8_t pio_filter_length;
++ 	struct in6_addr pio_filter_addr;
++Index: odhcpd-2021-07-18-bc9d317f/src/router.c
++===================================================================
++--- odhcpd-2021-07-18-bc9d317f.orig/src/router.c
+++++ odhcpd-2021-07-18-bc9d317f/src/router.c
++@@ -390,6 +390,7 @@ enum {
++ 	IOV_RA_ROUTES,
++ 	IOV_RA_DNS,
++ 	IOV_RA_SEARCH,
+++	IOV_RA_PREF64,
++ 	IOV_RA_ADV_INTERVAL,
++ 	IOV_RA_TOTAL,
++ };
++@@ -427,6 +428,13 @@ struct nd_opt_route_info {
++ 	uint32_t addr[4];
++ };
++ 
+++struct nd_opt_pref64_info {
+++	uint8_t type;
+++	uint8_t len;
+++	uint16_t lifetime_plc;
+++	uint32_t addr[3];
+++};
+++
++ /* Router Advert server mode */
++ static int send_router_advert(struct interface *iface, const struct in6_addr *from)
++ {
++@@ -437,10 +445,11 @@ static int send_router_advert(struct int
++ 	struct nd_opt_dns_server *dns = NULL;
++ 	struct nd_opt_search_list *search = NULL;
++ 	struct nd_opt_route_info *routes = NULL;
+++	struct nd_opt_pref64_info *pref64 = NULL;
++ 	struct nd_opt_adv_interval adv_interval;
++ 	struct iovec iov[IOV_RA_TOTAL];
++ 	struct sockaddr_in6 dest;
++-	size_t dns_sz = 0, search_sz = 0, pfxs_cnt = 0, routes_cnt = 0;
+++	size_t dns_sz = 0, search_sz = 0, pref64_sz = 0, pfxs_cnt = 0, routes_cnt = 0;
++ 	ssize_t addr_cnt = 0;
++ 	uint32_t minvalid = UINT32_MAX, maxival, lifetime;
++ 	int msecs, mtu = iface->ra_mtu, hlim = iface->ra_hoplimit;
++@@ -657,6 +666,65 @@ static int send_router_advert(struct int
++ 	iov[IOV_RA_SEARCH].iov_base = (char *)search;
++ 	iov[IOV_RA_SEARCH].iov_len = search_sz;
++ 
+++	if (iface->pref64_length) {
+++		/* RFC 8781 § 4.1 rounding up lifetime to multiply of 8 */
+++		uint16_t pref64_lifetime = lifetime < (UINT16_MAX - 7) ? lifetime + 7 : UINT16_MAX;
+++		uint8_t prefix_length_code;
+++		uint32_t mask_a1, mask_a2;
+++
+++		switch (iface->pref64_length) {
+++		case 96:
+++			prefix_length_code = 0;
+++			mask_a1 = 0xffffffff;
+++			mask_a2 = 0xffffffff;
+++			break;
+++		case 64:
+++			prefix_length_code = 1;
+++			mask_a1 = 0xffffffff;
+++			mask_a2 = 0x00000000;
+++			break;
+++		case 56:
+++			prefix_length_code = 2;
+++			mask_a1 = 0xffffff00;
+++			mask_a2 = 0x00000000;
+++			break;
+++		case 48:
+++			prefix_length_code = 3;
+++			mask_a1 = 0xffff0000;
+++			mask_a2 = 0x00000000;
+++			break;
+++		case 40:
+++			prefix_length_code = 4;
+++			mask_a1 = 0xff000000;
+++			mask_a2 = 0x00000000;
+++			break;
+++		case 32:
+++			prefix_length_code = 5;
+++			mask_a1 = 0x00000000;
+++			mask_a2 = 0x00000000;
+++			break;
+++		default:
+++			syslog(LOG_WARNING, "Invalid PREF64 prefix size (%d), "
+++					"ignoring ra_pref64 option!", iface->pref64_length);
+++			goto pref64_out;
+++			break;
+++		}
+++
+++		pref64_sz = sizeof(*pref64);
+++		pref64 = alloca(pref64_sz);
+++		memset(pref64, 0, pref64_sz);
+++		pref64->type = ND_OPT_PREF64;
+++		pref64->len = 2;
+++		pref64->lifetime_plc = htons((0xfff8 & pref64_lifetime) |
+++						(0x7 & prefix_length_code));
+++		pref64->addr[0] = iface->pref64_addr.s6_addr32[0];
+++		pref64->addr[1] = iface->pref64_addr.s6_addr32[1] & htonl(mask_a1);
+++		pref64->addr[2] = iface->pref64_addr.s6_addr32[2] & htonl(mask_a2);
+++	}
+++pref64_out:
+++	iov[IOV_RA_PREF64].iov_base = (char *)pref64;
+++	iov[IOV_RA_PREF64].iov_len = pref64_sz;
+++
++ 	/*
++ 	 * RFC7084 § 4.3 :
++ 	 *    L-3:   An IPv6 CE router MUST advertise itself as a router for the
+-- 
+2.42.1
+

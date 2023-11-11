@@ -1,0 +1,44 @@
+From b80ae12d4fe8481eaf82c274d7884d1d6e7b3c11 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ond=C5=99ej=20Caletka?= <ondrej@caletka.cz>
+Date: Wed, 21 Jun 2023 16:48:05 +0200
+Subject: [PATCH] luci-mod-network: add PREF64 support
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Add support for ra_pref64 option for IPv6 Router Advertisements
+options.
+This option of IPv6 Router Advertisements allows devices connected to
+a IPv6-only network to discover IPv6 prefix of the NAT64 gateway.
+Devices can use this information for instance to setup client translator
+(CLAT) from IPv4 to IPv6 in 464XLAT (RFC 6877) scenario or to handle
+IPv4 address literal on application level.
+
+Signed-off-by: Ondřej Caletka <ondrej@caletka.cz>
+[ remove extra new line and fix commit description ]
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+---
+ .../luci-static/resources/view/network/interfaces.js       | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js b/modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js
+index 611bbe81a7..ea85e63170 100644
+--- a/modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js
++++ b/modules/luci-mod-network/htdocs/luci-static/resources/view/network/interfaces.js
+@@ -808,6 +808,13 @@ return view.extend({
+ 						uci.set('dhcp', section_id, 'ra_flags', [ 'none' ]);
+ 					};
+ 
++					so = ss.taboption('ipv6-ra', form.Value, 'ra_pref64', _('NAT64 prefix'), _('Announce NAT64 prefix in <abbr title="Router Advertisement">RA</abbr> messages.'));
++					so.optional = true;
++					so.datatype = 'cidr6';
++					so.placeholder = '64:ff9b::/96';
++					so.depends('ra', 'server');
++					so.depends({ ra: 'hybrid', master: '0' });
++
+ 					so = ss.taboption('ipv6-ra', form.Value, 'ra_maxinterval', _('Max <abbr title="Router Advertisement">RA</abbr> interval'), _('Maximum time allowed  between sending unsolicited <abbr title="Router Advertisement, ICMPv6 Type 134">RA</abbr>. Default is 600 seconds.'));
+ 					so.optional = true;
+ 					so.datatype = 'uinteger';
+-- 
+2.42.1
+
