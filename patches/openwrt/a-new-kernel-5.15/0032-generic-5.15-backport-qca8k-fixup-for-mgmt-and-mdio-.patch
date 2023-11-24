@@ -1,31 +1,36 @@
-From 621f13afc7035bf7ee82d8772ae36611102da8b9 Mon Sep 17 00:00:00 2001
-From: Josef Schlehofer <pepe.schlehofer@gmail.com>
-Date: Tue, 20 Dec 2022 15:16:54 +0100
-Subject: [PATCH] mpc85xx: add patches from OpenWrt to improve switch
+From f4d949b404855c7a643f810dbca0ad85088bd185 Mon Sep 17 00:00:00 2001
+From: Christian Marangi <ansuelsmth@gmail.com>
+Date: Tue, 3 Jan 2023 22:42:45 +0100
+Subject: [PATCH] generic: 5.15: backport qca8k fixup for mgmt and mdio
+ read/write
 
-Requested in https://gist.github.com/Ansuel/4245c713a4c9ef425640a96066787cfe
+Backport qca8k fixup for mgmt and mdio read/write for kernel 5.15 fixup
+port dropping and configuration issue.
+
+Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
+Reviewed-by: Robert Marko <robimarko@gmail.com>
 ---
- ...x-wrong-length-value-for-mgmt-eth-pa.patch | 105 +++++++++++
- ...sa-tag_qca-fix-wrong-MGMT_DATA2-size.patch |  36 ++++
- ...qca8k-cache-lo-and-hi-for-mdio-write.patch | 177 ++++++++++++++++++
- ...ntroduce-single-mii-read-write-lo-hi.patch | 153 +++++++++++++++
- ...prove-mdio-master-read-write-by-usin.patch |  76 ++++++++
- 5 files changed, 547 insertions(+)
- create mode 100644 target/linux/mpc85xx/patches-5.15/0001-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
- create mode 100644 target/linux/mpc85xx/patches-5.15/0002-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
- create mode 100644 target/linux/mpc85xx/patches-5.15/0003-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
- create mode 100644 target/linux/mpc85xx/patches-5.15/0004-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
- create mode 100644 target/linux/mpc85xx/patches-5.15/0005-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
+ ...x-wrong-length-value-for-mgmt-eth-pa.patch | 102 +++++++++++
+ ...sa-tag_qca-fix-wrong-MGMT_DATA2-size.patch |  34 ++++
+ ...qca8k-cache-lo-and-hi-for-mdio-write.patch | 172 ++++++++++++++++++
+ ...ntroduce-single-mii-read-write-lo-hi.patch | 150 +++++++++++++++
+ ...prove-mdio-master-read-write-by-usin.patch |  73 ++++++++
+ 5 files changed, 531 insertions(+)
+ create mode 100644 target/linux/generic/backport-5.15/777-v6.2-01-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v6.2-02-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v6.2-03-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v6.2-04-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
+ create mode 100644 target/linux/generic/backport-5.15/777-v6.2-05-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
 
-diff --git a/target/linux/mpc85xx/patches-5.15/0001-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch b/target/linux/mpc85xx/patches-5.15/0001-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
+diff --git a/target/linux/generic/backport-5.15/777-v6.2-01-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch b/target/linux/generic/backport-5.15/777-v6.2-01-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
 new file mode 100644
-index 0000000000..e3198ee93a
+index 0000000000..b61e7ede49
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0001-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
-@@ -0,0 +1,105 @@
-+From 2fc5ef88a93fa71f330b5f363fa59ef061586252 Mon Sep 17 00:00:00 2001
++++ b/target/linux/generic/backport-5.15/777-v6.2-01-net-dsa-qca8k-fix-wrong-length-value-for-mgmt-eth-pa.patch
+@@ -0,0 +1,102 @@
++From 9807ae69746196ee4bbffe7d22d22ab2b61c6ed0 Mon Sep 17 00:00:00 2001
 +From: Christian Marangi <ansuelsmth@gmail.com>
-+Date: Mon, 12 Dec 2022 02:03:33 +0100
++Date: Thu, 29 Dec 2022 17:33:32 +0100
 +Subject: [PATCH 1/5] net: dsa: qca8k: fix wrong length value for mgmt eth
 + packet
 +
@@ -56,15 +61,15 @@ index 0000000000..e3198ee93a
 +Tested-by: Ronald Wahl <ronald.wahl@raritan.com>
 +Fixes: 90386223f44e ("net: dsa: qca8k: add support for larger read/write size with mgmt Ethernet")
 +Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org # v5.18+
++Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
 + drivers/net/dsa/qca/qca8k-8xxx.c | 45 +++++++++++++++++++++++++-------
 + 1 file changed, 35 insertions(+), 10 deletions(-)
 +
-+diff --git a/drivers/net/dsa/qca/qca8k-8xxx.c b/drivers/net/dsa/qca/qca8k-8xxx.c
-+index c5c3b4e92f28..46151320b2a8 100644
 +--- a/drivers/net/dsa/qca/qca8k-8xxx.c
 ++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
-+@@ -146,7 +146,16 @@ static void qca8k_rw_reg_ack_handler(struct dsa_switch *ds, struct sk_buff *skb)
++@@ -146,7 +146,16 @@ static void qca8k_rw_reg_ack_handler(str
 + 
 + 	command = get_unaligned_le32(&mgmt_ethhdr->command);
 + 	cmd = FIELD_GET(QCA_HDR_MGMT_CMD, command);
@@ -81,7 +86,7 @@ index 0000000000..e3198ee93a
 + 
 + 	/* Make sure the seq match the requested packet */
 + 	if (get_unaligned_le32(&mgmt_ethhdr->seq) == mgmt_eth_data->seq)
-+@@ -193,17 +202,33 @@ static struct sk_buff *qca8k_alloc_mdio_header(enum mdio_cmd cmd, u32 reg, u32 *
++@@ -193,17 +202,33 @@ static struct sk_buff *qca8k_alloc_mdio_
 + 	if (!skb)
 + 		return NULL;
 + 
@@ -105,17 +110,17 @@ index 0000000000..e3198ee93a
 ++	 * round up.
 ++	 * On the ack function we can skip the odd check as we already handle the
 ++	 * case here.
-++	 */
-++	real_len = DIV_ROUND_UP(len, sizeof(u16));
-++
-++	/* We check if the result len is odd and we round up another time to
-++	 * the next size. (length of 3 will be increased to 4 as switch will always
-++	 * return 8 bytes)
 + 	 */
 +-	if (len == 16)
 +-		real_len = 15;
 +-	else
 +-		real_len = len;
+++	real_len = DIV_ROUND_UP(len, sizeof(u16));
+++
+++	/* We check if the result len is odd and we round up another time to
+++	 * the next size. (length of 3 will be increased to 4 as switch will always
+++	 * return 8 bytes)
+++	 */
 ++	if (real_len % sizeof(u16) != 0)
 ++		real_len++;
 ++
@@ -125,18 +130,15 @@ index 0000000000..e3198ee93a
 + 
 + 	skb_reset_mac_header(skb);
 + 	skb_set_network_header(skb, skb->len);
-+-- 
-+2.37.2
-+
-diff --git a/target/linux/mpc85xx/patches-5.15/0002-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch b/target/linux/mpc85xx/patches-5.15/0002-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
+diff --git a/target/linux/generic/backport-5.15/777-v6.2-02-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch b/target/linux/generic/backport-5.15/777-v6.2-02-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
 new file mode 100644
-index 0000000000..971fa9072d
+index 0000000000..55ecb1eb42
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0002-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
-@@ -0,0 +1,36 @@
-+From b050697e22f53665d537e39417c4cf47c6473076 Mon Sep 17 00:00:00 2001
++++ b/target/linux/generic/backport-5.15/777-v6.2-02-net-dsa-tag_qca-fix-wrong-MGMT_DATA2-size.patch
+@@ -0,0 +1,34 @@
++From d9dba91be71f03cc75bcf39fc0d5d99ff33f1ae0 Mon Sep 17 00:00:00 2001
 +From: Christian Marangi <ansuelsmth@gmail.com>
-+Date: Mon, 12 Dec 2022 02:12:18 +0100
++Date: Thu, 29 Dec 2022 17:33:33 +0100
 +Subject: [PATCH 2/5] net: dsa: tag_qca: fix wrong MGMT_DATA2 size
 +
 +It was discovered that MGMT_DATA2 can contain up to 28 bytes of data
@@ -146,17 +148,18 @@ index 0000000000..971fa9072d
 +
 +Update the define with the real world value.
 +
++Tested-by: Ronald Wahl <ronald.wahl@raritan.com>
 +Fixes: c2ee8181fddb ("net: dsa: tag_qca: add define for handling mgmt Ethernet packet")
 +Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org # v5.18+
++Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
 + include/linux/dsa/tag_qca.h | 4 ++--
 + 1 file changed, 2 insertions(+), 2 deletions(-)
 +
-+diff --git a/include/linux/dsa/tag_qca.h b/include/linux/dsa/tag_qca.h
-+index b1b5720d89a5..ee657452f122 100644
 +--- a/include/linux/dsa/tag_qca.h
 ++++ b/include/linux/dsa/tag_qca.h
-+@@ -45,8 +45,8 @@ struct sk_buff;
++@@ -40,8 +40,8 @@
 + 					QCA_HDR_MGMT_COMMAND_LEN + \
 + 					QCA_HDR_MGMT_DATA1_LEN)
 + 
@@ -167,18 +170,15 @@ index 0000000000..971fa9072d
 + 
 + #define QCA_HDR_MGMT_PKT_LEN		(QCA_HDR_MGMT_HEADER_LEN + \
 + 					QCA_HDR_LEN + \
-+-- 
-+2.37.2
-+
-diff --git a/target/linux/mpc85xx/patches-5.15/0003-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch b/target/linux/mpc85xx/patches-5.15/0003-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
+diff --git a/target/linux/generic/backport-5.15/777-v6.2-03-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch b/target/linux/generic/backport-5.15/777-v6.2-03-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
 new file mode 100644
-index 0000000000..71bbe6185a
+index 0000000000..c8e22fd1b8
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0003-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
-@@ -0,0 +1,177 @@
-+From 6c031331fc9d25f84ea2b95a6ac7854679908404 Mon Sep 17 00:00:00 2001
++++ b/target/linux/generic/backport-5.15/777-v6.2-03-Revert-net-dsa-qca8k-cache-lo-and-hi-for-mdio-write.patch
+@@ -0,0 +1,172 @@
++From 03cb9e6d0b32b768e3d9d473c5c4ca1100877664 Mon Sep 17 00:00:00 2001
 +From: Christian Marangi <ansuelsmth@gmail.com>
-+Date: Tue, 13 Dec 2022 15:19:10 +0100
++Date: Thu, 29 Dec 2022 17:33:34 +0100
 +Subject: [PATCH 3/5] Revert "net: dsa: qca8k: cache lo and hi for mdio write"
 +
 +This reverts commit 2481d206fae7884cd07014fd1318e63af35e99eb.
@@ -187,27 +187,26 @@ index 0000000000..71bbe6185a
 +The cache logic for hi and lo is wrong and actually miss some regs to be
 +actually written.
 +
-+What the Docuemntation actually intended was that it's possible to skip
++What the Documentation actually intended was that it's possible to skip
 +writing hi OR lo if half of the reg is not needed to be written or read.
 +
 +Revert the change in favor of a better and correct implementation.
 +
 +Reported-by: Ronald Wahl <ronald.wahl@raritan.com>
 +Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org # v5.18+
++Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
 + drivers/net/dsa/qca/qca8k-8xxx.c | 61 +++++++-------------------------
 + drivers/net/dsa/qca/qca8k.h      |  5 ---
 + 2 files changed, 12 insertions(+), 54 deletions(-)
 +
-+diff --git a/drivers/net/dsa/qca/qca8k-8xxx.c b/drivers/net/dsa/qca/qca8k-8xxx.c
-+index 46151320b2a8..fbcd5c2b13ae 100644
 +--- a/drivers/net/dsa/qca/qca8k-8xxx.c
 ++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
-+@@ -36,44 +36,6 @@ qca8k_split_addr(u32 regaddr, u16 *r1, u16 *r2, u16 *page)
-+ 	*page = regaddr & 0x3ff;
++@@ -37,44 +37,6 @@ qca8k_split_addr(u32 regaddr, u16 *r1, u
 + }
 + 
-+-static int
++ static int
 +-qca8k_set_lo(struct qca8k_priv *priv, int phy_id, u32 regnum, u16 lo)
 +-{
 +-	u16 *cached_lo = &priv->mdio_cache.lo;
@@ -245,10 +244,11 @@ index 0000000000..71bbe6185a
 +-	return 0;
 +-}
 +-
-+ static int
++-static int
 + qca8k_mii_read32(struct mii_bus *bus, int phy_id, u32 regnum, u32 *val)
 + {
-+@@ -97,7 +59,7 @@ qca8k_mii_read32(struct mii_bus *bus, int phy_id, u32 regnum, u32 *val)
++ 	int ret;
++@@ -97,7 +59,7 @@ qca8k_mii_read32(struct mii_bus *bus, in
 + }
 + 
 + static void
@@ -257,7 +257,7 @@ index 0000000000..71bbe6185a
 + {
 + 	u16 lo, hi;
 + 	int ret;
-+@@ -105,9 +67,12 @@ qca8k_mii_write32(struct qca8k_priv *priv, int phy_id, u32 regnum, u32 val)
++@@ -105,9 +67,12 @@ qca8k_mii_write32(struct qca8k_priv *pri
 + 	lo = val & 0xffff;
 + 	hi = (u16)(val >> 16);
 + 
@@ -272,7 +272,7 @@ index 0000000000..71bbe6185a
 + }
 + 
 + static int
-+@@ -442,7 +407,7 @@ qca8k_regmap_write(void *ctx, uint32_t reg, uint32_t val)
++@@ -442,7 +407,7 @@ qca8k_regmap_write(void *ctx, uint32_t r
 + 	if (ret < 0)
 + 		goto exit;
 + 
@@ -281,7 +281,7 @@ index 0000000000..71bbe6185a
 + 
 + exit:
 + 	mutex_unlock(&bus->mdio_lock);
-+@@ -475,7 +440,7 @@ qca8k_regmap_update_bits(void *ctx, uint32_t reg, uint32_t mask, uint32_t write_
++@@ -475,7 +440,7 @@ qca8k_regmap_update_bits(void *ctx, uint
 + 
 + 	val &= ~mask;
 + 	val |= write_val;
@@ -290,7 +290,7 @@ index 0000000000..71bbe6185a
 + 
 + exit:
 + 	mutex_unlock(&bus->mdio_lock);
-+@@ -750,14 +715,14 @@ qca8k_mdio_write(struct qca8k_priv *priv, int phy, int regnum, u16 data)
++@@ -750,14 +715,14 @@ qca8k_mdio_write(struct qca8k_priv *priv
 + 	if (ret)
 + 		goto exit;
 + 
@@ -307,7 +307,7 @@ index 0000000000..71bbe6185a
 + 
 + 	mutex_unlock(&bus->mdio_lock);
 + 
-+@@ -787,7 +752,7 @@ qca8k_mdio_read(struct qca8k_priv *priv, int phy, int regnum)
++@@ -787,7 +752,7 @@ qca8k_mdio_read(struct qca8k_priv *priv,
 + 	if (ret)
 + 		goto exit;
 + 
@@ -316,7 +316,7 @@ index 0000000000..71bbe6185a
 + 
 + 	ret = qca8k_mdio_busy_wait(bus, QCA8K_MDIO_MASTER_CTRL,
 + 				   QCA8K_MDIO_MASTER_BUSY);
-+@@ -798,7 +763,7 @@ qca8k_mdio_read(struct qca8k_priv *priv, int phy, int regnum)
++@@ -798,7 +763,7 @@ qca8k_mdio_read(struct qca8k_priv *priv,
 + 
 + exit:
 + 	/* even if the busy_wait timeouts try to clear the MASTER_EN */
@@ -325,7 +325,7 @@ index 0000000000..71bbe6185a
 + 
 + 	mutex_unlock(&bus->mdio_lock);
 + 
-+@@ -1968,8 +1933,6 @@ qca8k_sw_probe(struct mdio_device *mdiodev)
++@@ -1914,8 +1879,6 @@ qca8k_sw_probe(struct mdio_device *mdiod
 + 	}
 + 
 + 	priv->mdio_cache.page = 0xffff;
@@ -334,8 +334,6 @@ index 0000000000..71bbe6185a
 + 
 + 	/* Check the detected switch id */
 + 	ret = qca8k_read_switch_id(priv);
-+diff --git a/drivers/net/dsa/qca/qca8k.h b/drivers/net/dsa/qca/qca8k.h
-+index 0b7a5cb12321..03514f7a20be 100644
 +--- a/drivers/net/dsa/qca/qca8k.h
 ++++ b/drivers/net/dsa/qca/qca8k.h
 +@@ -375,11 +375,6 @@ struct qca8k_mdio_cache {
@@ -349,19 +347,16 @@ index 0000000000..71bbe6185a
 +-	u16 hi;
 + };
 + 
-+ struct qca8k_pcs {
-+-- 
-+2.37.2
-+
-diff --git a/target/linux/mpc85xx/patches-5.15/0004-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch b/target/linux/mpc85xx/patches-5.15/0004-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
++ struct qca8k_priv {
+diff --git a/target/linux/generic/backport-5.15/777-v6.2-04-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch b/target/linux/generic/backport-5.15/777-v6.2-04-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
 new file mode 100644
-index 0000000000..e3da221373
+index 0000000000..c0320ad6f9
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0004-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
-@@ -0,0 +1,153 @@
-+From 96de017ff23ed4dabb409a714820b0f5a706e08c Mon Sep 17 00:00:00 2001
++++ b/target/linux/generic/backport-5.15/777-v6.2-04-net-dsa-qca8k-introduce-single-mii-read-write-lo-hi.patch
+@@ -0,0 +1,150 @@
++From cfbd6de588ef659c198083205dc954a6d3ed2aec Mon Sep 17 00:00:00 2001
 +From: Christian Marangi <ansuelsmth@gmail.com>
-+Date: Mon, 12 Dec 2022 21:19:22 +0100
++Date: Thu, 29 Dec 2022 17:33:35 +0100
 +Subject: [PATCH 4/5] net: dsa: qca8k: introduce single mii read/write lo/hi
 +
 +It may be useful to read/write just the lo or hi half of a reg.
@@ -373,16 +368,16 @@ index 0000000000..e3da221373
 +Refactor the mii function to permit single mii read/write of lo or hi
 +half of the reg.
 +
++Tested-by: Ronald Wahl <ronald.wahl@raritan.com>
 +Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
 + drivers/net/dsa/qca/qca8k-8xxx.c | 106 ++++++++++++++++++++++++-------
 + 1 file changed, 84 insertions(+), 22 deletions(-)
 +
-+diff --git a/drivers/net/dsa/qca/qca8k-8xxx.c b/drivers/net/dsa/qca/qca8k-8xxx.c
-+index fbcd5c2b13ae..92c4bfef7c97 100644
 +--- a/drivers/net/dsa/qca/qca8k-8xxx.c
 ++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
-+@@ -37,42 +37,104 @@ qca8k_split_addr(u32 regaddr, u16 *r1, u16 *r2, u16 *page)
++@@ -37,42 +37,104 @@ qca8k_split_addr(u32 regaddr, u16 *r1, u
 + }
 + 
 + static int
@@ -403,11 +398,11 @@ index 0000000000..e3da221373
 ++	if (ret < 0)
 ++		dev_err_ratelimited(&bus->dev,
 ++				    "failed to write qca8k 32bit lo register\n");
-+ 
-+-	if (ret < 0) {
+++
 ++	return ret;
 ++}
-++
++ 
++-	if (ret < 0) {
 ++static int
 ++qca8k_mii_write_hi(struct mii_bus *bus, int phy_id, u32 regnum, u32 val)
 ++{
@@ -423,7 +418,7 @@ index 0000000000..e3da221373
 +-		return ret;
 +-	}
 ++				    "failed to write qca8k 32bit hi register\n");
-++
++ 
 ++	return ret;
 ++}
 ++
@@ -435,7 +430,7 @@ index 0000000000..e3da221373
 ++	ret = bus->read(bus, phy_id, regnum);
 ++	if (ret < 0)
 ++		goto err;
-+ 
+++
 ++	*val = ret & 0xffff;
 + 	return 0;
 ++
@@ -509,18 +504,15 @@ index 0000000000..e3da221373
 + }
 + 
 + static int
-+-- 
-+2.37.2
-+
-diff --git a/target/linux/mpc85xx/patches-5.15/0005-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch b/target/linux/mpc85xx/patches-5.15/0005-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
+diff --git a/target/linux/generic/backport-5.15/777-v6.2-05-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch b/target/linux/generic/backport-5.15/777-v6.2-05-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
 new file mode 100644
-index 0000000000..f734dd6772
+index 0000000000..4cbb66cf35
 --- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0005-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
-@@ -0,0 +1,76 @@
-+From d0cf5793e031f69704d67108bdcc14b6384a67bc Mon Sep 17 00:00:00 2001
++++ b/target/linux/generic/backport-5.15/777-v6.2-05-net-dsa-qca8k-improve-mdio-master-read-write-by-usin.patch
+@@ -0,0 +1,73 @@
++From a4165830ca237f2b3318faf62562bce8ce12a389 Mon Sep 17 00:00:00 2001
 +From: Christian Marangi <ansuelsmth@gmail.com>
-+Date: Tue, 13 Dec 2022 15:38:10 +0100
++Date: Thu, 29 Dec 2022 17:33:36 +0100
 +Subject: [PATCH 5/5] net: dsa: qca8k: improve mdio master read/write by using
 + single lo/hi
 +
@@ -539,16 +531,16 @@ index 0000000000..f734dd6772
 +master reg as the lo half will be replaced by the result. This will save
 +an additional useless write for each read operation.
 +
++Tested-by: Ronald Wahl <ronald.wahl@raritan.com>
 +Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
 +---
 + drivers/net/dsa/qca/qca8k-8xxx.c | 12 ++++++------
 + 1 file changed, 6 insertions(+), 6 deletions(-)
 +
-+diff --git a/drivers/net/dsa/qca/qca8k-8xxx.c b/drivers/net/dsa/qca/qca8k-8xxx.c
-+index 92c4bfef7c97..2f224b166bbb 100644
 +--- a/drivers/net/dsa/qca/qca8k-8xxx.c
 ++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
-+@@ -740,9 +740,9 @@ qca8k_mdio_busy_wait(struct mii_bus *bus, u32 reg, u32 mask)
++@@ -740,9 +740,9 @@ qca8k_mdio_busy_wait(struct mii_bus *bus
 + 
 + 	qca8k_split_addr(reg, &r1, &r2, &page);
 + 
@@ -560,7 +552,7 @@ index 0000000000..f734dd6772
 + 
 + 	/* Check if qca8k_read has failed for a different reason
 + 	 * before returnting -ETIMEDOUT
-+@@ -784,7 +784,7 @@ qca8k_mdio_write(struct qca8k_priv *priv, int phy, int regnum, u16 data)
++@@ -784,7 +784,7 @@ qca8k_mdio_write(struct qca8k_priv *priv
 + 
 + exit:
 + 	/* even if the busy_wait timeouts try to clear the MASTER_EN */
@@ -569,7 +561,7 @@ index 0000000000..f734dd6772
 + 
 + 	mutex_unlock(&bus->mdio_lock);
 + 
-+@@ -814,18 +814,18 @@ qca8k_mdio_read(struct qca8k_priv *priv, int phy, int regnum)
++@@ -814,18 +814,18 @@ qca8k_mdio_read(struct qca8k_priv *priv,
 + 	if (ret)
 + 		goto exit;
 + 
@@ -591,9 +583,6 @@ index 0000000000..f734dd6772
 + 
 + 	mutex_unlock(&bus->mdio_lock);
 + 
-+-- 
-+2.37.2
-+
 -- 
-2.34.1
+2.41.0
 
