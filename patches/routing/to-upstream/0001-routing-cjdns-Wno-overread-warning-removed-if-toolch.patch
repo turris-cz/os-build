@@ -1,6 +1,6 @@
-From 99465466c5fda73c4c358333db4bfc1727a7af05 Mon Sep 17 00:00:00 2001
+From e41b9050392419312dd8a514aed5394c254d2bdb Mon Sep 17 00:00:00 2001
 From: Tomas Zak <tomas.zak@turris.com>
-Date: Mon, 16 Oct 2023 13:37:42 +0200
+Date: Wed, 22 Nov 2023 19:25:54 +0100
 Subject: [PATCH] routing: cjdns: Wno-overread warning removed if toolchain
  lower than version 11
 
@@ -10,40 +10,39 @@ recommendation (https://github.com/NixOS/nixpkgs/pull/168997)
 Added two patches from openwrt stream.
 patch3.10 (1df5290b92625823bb9725a5406383116463f3ac)
 invalid-pointer (d710a7938977c84d6ea0f74b21dc50111e5e968c)
+In previous patch there was error with empty intcmp.
+This commit fix error in in 26c38a17393e8771be6ed2cadb025c6c5e5f0b26
 ---
- cjdns/Makefile                              | 16 +++++++++++++-
+ cjdns/Makefile                              |  8 ++++++-
  cjdns/patches/030-fix-invalid-pointer.patch | 23 +++++++++++++++++++++
  cjdns/patches/040-gyp-python_310.patch      | 15 ++++++++++++++
- 3 files changed, 53 insertions(+), 1 deletion(-)
+ 3 files changed, 45 insertions(+), 1 deletion(-)
  create mode 100644 cjdns/patches/030-fix-invalid-pointer.patch
  create mode 100644 cjdns/patches/040-gyp-python_310.patch
 
 diff --git a/cjdns/Makefile b/cjdns/Makefile
-index 1f8592b..fd65838 100644
+index 1f8592b..78ef334 100644
 --- a/cjdns/Makefile
 +++ b/cjdns/Makefile
-@@ -74,6 +74,15 @@ ifneq ($(CONFIG_USE_UCLIBC),)
+@@ -74,6 +74,12 @@ ifneq ($(CONFIG_USE_UCLIBC),)
  PKG_DO_VARS+= UCLIBC=1
  endif
  
-+# Avoid error during initialization package, compilee variable is empty
-+ifneq (${GCC_VERSION},)
-+TOOLCHAIN_CC=$(word 1, $(subst ., ,${GCC_VERSION}))
-+endif
-+
 +# Check if version compiler is lower than ver. 11
-+TARGET_CCFLAGS:=$(TARGET_CFLAGS) -U_FORTIFY_SOURCE -Wno-error=array-bounds -Wno-error=stringop-overflow $(intcmp 10,$(TOOLCHAIN_CC),-Wno-error=stringop-overread)
-+
++TOOLCHAIN_CC=$(word 1, $(subst ., ,${GCC_VERSION}))
++ifneq ($(TOOLCHAIN_CC),)
++EXTRA_TARGET_CFLAGS=$(intcmp 10,$(TOOLCHAIN_CC), -Wno-error=stringop-overread)
++endif
 +
  define Build/Compile
  	$(INSTALL_DIR) $(PKG_BUILD_DIR)/tmp
  	(cd $(PKG_BUILD_DIR) && \
-@@ -81,7 +95,7 @@ define Build/Compile
+@@ -81,7 +87,7 @@ define Build/Compile
  	CC="$(TARGET_CC)" \
  	AR="$(TARGET_AR)" \
  	RANLIB="$(TARGET_RANLIB)" \
 -	CFLAGS="$(TARGET_CFLAGS) -U_FORTIFY_SOURCE -Wno-error=array-bounds -Wno-error=stringop-overflow -Wno-error=stringop-overread" \
-+	CFLAGS="$(TARGET_CCFLAGS)" \
++	CFLAGS="$(TARGET_CFLAGS) -U_FORTIFY_SOURCE -Wno-error=array-bounds -Wno-error=stringop-overflow$(EXTRA_TARGET_CFLAGS)" \
  	LDFLAGS="$(TARGET_LDFLAGS)" \
  	SYSTEM="linux" \
  	TARGET_ARCH="$(CONFIG_ARCH)" \
@@ -98,5 +97,5 @@ index 0000000..abff213
 + import filecmp
 + import os.path
 -- 
-2.42.0
+2.43.0
 
