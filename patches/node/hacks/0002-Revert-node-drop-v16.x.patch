@@ -1,0 +1,794 @@
+From bed8e47a1eecf1a9eba5bbf5ec4902dd513c240c Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Thu, 14 Dec 2023 15:41:31 +0100
+Subject: [PATCH 2/2] Revert "node: drop v16.x"
+
+This reverts commit 96997b893650b600e996d04b2bab8c92d20e5a7e.
+---
+ node/patches/v16.x/003-path.patch             |  12 +
+ node/patches/v16.x/004-musl_support.patch     |  42 ++++
+ .../v16.x/007-fix_host_build_on_macos.patch   |  11 +
+ .../v16.x/010-execvp-arg-list-too-long.patch  | 236 ++++++++++++++++++
+ .../012-changing-default-npm-settings.patch   |  20 ++
+ ...necessary_libraries_for_host_execute.patch |  78 ++++++
+ node/patches/v16.x/991-v8_zlib_support.patch  |  97 +++++++
+ .../v16.x/992-v8_add_include_dirs.patch       |  26 ++
+ node/patches/v16.x/999-cast_for_mips32.patch  |  11 +
+ ...s-v8-src-trap-handler-trap-handler.h.patch |  29 +++
+ node/patches/v16.x/999-fix_icu_conflict.patch |  74 ++++++
+ .../v16.x/999-localhost-no-addrconfig.patch   |  29 +++
+ ...able_pointer_authentication_on_arm64.patch |  13 +
+ 13 files changed, 678 insertions(+)
+ create mode 100644 node/patches/v16.x/003-path.patch
+ create mode 100644 node/patches/v16.x/004-musl_support.patch
+ create mode 100644 node/patches/v16.x/007-fix_host_build_on_macos.patch
+ create mode 100644 node/patches/v16.x/010-execvp-arg-list-too-long.patch
+ create mode 100644 node/patches/v16.x/012-changing-default-npm-settings.patch
+ create mode 100644 node/patches/v16.x/990-delete_unnecessary_libraries_for_host_execute.patch
+ create mode 100644 node/patches/v16.x/991-v8_zlib_support.patch
+ create mode 100644 node/patches/v16.x/992-v8_add_include_dirs.patch
+ create mode 100644 node/patches/v16.x/999-cast_for_mips32.patch
+ create mode 100644 node/patches/v16.x/999-deps-v8-src-trap-handler-trap-handler.h.patch
+ create mode 100644 node/patches/v16.x/999-fix_icu_conflict.patch
+ create mode 100644 node/patches/v16.x/999-localhost-no-addrconfig.patch
+ create mode 100644 node/patches/v16.x/999-revert_enable_pointer_authentication_on_arm64.patch
+
+diff --git a/node/patches/v16.x/003-path.patch b/node/patches/v16.x/003-path.patch
+new file mode 100644
+index 00000000..2066a5cf
+--- /dev/null
++++ b/node/patches/v16.x/003-path.patch
+@@ -0,0 +1,12 @@
++--- a/lib/internal/modules/cjs/loader.js
+++++ b/lib/internal/modules/cjs/loader.js
++@@ -1333,7 +1333,8 @@ Module._initPaths = function() {
++     path.resolve(process.execPath, '..') :
++     path.resolve(process.execPath, '..', '..');
++ 
++-  const paths = [path.resolve(prefixDir, 'lib', 'node')];
+++  const paths = [path.resolve(prefixDir, 'lib', 'node'),
+++                 path.resolve(prefixDir, 'lib', 'node_modules')];
++ 
++   if (homeDir) {
++     ArrayPrototypeUnshift(paths, path.resolve(homeDir, '.node_libraries'));
+diff --git a/node/patches/v16.x/004-musl_support.patch b/node/patches/v16.x/004-musl_support.patch
+new file mode 100644
+index 00000000..172b8010
+--- /dev/null
++++ b/node/patches/v16.x/004-musl_support.patch
+@@ -0,0 +1,42 @@
++--- a/deps/v8/src/base/platform/condition-variable.cc
+++++ b/deps/v8/src/base/platform/condition-variable.cc
++@@ -20,7 +20,7 @@ namespace base {
++ 
++ ConditionVariable::ConditionVariable() {
++ #if (V8_OS_FREEBSD || V8_OS_NETBSD || V8_OS_OPENBSD || \
++-     (V8_OS_LINUX && V8_LIBC_GLIBC))
+++     V8_OS_LINUX)
++   // On Free/Net/OpenBSD and Linux with glibc we can change the time
++   // source for pthread_cond_timedwait() to use the monotonic clock.
++   pthread_condattr_t attr;
++@@ -96,7 +96,7 @@ bool ConditionVariable::WaitFor(Mutex* m
++       &native_handle_, &mutex->native_handle(), &ts);
++ #else
++ #if (V8_OS_FREEBSD || V8_OS_NETBSD || V8_OS_OPENBSD || \
++-     (V8_OS_LINUX && V8_LIBC_GLIBC))
+++     V8_OS_LINUX)
++   // On Free/Net/OpenBSD and Linux with glibc we can change the time
++   // source for pthread_cond_timedwait() to use the monotonic clock.
++   result = clock_gettime(CLOCK_MONOTONIC, &ts);
++--- a/deps/v8/src/base/platform/platform-posix.cc
+++++ b/deps/v8/src/base/platform/platform-posix.cc
++@@ -883,7 +883,7 @@ bool Thread::Start() {
++ #if V8_OS_MACOSX
++     // Default on Mac OS X is 512kB -- bump up to 1MB
++     stack_size = 1 * 1024 * 1024;
++-#elif V8_OS_AIX
+++#elif V8_OS_AIX || !defined(__GLIBC__)
++     // Default on AIX is 96kB -- bump up to 2MB
++     stack_size = 2 * 1024 * 1024;
++ #endif
++--- a/deps/v8/src/codegen/external-reference-table.cc
+++++ b/deps/v8/src/codegen/external-reference-table.cc
++@@ -10,7 +10,7 @@
++ #include "src/ic/stub-cache.h"
++ #include "src/logging/counters.h"
++ 
++-#if defined(DEBUG) && defined(V8_OS_LINUX) && !defined(V8_OS_ANDROID)
+++#if defined(DEBUG) && defined(V8_OS_LINUX) && !defined(V8_OS_ANDROID) && defined(V8_LIBC_GLIBC)
++ #define SYMBOLIZE_FUNCTION
++ #include <execinfo.h>
++ 
+diff --git a/node/patches/v16.x/007-fix_host_build_on_macos.patch b/node/patches/v16.x/007-fix_host_build_on_macos.patch
+new file mode 100644
+index 00000000..5def2bd4
+--- /dev/null
++++ b/node/patches/v16.x/007-fix_host_build_on_macos.patch
+@@ -0,0 +1,11 @@
++--- a/tools/gyp/pylib/gyp/generator/make.py
+++++ b/tools/gyp/pylib/gyp/generator/make.py
++@@ -181,7 +181,7 @@ cmd_solink_module = $(LINK.$(TOOLSET)) -
++ 
++ LINK_COMMANDS_MAC = """\
++ quiet_cmd_alink = LIBTOOL-STATIC $@
++-cmd_alink = rm -f $@ && ./gyp-mac-tool filter-libtool libtool $(GYP_LIBTOOLFLAGS) -static -o $@ $(filter %.o,$^)
+++cmd_alink = rm -f $@ && ./gyp-mac-tool filter-libtool /usr/bin/libtool $(GYP_LIBTOOLFLAGS) -static -o $@ $(filter %.o,$^)
++ 
++ quiet_cmd_link = LINK($(TOOLSET)) $@
++ cmd_link = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o "$@" $(LD_INPUTS) $(LIBS)
+diff --git a/node/patches/v16.x/010-execvp-arg-list-too-long.patch b/node/patches/v16.x/010-execvp-arg-list-too-long.patch
+new file mode 100644
+index 00000000..8074ba14
+--- /dev/null
++++ b/node/patches/v16.x/010-execvp-arg-list-too-long.patch
+@@ -0,0 +1,236 @@
++--- a/deps/npm/node_modules/node-gyp/gyp/pylib/gyp/generator/make.py
+++++ b/deps/npm/node_modules/node-gyp/gyp/pylib/gyp/generator/make.py
++@@ -154,6 +154,32 @@ cmd_alink_thin = rm -f $@ && $(AR.$(TOOL
++ quiet_cmd_link = LINK($(TOOLSET)) $@
++ cmd_link = $(LINK.$(TOOLSET)) -o $@ $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -Wl,--start-group $(LD_INPUTS) $(LIBS) -Wl,--end-group
++ 
+++define xargs
+++        $(1) $(wordlist 1,100,$(2))
+++        $(if $(word 101,$(2)),$(call xargs,$(1),$(wordlist 101,$(words $(2)),$(2))))
+++endef
+++
+++define write-to-file
+++        @echo >$(1)
+++        $(call xargs,printf "%s\\n" >>$(1),$(2))
+++endef
+++
+++OBJ_FILE_LIST_SFX := ar-file-list
+++
+++define create_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(1).$(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crs $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
+++define create_thin_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crsT $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
++ # We support two kinds of shared objects (.so):
++ # 1) shared_library, which is just bundling together many dependent libraries
++ # into a link line.
++@@ -198,6 +224,32 @@ cmd_alink = rm -f $@ && $(AR.$(TOOLSET))
++ quiet_cmd_alink_thin = AR($(TOOLSET)) $@
++ cmd_alink_thin = rm -f $@ && $(AR.$(TOOLSET)) crsT $@ $(filter %.o,$^)
++ 
+++define xargs
+++        $(1) $(wordlist 1,100,$(2))
+++        $(if $(word 101,$(2)),$(call xargs,$(1),$(wordlist 101,$(words $(2)),$(2))))
+++endef
+++
+++define write-to-file
+++        @echo >$(1)
+++        $(call xargs,printf "%s\\n" >>$(1),$(2))
+++endef
+++
+++OBJ_FILE_LIST_SFX := ar-file-list
+++
+++define create_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(1).$(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crs $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
+++define create_thin_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crsT $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
++ # Due to circular dependencies between libraries :(, we wrap the
++ # special "figure out circular dependencies" flags around the entire
++ # input list during linking.
++@@ -1768,21 +1820,35 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)
++                 self.flavor not in ("mac", "openbsd", "netbsd", "win")
++                 and not self.is_standalone_static_library
++             ):
++-                self.WriteDoCmd(
++-                    [self.output_binary],
++-                    link_deps,
++-                    "alink_thin",
++-                    part_of_all,
++-                    postbuilds=postbuilds,
++-                )
+++                if self.flavor in ('linux', 'android'):
+++                    self.WriteMakeRule(
+++                        [self.output_binary],
+++                        link_deps,
+++                        actions = ['$(call create_thin_archive,$@,$^)']
+++                    )
+++                else:
+++                    self.WriteDoCmd(
+++                        [self.output_binary],
+++                        link_deps,
+++                        "alink_thin",
+++                        part_of_all,
+++                        postbuilds=postbuilds,
+++                    )
++             else:
++-                self.WriteDoCmd(
++-                    [self.output_binary],
++-                    link_deps,
++-                    "alink",
++-                    part_of_all,
++-                    postbuilds=postbuilds,
++-                )
+++                if self.flavor in ('linux', 'android'):
+++                    self.WriteMakeRule(
+++                        [self.output_binary],
+++                        link_deps,
+++                        actions = ['$(call create_archive,$@,$^)']
+++                    )
+++                else:
+++                    self.WriteDoCmd(
+++                        [self.output_binary],
+++                        link_deps,
+++                        "alink",
+++                        part_of_all,
+++                        postbuilds=postbuilds,
+++                    )
++         elif self.type == "shared_library":
++             self.WriteLn(
++                 "%s: LD_INPUTS := %s"
++--- a/tools/gyp/pylib/gyp/generator/make.py
+++++ b/tools/gyp/pylib/gyp/generator/make.py
++@@ -156,6 +156,32 @@ cmd_alink_thin = rm -f $@ && $(AR.$(TOOL
++ quiet_cmd_link = LINK($(TOOLSET)) $@
++ cmd_link = $(LINK.$(TOOLSET)) -o $@ $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -Wl,--start-group $(LD_INPUTS) $(LIBS) -Wl,--end-group
++ 
+++define xargs
+++        $(1) $(wordlist 1,100,$(2))
+++        $(if $(word 101,$(2)),$(call xargs,$(1),$(wordlist 101,$(words $(2)),$(2))))
+++endef
+++
+++define write-to-file
+++        @echo >$(1)
+++        $(call xargs,printf "%s\\n" >>$(1),$(2))
+++endef
+++
+++OBJ_FILE_LIST_SFX := ar-file-list
+++
+++define create_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(1).$(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crs $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
+++define create_thin_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crsT $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
++ # We support two kinds of shared objects (.so):
++ # 1) shared_library, which is just bundling together many dependent libraries
++ # into a link line.
++@@ -200,6 +226,32 @@ cmd_alink = rm -f $@ && $(AR.$(TOOLSET))
++ quiet_cmd_alink_thin = AR($(TOOLSET)) $@
++ cmd_alink_thin = rm -f $@ && $(AR.$(TOOLSET)) crsT $@ $(filter %.o,$^)
++ 
+++define xargs
+++        $(1) $(wordlist 1,100,$(2))
+++        $(if $(word 101,$(2)),$(call xargs,$(1),$(wordlist 101,$(words $(2)),$(2))))
+++endef
+++
+++define write-to-file
+++        @echo >$(1)
+++        $(call xargs,printf "%s\\n" >>$(1),$(2))
+++endef
+++
+++OBJ_FILE_LIST_SFX := ar-file-list
+++
+++define create_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(1).$(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crs $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
+++define create_thin_archive
+++        $(eval OBJ_FILE_LIST := $(basename $(notdir $(1))).$(OBJ_FILE_LIST_SFX))
+++        rm -f $(1) $(OBJ_FILE_LIST); mkdir -p `dirname $(1)`
+++        $(call write-to-file,$(1).$(OBJ_FILE_LIST),$(filter %.o,$(2)))
+++        $(AR.$(TOOLSET)) crsT $(1) @$(1).$(OBJ_FILE_LIST)
+++endef
+++
++ # Due to circular dependencies between libraries :(, we wrap the
++ # special "figure out circular dependencies" flags around the entire
++ # input list during linking.
++@@ -1809,21 +1861,35 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)
++                 self.flavor not in ("mac", "openbsd", "netbsd", "win")
++                 and not self.is_standalone_static_library
++             ):
++-                self.WriteDoCmd(
++-                    [self.output_binary],
++-                    link_deps,
++-                    "alink_thin",
++-                    part_of_all,
++-                    postbuilds=postbuilds,
++-                )
+++                if self.flavor in ('linux', 'android'):
+++                    self.WriteMakeRule(
+++                        [self.output_binary],
+++                        link_deps,
+++                        actions = ['$(call create_thin_archive,$@,$^)']
+++                    )
+++                else:
+++                    self.WriteDoCmd(
+++                        [self.output_binary],
+++                        link_deps,
+++                        'alink_thin',
+++                        part_of_all,
+++                        postbuilds=postbuilds
+++                    )
++             else:
++-                self.WriteDoCmd(
++-                    [self.output_binary],
++-                    link_deps,
++-                    "alink",
++-                    part_of_all,
++-                    postbuilds=postbuilds,
++-                )
+++                if self.flavor in ('linux', 'android'):
+++                    self.WriteMakeRule(
+++                        [self.output_binary],
+++                        link_deps,
+++                        actions = ['$(call create_archive,$@,$^)']
+++                    )
+++                else:
+++                    self.WriteDoCmd(
+++                        [self.output_binary],
+++                        link_deps,
+++                        'alink',
+++                        part_of_all,
+++                        postbuilds=postbuilds
+++                    )
++         elif self.type == "shared_library":
++             self.WriteLn(
++                 "%s: LD_INPUTS := %s"
+diff --git a/node/patches/v16.x/012-changing-default-npm-settings.patch b/node/patches/v16.x/012-changing-default-npm-settings.patch
+new file mode 100644
+index 00000000..4105eacf
+--- /dev/null
++++ b/node/patches/v16.x/012-changing-default-npm-settings.patch
+@@ -0,0 +1,20 @@
++--- a/deps/npm/lib/utils/config/definitions.js
+++++ b/deps/npm/lib/utils/config/definitions.js
++@@ -1241,7 +1241,7 @@ define('lockfile-version', {
++ })
++ 
++ define('loglevel', {
++-  default: 'notice',
+++  default: 'info',
++   type: [
++     'silent',
++     'error',
++@@ -2053,7 +2053,7 @@ define('strict-peer-deps', {
++ })
++ 
++ define('strict-ssl', {
++-  default: true,
+++  default: false,
++   type: Boolean,
++   description: `
++     Whether or not to do SSL key validation when making requests to the
+diff --git a/node/patches/v16.x/990-delete_unnecessary_libraries_for_host_execute.patch b/node/patches/v16.x/990-delete_unnecessary_libraries_for_host_execute.patch
+new file mode 100644
+index 00000000..e39e29df
+--- /dev/null
++++ b/node/patches/v16.x/990-delete_unnecessary_libraries_for_host_execute.patch
+@@ -0,0 +1,78 @@
++--- a/tools/icu/icu-generic.gyp
+++++ b/tools/icu/icu-generic.gyp
++@@ -419,6 +419,7 @@
++       'target_name': 'genrb',
++       'type': 'executable',
++       'toolsets': [ 'host' ],
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'dependencies': [ 'icutools' ],
++       'sources': [
++         '<@(icu_src_genrb)'
++@@ -435,6 +436,7 @@
++       'target_name': 'iculslocs',
++       'toolsets': [ 'host' ],
++       'type': 'executable',
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'dependencies': [ 'icutools' ],
++       'sources': [
++         'iculslocs.cc',
++@@ -447,6 +449,7 @@
++       'target_name': 'icupkg',
++       'toolsets': [ 'host' ],
++       'type': 'executable',
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'dependencies': [ 'icutools' ],
++       'sources': [
++         '<@(icu_src_icupkg)',
++@@ -458,6 +461,7 @@
++       'target_name': 'genccode',
++       'toolsets': [ 'host' ],
++       'type': 'executable',
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'dependencies': [ 'icutools' ],
++       'sources': [
++         '<@(icu_src_genccode)',
++--- a/tools/v8_gypfiles/v8.gyp
+++++ b/tools/v8_gypfiles/v8.gyp
++@@ -1373,6 +1373,7 @@
++     {
++       'target_name': 'bytecode_builtins_list_generator',
++       'type': 'executable',
+++      'libraries!':[ '-licui18n', '-licuuc', '-licudata', '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'conditions': [
++         ['want_separate_host_toolset', {
++           'toolsets': ['host'],
++@@ -1397,6 +1398,8 @@
++     {
++       'target_name': 'mksnapshot',
++       'type': 'executable',
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
+++      'library_dirs':[ '../../../../staging_dir/hostpkg/share/icu/current/lib' ],
++       'dependencies': [
++         'v8_base_without_compiler',
++         'v8_compiler_for_mksnapshot',
++@@ -1418,6 +1421,7 @@
++     {
++       'target_name': 'torque',
++       'type': 'executable',
+++      'libraries!':[ '-licui18n', '-licuuc', '-licudata', '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'dependencies': [
++         'torque_base',
++         # "build/win:default_exe_manifest",
++@@ -1456,6 +1460,7 @@
++     {
++       'target_name': 'torque-language-server',
++       'type': 'executable',
+++      'libraries!':[ '-licui18n', '-licuuc', '-licudata', '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'conditions': [
++         ['want_separate_host_toolset', {
++           'toolsets': ['host'],
++@@ -1483,6 +1488,8 @@
++     {
++       'target_name': 'gen-regexp-special-case',
++       'type': 'executable',
+++      'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
+++      'library_dirs':[ '../../../../staging_dir/hostpkg/share/icu/current/lib' ],
++       'dependencies': [
++         'v8_libbase',
++         # "build/win:default_exe_manifest",
+diff --git a/node/patches/v16.x/991-v8_zlib_support.patch b/node/patches/v16.x/991-v8_zlib_support.patch
+new file mode 100644
+index 00000000..8bcd674c
+--- /dev/null
++++ b/node/patches/v16.x/991-v8_zlib_support.patch
+@@ -0,0 +1,97 @@
++--- a/deps/zlib/zlib.gyp
+++++ b/deps/zlib/zlib.gyp
++@@ -43,10 +43,12 @@
++             'zutil.c',
++             'zutil.h',
++           ],
+++          'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++           'include_dirs': [
++             '.',
++           ],
++           'direct_dependent_settings': {
+++            'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++             'include_dirs': [
++               '.',
++             ],
++--- a/tools/v8_gypfiles/v8.gyp
+++++ b/tools/v8_gypfiles/v8.gyp
++@@ -60,6 +60,7 @@
++       ],
++       'hard_dependency': 1,
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(SHARED_INTERMEDIATE_DIR)',
++         ],
++@@ -181,6 +182,7 @@
++           '<@(torque_outputs_cc)',
++           '<@(torque_outputs_inc)',
++         ],
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(SHARED_INTERMEDIATE_DIR)',
++         ],
++@@ -202,6 +204,7 @@
++         'sources': [
++           '<(generate_bytecode_builtins_list_output)',
++         ],
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(generate_bytecode_output_root)',
++           '<(SHARED_INTERMEDIATE_DIR)',
++@@ -249,9 +252,11 @@
++         'v8_base_without_compiler',
++         'v8_shared_internal_headers',
++       ],
+++      'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++       'include_dirs': [
++         '<(SHARED_INTERMEDIATE_DIR)',
++         '<(generate_bytecode_output_root)',
+++        '<!@(echo "$STAGING_DIR"/usr/../usr/include)',
++       ],
++       'sources': [
++         '<!@pymod_do_main(GN-scraper "<(V8_ROOT)/BUILD.gn"  "\\"v8_initializers.*?sources = ")',
++@@ -754,6 +759,7 @@
++       ],
++       'includes': ['inspector.gypi'],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(generate_bytecode_output_root)',
++           '<(SHARED_INTERMEDIATE_DIR)',
++@@ -1353,6 +1359,7 @@
++         }],
++       ],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(V8_ROOT)/include',
++         ],
++@@ -1701,6 +1708,7 @@
++          }],
++       ],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(V8_ROOT)/include',
++         ],
++@@ -1881,15 +1889,19 @@
++         }],
++       ],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(V8_ROOT)/third_party/zlib',
++           '<(V8_ROOT)/third_party/zlib/google',
+++          '<!@(echo "$STAGING_DIR"/usr/../usr/include)',
++         ],
++       },
++       'defines': [ 'ZLIB_IMPLEMENTATION' ],
+++      'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++       'include_dirs': [
++         '<(V8_ROOT)/third_party/zlib',
++         '<(V8_ROOT)/third_party/zlib/google',
+++        '<!@(echo "$STAGING_DIR"/usr/../usr/include)',
++       ],
++       'sources': [
++         '<(V8_ROOT)/third_party/zlib/adler32.c',
+diff --git a/node/patches/v16.x/992-v8_add_include_dirs.patch b/node/patches/v16.x/992-v8_add_include_dirs.patch
+new file mode 100644
+index 00000000..af467516
+--- /dev/null
++++ b/node/patches/v16.x/992-v8_add_include_dirs.patch
+@@ -0,0 +1,26 @@
++--- a/tools/v8_gypfiles/v8.gyp
+++++ b/tools/v8_gypfiles/v8.gyp
++@@ -242,6 +242,7 @@
++       'sources': [
++         '<(V8_ROOT)/src/init/setup-isolate-full.cc',
++       ],
+++      'include_dirs': [ '<!@(echo "$STAGING_DIR"/usr/../usr/include)' ],
++     },  # v8_init
++     {
++       'target_name': 'v8_initializers',
++@@ -699,6 +700,7 @@
++         'v8_shared_internal_headers',
++       ],
++       'sources': ['<@(v8_compiler_sources)'],
+++      'include_dirs': [ '<!@(echo "$STAGING_DIR"/usr/../usr/include)' ],
++       'conditions': [
++         ['OS=="win" and _toolset=="target"', {
++           'msvs_precompiled_header': '<(V8_ROOT)/../../tools/msvs/pch/v8_pch.h',
++@@ -1407,6 +1409,7 @@
++       'type': 'executable',
++       'libraries!':[ '-lcrypto', '-lssl', '-lz', '-lhttp_parser', '-luv', '-lnghttp2', '-lcares' ],
++       'library_dirs':[ '../../../../staging_dir/hostpkg/share/icu/current/lib' ],
+++      'include_dirs': [ '<!@(echo "$STAGING_DIR"/usr/../usr/include)' ],
++       'dependencies': [
++         'v8_base_without_compiler',
++         'v8_compiler_for_mksnapshot',
+diff --git a/node/patches/v16.x/999-cast_for_mips32.patch b/node/patches/v16.x/999-cast_for_mips32.patch
+new file mode 100644
+index 00000000..a83157b8
+--- /dev/null
++++ b/node/patches/v16.x/999-cast_for_mips32.patch
+@@ -0,0 +1,11 @@
++--- a/deps/v8/src/compiler/backend/mips/code-generator-mips.cc
+++++ b/deps/v8/src/compiler/backend/mips/code-generator-mips.cc
++@@ -4103,7 +4103,7 @@ void CodeGenerator::AssembleReturn(Instr
++     } else if (FLAG_debug_code) {
++       __ Assert(eq, AbortReason::kUnexpectedAdditionalPopValue,
++                 g.ToRegister(additional_pop_count),
++-                Operand(static_cast<int64_t>(0)));
+++                Operand(static_cast<int32_t>(0)));
++     }
++   }
++   // Functions with JS linkage have at least one parameter (the receiver).
+diff --git a/node/patches/v16.x/999-deps-v8-src-trap-handler-trap-handler.h.patch b/node/patches/v16.x/999-deps-v8-src-trap-handler-trap-handler.h.patch
+new file mode 100644
+index 00000000..b488359b
+--- /dev/null
++++ b/node/patches/v16.x/999-deps-v8-src-trap-handler-trap-handler.h.patch
+@@ -0,0 +1,29 @@
++--- a/deps/v8/src/trap-handler/trap-handler.h
+++++ b/deps/v8/src/trap-handler/trap-handler.h
++@@ -17,19 +17,16 @@ namespace v8 {
++ namespace internal {
++ namespace trap_handler {
++ 
++-// X64 on Linux, Windows, MacOS, FreeBSD.
++-#if V8_HOST_ARCH_X64 && V8_TARGET_ARCH_X64 &&                        \
++-    ((V8_OS_LINUX && !V8_OS_ANDROID) || V8_OS_WIN || V8_OS_MACOSX || \
++-     V8_OS_FREEBSD)
+++#if V8_TARGET_ARCH_X64 && V8_OS_LINUX && !V8_OS_ANDROID
++ #define V8_TRAP_HANDLER_SUPPORTED true
++-// Arm64 (non-simulator) on Mac.
++-#elif V8_TARGET_ARCH_ARM64 && V8_HOST_ARCH_ARM64 && V8_OS_MACOSX
+++#elif V8_TARGET_ARCH_X64 && V8_OS_WIN
++ #define V8_TRAP_HANDLER_SUPPORTED true
++-// Arm64 simulator on x64 on Linux or Mac.
++-#elif V8_TARGET_ARCH_ARM64 && V8_HOST_ARCH_X64 && (V8_OS_LINUX || V8_OS_MACOSX)
++-#define V8_TRAP_HANDLER_VIA_SIMULATOR
+++#elif V8_TARGET_ARCH_X64 && V8_OS_MACOSX
+++#define V8_TRAP_HANDLER_SUPPORTED true
+++#elif V8_TARGET_ARCH_X64 && V8_OS_FREEBSD
+++#define V8_TRAP_HANDLER_SUPPORTED true
+++#elif V8_HOST_ARCH_ARM64 && V8_TARGET_ARCH_ARM64 && V8_OS_MACOSX
++ #define V8_TRAP_HANDLER_SUPPORTED true
++-// Everything else is unsupported.
++ #else
++ #define V8_TRAP_HANDLER_SUPPORTED false
++ #endif
+diff --git a/node/patches/v16.x/999-fix_icu_conflict.patch b/node/patches/v16.x/999-fix_icu_conflict.patch
+new file mode 100644
+index 00000000..489bca47
+--- /dev/null
++++ b/node/patches/v16.x/999-fix_icu_conflict.patch
+@@ -0,0 +1,74 @@
++--- a/tools/icu/icu-generic.gyp
+++++ b/tools/icu/icu-generic.gyp
++@@ -107,6 +107,7 @@
++           'sources': [
++             '<@(icu_src_i18n)'
++           ],
+++          'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++           'include_dirs': [
++             '<(icu_path)/source/i18n',
++           ],
++@@ -115,6 +116,7 @@
++           ],
++           'dependencies': [ 'icuucx', 'icu_implementation', 'icu_uconfig', 'icu_uconfig_target' ],
++           'direct_dependent_settings': {
+++            'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++             'include_dirs': [
++               '<(icu_path)/source/i18n',
++             ],
++@@ -201,6 +203,7 @@
++               # full data - no trim needed
++               'sources': [ '<(SHARED_INTERMEDIATE_DIR)/icudt<(icu_ver_major)_dat.<(icu_asm_ext)' ],
++               'dependencies': [ 'genccode#host', 'icupkg#host', 'icu_implementation#host', 'icu_uconfig' ],
+++              'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++               'include_dirs': [
++                 '<(icu_path)/source/common',
++               ],
++@@ -285,6 +288,7 @@
++               # This file contains the small ICU data
++               'sources': [ '<(SHARED_INTERMEDIATE_DIR)/icusmdt<(icu_ver_major)_dat.<(icu_asm_ext)' ],
++               # for umachine.h
+++              'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++               'include_dirs': [
++                 '<(icu_path)/source/common',
++               ],
++@@ -301,6 +305,7 @@
++       'sources': [
++         '<@(icu_src_stubdata)'
++       ],
+++      'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++       'include_dirs': [
++         '<(icu_path)/source/common',
++       ],
++@@ -340,6 +345,7 @@
++           '_XOPEN_SOURCE_EXTENDED=0',
++         ]}],
++       ],
+++      'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++       'include_dirs': [
++         '<(icu_path)/source/common',
++       ],
++@@ -349,6 +355,7 @@
++       'cflags_c': ['-std=c99'],
++       'export_dependent_settings': [ 'icu_uconfig', 'icu_uconfig_target' ],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(icu_path)/source/common',
++         ],
++@@ -379,6 +386,7 @@
++         '<(icu_path)/source/tools/toolutil/dbgutil.cpp',
++         '<(icu_path)/source/tools/toolutil/dbgutil.h',
++       ],
+++      'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++       'include_dirs': [
++         '<(icu_path)/source/common',
++         '<(icu_path)/source/i18n',
++@@ -398,6 +406,7 @@
++         }]
++       ],
++       'direct_dependent_settings': {
+++        'include_dirs!': [ '<!@(echo "$STAGING_DIR"/usr/include)' ],
++         'include_dirs': [
++           '<(icu_path)/source/common',
++           '<(icu_path)/source/i18n',
+diff --git a/node/patches/v16.x/999-localhost-no-addrconfig.patch b/node/patches/v16.x/999-localhost-no-addrconfig.patch
+new file mode 100644
+index 00000000..ce24ebd1
+--- /dev/null
++++ b/node/patches/v16.x/999-localhost-no-addrconfig.patch
+@@ -0,0 +1,29 @@
++Description: do not use dns.ADDRCONFIG for localhost
++ it fails on IPv6-only systems. Setting it with libc fails on linux.
++ https://github.com/nodejs/node/issues/33279
++Author: Jérémy Lal <kapouer@melix.org>
++Last-Update: 2020-06-11
++Bug-Debian: https://bugs.debian.org/962318
++Forwarded: https://github.com/nodejs/node/issues/33816
++--- a/lib/net.js
+++++ b/lib/net.js
++@@ -1,4 +1,5 @@
++ // Copyright Joyent, Inc. and other Node contributors.
+++
++ //
++ // Permission is hereby granted, free of charge, to any person obtaining a
++ // copy of this software and associated documentation files (the
++@@ -1149,13 +1150,6 @@ function lookupAndConnect(self, options)
++     hints: options.hints || 0
++   };
++ 
++-  if (!isWindows &&
++-      dnsopts.family !== 4 &&
++-      dnsopts.family !== 6 &&
++-      dnsopts.hints === 0) {
++-    dnsopts.hints = dns.ADDRCONFIG;
++-  }
++-
++   debug('connect: find host', host);
++   debug('connect: dns options', dnsopts);
++   self._host = host;
+diff --git a/node/patches/v16.x/999-revert_enable_pointer_authentication_on_arm64.patch b/node/patches/v16.x/999-revert_enable_pointer_authentication_on_arm64.patch
+new file mode 100644
+index 00000000..4ef802d0
+--- /dev/null
++++ b/node/patches/v16.x/999-revert_enable_pointer_authentication_on_arm64.patch
+@@ -0,0 +1,13 @@
++--- a/configure.py
+++++ b/configure.py
++@@ -1259,10 +1259,6 @@ def configure_node(o):
++ 
++   o['variables']['want_separate_host_toolset'] = int(cross_compiling)
++ 
++-  # Enable branch protection for arm64
++-  if target_arch == 'arm64':
++-    o['cflags']+=['-msign-return-address=all']
++-
++   if options.node_snapshot_main is not None:
++     if options.shared:
++       # This should be possible to fix, but we will need to refactor the
+-- 
+2.43.0
+
