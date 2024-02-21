@@ -7,8 +7,8 @@ Signed-off-by: Michal Hrusecky <Michal@Hrusecky.net>
 ---
  utils/lxc/Makefile                         |  1 +
  utils/lxc/files/systemd-workaround         |  4 +++
- utils/lxc/patches/030-turris-servers.patch | 31 ++++++++++++++++++++++
- 3 files changed, 36 insertions(+)
+ utils/lxc/patches/030-turris-servers.patch | 44 ++++++++++++++++++++++
+ 3 files changed, 49 insertions(+)
  create mode 100644 utils/lxc/files/systemd-workaround
  create mode 100644 utils/lxc/patches/030-turris-servers.patch
 
@@ -36,10 +36,10 @@ index 000000000..2e343dc68
 +}
 diff --git a/utils/lxc/patches/030-turris-servers.patch b/utils/lxc/patches/030-turris-servers.patch
 new file mode 100644
-index 000000000..dae81378a
+index 000000000..4fd5c0956
 --- /dev/null
 +++ b/utils/lxc/patches/030-turris-servers.patch
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,46 @@
 +--- a/config/etc/default.conf.unknown
 ++++ b/config/etc/default.conf.unknown
 +@@ -1 +1,9 @@
@@ -47,6 +47,20 @@ index 000000000..dae81378a
 ++lxc.net.0.type = veth
 ++lxc.net.0.link = br-lan
 ++lxc.net.0.flags = up
+++lxc.net.0.name = eth0
+++# # Some workarounds
+++lxc.include = /usr/share/lxc/config/common.conf
+++lxc.hook.start-host = /usr/share/lxc/hooks/systemd-workaround
+++# Template to generate fixed MAC address
+++lxc.net.0.hwaddr = x2:xx:xx:xx:xx:xx
++--- a/config/etc/default.conf.lxcbr
+++++ b/config/etc/default.conf.lxcbr
++@@ -1,4 +1,9 @@
++ lxc.net.0.type = veth
++-lxc.net.0.link = lxcbr0
+++lxc.net.0.link = br-lan
++ lxc.net.0.flags = up
++-lxc.net.0.hwaddr = 00:16:3e:xx:xx:xx
 ++lxc.net.0.name = eth0
 ++# # Some workarounds
 ++lxc.include = /usr/share/lxc/config/common.conf
@@ -70,7 +84,8 @@ index 000000000..dae81378a
 ++DOWNLOAD_SERVER="$(uci get lxc.lxc.url 2> /dev/null || echo repo.turris.cz/lxc)"
 + DOWNLOAD_TARGET="system"
 + DOWNLOAD_URL=
-+ DOWNLOAD_USE_CACHE="false"
++ DOWNLOAD_USE_CACHE="false"                                                        
++
 -- 
 2.40.1
 
