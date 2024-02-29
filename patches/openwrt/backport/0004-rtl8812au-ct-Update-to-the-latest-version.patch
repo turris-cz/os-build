@@ -1,0 +1,289 @@
+From d9c061aa0e47a8206b2fc7c84bb82bb3266d1a15 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 27 Feb 2024 16:08:21 +0100
+Subject: [PATCH 1/2] rtl8812au-ct: Update to the latest version
+
+Backport latest version of rtl8812au-ct to fix build.
+Taken from OpenWrt master, commit 35a5e62da7275a4a1423df6238340dd08eeff3c9
+---
+ package/kernel/rtl8812au-ct/Makefile          | 15 ++--
+ .../patches/003-wireless-5.8.patch            |  4 +-
+ .../patches/004-remove-extern-inline.patch    | 24 ++++++
+ ...de-fix-always-TRUE-condition-warning.patch | 72 ++++++++++++++++
+ ...nkid-linux-version-code-conditionals.patch | 86 +++++++++++++++++++
+ .../rtl8812au-ct/patches/100-api_update.patch | 56 ++++++++++++
+ 6 files changed, 248 insertions(+), 9 deletions(-)
+ create mode 100644 package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
+ create mode 100644 package/kernel/rtl8812au-ct/patches/007-treewide-fix-always-TRUE-condition-warning.patch
+ create mode 100644 package/kernel/rtl8812au-ct/patches/099-cut-linkid-linux-version-code-conditionals.patch
+ create mode 100644 package/kernel/rtl8812au-ct/patches/100-api_update.patch
+
+diff --git a/package/kernel/rtl8812au-ct/Makefile b/package/kernel/rtl8812au-ct/Makefile
+index aa2d7a2ea9..b0440a6858 100644
+--- a/package/kernel/rtl8812au-ct/Makefile
++++ b/package/kernel/rtl8812au-ct/Makefile
+@@ -7,10 +7,10 @@ PKG_LICENSE:=GPLv2
+ PKG_LICENSE_FILES:=
+ 
+ PKG_SOURCE_URL:=https://github.com/greearb/rtl8812AU_8821AU_linux.git
+-PKG_MIRROR_HASH:=31e658df3e4d4c18c396259c2e0bef2bfc44a4aa870931f031a31e948be98af4
++PKG_MIRROR_HASH:=748f5c58aa3f391222c0c43db35b9ff4c30c9c987ca052a5a3cdf36193e5821b
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_DATE:=2021-11-07
+-PKG_SOURCE_VERSION:=39df55967b7de9f6c9600017b724303f95a8b9e2
++PKG_SOURCE_DATE:=2022-10-26
++PKG_SOURCE_VERSION:=9b2b203a217e1320602a0eb07c338a1bfca0f5a6
+ 
+ PKG_MAINTAINER:=Ben Greear <greearb@candelatech.com>
+ PKG_BUILD_PARALLEL:=1
+@@ -24,7 +24,7 @@ include $(INCLUDE_DIR)/package.mk
+ define KernelPackage/rtl8812au-ct
+   SUBMENU:=Wireless Drivers
+   TITLE:=Driver for Realtek 8812 AU devices comfast 912-ac, etc
+-  DEPENDS:=+kmod-cfg80211 +kmod-usb-core +@DRIVER_11N_SUPPORT +@DRIVER_11AC_SUPPORT
++  DEPENDS:=+kmod-cfg80211 +kmod-usb-core +@DRIVER_11AC_SUPPORT
+   FILES:=\
+ 	$(PKG_BUILD_DIR)/rtl8812au.ko
+   AUTOLOAD:=$(call AutoProbe,rtl8812au)
+@@ -39,13 +39,14 @@ NOSTDINC_FLAGS := \
+ 	-I$(STAGING_DIR)/usr/include/mac80211-backport/uapi \
+ 	-I$(STAGING_DIR)/usr/include/mac80211 \
+ 	-I$(STAGING_DIR)/usr/include/mac80211/uapi \
+-	-include backport/backport.h
++	-include backport/backport.h \
++	-Wno-error=address \
++	-Wno-error=stringop-overread
+ 
+ NOSTDINC_FLAGS+=-DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -DBUILD_OPENWRT
+ 
+ define Build/Compile
+-	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
+-		$(KERNEL_MAKE_FLAGS) \
++	+$(KERNEL_MAKE) $(PKG_JOBS) \
+ 		M="$(PKG_BUILD_DIR)" \
+ 		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
+ 		modules
+diff --git a/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch b/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
+index 67ebb82b38..f84adebe0a 100644
+--- a/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
++++ b/package/kernel/rtl8812au-ct/patches/003-wireless-5.8.patch
+@@ -1,6 +1,6 @@
+ --- a/os_dep/linux/ioctl_cfg80211.c
+ +++ b/os_dep/linux/ioctl_cfg80211.c
+-@@ -5177,6 +5177,15 @@ exit:
++@@ -5196,6 +5196,15 @@ exit:
+  	return ret;
+  }
+  
+@@ -16,7 +16,7 @@
+  #if defined(CONFIG_TDLS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+  static int cfg80211_rtw_tdls_mgmt(struct wiphy *wiphy,
+  		struct net_device *ndev,
+-@@ -5990,7 +5999,10 @@ static struct cfg80211_ops rtw_cfg80211_
++@@ -6009,7 +6018,10 @@ static struct cfg80211_ops rtw_cfg80211_
+  	.cancel_remain_on_channel = cfg80211_rtw_cancel_remain_on_channel,
+  #endif
+  
+diff --git a/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch b/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
+new file mode 100644
+index 0000000000..871fe10636
+--- /dev/null
++++ b/package/kernel/rtl8812au-ct/patches/004-remove-extern-inline.patch
+@@ -0,0 +1,24 @@
++--- a/include/ieee80211.h
+++++ b/include/ieee80211.h
++@@ -1313,18 +1313,18 @@ enum ieee80211_state {
++ (((Addr[2]) & 0xff) == 0xff) && (((Addr[3]) & 0xff) == 0xff) && (((Addr[4]) & 0xff) == 0xff) && \
++ (((Addr[5]) & 0xff) == 0xff))
++ #else
++-extern __inline int is_multicast_mac_addr(const u8 *addr)
+++__inline static int is_multicast_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] != 0xff) && (0x01 & addr[0]));
++ }
++ 
++-extern __inline int is_broadcast_mac_addr(const u8 *addr)
+++__inline static int is_broadcast_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] == 0xff) && (addr[1] == 0xff) && (addr[2] == 0xff) &&   \
++ 	        (addr[3] == 0xff) && (addr[4] == 0xff) && (addr[5] == 0xff));
++ }
++ 
++-extern __inline int is_zero_mac_addr(const u8 *addr)
+++__inline static int is_zero_mac_addr(const u8 *addr)
++ {
++ 	return ((addr[0] == 0x00) && (addr[1] == 0x00) && (addr[2] == 0x00) &&   \
++ 	        (addr[3] == 0x00) && (addr[4] == 0x00) && (addr[5] == 0x00));
+diff --git a/package/kernel/rtl8812au-ct/patches/007-treewide-fix-always-TRUE-condition-warning.patch b/package/kernel/rtl8812au-ct/patches/007-treewide-fix-always-TRUE-condition-warning.patch
+new file mode 100644
+index 0000000000..c645c1e8e3
+--- /dev/null
++++ b/package/kernel/rtl8812au-ct/patches/007-treewide-fix-always-TRUE-condition-warning.patch
+@@ -0,0 +1,72 @@
++From dc4024894c9deefc56f8dd6b2d2822b277f268a5 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Sun, 30 Jul 2023 11:18:48 +0200
++Subject: [PATCH 2/5] treewide: fix always TRUE condition warning
++
++Fix always TRUE condition warning an drop redundant check.
++
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++---
++ core/rtw_sta_mgt.c            |  3 +--
++ hal/OUTSRC/phydm_debug.c      | 16 ++++++----------
++ os_dep/linux/ioctl_cfg80211.c |  3 +--
++ 3 files changed, 8 insertions(+), 14 deletions(-)
++
++--- a/core/rtw_sta_mgt.c
+++++ b/core/rtw_sta_mgt.c
++@@ -207,8 +207,7 @@ void rtw_mfree_stainfo(struct sta_info *
++ {
++ 	_func_enter_;
++ 
++-	if(&psta->lock != NULL)
++-		_rtw_spinlock_free(&psta->lock);
+++	_rtw_spinlock_free(&psta->lock);
++ 
++ 	_rtw_free_sta_xmit_priv_lock(&psta->sta_xmitpriv);
++ 	_rtw_free_sta_recv_priv_lock(&psta->sta_recvpriv);
++--- a/hal/OUTSRC/phydm_debug.c
+++++ b/hal/OUTSRC/phydm_debug.c
++@@ -870,12 +870,10 @@ phydm_cmd_parser(
++ 	case PHYDM_RA:
++ 
++ 		for(i=0; i<5; i++) {
++-			if(input[i+1]) {
++-				PHYDM_SSCANF(input[i+1], DCMD_DECIMAL, &var1[i]);
+++			PHYDM_SSCANF(input[i+1], DCMD_DECIMAL, &var1[i]);
++ 
++-				PHYDM_SNPRINTF((output+used, out_len-used, "new SET, RA_var[%d]= (( %d ))\n", i , var1[i]));
++-				input_idx++;
++-			}
+++			PHYDM_SNPRINTF((output+used, out_len-used, "new SET, RA_var[%d]= (( %d ))\n", i , var1[i]));
+++			input_idx++;
++ 		}
++ 
++ 		if(input_idx>=1) {
++@@ -891,12 +889,10 @@ phydm_cmd_parser(
++ 	case PHYDM_PATHDIV:
++ 
++ 		for(i=0; i<5; i++) {
++-			if(input[i+1]) {
++-				PHYDM_SSCANF(input[i+1], DCMD_HEX, &var1[i]);
+++			PHYDM_SSCANF(input[i+1], DCMD_HEX, &var1[i]);
++ 
++-				PHYDM_SNPRINTF((output+used, out_len-used, "new SET, PATHDIV_var[%d]= (( %d ))\n", i , var1[i]));
++-				input_idx++;
++-			}
+++			PHYDM_SNPRINTF((output+used, out_len-used, "new SET, PATHDIV_var[%d]= (( %d ))\n", i , var1[i]));
+++			input_idx++;
++ 		}
++ 
++ 		if(input_idx>=1) {
++--- a/os_dep/linux/ioctl_cfg80211.c
+++++ b/os_dep/linux/ioctl_cfg80211.c
++@@ -2185,8 +2185,7 @@ static int cfg80211_rtw_scan(struct wiph
++ 
++ #ifdef CONFIG_P2P
++ 	if( pwdinfo->driver_interface == DRIVER_CFG80211 ) {
++-		if(ssids->ssid != NULL
++-		   && _rtw_memcmp(ssids->ssid, "DIRECT-", 7)
+++		if(_rtw_memcmp(ssids->ssid, "DIRECT-", 7)
++ 		   && rtw_get_p2p_ie((u8 *)request->ie, request->ie_len, NULL, NULL)
++ 		  ) {
++ 			if(rtw_p2p_chk_state(pwdinfo, P2P_STATE_NONE)) {
+diff --git a/package/kernel/rtl8812au-ct/patches/099-cut-linkid-linux-version-code-conditionals.patch b/package/kernel/rtl8812au-ct/patches/099-cut-linkid-linux-version-code-conditionals.patch
+new file mode 100644
+index 0000000000..bb644a9ace
+--- /dev/null
++++ b/package/kernel/rtl8812au-ct/patches/099-cut-linkid-linux-version-code-conditionals.patch
+@@ -0,0 +1,86 @@
++From 30fc9d96fa2ce16209306237e677d3d3cbb12685 Mon Sep 17 00:00:00 2001
++From: John Thomson <git@johnthomson.fastmail.com.au>
++Date: Sun, 28 May 2023 13:26:46 +1000
++Subject: [PATCH] Revert "fix kernel 6.1 80211 link_id"
++
++This reverts commit a027da58e8d8e95827f97222ca321cd0b2d377dd.
++---
++ os_dep/linux/ioctl_cfg80211.c | 29 +++++------------------------
++ 1 file changed, 5 insertions(+), 24 deletions(-)
++
++--- a/os_dep/linux/ioctl_cfg80211.c
+++++ b/os_dep/linux/ioctl_cfg80211.c
++@@ -797,14 +797,9 @@ check_bss:
++ #endif
++ 
++ 		DBG_871X(FUNC_ADPT_FMT" call cfg80211_roamed\n", FUNC_ADPT_ARG(padapter));
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
++-		roam_info.links[0].channel = notify_channel;
++-		roam_info.links[0].bssid = cur_network->network.MacAddress;
++-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
+++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++ 		roam_info.channel = notify_channel;
++ 		roam_info.bssid = cur_network->network.MacAddress;
++-#endif
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 12, 0)
++ 		roam_info.req_ie = pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2;
++ 		roam_info.req_ie_len = pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2;
++ 		roam_info.resp_ie = pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6;
++@@ -1393,9 +1388,7 @@ exit:
++ }
++ 
++ static int cfg80211_rtw_add_key(struct wiphy *wiphy, struct net_device *ndev,
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
++-                                int link_id, u8 key_index, bool pairwise, const u8 *mac_addr,
++-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
++                                 u8 key_index, bool pairwise, const u8 *mac_addr,
++ #else	// (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
++                                 u8 key_index, const u8 *mac_addr,
++@@ -1535,9 +1528,7 @@ addkey_end:
++ }
++ 
++ static int cfg80211_rtw_get_key(struct wiphy *wiphy, struct net_device *ndev,
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
++-                                int link_id, u8 key_index, bool pairwise, const u8 *mac_addr,
++-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
++                                 u8 key_index, bool pairwise, const u8 *mac_addr,
++ #else	// (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
++                                 u8 key_index, const u8 *mac_addr,
++@@ -1570,9 +1561,7 @@ static int cfg80211_rtw_get_key(struct w
++ }
++ 
++ static int cfg80211_rtw_del_key(struct wiphy *wiphy, struct net_device *ndev,
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
++-                                int link_id, u8 key_index, bool pairwise, const u8 *mac_addr)
++-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
+++#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)) || defined(COMPAT_KERNEL_RELEASE)
++                                 u8 key_index, bool pairwise, const u8 *mac_addr)
++ #else	// (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
++                                 u8 key_index, const u8 *mac_addr)
++@@ -1592,11 +1581,7 @@ static int cfg80211_rtw_del_key(struct w
++ }
++ 
++ static int cfg80211_rtw_set_default_key(struct wiphy *wiphy,
++-					struct net_device *ndev,
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0))
++-                                        int link_id,
++-#endif
++-                                        u8 key_index
+++                                        struct net_device *ndev, u8 key_index
++ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)) || defined(COMPAT_KERNEL_RELEASE)
++                                         , bool unicast, bool multicast
++ #endif
++@@ -4033,11 +4018,7 @@ static int cfg80211_rtw_change_beacon(st
++ 	return ret;
++ }
++ 
++-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(6,0,0))
++-static int cfg80211_rtw_stop_ap(struct wiphy *wiphy, struct net_device *ndev, unsigned int link_id)
++-#else
++ static int cfg80211_rtw_stop_ap(struct wiphy *wiphy, struct net_device *ndev)
++-#endif
++ {
++ 	DBG_871X(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
++ 	return 0;
+-- 
+2.43.2
+
