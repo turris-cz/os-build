@@ -1,149 +1,38 @@
-From c001db548b9d9d7e7637882f87b77f438b3ef469 Mon Sep 17 00:00:00 2001
+From 151859cff680d1f8582ea12d044c78c9ca22da2d Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <marek.behun@nic.cz>
 Date: Tue, 17 Oct 2023 11:17:38 +0200
-Subject: [PATCH 2/3] mvebu: patches-5.15: Backport Turris Omnia MCU support
+Subject: [PATCH] mvebu: patches-5.15: Backport Turris Omnia MCU support
 
 ---
- ...-add-cznic-turris-omnia-ctrl-binding.patch |  107 ++
- ...dd-preliminary-support-for-Turris-Om.patch |  706 ++++++++++
- ...urris-omnia-mcu-Add-support-for-MCU-.patch | 1234 +++++++++++++++++
- ...urris-omnia-mcu-Add-support-for-powe.patch |  447 ++++++
- ...urris-omnia-mcu-Add-support-for-MCU-.patch |  261 ++++
+ ...dd-preliminary-support-for-Turris-Om.patch |  822 +++++++++++
+ ...urris-omnia-mcu-Add-support-for-MCU-.patch | 1273 +++++++++++++++++
+ ...urris-omnia-mcu-Add-support-for-powe.patch |  446 ++++++
+ ...urris-omnia-mcu-Add-support-for-MCU-.patch |  251 ++++
+ ...urris-omnia-mcu-Add-support-for-MCU-.patch |  230 +++
+ ...urris-omnia-mcu-Add-support-for-digi.patch |  564 ++++++++
  ...omnia-Add-MCU-system-controller-node.patch |   60 +
  ...mnia-Add-GPIO-key-node-for-front-but.patch |   45 +
- 7 files changed, 2860 insertions(+)
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-1-dt-bindings-arm-add-cznic-turris-omnia-ctrl-binding.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-2-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-3-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-4-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-6-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
- create mode 100644 target/linux/mvebu/patches-5.15/103-v6.7-7-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
+ 8 files changed, 3691 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-5.15/103-1-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-2-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-3-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-4-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-6-platform-cznic-turris-omnia-mcu-Add-support-for-digi.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-7-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
+ create mode 100644 target/linux/mvebu/patches-5.15/103-8-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
 
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-1-dt-bindings-arm-add-cznic-turris-omnia-ctrl-binding.patch b/target/linux/mvebu/patches-5.15/103-v6.7-1-dt-bindings-arm-add-cznic-turris-omnia-ctrl-binding.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-1-platform-cznic-Add-preliminary-support-for-Turris-Om.patch b/target/linux/mvebu/patches-5.15/103-1-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
 new file mode 100644
-index 0000000000..4567967830
+index 0000000000..248fb0a920
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-1-dt-bindings-arm-add-cznic-turris-omnia-ctrl-binding.patch
-@@ -0,0 +1,107 @@
-+From 4871568e4a89cd90155b0fbea7878983798619b5 Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
-+Date: Tue, 22 Aug 2023 13:26:38 +0200
-+Subject: [PATCH 09/17] dt-bindings: arm: add cznic,turris-omnia-ctrl binding
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+Add binding for cznic,turris-omnia-ctrl, the device-tree node
-+representing the system-controller features provided by the MCU on the
-+Turris Omnia router.
-+
-+Signed-off-by: Marek Behún <kabel@kernel.org>
-+---
-+ ...bindings/arm/cznic,turris-omnia-ctrl.yaml  | 67 +++++++++++++++++++
-+ MAINTAINERS                                   |  1 +
-+ 2 files changed, 68 insertions(+)
-+ create mode 100644 Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml
-+
-+diff --git a/Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml b/Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml
-+new file mode 100644
-+index 000000000000..ea1fd0117bb8
-+--- /dev/null
-++++ b/Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml
-+@@ -0,0 +1,67 @@
-++# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
-++%YAML 1.2
-++---
-++$id: http://devicetree.org/schemas/arm/cznic,turris-omnia-ctrl.yaml#
-++$schema: http://devicetree.org/meta-schemas/core.yaml#
-++
-++title: CZ.NIC's Turris Omnia MCU
-++
-++maintainers:
-++  - Marek Behún <kabel@kernel.org>
-++
-++description:
-++  The MCU on Turris Omnia acts as a system controller providing additional
-++  GPIOs, interrupts, watchdog, system power off and wakeup configuration.
-++
-++properties:
-++  compatible:
-++    const: cznic,turris-omnia-ctrl
-++
-++  reg:
-++    description: MCU I2C slave address
-++    maxItems: 1
-++
-++  interrupts:
-++    maxItems: 1
-++
-++  interrupt-controller: true
-++
-++  '#interrupt-cells':
-++    const: 2
-++
-++  gpio-controller: true
-++
-++  '#gpio-cells':
-++    const: 2
-++
-++required:
-++  - compatible
-++  - reg
-++  - interrupts
-++  - interrupt-controller
-++  - gpio-controller
-++
-++additionalProperties: false
-++
-++examples:
-++  - |
-++    #include <dt-bindings/interrupt-controller/irq.h>
-++
-++    i2c {
-++        #address-cells = <1>;
-++        #size-cells = <0>;
-++
-++        system-controller@2a {
-++            compatible = "cznic,turris-omnia-ctrl";
-++            reg = <0x2a>;
-++
-++            interrupt-parent = <&gpio1>;
-++            interrupts = <11 IRQ_TYPE_NONE>;
-++
-++            gpio-controller;
-++            #gpio-cells = <2>;
-++
-++            interrupt-controller;
-++            #interrupt-cells = <2>;
-++        };
-++    };
-+diff --git a/MAINTAINERS b/MAINTAINERS
-+index 9216b9c85ce9..4776eaec2b23 100644
-+--- a/MAINTAINERS
-++++ b/MAINTAINERS
-+@@ -1896,6 +1896,7 @@ W:	https://www.turris.cz/
-+ F:	Documentation/ABI/testing/debugfs-moxtet
-+ F:	Documentation/ABI/testing/sysfs-bus-moxtet-devices
-+ F:	Documentation/ABI/testing/sysfs-firmware-turris-mox-rwtm
-++F:	Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml
-+ F:	Documentation/devicetree/bindings/bus/moxtet.txt
-+ F:	Documentation/devicetree/bindings/firmware/cznic,turris-mox-rwtm.txt
-+ F:	Documentation/devicetree/bindings/gpio/gpio-moxtet.txt
-+-- 
-+2.41.0
-+
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-2-platform-cznic-Add-preliminary-support-for-Turris-Om.patch b/target/linux/mvebu/patches-5.15/103-v6.7-2-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
-new file mode 100644
-index 0000000000..cbd97c17ed
---- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-2-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
-@@ -0,0 +1,706 @@
-+From d5d372ebcb7855880aefcd4a4f427df30c9439e3 Mon Sep 17 00:00:00 2001
++++ b/target/linux/mvebu/patches-5.15/103-1-platform-cznic-Add-preliminary-support-for-Turris-Om.patch
+@@ -0,0 +1,822 @@
++From 865fa6851cf71d5fc07f79c500451648b8021b8b Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Thu, 3 Aug 2023 13:32:59 +0200
-+Subject: [PATCH 10/17] platform: cznic: Add preliminary support for Turris
-+ Omnia MCU
++Subject: [PATCH 1/8] platform: cznic: Add preliminary support for Turris Omnia
++ MCU
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -153,16 +42,15 @@ index 0000000000..cbd97c17ed
 +
 +Signed-off-by: Marek Behún <kabel@kernel.org>
 +---
-+ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  45 ++++
-+ MAINTAINERS                                   |   3 +
++ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  81 +++++
 + drivers/platform/Kconfig                      |   2 +
 + drivers/platform/Makefile                     |   1 +
 + drivers/platform/cznic/Kconfig                |  26 ++
 + drivers/platform/cznic/Makefile               |   4 +
-+ .../platform/cznic/turris-omnia-mcu-base.c    | 254 ++++++++++++++++++
-+ drivers/platform/cznic/turris-omnia-mcu.h     |  65 +++++
-+ include/linux/turris-omnia-mcu-interface.h    | 194 +++++++++++++
-+ 9 files changed, 594 insertions(+)
++ .../platform/cznic/turris-omnia-mcu-base.c    | 336 ++++++++++++++++++
++ drivers/platform/cznic/turris-omnia-mcu.h     |  71 ++++
++ include/linux/turris-omnia-mcu-interface.h    | 212 +++++++++++
++ 8 files changed, 733 insertions(+)
 + create mode 100644 Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
 + create mode 100644 drivers/platform/cznic/Kconfig
 + create mode 100644 drivers/platform/cznic/Makefile
@@ -172,13 +60,37 @@ index 0000000000..cbd97c17ed
 +
 +diff --git a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
 +new file mode 100644
-+index 000000000000..72cdf0cfce3e
++index 000000000000..4322724ad891
 +--- /dev/null
 ++++ b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+@@ -0,0 +1,45 @@
++@@ -0,0 +1,81 @@
+++What:		/sys/bus/i2c/devices/<mcu_device>/board_revision
+++Date:		May 2024
+++KernelVersion:	6.9
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:	(RO) Contains board revision number.
+++
+++		Only available if board information is burned in the MCU (older
+++		revisions have board information burned in the ATSHA204-A chip).
+++
+++		Format: %u.
+++
+++What:		/sys/bus/i2c/devices/<mcu_device>/first_mac_address
+++Date:		May 2024
+++KernelVersion:	6.9
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:	(RO) Contains device first MAC address. Each Turris Omnia is
+++		allocated 3 MAC addresses. The two additional addresses are
+++		computed from the first one by incrementing it.
+++
+++		Only available if board information is burned in the MCU (older
+++		revisions have board information burned in the ATSHA204-A chip).
+++
+++		Format: %pM.
+++
 ++What:		/sys/bus/i2c/devices/<mcu_device>/fw_features
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RO) Newer versions of the microcontroller firmware report the
 ++		features they support. These can be read from this file. If the
@@ -187,8 +99,8 @@ index 0000000000..cbd97c17ed
 ++		Format: 0x%x.
 ++
 ++What:		/sys/bus/i2c/devices/<mcu_device>/fw_version_hash_application
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RO) Contains the version hash (commit hash) of the application
 ++		part of the microcontroller firmware.
@@ -196,8 +108,8 @@ index 0000000000..cbd97c17ed
 ++		Format: %s.
 ++
 ++What:		/sys/bus/i2c/devices/<mcu_device>/fw_version_hash_bootloader
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RO) Contains the version hash (commit hash) of the bootloader
 ++		part of the microcontroller firmware.
@@ -205,47 +117,34 @@ index 0000000000..cbd97c17ed
 ++		Format: %s.
 ++
 ++What:		/sys/bus/i2c/devices/<mcu_device>/mcu_type
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RO) Contains the microcontroller type (STM32, GD32, MKL).
 ++
 ++		Format: %s.
 ++
 ++What:		/sys/bus/i2c/devices/<mcu_device>/reset_selector
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RO) Contains the selected factory reset level, determined by
 ++		how long the rear reset button was held by the user during board
 ++		reset.
 ++
 ++		Format: %i.
-+diff --git a/MAINTAINERS b/MAINTAINERS
-+index 4776eaec2b23..eab0181c9b10 100644
-+--- a/MAINTAINERS
-++++ b/MAINTAINERS
-+@@ -1894,6 +1894,7 @@ M:	Marek Behún <kabel@kernel.org>
-+ S:	Maintained
-+ W:	https://www.turris.cz/
-+ F:	Documentation/ABI/testing/debugfs-moxtet
-++F:	Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+ F:	Documentation/ABI/testing/sysfs-bus-moxtet-devices
-+ F:	Documentation/ABI/testing/sysfs-firmware-turris-mox-rwtm
-+ F:	Documentation/devicetree/bindings/arm/cznic,turris-omnia-ctrl.yaml
-+@@ -1907,10 +1908,12 @@ F:	drivers/firmware/turris-mox-rwtm.c
-+ F:	drivers/leds/leds-turris-omnia.c
-+ F:	drivers/mailbox/armada-37xx-rwtm-mailbox.c
-+ F:	drivers/gpio/gpio-moxtet.c
-++F:	drivers/platform/cznic/
-+ F:	drivers/watchdog/armada_37xx_wdt.c
-+ F:	include/dt-bindings/bus/moxtet.h
-+ F:	include/linux/armada-37xx-rwtm-mailbox.h
-+ F:	include/linux/moxtet.h
-++F:	include/linux/turris-omnia-mcu-interface.h
-+ 
-+ ARM/EZX SMARTPHONES (A780, A910, A1200, E680, ROKR E2 and ROKR E6)
-+ M:	Robert Jarzmik <robert.jarzmik@free.fr>
+++
+++What:		/sys/bus/i2c/devices/<mcu_device>/serial_number
+++Date:		May 2024
+++KernelVersion:	6.9
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:	(RO) Contains the 64 bit long board serial number in hexadecimal
+++		format.
+++
+++		Only available if board information is burned in the MCU (older
+++		revisions have board information burned in the ATSHA204-A chip).
+++
+++		Format: %016X.
 +diff --git a/drivers/platform/Kconfig b/drivers/platform/Kconfig
 +index 18fc6a08569e..9babfc946bfb 100644
 +--- a/drivers/platform/Kconfig
@@ -313,10 +212,10 @@ index 0000000000..cbd97c17ed
 ++turris-omnia-mcu-objs		:= turris-omnia-mcu-base.o
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
 +new file mode 100644
-+index 000000000000..5495e0a029d7
++index 000000000000..894856dd8fea
 +--- /dev/null
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+@@ -0,0 +1,254 @@
++@@ -0,0 +1,336 @@
 ++// SPDX-License-Identifier: GPL-2.0
 ++/*
 ++ * CZ.NIC's Turris Omnia MCU driver
@@ -335,6 +234,7 @@ index 0000000000..cbd97c17ed
 ++
 ++#define OMNIA_FW_VERSION_LEN		20
 ++#define OMNIA_FW_VERSION_HEX_LEN	(2 * OMNIA_FW_VERSION_LEN + 1)
+++#define OMNIA_BOARD_INFO_LEN		16
 ++
 ++static int omnia_get_version_hash(struct omnia_mcu *mcu, bool bootloader,
 ++				  u8 version[static OMNIA_FW_VERSION_HEX_LEN])
@@ -415,15 +315,70 @@ index 0000000000..cbd97c17ed
 ++}
 ++static DEVICE_ATTR_RO(reset_selector);
 ++
-++static struct attribute *omnia_mcu_attrs[] = {
+++static ssize_t serial_number_show(struct device *dev,
+++				  struct device_attribute *a, char *buf)
+++{
+++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
+++
+++	return sysfs_emit(buf, "%016llX\n", mcu->board_serial_number);
+++}
+++static DEVICE_ATTR_RO(serial_number);
+++
+++static ssize_t first_mac_address_show(struct device *dev,
+++				      struct device_attribute *a, char *buf)
+++{
+++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
+++
+++	return sysfs_emit(buf, "%pM\n", mcu->board_first_mac);
+++}
+++static DEVICE_ATTR_RO(first_mac_address);
+++
+++static ssize_t board_revision_show(struct device *dev,
+++				   struct device_attribute *a, char *buf)
+++{
+++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
+++
+++	return sysfs_emit(buf, "%u\n", mcu->board_revision);
+++}
+++static DEVICE_ATTR_RO(board_revision);
+++
+++static struct attribute *omnia_mcu_base_attrs[] = {
 ++	&dev_attr_fw_version_hash_application.attr,
 ++	&dev_attr_fw_version_hash_bootloader.attr,
 ++	&dev_attr_fw_features.attr,
 ++	&dev_attr_mcu_type.attr,
 ++	&dev_attr_reset_selector.attr,
+++	&dev_attr_serial_number.attr,
+++	&dev_attr_first_mac_address.attr,
+++	&dev_attr_board_revision.attr,
 ++	NULL
 ++};
-++ATTRIBUTE_GROUPS(omnia_mcu);
+++
+++static umode_t omnia_mcu_base_attrs_visible(struct kobject *kobj,
+++					    struct attribute *a, int n)
+++{
+++	struct device *dev = kobj_to_dev(kobj);
+++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
+++	umode_t mode = a->mode;
+++
+++	if ((a == &dev_attr_serial_number.attr ||
+++	     a == &dev_attr_first_mac_address.attr ||
+++	     a == &dev_attr_board_revision.attr) &&
+++	    !(mcu->features & FEAT_BOARD_INFO))
+++		mode = 0;
+++
+++	return mode;
+++}
+++
+++static const struct attribute_group omnia_mcu_base_group = {
+++	.attrs = omnia_mcu_base_attrs,
+++	.is_visible = omnia_mcu_base_attrs_visible,
+++};
+++
+++static const struct attribute_group *omnia_mcu_groups[] = {
+++	&omnia_mcu_base_group,
+++	NULL
+++};
 ++
 ++static void omnia_mcu_print_version_hash(struct omnia_mcu *mcu, bool bootloader)
 ++{
@@ -477,7 +432,7 @@ index 0000000000..cbd97c17ed
 ++	};
 ++	struct device *dev = &mcu->client->dev;
 ++	bool suggest_fw_upgrade = false;
-++	unsigned i;
+++	unsigned int i;
 ++	int status;
 ++
 ++	/* status word holds MCU type, which we need below */
@@ -527,8 +482,27 @@ index 0000000000..cbd97c17ed
 ++	return 0;
 ++}
 ++
-++static int omnia_mcu_probe(struct i2c_client *client,
-++			   const struct i2c_device_id *id)
+++static int omnia_mcu_read_board_info(struct omnia_mcu *mcu)
+++{
+++	u8 reply[1 + OMNIA_BOARD_INFO_LEN];
+++	int err;
+++
+++	err = omnia_cmd_read(mcu->client, CMD_BOARD_INFO_GET, reply,
+++			     sizeof(reply));
+++	if (err)
+++		return err;
+++
+++	if (reply[0] != OMNIA_BOARD_INFO_LEN)
+++		return -EIO;
+++
+++	mcu->board_serial_number = get_unaligned_le64(&reply[1]);
+++	memcpy(mcu->board_first_mac, &reply[9], ETH_ALEN);
+++	mcu->board_revision = reply[15];
+++
+++	return 0;
+++}
+++
+++static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id *)
 ++{
 ++	struct device *dev = &client->dev;
 ++	struct omnia_mcu *mcu;
@@ -549,11 +523,18 @@ index 0000000000..cbd97c17ed
 ++		return dev_err_probe(dev, err,
 ++				     "Cannot determine MCU supported features\n");
 ++
+++	if (mcu->features & FEAT_BOARD_INFO) {
+++		err = omnia_mcu_read_board_info(mcu);
+++		if (err)
+++			return dev_err_probe(dev, err,
+++					     "Cannot read board info\n");
+++	}
+++
 ++	return 0;
 ++}
 ++
 ++static const struct of_device_id of_omnia_mcu_match[] = {
-++	{ .compatible = "cznic,turris-omnia-ctrl" },
+++	{ .compatible = "cznic,turris-omnia-mcu" },
 ++	{}
 ++};
 ++
@@ -573,10 +554,10 @@ index 0000000000..cbd97c17ed
 ++MODULE_LICENSE("GPL");
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
 +new file mode 100644
-+index 000000000000..ee7c7cf34243
++index 000000000000..f18b745b223c
 +--- /dev/null
 ++++ b/drivers/platform/cznic/turris-omnia-mcu.h
-+@@ -0,0 +1,65 @@
++@@ -0,0 +1,71 @@
 ++/* SPDX-License-Identifier: GPL-2.0 */
 ++/*
 ++ * CZ.NIC's Turris Omnia MCU driver
@@ -588,6 +569,7 @@ index 0000000000..cbd97c17ed
 ++#define __TURRIS_OMNIA_MCU_H
 ++
 ++#include <linux/i2c.h>
+++#include <linux/if_ether.h>
 ++#include <linux/types.h>
 ++#include <asm/byteorder.h>
 ++
@@ -595,10 +577,15 @@ index 0000000000..cbd97c17ed
 ++	struct i2c_client *client;
 ++	const char *type;
 ++	u16 features;
+++
+++	/* board information */
+++	u64 board_serial_number;
+++	u8 board_first_mac[ETH_ALEN];
+++	u8 board_revision;
 ++};
 ++
-++static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd, void *reply,
-++				 unsigned int len)
+++static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
+++				 void *reply, unsigned int len)
 ++{
 ++	struct i2c_msg msgs[2];
 ++	int ret;
@@ -623,7 +610,7 @@ index 0000000000..cbd97c17ed
 ++
 ++static inline int omnia_cmd_read_u16(const struct i2c_client *client, u8 cmd)
 ++{
-++	u16 reply;
+++	__le16 reply;
 ++	int err;
 ++
 ++	err = omnia_cmd_read(client, cmd, &reply, sizeof(reply));
@@ -644,10 +631,10 @@ index 0000000000..cbd97c17ed
 ++#endif /* __TURRIS_OMNIA_MCU_H */
 +diff --git a/include/linux/turris-omnia-mcu-interface.h b/include/linux/turris-omnia-mcu-interface.h
 +new file mode 100644
-+index 000000000000..1d426f8c209e
++index 000000000000..4498590303d5
 +--- /dev/null
 ++++ b/include/linux/turris-omnia-mcu-interface.h
-+@@ -0,0 +1,194 @@
++@@ -0,0 +1,212 @@
 ++/* SPDX-License-Identifier: GPL-2.0 */
 ++/*
 ++ * CZ.NIC's Turris Omnia MCU I2C interface commands definitions
@@ -708,6 +695,18 @@ index 0000000000..cbd97c17ed
 ++	CMD_GET_UPTIME_AND_WAKEUP	= 0x23,
 ++	CMD_POWER_OFF			= 0x24,
 ++
+++	/* available if TRNG bit set in features */
+++	CMD_TRNG_COLLECT_ENTROPY	= 0x28,
+++
+++	/* available if CRYPTO bit set in features */
+++	CMD_CRYPTO_GET_PUBLIC_KEY	= 0x29,
+++	CMD_CRYPTO_SIGN_MESSAGE		= 0x2A,
+++	CMD_CRYPTO_COLLECT_SIGNATURE	= 0x2B,
+++
+++	/* available if BOARD_INFO it set in features */
+++	CMD_BOARD_INFO_GET		= 0x2C,
+++	CMD_BOARD_INFO_BURN		= 0x2D,
+++
 ++	/* available only at address 0x2b (led-controller) */
 ++	/* available only if LED_GAMMA_CORRECTION bit set in features */
 ++	CMD_SET_GAMMA_CORRECTION	= 0x30,
@@ -765,6 +764,10 @@ index 0000000000..cbd97c17ed
 ++	FEAT_NEW_MESSAGE_API		= BIT(9),
 ++	FEAT_BRIGHTNESS_INT		= BIT(10),
 ++	FEAT_POWEROFF_WAKEUP		= BIT(11),
+++	FEAT_CAN_OLD_MESSAGE_API	= BIT(12),
+++	FEAT_TRNG			= BIT(13),
+++	FEAT_CRYPTO			= BIT(14),
+++	FEAT_BOARD_INFO			= BIT(15),
 ++};
 ++
 ++enum omnia_ext_sts_dword_e {
@@ -812,6 +815,8 @@ index 0000000000..cbd97c17ed
 ++	INT_BUTTON_PRESSED	= BIT(4),
 ++	INT_SFP_nDET		= BIT(5),
 ++	INT_BRIGHTNESS_CHANGED	= BIT(6),
+++	INT_TRNG		= BIT(7),
+++	INT_MESSAGE_SIGNED	= BIT(8),
 ++
 ++	INT_LED_STATES_MASK	= GENMASK(31, 12),
 ++	INT_WLAN0_MSATA_LED	= BIT(12),
@@ -843,18 +848,18 @@ index 0000000000..cbd97c17ed
 ++
 ++#endif /* __TURRIS_OMNIA_MCU_INTERFACE_H */
 +-- 
-+2.41.0
++2.43.0
 +
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-3-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch b/target/linux/mvebu/patches-5.15/103-v6.7-3-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-2-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch b/target/linux/mvebu/patches-5.15/103-2-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
 new file mode 100644
-index 0000000000..38b263b249
+index 0000000000..438b3f5a07
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-3-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
-@@ -0,0 +1,1234 @@
-+From 2a1e9e8b32d6b8413443e5ebfb11f6019cc463d3 Mon Sep 17 00:00:00 2001
++++ b/target/linux/mvebu/patches-5.15/103-2-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+@@ -0,0 +1,1273 @@
++From b2c4a09d6567a0ac841a50abc829c2dd16fec0af Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Tue, 19 Sep 2023 11:58:51 +0200
-+Subject: [PATCH 11/17] platform: cznic: turris-omnia-mcu: Add support for MCU
++Subject: [PATCH 2/8] platform: cznic: turris-omnia-mcu: Add support for MCU
 + connected GPIOs
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -872,23 +877,26 @@ index 0000000000..38b263b249
 +
 +Signed-off-by: Marek Behún <kabel@kernel.org>
 +---
-+ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  16 +
-+ drivers/platform/cznic/Kconfig                |  15 +
-+ drivers/platform/cznic/Makefile               |   1 +
-+ .../platform/cznic/turris-omnia-mcu-base.c    |  21 +-
-+ .../platform/cznic/turris-omnia-mcu-gpio.c    | 989 ++++++++++++++++++
-+ drivers/platform/cznic/turris-omnia-mcu.h     |  63 +-
-+ 6 files changed, 1103 insertions(+), 2 deletions(-)
++ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |   16 +
++ drivers/platform/cznic/Kconfig                |   15 +
++ drivers/platform/cznic/Makefile               |    1 +
++ .../platform/cznic/turris-omnia-mcu-base.c    |    3 +-
++ .../platform/cznic/turris-omnia-mcu-gpio.c    | 1051 +++++++++++++++++
++ drivers/platform/cznic/turris-omnia-mcu.h     |   62 +
++ 6 files changed, 1147 insertions(+), 1 deletion(-)
 + create mode 100644 drivers/platform/cznic/turris-omnia-mcu-gpio.c
 +
 +diff --git a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+index 72cdf0cfce3e..e635ba45ef9a 100644
++index 4322724ad891..91e107583edd 100644
 +--- a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
 ++++ b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+@@ -1,3 +1,19 @@
++@@ -22,6 +22,22 @@ Description:	(RO) Contains device first MAC address. Each Turris Omnia is
++ 
++ 		Format: %pM.
++ 
 ++What:		/sys/bus/i2c/devices/<mcu_device>/front_button_mode
-++Date:		November 2023
-++KernelVersion:	6.7
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RW) The front button on the Turris Omnia router can be
 ++		configured either to change the intensity of all the LEDs on the
@@ -903,8 +911,8 @@ index 0000000000..38b263b249
 ++		Format: %s.
 ++
 + What:		/sys/bus/i2c/devices/<mcu_device>/fw_features
-+ Date:		November 2023
-+ KernelVersion:	6.7
++ Date:		May 2024
++ KernelVersion:	6.9
 +diff --git a/drivers/platform/cznic/Kconfig b/drivers/platform/cznic/Kconfig
 +index f8560ff9c1af..3a8c3edcd7e6 100644
 +--- a/drivers/platform/cznic/Kconfig
@@ -944,57 +952,32 @@ index 0000000000..38b263b249
 + turris-omnia-mcu-objs		:= turris-omnia-mcu-base.o
 ++turris-omnia-mcu-objs		+= turris-omnia-mcu-gpio.o
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+index 5495e0a029d7..272e0b0496d6 100644
++index 894856dd8fea..8bb38b910f10 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+@@ -104,7 +104,16 @@ static struct attribute *omnia_mcu_attrs[] = {
-+ 	&dev_attr_reset_selector.attr,
++@@ -159,6 +159,7 @@ static const struct attribute_group omnia_mcu_base_group = {
++ 
++ static const struct attribute_group *omnia_mcu_groups[] = {
++ 	&omnia_mcu_base_group,
+++	&omnia_mcu_gpio_group,
 + 	NULL
 + };
-+-ATTRIBUTE_GROUPS(omnia_mcu);
-++
-++static const struct attribute_group omnia_mcu_base_group = {
-++	.attrs = omnia_mcu_attrs,
-++};
-++
-++static const struct attribute_group *omnia_mcu_groups[] = {
-++	&omnia_mcu_base_group,
-++	&omnia_mcu_gpio_group,
-++	NULL
-++};
 + 
-+ static void omnia_mcu_print_version_hash(struct omnia_mcu *mcu, bool bootloader)
-+ {
-+@@ -230,6 +239,15 @@ static int omnia_mcu_probe(struct i2c_client *client,
-+ 		return dev_err_probe(dev, err,
-+ 				     "Cannot determine MCU supported features\n");
++@@ -312,7 +313,7 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
++ 					     "Cannot read board info\n");
++ 	}
 + 
++-	return 0;
 ++	return omnia_mcu_register_gpiochip(mcu);
-++}
-++
-++static int omnia_mcu_remove(struct i2c_client *client)
-++{
-++	struct omnia_mcu *mcu = i2c_get_clientdata(client);
-++
-++	omnia_mcu_unregister_gpiochip(mcu);
-++
-+ 	return 0;
 + }
 + 
-+@@ -240,6 +258,7 @@ static const struct of_device_id of_omnia_mcu_match[] = {
-+ 
-+ static struct i2c_driver omnia_mcu_driver = {
-+ 	.probe		= omnia_mcu_probe,
-++	.remove		= omnia_mcu_remove,
-+ 	.driver		= {
-+ 		.name	= "turris-omnia-mcu",
-+ 		.of_match_table = of_omnia_mcu_match,
++ static const struct of_device_id of_omnia_mcu_match[] = {
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-gpio.c b/drivers/platform/cznic/turris-omnia-mcu-gpio.c
 +new file mode 100644
-+index 000000000000..4d66965bdcd1
++index 000000000000..ee5bd64a988f
 +--- /dev/null
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-gpio.c
-+@@ -0,0 +1,989 @@
++@@ -0,0 +1,1051 @@
 ++// SPDX-License-Identifier: GPL-2.0
 ++/*
 ++ * CZ.NIC's Turris Omnia MCU GPIO and IRQ driver
@@ -1005,6 +988,7 @@ index 0000000000..38b263b249
 ++#include <linux/bitfield.h>
 ++#include <linux/bitops.h>
 ++#include <linux/bug.h>
+++#include <linux/devm-helpers.h>
 ++#include <linux/gpio/driver.h>
 ++#include <linux/i2c.h>
 ++#include <linux/interrupt.h>
@@ -1116,6 +1100,12 @@ index 0000000000..38b263b249
 ++
 ++	[12] = _DEF_GPIO_STS(BUTTON_PRESSED),
 ++
+++	/* TRNG interrupt, no GPIO */
+++	[13] = _DEF_INT(TRNG),
+++
+++	/* MESSAGE_SIGNED interrupt, no GPIO */
+++	[14] = _DEF_INT(MESSAGE_SIGNED),
+++
 ++	/* GPIOs with value read from the 32-bit wide extended status */
 ++	[16] = _DEF_GPIO_EXT_STS(SFP_nDET, PERIPH_MCU),
 ++	[28] = _DEF_GPIO_EXT_STS_LEDALL(WLAN0_MSATA_LED),
@@ -1156,6 +1146,8 @@ index 0000000000..38b263b249
 ++	[__bf_shf(INT_USB30_OVC)]		= 6,
 ++	[__bf_shf(INT_USB31_OVC)]		= 7,
 ++	[__bf_shf(INT_BUTTON_PRESSED)]		= 12,
+++	[__bf_shf(INT_TRNG)]			= 13,
+++	[__bf_shf(INT_MESSAGE_SIGNED)]		= 14,
 ++	[__bf_shf(INT_SFP_nDET)]		= 16,
 ++	[__bf_shf(INT_BRIGHTNESS_CHANGED)]	= 11,
 ++	[__bf_shf(INT_WLAN0_MSATA_LED)]		= 28,
@@ -1399,9 +1391,7 @@ index 0000000000..38b263b249
 ++{
 ++	const struct omnia_gpio *gpio = &omnia_gpios[offset];
 ++	struct omnia_mcu *mcu = gpiochip_get_data(gc);
-++	struct device *dev = &mcu->client->dev;
 ++	u16 val, mask;
-++	int err;
 ++
 ++	if (!gpio->ctl_cmd)
 ++		return;
@@ -1409,19 +1399,16 @@ index 0000000000..38b263b249
 ++	mask = gpio->ctl_bit;
 ++	val = value ? mask : 0;
 ++
-++	err = omnia_ctl_cmd(mcu, gpio->ctl_cmd, val, mask);
-++	if (err)
-++		dev_err(dev, "Cannot set GPIO %u: %d\n", offset, err);
+++	omnia_ctl_cmd(mcu, gpio->ctl_cmd, val, mask);
 ++}
 ++
 ++static void omnia_gpio_set_multiple(struct gpio_chip *gc, unsigned long *mask,
 ++				    unsigned long *bits)
 ++{
 ++	struct omnia_mcu *mcu = gpiochip_get_data(gc);
-++	struct device *dev = &mcu->client->dev;
 ++	u16 ext_ctl, ext_ctl_mask;
 ++	u8 ctl, ctl_mask;
-++	int err = 0, i;
+++	int i;
 ++
 ++	ctl = 0;
 ++	ctl_mask = 0;
@@ -1443,17 +1430,13 @@ index 0000000000..38b263b249
 ++	mutex_lock(&mcu->lock);
 ++
 ++	if (ctl_mask)
-++		err = omnia_ctl_cmd_locked(mcu, CMD_GENERAL_CONTROL, ctl,
-++					   ctl_mask);
+++		omnia_ctl_cmd_locked(mcu, CMD_GENERAL_CONTROL, ctl, ctl_mask);
 ++
-++	if (!err && ext_ctl_mask)
-++		err = omnia_ctl_cmd_locked(mcu, CMD_EXT_CONTROL, ext_ctl,
-++					   ext_ctl_mask);
+++	if (ext_ctl_mask)
+++		omnia_ctl_cmd_locked(mcu, CMD_EXT_CONTROL, ext_ctl,
+++				     ext_ctl_mask);
 ++
 ++	mutex_unlock(&mcu->lock);
-++
-++	if (err)
-++		dev_err(dev, "Cannot set GPIOs: %d\n", err);
 ++}
 ++
 ++static bool omnia_gpio_available(struct omnia_mcu *mcu,
@@ -1461,7 +1444,8 @@ index 0000000000..38b263b249
 ++{
 ++	if (gpio->feat_mask)
 ++		return (mcu->features & gpio->feat_mask) == gpio->feat;
-++	else if (gpio->feat)
+++
+++	if (gpio->feat)
 ++		return mcu->features & gpio->feat;
 ++
 ++	return true;
@@ -1477,12 +1461,11 @@ index 0000000000..38b263b249
 ++	for (i = 0; i < ngpios; i++) {
 ++		const struct omnia_gpio *gpio = &omnia_gpios[i];
 ++
-++		if (!gpio->cmd && !gpio->int_bit) {
+++		if (gpio->cmd || gpio->int_bit)
+++			__assign_bit(i, valid_mask,
+++				     omnia_gpio_available(mcu, gpio));
+++		else
 ++			__clear_bit(i, valid_mask);
-++			continue;
-++		}
-++
-++		__assign_bit(i, valid_mask, omnia_gpio_available(mcu, gpio));
 ++	}
 ++
 ++	return 0;
@@ -1509,6 +1492,7 @@ index 0000000000..38b263b249
 ++	if (!omnia_gpios[hwirq].cmd)
 ++		mcu->rising &= ~bit;
 ++	mcu->mask &= ~bit;
+++	gpiochip_disable_irq(gc, hwirq);
 ++}
 ++
 ++static void omnia_irq_unmask(struct irq_data *d)
@@ -1518,6 +1502,7 @@ index 0000000000..38b263b249
 ++	irq_hw_number_t hwirq = irqd_to_hwirq(d);
 ++	u32 bit = omnia_gpios[hwirq].int_bit;
 ++
+++	gpiochip_enable_irq(gc, hwirq);
 ++	mcu->mask |= bit;
 ++	if (!omnia_gpios[hwirq].cmd)
 ++		mcu->rising |= bit;
@@ -1561,6 +1546,56 @@ index 0000000000..38b263b249
 ++	mutex_lock(&mcu->lock);
 ++}
 ++
+++/**
+++ * omnia_mask_interleave - Interleaves the bytes from @rising and @falling
+++ *	@dst: the destination u8 array of interleaved bytes
+++ *	@rising: rising mask
+++ *	@falling: falling mask
+++ *
+++ * Interleaves the little-endian bytes from @rising and @falling words.
+++ *
+++ * If @rising = (r0, r1, r2, r3) and @falling = (f0, f1, f2, f3), the result is
+++ * @dst = (r0, f0, r1, f1, r2, f2, r3, f3).
+++ *
+++ * The MCU receives interrupt mask and reports pending interrupt bitmap int this
+++ * interleaved format. The rationale behind it is that the low-indexed bits are
+++ * more important - in many cases, the user will be interested only in
+++ * interrupts with indexes 0 to 7, and so the system can stop reading after
+++ * first 2 bytes (r0, f0), to save time on the slow I2C bus.
+++ *
+++ * Feel free to remove this function and its inverse, omnia_mask_deinterleave,
+++ * and use an appropriate bitmap_* function once such a function exists.
+++ */
+++static void omnia_mask_interleave(u8 *dst, u32 rising, u32 falling)
+++{
+++	int i;
+++
+++	for (i = 0; i < sizeof(u32); ++i) {
+++		dst[2 * i] = rising >> (8 * i);
+++		dst[2 * i + 1] = falling >> (8 * i);
+++	}
+++}
+++
+++/**
+++ * omnia_mask_deinterleave - Deinterleaves the bytes into @rising and @falling
+++ *	@src: the source u8 array containing the interleaved bytes
+++ *	@rising: pointer where to store the rising mask gathered from @src
+++ *	@falling: pointer where to store the falling mask gathered from @src
+++ *
+++ * This is the inverse function to omnia_mask_interleave.
+++ */
+++static void omnia_mask_deinterleave(const u8 *src, u32 *rising, u32 *falling)
+++{
+++	int i;
+++
+++	*rising = *falling = 0;
+++
+++	for (i = 0; i < sizeof(u32); ++i) {
+++		*rising |= src[2 * i] << (8 * i);
+++		*falling |= src[2 * i + 1] << (8 * i);
+++	}
+++}
+++
 ++static void omnia_irq_bus_sync_unlock(struct irq_data *d)
 ++{
 ++	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
@@ -1579,14 +1614,8 @@ index 0000000000..38b263b249
 ++	rising = mcu->rising & mcu->mask;
 ++	falling = mcu->falling & mcu->mask;
 ++
-++	cmd[1] = rising;
-++	cmd[2] = falling;
-++	cmd[3] = rising >> 8;
-++	cmd[4] = falling >> 8;
-++	cmd[5] = rising >> 16;
-++	cmd[6] = falling >> 16;
-++	cmd[7] = rising >> 24;
-++	cmd[8] = falling >> 24;
+++	/* interleave the rising and falling bytes into the command arguments */
+++	omnia_mask_interleave(&cmd[1], rising, falling);
 ++
 ++	dev_dbg(dev, "set int mask %8ph\n", &cmd[1]);
 ++
@@ -1619,12 +1648,11 @@ index 0000000000..38b263b249
 ++	for (i = 0; i < ngpios; i++) {
 ++		const struct omnia_gpio *gpio = &omnia_gpios[i];
 ++
-++		if (!gpio->int_bit) {
+++		if (gpio->int_bit)
+++			__assign_bit(i, valid_mask,
+++				     omnia_gpio_available(mcu, gpio));
+++		else
 ++			__clear_bit(i, valid_mask);
-++			continue;
-++		}
-++
-++		__assign_bit(i, valid_mask, omnia_gpio_available(mcu, gpio));
 ++	}
 ++}
 ++
@@ -1679,10 +1707,8 @@ index 0000000000..38b263b249
 ++		return false;
 ++	}
 ++
-++	rising = reply[0] | (reply[2] << 8) | (reply[4] << 16) |
-++		 (reply[6] << 24);
-++	falling = reply[1] | (reply[3] << 8) | (reply[5] << 16) |
-++		  (reply[7] << 24);
+++	/* deinterleave the reply bytes into rising and falling */
+++	omnia_mask_deinterleave(reply, &rising, &falling);
 ++
 ++	rising &= mcu->mask;
 ++	falling &= mcu->mask;
@@ -1894,6 +1920,11 @@ index 0000000000..38b263b249
 ++	.attrs = omnia_mcu_gpio_attrs,
 ++};
 ++
+++static void omnia_mcu_mutex_destroy(void *lock)
+++{
+++	mutex_destroy(lock);
+++}
+++
 ++int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu)
 ++{
 ++	bool new_api = mcu->features & FEAT_NEW_INT_API;
@@ -1902,6 +1933,10 @@ index 0000000000..38b263b249
 ++	int err;
 ++
 ++	mutex_init(&mcu->lock);
+++	err = devm_add_action_or_reset(dev, omnia_mcu_mutex_destroy,
+++				       &mcu->lock);
+++	if (err)
+++		return err;
 ++
 ++	mcu->gc.request = omnia_gpio_request;
 ++	mcu->gc.get_direction = omnia_gpio_get_direction;
@@ -1966,44 +2001,56 @@ index 0000000000..38b263b249
 ++	else
 ++		irqflags |= IRQF_TRIGGER_FALLING;
 ++
-++	err = request_threaded_irq(mcu->client->irq, NULL,
-++				   omnia_irq_thread_handler, irqflags,
-++				   "turris-omnia-mcu", mcu);
+++	err = devm_request_threaded_irq(dev, mcu->client->irq, NULL,
+++					omnia_irq_thread_handler, irqflags,
+++					"turris-omnia-mcu", mcu);
 ++	if (err)
 ++		return dev_err_probe(dev, err, "Cannot request IRQ\n");
 ++
+++	if (!new_api) {
+++		/*
+++		 * The button_release_emul_work has to be initialized before the
+++		 * thread is requested, and on driver remove it needs to be
+++		 * canceled before the thread is freed. Therefore we can't use
+++		 * devm_delayed_work_autocancel() directly, because the order
+++		 *   devm_delayed_work_autocancel();
+++		 *   devm_request_threaded_irq();
+++		 * would cause improper release order:
+++		 *   free_irq();
+++		 *   cancel_delayed_work_sync();
+++		 * Instead we first initialize the work above, and only now
+++		 * after IRQ is requested we add the work devm action.
+++		 */
+++		err = devm_add_action(dev, devm_delayed_work_drop,
+++				      &mcu->button_release_emul_work);
+++		if (err)
+++			return err;
+++	}
+++
 ++	return 0;
 ++}
-++
-++void omnia_mcu_unregister_gpiochip(struct omnia_mcu *mcu)
-++{
-++	if (!(mcu->features & FEAT_NEW_INT_API))
-++		cancel_delayed_work_sync(&mcu->button_release_emul_work);
-++
-++	free_irq(mcu->client->irq, mcu);
-++
-++	mutex_destroy(&mcu->lock);
-++}
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
-+index ee7c7cf34243..5383d4ca9b67 100644
++index f18b745b223c..778d2d06b3e6 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu.h
 ++++ b/drivers/platform/cznic/turris-omnia-mcu.h
-+@@ -8,16 +8,40 @@
++@@ -8,9 +8,13 @@
 + #ifndef __TURRIS_OMNIA_MCU_H
 + #define __TURRIS_OMNIA_MCU_H
 + 
 ++#include <linux/bitops.h>
 ++#include <linux/gpio/driver.h>
 + #include <linux/i2c.h>
++ #include <linux/if_ether.h>
 ++#include <linux/mutex.h>
 + #include <linux/types.h>
 ++#include <linux/workqueue.h>
 + #include <asm/byteorder.h>
 + 
 + struct omnia_mcu {
-+ 	struct i2c_client *client;
-+ 	const char *type;
-+ 	u16 features;
++@@ -22,8 +26,28 @@ struct omnia_mcu {
++ 	u64 board_serial_number;
++ 	u8 board_first_mac[ETH_ALEN];
++ 	u8 board_revision;
 ++
 ++	/* GPIO chip */
 ++	struct gpio_chip gc;
@@ -2026,10 +2073,10 @@ index 0000000000..38b263b249
 ++	return ret < 0 ? ret : 0;
 ++}
 ++
-+ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd, void *reply,
-+ 				 unsigned int len)
++ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
++ 				 void *reply, unsigned int len)
 + {
-+@@ -42,9 +66,41 @@ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd, void *
++@@ -48,6 +72,40 @@ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
 + 	return 0;
 + }
 + 
@@ -2046,10 +2093,12 @@ index 0000000000..38b263b249
 ++	}
 ++
 ++	err = omnia_cmd_read(client, cmd, &reply, (__fls(bits) >> 3) + 1);
-++	if (!err)
-++		*dst = le32_to_cpu(reply) & bits;
+++	if (err)
+++		return err;
 ++
-++	return err;
+++	*dst = le32_to_cpu(reply) & bits;
+++
+++	return 0;
 ++}
 ++
 ++static inline int omnia_cmd_read_bit(const struct i2c_client *client, u8 cmd,
@@ -2067,34 +2116,29 @@ index 0000000000..38b263b249
 ++
 + static inline int omnia_cmd_read_u16(const struct i2c_client *client, u8 cmd)
 + {
-+-	u16 reply;
-++	__le16 reply;
-+ 	int err;
-+ 
-+ 	err = omnia_cmd_read(client, cmd, &reply, sizeof(reply));
-+@@ -62,4 +118,9 @@ static inline int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
++ 	__le16 reply;
++@@ -68,4 +126,8 @@ static inline int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
 + 	return err ?: reply;
 + }
 + 
 ++extern const struct attribute_group omnia_mcu_gpio_group;
 ++
 ++int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu);
-++void omnia_mcu_unregister_gpiochip(struct omnia_mcu *mcu);
 ++
 + #endif /* __TURRIS_OMNIA_MCU_H */
 +-- 
-+2.41.0
++2.43.0
 +
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-4-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch b/target/linux/mvebu/patches-5.15/103-v6.7-4-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-3-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch b/target/linux/mvebu/patches-5.15/103-3-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
 new file mode 100644
-index 0000000000..1f03b2676c
+index 0000000000..58b52975c7
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-4-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
-@@ -0,0 +1,447 @@
-+From 3b0fbfaad455271a905a20ddcff48c449c826339 Mon Sep 17 00:00:00 2001
++++ b/target/linux/mvebu/patches-5.15/103-3-platform-cznic-turris-omnia-mcu-Add-support-for-powe.patch
+@@ -0,0 +1,446 @@
++From 1a72f0785939089456965e0f807387728d17d58c Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Tue, 19 Sep 2023 12:16:25 +0200
-+Subject: [PATCH 12/17] platform: cznic: turris-omnia-mcu: Add support for
++Subject: [PATCH 3/8] platform: cznic: turris-omnia-mcu: Add support for
 + poweroff and wakeup
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -2106,26 +2150,26 @@ index 0000000000..1f03b2676c
 +
 +Signed-off-by: Marek Behún <kabel@kernel.org>
 +---
-+ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  16 ++
++ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  16 +
 + drivers/platform/cznic/Kconfig                |   4 +
 + drivers/platform/cznic/Makefile               |   1 +
-+ .../platform/cznic/turris-omnia-mcu-base.c    |  12 +-
-+ .../cznic/turris-omnia-mcu-sys-off-wakeup.c   | 261 ++++++++++++++++++
-+ drivers/platform/cznic/turris-omnia-mcu.h     |  24 ++
-+ 6 files changed, 317 insertions(+), 1 deletion(-)
++ .../platform/cznic/turris-omnia-mcu-base.c    |   5 +
++ .../cznic/turris-omnia-mcu-sys-off-wakeup.c   | 277 ++++++++++++++++++
++ drivers/platform/cznic/turris-omnia-mcu.h     |  22 ++
++ 6 files changed, 325 insertions(+)
 + create mode 100644 drivers/platform/cznic/turris-omnia-mcu-sys-off-wakeup.c
 +
 +diff --git a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+index e635ba45ef9a..a69172d5b998 100644
++index 91e107583edd..b2c667f9bf48 100644
 +--- a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
 ++++ b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
-+@@ -14,6 +14,22 @@ Description:	(RW) The front button on the Turris Omnia router can be
++@@ -38,6 +38,22 @@ Description:	(RW) The front button on the Turris Omnia router can be
 + 
 + 		Format: %s.
 + 
 ++What:		/sys/bus/i2c/devices/<mcu_device>/front_button_poweron
-++Date:		August 2023
-++KernelVersion:	6.6
+++Date:		May 2024
+++KernelVersion:	6.9
 ++Contact:	Marek Behún <kabel@kernel.org>
 ++Description:	(RW) Newer versions of the microcontroller firmware of the
 ++		Turris Omnia router support powering off the router into true
@@ -2140,8 +2184,8 @@ index 0000000000..1f03b2676c
 ++		Format: %i.
 ++
 + What:		/sys/bus/i2c/devices/<mcu_device>/fw_features
-+ Date:		November 2023
-+ KernelVersion:	6.7
++ Date:		May 2024
++ KernelVersion:	6.9
 +diff --git a/drivers/platform/cznic/Kconfig b/drivers/platform/cznic/Kconfig
 +index 3a8c3edcd7e6..0a752aa654fa 100644
 +--- a/drivers/platform/cznic/Kconfig
@@ -2171,10 +2215,10 @@ index 0000000000..1f03b2676c
 + turris-omnia-mcu-objs		+= turris-omnia-mcu-gpio.o
 ++turris-omnia-mcu-objs		+= turris-omnia-mcu-sys-off-wakeup.o
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+index 272e0b0496d6..2e82419734d2 100644
++index 8bb38b910f10..c2ff72fbad23 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+@@ -112,6 +112,7 @@ static const struct attribute_group omnia_mcu_base_group = {
++@@ -160,6 +160,7 @@ static const struct attribute_group omnia_mcu_base_group = {
 + static const struct attribute_group *omnia_mcu_groups[] = {
 + 	&omnia_mcu_base_group,
 + 	&omnia_mcu_gpio_group,
@@ -2182,37 +2226,23 @@ index 0000000000..1f03b2676c
 + 	NULL
 + };
 + 
-+@@ -239,7 +240,15 @@ static int omnia_mcu_probe(struct i2c_client *client,
-+ 		return dev_err_probe(dev, err,
-+ 				     "Cannot determine MCU supported features\n");
++@@ -313,6 +314,10 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
++ 					     "Cannot read board info\n");
++ 	}
 + 
-+-	return omnia_mcu_register_gpiochip(mcu);
 ++	err = omnia_mcu_register_sys_off_and_wakeup(mcu);
 ++	if (err)
 ++		return err;
 ++
-++	err = omnia_mcu_register_gpiochip(mcu);
-++	if (err)
-++		omnia_mcu_unregister_sys_off_and_wakeup(mcu);
-++
-++	return err;
++ 	return omnia_mcu_register_gpiochip(mcu);
 + }
 + 
-+ static int omnia_mcu_remove(struct i2c_client *client)
-+@@ -247,6 +256,7 @@ static int omnia_mcu_remove(struct i2c_client *client)
-+ 	struct omnia_mcu *mcu = i2c_get_clientdata(client);
-+ 
-+ 	omnia_mcu_unregister_gpiochip(mcu);
-++	omnia_mcu_unregister_sys_off_and_wakeup(mcu);
-+ 
-+ 	return 0;
-+ }
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-sys-off-wakeup.c b/drivers/platform/cznic/turris-omnia-mcu-sys-off-wakeup.c
 +new file mode 100644
-+index 000000000000..35dddadf6262
++index 000000000000..a4a5cfede8f1
 +--- /dev/null
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-sys-off-wakeup.c
-+@@ -0,0 +1,261 @@
++@@ -0,0 +1,277 @@
 ++// SPDX-License-Identifier: GPL-2.0
 ++/*
 ++ * CZ.NIC's Turris Omnia MCU system off and RTC wakeup driver
@@ -2298,8 +2328,8 @@ index 0000000000..1f03b2676c
 ++	if (alrm->enabled)
 ++		return omnia_cmd_write_u32(client, CMD_SET_WAKEUP,
 ++					   mcu->rtc_alarm);
-++	else
-++		return 0;
+++
+++	return 0;
 ++}
 ++
 ++static int omnia_alarm_irq_enable(struct device *dev, unsigned int enabled)
@@ -2337,6 +2367,11 @@ index 0000000000..1f03b2676c
 ++	put_unaligned_le16(CMD_POWER_OFF_MAGIC, &cmd[1]);
 ++	put_unaligned_le16(arg, &cmd[3]);
 ++
+++	/*
+++	 * Although all values from and to MCU are passed in little-endian, the
+++	 * MCU's CRC unit uses big-endian CRC32 polynomial (0x04c11db7), so we
+++	 * need to use crc32_be() here.
+++	 */
 ++	tmp = cpu_to_be32(get_unaligned_le32(&cmd[1]));
 ++	put_unaligned_le32(crc32_be(0xffffffff, (void *)&tmp, sizeof(tmp)),
 ++			   &cmd[5]);
@@ -2389,9 +2424,11 @@ index 0000000000..1f03b2676c
 ++{
 ++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
 ++	bool val;
+++	int err;
 ++
-++	if (kstrtobool(buf, &val) < 0)
-++		return -EINVAL;
+++	err = kstrtobool(buf, &val);
+++	if (err)
+++		return err;
 ++
 ++	mcu->front_button_poweron = val;
 ++
@@ -2407,7 +2444,7 @@ index 0000000000..1f03b2676c
 ++static umode_t poweroff_attrs_visible(struct kobject *kobj, struct attribute *a,
 ++				      int n)
 ++{
-++	struct device *dev = container_of(kobj, typeof(*dev), kobj);
+++	struct device *dev = kobj_to_dev(kobj);
 ++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
 ++
 ++	if (mcu->features & FEAT_POWEROFF_WAKEUP)
@@ -2421,6 +2458,20 @@ index 0000000000..1f03b2676c
 ++	.is_visible = poweroff_attrs_visible,
 ++};
 ++
+++static void omnia_mcu_unregister_restart(void *ptr)
+++{
+++	struct omnia_mcu *mcu = ptr;
+++
+++	unregister_restart_handler(&mcu->restart_nb);
+++}
+++
+++static void omnia_mcu_unregister_poweroff(void *ptr)
+++{
+++	struct omnia_mcu *mcu = ptr;
+++
+++	pm_power_off = mcu->prev_pm_power_off;
+++}
+++
 ++int omnia_mcu_register_sys_off_and_wakeup(struct omnia_mcu *mcu)
 ++{
 ++	struct device *dev = &mcu->client->dev;
@@ -2429,60 +2480,54 @@ index 0000000000..1f03b2676c
 ++	/* MCU restart is always available */
 ++	mcu->restart_nb.notifier_call = omnia_restart;
 ++	mcu->restart_nb.priority = 0;
-++
 ++	err = register_restart_handler(&mcu->restart_nb);
 ++	if (err)
 ++		return dev_err_probe(dev, err,
 ++				     "Cannot register system restart handler\n");
 ++
+++	err = devm_add_action_or_reset(dev, omnia_mcu_unregister_restart, mcu);
+++	if (err)
+++		return err;
+++
 ++	/*
-++	 * poweroff and wakeup are available only if POWEROFF_WAKEUP feature is
-++	 * present
+++	 * Poweroff and wakeup are available only if POWEROFF_WAKEUP feature is
+++	 * present.
 ++	 */
 ++	if (!(mcu->features & FEAT_POWEROFF_WAKEUP))
 ++		return 0;
-++
-++	mcu->rtcdev = devm_rtc_allocate_device(dev);
-++	if (IS_ERR(mcu->rtcdev)) {
-++		unregister_restart_handler(&mcu->restart_nb);
-++		return dev_err_probe(dev, PTR_ERR(mcu->rtcdev),
-++				     "Cannot allocate RTC device\n");
-++	}
-++
-++	mcu->rtcdev->ops = &omnia_rtc_ops;
-++	mcu->rtcdev->range_max = U32_MAX;
-++
-++	err = devm_rtc_register_device(mcu->rtcdev);
-++	if (err) {
-++		unregister_restart_handler(&mcu->restart_nb);
-++		return dev_err_probe(dev, err, "Cannot register RTC device\n");
-++	}
-++
-++	mcu->front_button_poweron = true;
 ++
 ++	omnia_power_off_mcu_ptr = mcu;
 ++	mcu->prev_pm_power_off = pm_power_off;
 ++	pm_power_off = omnia_power_off;
 ++
-++	return err;
-++}
+++	err = devm_add_action_or_reset(dev, omnia_mcu_unregister_poweroff, mcu);
+++	if (err)
+++		return err;
 ++
-++void omnia_mcu_unregister_sys_off_and_wakeup(struct omnia_mcu *mcu)
-++{
-++	if (mcu->features & FEAT_POWEROFF_WAKEUP)
-++		pm_power_off = mcu->prev_pm_power_off;
+++	mcu->rtcdev = devm_rtc_allocate_device(dev);
+++	if (IS_ERR(mcu->rtcdev))
+++		return dev_err_probe(dev, PTR_ERR(mcu->rtcdev),
+++				     "Cannot allocate RTC device\n");
 ++
-++	unregister_restart_handler(&mcu->restart_nb);
+++	mcu->rtcdev->ops = &omnia_rtc_ops;
+++	mcu->rtcdev->range_max = U32_MAX;
+++
+++	err = devm_rtc_register_device(mcu->rtcdev);
+++	if (err)
+++		return dev_err_probe(dev, err, "Cannot register RTC device\n");
+++
+++	mcu->front_button_poweron = true;
+++
+++	return 0;
 ++}
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
-+index 5383d4ca9b67..d7f0c9e84e36 100644
++index 778d2d06b3e6..7df650972778 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu.h
 ++++ b/drivers/platform/cznic/turris-omnia-mcu.h
-+@@ -12,9 +12,12 @@
-+ #include <linux/gpio/driver.h>
++@@ -13,9 +13,11 @@
 + #include <linux/i2c.h>
++ #include <linux/if_ether.h>
 + #include <linux/mutex.h>
-++#include <linux/notifier.h>
 ++#include <linux/rtc.h>
 + #include <linux/types.h>
 + #include <linux/workqueue.h>
@@ -2491,7 +2536,7 @@ index 0000000000..1f03b2676c
 + 
 + struct omnia_mcu {
 + 	struct i2c_client *client;
-+@@ -30,6 +33,13 @@ struct omnia_mcu {
++@@ -36,6 +38,13 @@ struct omnia_mcu {
 + 	struct delayed_work button_release_emul_work;
 + 	u16 last_status;
 + 	bool button_pressed_emul;
@@ -2505,7 +2550,7 @@ index 0000000000..1f03b2676c
 + };
 + 
 + static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
-+@@ -42,6 +52,17 @@ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
++@@ -48,6 +57,17 @@ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
 + 	return ret < 0 ? ret : 0;
 + }
 + 
@@ -2520,34 +2565,32 @@ index 0000000000..1f03b2676c
 ++	return omnia_cmd_write(client, buf, sizeof(buf));
 ++}
 ++
-+ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd, void *reply,
-+ 				 unsigned int len)
++ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
++ 				 void *reply, unsigned int len)
 + {
-+@@ -119,8 +140,11 @@ static inline int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
++@@ -127,7 +147,9 @@ static inline int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
 + }
 + 
 + extern const struct attribute_group omnia_mcu_gpio_group;
 ++extern const struct attribute_group omnia_mcu_poweroff_group;
 + 
 + int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu);
-+ void omnia_mcu_unregister_gpiochip(struct omnia_mcu *mcu);
 ++int omnia_mcu_register_sys_off_and_wakeup(struct omnia_mcu *mcu);
-++void omnia_mcu_unregister_sys_off_and_wakeup(struct omnia_mcu *mcu);
 + 
 + #endif /* __TURRIS_OMNIA_MCU_H */
 +-- 
-+2.41.0
++2.43.0
 +
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch b/target/linux/mvebu/patches-5.15/103-v6.7-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-4-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch b/target/linux/mvebu/patches-5.15/103-4-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
 new file mode 100644
-index 0000000000..db9d7eea39
+index 0000000000..0acde399bd
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
-@@ -0,0 +1,261 @@
-+From e9146f96269b2cb9e98bdd711dc7eed099606209 Mon Sep 17 00:00:00 2001
++++ b/target/linux/mvebu/patches-5.15/103-4-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+@@ -0,0 +1,251 @@
++From f901e6662635b8a4a9e6977559ec4496a691a7e0 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Tue, 19 Sep 2023 12:21:40 +0200
-+Subject: [PATCH 13/17] platform: cznic: turris-omnia-mcu: Add support for MCU
++Subject: [PATCH 4/8] platform: cznic: turris-omnia-mcu: Add support for MCU
 + watchdog
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -2559,10 +2602,10 @@ index 0000000000..db9d7eea39
 +---
 + drivers/platform/cznic/Kconfig                |   2 +
 + drivers/platform/cznic/Makefile               |   1 +
-+ .../platform/cznic/turris-omnia-mcu-base.c    |  10 +-
++ .../platform/cznic/turris-omnia-mcu-base.c    |   4 +
 + .../cznic/turris-omnia-mcu-watchdog.c         | 122 ++++++++++++++++++
 + drivers/platform/cznic/turris-omnia-mcu.h     |  24 ++++
-+ 5 files changed, 158 insertions(+), 1 deletion(-)
++ 5 files changed, 153 insertions(+)
 + create mode 100644 drivers/platform/cznic/turris-omnia-mcu-watchdog.c
 +
 +diff --git a/drivers/platform/cznic/Kconfig b/drivers/platform/cznic/Kconfig
@@ -2595,30 +2638,20 @@ index 0000000000..db9d7eea39
 + turris-omnia-mcu-objs		+= turris-omnia-mcu-sys-off-wakeup.o
 ++turris-omnia-mcu-objs		+= turris-omnia-mcu-watchdog.o
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+index 2e82419734d2..6d401ce5d5dd 100644
++index c2ff72fbad23..b136635a175b 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
 ++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
-+@@ -244,11 +244,19 @@ static int omnia_mcu_probe(struct i2c_client *client,
++@@ -318,6 +318,10 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
 + 	if (err)
 + 		return err;
 + 
 ++	err = omnia_mcu_register_watchdog(mcu);
 ++	if (err)
-++		goto err_unregister_sys_off;
+++		return err;
 ++
-+ 	err = omnia_mcu_register_gpiochip(mcu);
-+ 	if (err)
-+-		omnia_mcu_unregister_sys_off_and_wakeup(mcu);
-++		goto err_unregister_sys_off;
-+ 
-+ 	return err;
-++
-++err_unregister_sys_off:
-++	omnia_mcu_unregister_sys_off_and_wakeup(mcu);
-++	return err;
++ 	return omnia_mcu_register_gpiochip(mcu);
 + }
 + 
-+ static int omnia_mcu_remove(struct i2c_client *client)
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu-watchdog.c b/drivers/platform/cznic/turris-omnia-mcu-watchdog.c
 +new file mode 100644
 +index 000000000000..6685166bc4c7
@@ -2748,18 +2781,18 @@ index 0000000000..db9d7eea39
 ++	return 0;
 ++}
 +diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
-+index d7f0c9e84e36..ad4635a36f99 100644
++index 7df650972778..e7a2af0919ae 100644
 +--- a/drivers/platform/cznic/turris-omnia-mcu.h
 ++++ b/drivers/platform/cznic/turris-omnia-mcu.h
 +@@ -15,6 +15,7 @@
-+ #include <linux/notifier.h>
++ #include <linux/mutex.h>
 + #include <linux/rtc.h>
 + #include <linux/types.h>
 ++#include <linux/watchdog.h>
 + #include <linux/workqueue.h>
 + #include <asm/byteorder.h>
 + #include <asm/unaligned.h>
-+@@ -40,6 +41,9 @@ struct omnia_mcu {
++@@ -45,6 +46,9 @@ struct omnia_mcu {
 + 	bool front_button_poweron;
 + 	struct notifier_block restart_nb;
 + 	void (*prev_pm_power_off)(void);
@@ -2769,7 +2802,7 @@ index 0000000000..db9d7eea39
 + };
 + 
 + static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
-+@@ -52,6 +56,25 @@ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
++@@ -57,6 +61,25 @@ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
 + 	return ret < 0 ? ret : 0;
 + }
 + 
@@ -2795,26 +2828,832 @@ index 0000000000..db9d7eea39
 + static inline int omnia_cmd_write_u32(const struct i2c_client *client, u8 cmd,
 + 				      u32 val)
 + {
-+@@ -146,5 +169,6 @@ int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu);
-+ void omnia_mcu_unregister_gpiochip(struct omnia_mcu *mcu);
++@@ -151,5 +174,6 @@ extern const struct attribute_group omnia_mcu_poweroff_group;
++ 
++ int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu);
 + int omnia_mcu_register_sys_off_and_wakeup(struct omnia_mcu *mcu);
-+ void omnia_mcu_unregister_sys_off_and_wakeup(struct omnia_mcu *mcu);
 ++int omnia_mcu_register_watchdog(struct omnia_mcu *mcu);
 + 
 + #endif /* __TURRIS_OMNIA_MCU_H */
 +-- 
-+2.41.0
++2.43.0
 +
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-6-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch b/target/linux/mvebu/patches-5.15/103-v6.7-6-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch b/target/linux/mvebu/patches-5.15/103-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
 new file mode 100644
-index 0000000000..a5dc650f7b
+index 0000000000..6fdd284d09
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-6-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
++++ b/target/linux/mvebu/patches-5.15/103-5-platform-cznic-turris-omnia-mcu-Add-support-for-MCU-.patch
+@@ -0,0 +1,230 @@
++From df2c6ddda0125b4a66c1964c6b2c53f02110b927 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 17 Jan 2024 14:03:14 +0100
++Subject: [PATCH 5/8] platform: cznic: turris-omnia-mcu: Add support for MCU
++ provided TRNG
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add support for true random number generator provided by the MCU.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/platform/cznic/Kconfig                |   2 +
++ drivers/platform/cznic/Makefile               |   1 +
++ .../platform/cznic/turris-omnia-mcu-base.c    |   6 +-
++ .../platform/cznic/turris-omnia-mcu-gpio.c    |   2 +-
++ .../platform/cznic/turris-omnia-mcu-trng.c    | 100 ++++++++++++++++++
++ drivers/platform/cznic/turris-omnia-mcu.h     |   8 ++
++ 6 files changed, 117 insertions(+), 2 deletions(-)
++ create mode 100644 drivers/platform/cznic/turris-omnia-mcu-trng.c
++
++diff --git a/drivers/platform/cznic/Kconfig b/drivers/platform/cznic/Kconfig
++index e2649cdecc38..750d5f47dba8 100644
++--- a/drivers/platform/cznic/Kconfig
+++++ b/drivers/platform/cznic/Kconfig
++@@ -19,6 +19,7 @@ config TURRIS_OMNIA_MCU
++ 	depends on I2C
++ 	select GPIOLIB
++ 	select GPIOLIB_IRQCHIP
+++	select HW_RANDOM
++ 	select RTC_CLASS
++ 	select WATCHDOG_CORE
++ 	help
++@@ -28,6 +29,7 @@ config TURRIS_OMNIA_MCU
++ 	  - board poweroff into true low power mode (with voltage regulators
++ 	    disabled) and the ability to configure wake up from this mode (via
++ 	    rtcwake)
+++	  - true random number generator (if available on the MCU)
++ 	  - MCU watchdog
++ 	  - GPIO pins
++ 	    - to get front button press events (the front button can be
++diff --git a/drivers/platform/cznic/Makefile b/drivers/platform/cznic/Makefile
++index a43997a12d74..8fd4c6cbcb1b 100644
++--- a/drivers/platform/cznic/Makefile
+++++ b/drivers/platform/cznic/Makefile
++@@ -4,4 +4,5 @@ obj-$(CONFIG_TURRIS_OMNIA_MCU)	+= turris-omnia-mcu.o
++ turris-omnia-mcu-objs		:= turris-omnia-mcu-base.o
++ turris-omnia-mcu-objs		+= turris-omnia-mcu-gpio.o
++ turris-omnia-mcu-objs		+= turris-omnia-mcu-sys-off-wakeup.o
+++turris-omnia-mcu-objs		+= turris-omnia-mcu-trng.o
++ turris-omnia-mcu-objs		+= turris-omnia-mcu-watchdog.o
++diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
++index b136635a175b..d96c1366a73b 100644
++--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
+++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
++@@ -322,7 +322,11 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
++ 	if (err)
++ 		return err;
++ 
++-	return omnia_mcu_register_gpiochip(mcu);
+++	err = omnia_mcu_register_gpiochip(mcu);
+++	if (err)
+++		return err;
+++
+++	return omnia_mcu_register_trng(mcu);
++ }
++ 
++ static const struct of_device_id of_omnia_mcu_match[] = {
++diff --git a/drivers/platform/cznic/turris-omnia-mcu-gpio.c b/drivers/platform/cznic/turris-omnia-mcu-gpio.c
++index ee5bd64a988f..bc58301cb8b8 100644
++--- a/drivers/platform/cznic/turris-omnia-mcu-gpio.c
+++++ b/drivers/platform/cznic/turris-omnia-mcu-gpio.c
++@@ -160,7 +160,7 @@ static const struct omnia_gpio {
++ };
++ 
++ /* mapping from interrupts to indexes of GPIOs in the omnia_gpios array */
++-static const u8 omnia_int_to_gpio_idx[32] = {
+++const u8 omnia_int_to_gpio_idx[32] = {
++ 	[__bf_shf(INT_CARD_DET)]		= 4,
++ 	[__bf_shf(INT_MSATA_IND)]		= 5,
++ 	[__bf_shf(INT_USB30_OVC)]		= 6,
++diff --git a/drivers/platform/cznic/turris-omnia-mcu-trng.c b/drivers/platform/cznic/turris-omnia-mcu-trng.c
++new file mode 100644
++index 000000000000..fff9ef5e7e11
++--- /dev/null
+++++ b/drivers/platform/cznic/turris-omnia-mcu-trng.c
++@@ -0,0 +1,100 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ * CZ.NIC's Turris Omnia MCU TRNG driver
+++ *
+++ * 2024 by Marek Behún <kabel@kernel.org>
+++ */
+++
+++#include <linux/bitfield.h>
+++#include <linux/completion.h>
+++#include <linux/devm-helpers.h>
+++#include <linux/irqdomain.h>
+++#include <linux/minmax.h>
+++#include <linux/module.h>
+++#include <linux/string.h>
+++#include <linux/turris-omnia-mcu-interface.h>
+++#include <linux/types.h>
+++
+++#include "turris-omnia-mcu.h"
+++
+++#define CMD_TRNG_MAX_ENTROPY_LEN	64
+++
+++static irqreturn_t omnia_trng_irq_handler(int irq, void *dev_id)
+++{
+++	struct omnia_mcu *mcu = dev_id;
+++
+++	complete(&mcu->trng_completion);
+++
+++	return IRQ_HANDLED;
+++}
+++
+++static int omnia_trng_read(struct hwrng *rng, void *data, size_t max, bool wait)
+++{
+++	struct omnia_mcu *mcu = (struct omnia_mcu *)rng->priv;
+++	u8 reply[1 + CMD_TRNG_MAX_ENTROPY_LEN];
+++	int err, bytes;
+++
+++	if (!wait && !completion_done(&mcu->trng_completion))
+++		return 0;
+++
+++	do {
+++		if (wait_for_completion_interruptible(&mcu->trng_completion))
+++			return -EINTR;
+++
+++		err = omnia_cmd_read(mcu->client, CMD_TRNG_COLLECT_ENTROPY,
+++				     reply, sizeof(reply));
+++		if (err)
+++			return err;
+++
+++		bytes = min3((size_t)reply[0], max,
+++			     (size_t)CMD_TRNG_MAX_ENTROPY_LEN);
+++	} while (wait && !bytes);
+++
+++	memcpy(data, &reply[1], bytes);
+++
+++	return bytes;
+++}
+++
+++static void omnia_mcu_irq_destroy_mapping(void *res)
+++{
+++	irq_dispose_mapping((unsigned int)(unsigned long)res);
+++}
+++
+++int omnia_mcu_register_trng(struct omnia_mcu *mcu)
+++{
+++	struct device *dev = &mcu->client->dev;
+++	unsigned int irq;
+++	u8 irq_idx;
+++	int err;
+++
+++	if (!(mcu->features & FEAT_TRNG))
+++		return 0;
+++
+++	irq_idx = omnia_int_to_gpio_idx[__bf_shf(INT_TRNG)];
+++	irq = irq_create_mapping(mcu->gc.irq.domain, irq_idx);
+++	if (!irq)
+++		return dev_err_probe(dev, -ENXIO, "Cannot map TRNG IRQ\n");
+++
+++	err = devm_add_action_or_reset(dev, omnia_mcu_irq_destroy_mapping,
+++				       (void *)irq);
+++	if (err)
+++		return err;
+++
+++	init_completion(&mcu->trng_completion);
+++
+++	err = devm_request_threaded_irq(dev, irq, NULL, omnia_trng_irq_handler,
+++					IRQF_ONESHOT, "turris-omnia-mcu-trng",
+++					mcu);
+++	if (err)
+++		return dev_err_probe(dev, err, "Cannot request TRNG IRQ\n");
+++
+++	mcu->trng.name = "turris-omnia-mcu-trng";
+++	mcu->trng.read = omnia_trng_read;
+++	mcu->trng.priv = (unsigned long)mcu;
+++
+++	err = devm_hwrng_register(dev, &mcu->trng);
+++	if (err)
+++		return dev_err_probe(dev, err, "Cannot register TRNG\n");
+++
+++	return 0;
+++}
++diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
++index e7a2af0919ae..d83c2bdf63b8 100644
++--- a/drivers/platform/cznic/turris-omnia-mcu.h
+++++ b/drivers/platform/cznic/turris-omnia-mcu.h
++@@ -9,7 +9,9 @@
++ #define __TURRIS_OMNIA_MCU_H
++ 
++ #include <linux/bitops.h>
+++#include <linux/completion.h>
++ #include <linux/gpio/driver.h>
+++#include <linux/hw_random.h>
++ #include <linux/i2c.h>
++ #include <linux/if_ether.h>
++ #include <linux/mutex.h>
++@@ -49,6 +51,10 @@ struct omnia_mcu {
++ 
++ 	/* MCU watchdog */
++ 	struct watchdog_device wdt;
+++
+++	/* true random number generator */
+++	struct hwrng trng;
+++	struct completion trng_completion;
++ };
++ 
++ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
++@@ -169,11 +175,13 @@ static inline int omnia_cmd_read_u8(const struct i2c_client *client, u8 cmd)
++ 	return err ?: reply;
++ }
++ 
+++extern const u8 omnia_int_to_gpio_idx[32];
++ extern const struct attribute_group omnia_mcu_gpio_group;
++ extern const struct attribute_group omnia_mcu_poweroff_group;
++ 
++ int omnia_mcu_register_gpiochip(struct omnia_mcu *mcu);
++ int omnia_mcu_register_sys_off_and_wakeup(struct omnia_mcu *mcu);
+++int omnia_mcu_register_trng(struct omnia_mcu *mcu);
++ int omnia_mcu_register_watchdog(struct omnia_mcu *mcu);
++ 
++ #endif /* __TURRIS_OMNIA_MCU_H */
++-- 
++2.43.0
++
+diff --git a/target/linux/mvebu/patches-5.15/103-6-platform-cznic-turris-omnia-mcu-Add-support-for-digi.patch b/target/linux/mvebu/patches-5.15/103-6-platform-cznic-turris-omnia-mcu-Add-support-for-digi.patch
+new file mode 100644
+index 0000000000..6dc58d90cf
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/103-6-platform-cznic-turris-omnia-mcu-Add-support-for-digi.patch
+@@ -0,0 +1,564 @@
++From dd9748f8530aed1f396500f798af498ca2f6522d Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 21 Feb 2024 16:46:21 +0100
++Subject: [PATCH 6/8] platform: cznic: turris-omnia-mcu: Add support for
++ digital message signing via debugfs
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add support for digital message signing with private key stored in the
++MCU. Boards with MKL MCUs have a NIST256p ECDSA private key created
++when manufactured. The private key is not readable from the MCU, but
++MCU allows for signing messages with it and retrieving the public key.
++
++As described in a similar commit 50524d787de3 ("firmware:
++turris-mox-rwtm: support ECDSA signatures via debugfs"):
++  The optimal solution would be to register an akcipher provider via
++  kernel's crypto API, but crypto API does not yet support accessing
++  akcipher API from userspace (and probably won't for some time, see
++  https://www.spinics.net/lists/linux-crypto/msg38388.html).
++
++Therefore we add support for accessing this signature generation
++mechanism via debugfs for now, so that userspace can access it.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ .../ABI/testing/debugfs-turris-omnia-mcu      |  13 +
++ .../sysfs-bus-i2c-devices-turris-omnia-mcu    |  13 +
++ drivers/platform/cznic/Kconfig                |   2 +
++ drivers/platform/cznic/Makefile               |  12 +-
++ .../platform/cznic/turris-omnia-mcu-base.c    |  45 ++-
++ .../platform/cznic/turris-omnia-mcu-debugfs.c | 259 ++++++++++++++++++
++ drivers/platform/cznic/turris-omnia-mcu.h     |  40 ++-
++ 7 files changed, 373 insertions(+), 11 deletions(-)
++ create mode 100644 Documentation/ABI/testing/debugfs-turris-omnia-mcu
++ create mode 100644 drivers/platform/cznic/turris-omnia-mcu-debugfs.c
++
++diff --git a/Documentation/ABI/testing/debugfs-turris-omnia-mcu b/Documentation/ABI/testing/debugfs-turris-omnia-mcu
++new file mode 100644
++index 000000000000..2f9b3b765a6d
++--- /dev/null
+++++ b/Documentation/ABI/testing/debugfs-turris-omnia-mcu
++@@ -0,0 +1,13 @@
+++What:		/sys/kernel/debug/turris-omnia-mcu/do_sign
+++Date:		May 2024
+++KernelVersion:	6.9
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:
+++
+++		======= ===========================================================
+++		(Write) Message to sign with the ECDSA private key stored in MCU.
+++		        The message must be exactly 32 bytes long (since this is
+++		        intended to be a SHA-256 hash).
+++		(Read)  The resulting signature, 64 bytes. This contains the R and
+++			S values of the ECDSA signature, both in big-endian format.
+++		======= ===========================================================
++diff --git a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
++index b2c667f9bf48..f856e02551ee 100644
++--- a/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
+++++ b/Documentation/ABI/testing/sysfs-bus-i2c-devices-turris-omnia-mcu
++@@ -90,6 +90,19 @@ Description:	(RO) Contains the microcontroller type (STM32, GD32, MKL).
++ 
++ 		Format: %s.
++ 
+++What:		/sys/bus/i2c/devices/<mcu_device>/public_key
+++Date:		May 2024
+++KernelVersion:	6.9
+++Contact:	Marek Behún <kabel@kernel.org>
+++Description:	(RO) Contains board ECDSA public key.
+++
+++		Only available if MCU supports signing messages with the ECDSA
+++		algorithm. If so, the board has a private key stored in the MCU
+++		that was generated during manufacture and cannot be retrieved
+++		from the MCU.
+++
+++		Format: %s.
+++
++ What:		/sys/bus/i2c/devices/<mcu_device>/reset_selector
++ Date:		May 2024
++ KernelVersion:	6.9
++diff --git a/drivers/platform/cznic/Kconfig b/drivers/platform/cznic/Kconfig
++index 750d5f47dba8..2d45495c0a2d 100644
++--- a/drivers/platform/cznic/Kconfig
+++++ b/drivers/platform/cznic/Kconfig
++@@ -30,6 +30,8 @@ config TURRIS_OMNIA_MCU
++ 	    disabled) and the ability to configure wake up from this mode (via
++ 	    rtcwake)
++ 	  - true random number generator (if available on the MCU)
+++	  - ECDSA message signing with board private key (if available on the
+++	    MCU)
++ 	  - MCU watchdog
++ 	  - GPIO pins
++ 	    - to get front button press events (the front button can be
++diff --git a/drivers/platform/cznic/Makefile b/drivers/platform/cznic/Makefile
++index 8fd4c6cbcb1b..22ac5075b750 100644
++--- a/drivers/platform/cznic/Makefile
+++++ b/drivers/platform/cznic/Makefile
++@@ -1,8 +1,10 @@
++ # SPDX-License-Identifier: GPL-2.0-only
++ 
++ obj-$(CONFIG_TURRIS_OMNIA_MCU)	+= turris-omnia-mcu.o
++-turris-omnia-mcu-objs		:= turris-omnia-mcu-base.o
++-turris-omnia-mcu-objs		+= turris-omnia-mcu-gpio.o
++-turris-omnia-mcu-objs		+= turris-omnia-mcu-sys-off-wakeup.o
++-turris-omnia-mcu-objs		+= turris-omnia-mcu-trng.o
++-turris-omnia-mcu-objs		+= turris-omnia-mcu-watchdog.o
+++turris-omnia-mcu-objs-y		:= turris-omnia-mcu-base.o
+++turris-omnia-mcu-objs-y		+= turris-omnia-mcu-gpio.o
+++turris-omnia-mcu-objs-y		+= turris-omnia-mcu-sys-off-wakeup.o
+++turris-omnia-mcu-objs-y		+= turris-omnia-mcu-trng.o
+++turris-omnia-mcu-objs-y		+= turris-omnia-mcu-watchdog.o
+++turris-omnia-mcu-objs-$(CONFIG_DEBUG_FS) += turris-omnia-mcu-debugfs.o
+++turris-omnia-mcu-objs		:= $(turris-omnia-mcu-objs-y)
++diff --git a/drivers/platform/cznic/turris-omnia-mcu-base.c b/drivers/platform/cznic/turris-omnia-mcu-base.c
++index d96c1366a73b..0e6129a95754 100644
++--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
+++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
++@@ -124,6 +124,16 @@ static ssize_t board_revision_show(struct device *dev,
++ }
++ static DEVICE_ATTR_RO(board_revision);
++ 
+++static ssize_t public_key_show(struct device *dev, struct device_attribute *a,
+++			       char *buf)
+++{
+++	struct omnia_mcu *mcu = i2c_get_clientdata(to_i2c_client(dev));
+++
+++	return sysfs_emit(buf, "%*phN\n", OMNIA_MCU_CRYPTO_PUBLIC_KEY_LEN,
+++			  mcu->board_public_key);
+++}
+++static DEVICE_ATTR_RO(public_key);
+++
++ static struct attribute *omnia_mcu_base_attrs[] = {
++ 	&dev_attr_fw_version_hash_application.attr,
++ 	&dev_attr_fw_version_hash_bootloader.attr,
++@@ -133,6 +143,7 @@ static struct attribute *omnia_mcu_base_attrs[] = {
++ 	&dev_attr_serial_number.attr,
++ 	&dev_attr_first_mac_address.attr,
++ 	&dev_attr_board_revision.attr,
+++	&dev_attr_public_key.attr,
++ 	NULL
++ };
++ 
++@@ -148,6 +159,9 @@ static umode_t omnia_mcu_base_attrs_visible(struct kobject *kobj,
++ 	     a == &dev_attr_board_revision.attr) &&
++ 	    !(mcu->features & FEAT_BOARD_INFO))
++ 		mode = 0;
+++	else if (a == &dev_attr_public_key.attr &&
+++		 !(mcu->features & FEAT_CRYPTO))
+++		mode = 0;
++ 
++ 	return mode;
++ }
++@@ -286,6 +300,24 @@ static int omnia_mcu_read_board_info(struct omnia_mcu *mcu)
++ 	return 0;
++ }
++ 
+++static int omnia_mcu_read_public_key(struct omnia_mcu *mcu)
+++{
+++	u8 reply[1 + OMNIA_MCU_CRYPTO_PUBLIC_KEY_LEN];
+++	int err;
+++
+++	err = omnia_cmd_read(mcu->client, CMD_CRYPTO_GET_PUBLIC_KEY, reply,
+++			     sizeof(reply));
+++	if (err)
+++		return err;
+++
+++	if (reply[0] != OMNIA_MCU_CRYPTO_PUBLIC_KEY_LEN)
+++		return -EIO;
+++
+++	memcpy(mcu->board_public_key, &reply[1], sizeof(mcu->board_public_key));
+++
+++	return 0;
+++}
+++
++ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id *)
++ {
++ 	struct device *dev = &client->dev;
++@@ -314,6 +346,13 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
++ 					     "Cannot read board info\n");
++ 	}
++ 
+++	if (mcu->features & FEAT_CRYPTO) {
+++		err = omnia_mcu_read_public_key(mcu);
+++		if (err)
+++			return dev_err_probe(dev, err,
+++					     "Cannot read board public key\n");
+++	}
+++
++ 	err = omnia_mcu_register_sys_off_and_wakeup(mcu);
++ 	if (err)
++ 		return err;
++@@ -326,7 +365,11 @@ static int omnia_mcu_probe(struct i2c_client *client, const struct i2c_device_id
++ 	if (err)
++ 		return err;
++ 
++-	return omnia_mcu_register_trng(mcu);
+++	err = omnia_mcu_register_trng(mcu);
+++	if (err)
+++		return err;
+++
+++	return omnia_mcu_register_debugfs(mcu);
++ }
++ 
++ static const struct of_device_id of_omnia_mcu_match[] = {
++diff --git a/drivers/platform/cznic/turris-omnia-mcu-debugfs.c b/drivers/platform/cznic/turris-omnia-mcu-debugfs.c
++new file mode 100644
++index 000000000000..47d1b4a67a25
++--- /dev/null
+++++ b/drivers/platform/cznic/turris-omnia-mcu-debugfs.c
++@@ -0,0 +1,259 @@
+++// SPDX-License-Identifier: GPL-2.0
+++/*
+++ * CZ.NIC's Turris Omnia MCU ECDSA message signing via debugfs
+++ *
+++ * 2024 by Marek Behún <kabel@kernel.org>
+++ */
+++
+++#include <linux/bitfield.h>
+++#include <linux/completion.h>
+++#include <linux/debugfs.h>
+++#include <linux/devm-helpers.h>
+++#include <linux/irqdomain.h>
+++#include <linux/module.h>
+++#include <linux/mutex.h>
+++#include <linux/string.h>
+++#include <linux/turris-omnia-mcu-interface.h>
+++#include <linux/types.h>
+++#include <linux/uaccess.h>
+++
+++#include "turris-omnia-mcu.h"
+++
+++#define CMD_CRYPTO_SIGN_MESSAGE_LEN	32
+++
+++enum {
+++	SIGN_STATE_CLOSED	= 0,
+++	SIGN_STATE_OPEN		= 1,
+++	SIGN_STATE_REQUESTED	= 2,
+++	SIGN_STATE_COLLECTED	= 3,
+++};
+++
+++static irqreturn_t omnia_msg_signed_irq_handler(int irq, void *dev_id)
+++{
+++	u8 reply[1 + OMNIA_MCU_CRYPTO_SIGNATURE_LEN];
+++	struct omnia_mcu *mcu = dev_id;
+++	int err;
+++
+++	err = omnia_cmd_read(mcu->client, CMD_CRYPTO_COLLECT_SIGNATURE, reply,
+++			     sizeof(reply));
+++	if (!err && reply[0] != OMNIA_MCU_CRYPTO_SIGNATURE_LEN)
+++		err = -EIO;
+++
+++	mutex_lock(&mcu->sign_lock);
+++
+++	if (mcu->sign_state == SIGN_STATE_REQUESTED) {
+++		mcu->sign_err = err;
+++		if (!err)
+++			memcpy(mcu->signature, &reply[1],
+++			       OMNIA_MCU_CRYPTO_SIGNATURE_LEN);
+++		mcu->sign_state = SIGN_STATE_COLLECTED;
+++		complete(&mcu->msg_signed_completion);
+++	}
+++
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	return IRQ_HANDLED;
+++}
+++
+++static int do_sign_open(struct inode *inode, struct file *file)
+++{
+++	struct omnia_mcu *mcu = inode->i_private;
+++
+++	mutex_lock(&mcu->sign_lock);
+++
+++	/* do_sign is allowed to be opened only once */
+++	if (mcu->sign_state != SIGN_STATE_CLOSED) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return -EBUSY;
+++	}
+++
+++	mcu->sign_state = SIGN_STATE_OPEN;
+++
+++	file->private_data = mcu;
+++
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	return nonseekable_open(inode, file);
+++}
+++
+++static int do_sign_release(struct inode *inode, struct file *file)
+++{
+++	struct omnia_mcu *mcu = file->private_data;
+++
+++	mutex_lock(&mcu->sign_lock);
+++
+++	mcu->sign_state = SIGN_STATE_CLOSED;
+++
+++	/* forget signature on release even if it was not read, for security */
+++	memzero_explicit(mcu->signature, sizeof(mcu->signature));
+++
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	return 0;
+++}
+++
+++static ssize_t do_sign_read(struct file *file, char __user *buf, size_t len,
+++			    loff_t *ppos)
+++{
+++	struct omnia_mcu *mcu = file->private_data;
+++
+++	/* only allow read of one whole signature */
+++	if (len != sizeof(mcu->signature))
+++		return -EINVAL;
+++
+++	mutex_lock(&mcu->sign_lock);
+++	if (mcu->sign_state != SIGN_STATE_REQUESTED &&
+++	    mcu->sign_state != SIGN_STATE_COLLECTED) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return -ENODATA;
+++	}
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	if (wait_for_completion_interruptible(&mcu->msg_signed_completion))
+++		return -EINTR;
+++
+++	mutex_lock(&mcu->sign_lock);
+++
+++	mcu->sign_state = SIGN_STATE_OPEN;
+++
+++	if (mcu->sign_err) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return mcu->sign_err;
+++	}
+++
+++	if (copy_to_user(buf, mcu->signature, len)) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return -EFAULT;
+++	}
+++
+++	/* on read forget the signature, for security */
+++	memzero_explicit(mcu->signature, sizeof(mcu->signature));
+++
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	return len;
+++}
+++
+++static ssize_t do_sign_write(struct file *file, const char __user *buf,
+++			     size_t len, loff_t *ppos)
+++{
+++	u8 cmd[1 + CMD_CRYPTO_SIGN_MESSAGE_LEN], reply;
+++	struct omnia_mcu *mcu = file->private_data;
+++	int err;
+++
+++	/*
+++	 * the input is a SHA-256 hash of a message to sign, so exactly
+++	 * 32 bytes have to be read
+++	 */
+++	if (len != CMD_CRYPTO_SIGN_MESSAGE_LEN)
+++		return -EINVAL;
+++
+++	cmd[0] = CMD_CRYPTO_SIGN_MESSAGE;
+++
+++	if (copy_from_user(&cmd[1], buf, len))
+++		return -EFAULT;
+++
+++	mutex_lock(&mcu->sign_lock);
+++
+++	if (mcu->sign_state != SIGN_STATE_OPEN) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return -EBUSY;
+++	}
+++
+++	err = omnia_cmd_write_read(mcu->client, cmd, sizeof(cmd), &reply, 1);
+++	if (err) {
+++		mutex_unlock(&mcu->sign_lock);
+++		return err;
+++	}
+++
+++	if (reply)
+++		mcu->sign_state = SIGN_STATE_REQUESTED;
+++
+++	mutex_unlock(&mcu->sign_lock);
+++
+++	return reply ? len : -EBUSY;
+++}
+++
+++static const struct file_operations do_sign_fops = {
+++	.owner		= THIS_MODULE,
+++	.open		= do_sign_open,
+++	.read		= do_sign_read,
+++	.write		= do_sign_write,
+++	.release	= do_sign_release,
+++	.llseek		= no_llseek,
+++};
+++
+++static void omnia_mcu_irq_destroy_mapping(void *res)
+++{
+++	irq_dispose_mapping((unsigned int)(unsigned long)res);
+++}
+++
+++static void omnia_mcu_mutex_destroy(void *lock)
+++{
+++	mutex_destroy(lock);
+++}
+++
+++static void omnia_mcu_debugfs_dir_recursive_drop(void *res)
+++{
+++	debugfs_remove_recursive(res);
+++}
+++
+++int omnia_mcu_register_debugfs(struct omnia_mcu *mcu)
+++{
+++	struct device *dev = &mcu->client->dev;
+++	struct dentry *root, *entry;
+++	unsigned int irq;
+++	u8 irq_idx;
+++	int err;
+++
+++	if (!(mcu->features & FEAT_CRYPTO))
+++		return 0;
+++
+++	irq_idx = omnia_int_to_gpio_idx[__bf_shf(INT_MESSAGE_SIGNED)];
+++	irq = irq_create_mapping(mcu->gc.irq.domain, irq_idx);
+++	if (!irq)
+++		return dev_err_probe(dev, -ENXIO,
+++				     "Cannot map MESSAGE_SIGNED IRQ\n");
+++
+++	err = devm_add_action_or_reset(dev, omnia_mcu_irq_destroy_mapping,
+++				       (void *)irq);
+++	if (err)
+++		return err;
+++
+++	mutex_init(&mcu->sign_lock);
+++	err = devm_add_action_or_reset(dev, omnia_mcu_mutex_destroy,
+++				       &mcu->sign_lock);
+++	if (err)
+++		return err;
+++
+++	mcu->sign_state = 0;
+++
+++	init_completion(&mcu->msg_signed_completion);
+++
+++	err = devm_request_threaded_irq(dev, irq, NULL,
+++					omnia_msg_signed_irq_handler,
+++					IRQF_ONESHOT,
+++					"turris-omnia-mcu-debugfs", mcu);
+++	if (err)
+++		return dev_err_probe(dev, err,
+++				     "Cannot request MESSAGE_SIGNED IRQ\n");
+++
+++	root = debugfs_create_dir("turris-omnia-mcu", NULL);
+++	if (IS_ERR(root))
+++		return dev_err_probe(dev, PTR_ERR(root),
+++				     "Cannot create debugfs dir\n");
+++
+++	err = devm_add_action_or_reset(dev,
+++				       omnia_mcu_debugfs_dir_recursive_drop,
+++				       root);
+++	if (err)
+++		return err;
+++
+++	entry = debugfs_create_file_unsafe("do_sign", 0600, root, mcu,
+++					   &do_sign_fops);
+++	if (IS_ERR(entry))
+++		return dev_err_probe(dev, PTR_ERR(entry),
+++				     "Cannot create debugfs entry\n");
+++
+++	return 0;
+++}
++diff --git a/drivers/platform/cznic/turris-omnia-mcu.h b/drivers/platform/cznic/turris-omnia-mcu.h
++index d83c2bdf63b8..a3c5f6ed8f21 100644
++--- a/drivers/platform/cznic/turris-omnia-mcu.h
+++++ b/drivers/platform/cznic/turris-omnia-mcu.h
++@@ -22,6 +22,9 @@
++ #include <asm/byteorder.h>
++ #include <asm/unaligned.h>
++ 
+++#define OMNIA_MCU_CRYPTO_PUBLIC_KEY_LEN	33
+++#define OMNIA_MCU_CRYPTO_SIGNATURE_LEN	64
+++
++ struct omnia_mcu {
++ 	struct i2c_client *client;
++ 	const char *type;
++@@ -31,6 +34,7 @@ struct omnia_mcu {
++ 	u64 board_serial_number;
++ 	u8 board_first_mac[ETH_ALEN];
++ 	u8 board_revision;
+++	u8 board_public_key[OMNIA_MCU_CRYPTO_PUBLIC_KEY_LEN];
++ 
++ 	/* GPIO chip */
++ 	struct gpio_chip gc;
++@@ -55,6 +59,16 @@ struct omnia_mcu {
++ 	/* true random number generator */
++ 	struct hwrng trng;
++ 	struct completion trng_completion;
+++
+++#ifdef CONFIG_DEBUG_FS
+++	/* MCU ECDSA message signing via debugfs */
+++	struct dentry *debugfs_root;
+++	struct completion msg_signed_completion;
+++	struct mutex sign_lock;
+++	unsigned int sign_state;
+++	u8 signature[OMNIA_MCU_CRYPTO_SIGNATURE_LEN];
+++	int sign_err;
+++#endif
++ };
++ 
++ static inline int omnia_cmd_write(const struct i2c_client *client, void *cmd,
++@@ -97,19 +111,20 @@ static inline int omnia_cmd_write_u32(const struct i2c_client *client, u8 cmd,
++ 	return omnia_cmd_write(client, buf, sizeof(buf));
++ }
++ 
++-static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
++-				 void *reply, unsigned int len)
+++static inline int omnia_cmd_write_read(const struct i2c_client *client,
+++				       void *cmd, unsigned int cmd_len,
+++				       void *reply, unsigned int reply_len)
++ {
++ 	struct i2c_msg msgs[2];
++ 	int ret;
++ 
++ 	msgs[0].addr = client->addr;
++ 	msgs[0].flags = 0;
++-	msgs[0].len = 1;
++-	msgs[0].buf = &cmd;
+++	msgs[0].len = cmd_len;
+++	msgs[0].buf = cmd;
++ 	msgs[1].addr = client->addr;
++ 	msgs[1].flags = I2C_M_RD;
++-	msgs[1].len = len;
+++	msgs[1].len = reply_len;
++ 	msgs[1].buf = reply;
++ 
++ 	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++@@ -121,6 +136,12 @@ static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
++ 	return 0;
++ }
++ 
+++static inline int omnia_cmd_read(const struct i2c_client *client, u8 cmd,
+++				 void *reply, unsigned int len)
+++{
+++	return omnia_cmd_write_read(client, &cmd, 1, reply, len);
+++}
+++
++ /* Returns 0 on success */
++ static inline int omnia_cmd_read_bits(const struct i2c_client *client, u8 cmd,
++ 				      u32 bits, u32 *dst)
++@@ -184,4 +205,13 @@ int omnia_mcu_register_sys_off_and_wakeup(struct omnia_mcu *mcu);
++ int omnia_mcu_register_trng(struct omnia_mcu *mcu);
++ int omnia_mcu_register_watchdog(struct omnia_mcu *mcu);
++ 
+++#ifdef CONFIG_DEBUG_FS
+++int omnia_mcu_register_debugfs(struct omnia_mcu *mcu);
+++#else
+++static inline int omnia_mcu_register_debugfs(struct omnia_mcu *mcu)
+++{
+++	return 0;
+++}
+++#endif
+++
++ #endif /* __TURRIS_OMNIA_MCU_H */
++-- 
++2.43.0
++
+diff --git a/target/linux/mvebu/patches-5.15/103-7-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch b/target/linux/mvebu/patches-5.15/103-7-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
+new file mode 100644
+index 0000000000..765359dbbc
+--- /dev/null
++++ b/target/linux/mvebu/patches-5.15/103-7-ARM-dts-turris-omnia-Add-MCU-system-controller-node.patch
 @@ -0,0 +1,60 @@
 +From 6021be3e190392bf25de436b553fbb2c956266c2 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Tue, 8 Aug 2023 14:27:21 +0200
-+Subject: [PATCH 14/17] ARM: dts: turris-omnia: Add MCU system-controller node
++Subject: [PATCH 7/8] ARM: dts: turris-omnia: Add MCU system-controller node
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
 +Content-Transfer-Encoding: 8bit
@@ -2838,7 +3677,7 @@ index 0000000000..a5dc650f7b
 + 
 +-			/* STM32F0 command interface at address 0x2a */
 ++			mcu: system-controller@2a {
-++				compatible = "cznic,turris-omnia-ctrl";
+++				compatible = "cznic,turris-omnia-mcu";
 ++				reg = <0x2a>;
 ++
 ++				pinctrl-names = "default";
@@ -2871,16 +3710,16 @@ index 0000000000..a5dc650f7b
 +-- 
 +2.41.0
 +
-diff --git a/target/linux/mvebu/patches-5.15/103-v6.7-7-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch b/target/linux/mvebu/patches-5.15/103-v6.7-7-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
+diff --git a/target/linux/mvebu/patches-5.15/103-8-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch b/target/linux/mvebu/patches-5.15/103-8-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
 new file mode 100644
-index 0000000000..e3ee7e0598
+index 0000000000..7ff5ad9374
 --- /dev/null
-+++ b/target/linux/mvebu/patches-5.15/103-v6.7-7-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
++++ b/target/linux/mvebu/patches-5.15/103-8-ARM-dts-turris-omnia-Add-GPIO-key-node-for-front-but.patch
 @@ -0,0 +1,45 @@
 +From fb05d6e709894abf1f9c1ad0ce38635d56847e59 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Wed, 23 Aug 2023 16:33:42 +0200
-+Subject: [PATCH 15/17] ARM: dts: turris-omnia: Add GPIO key node for front
++Subject: [PATCH 8/8] ARM: dts: turris-omnia: Add GPIO key node for front
 + button
 +MIME-Version: 1.0
 +Content-Type: text/plain; charset=UTF-8
@@ -2923,5 +3762,5 @@ index 0000000000..e3ee7e0598
 +2.41.0
 +
 -- 
-2.41.0
+2.43.0
 
