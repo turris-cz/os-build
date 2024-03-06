@@ -1,0 +1,876 @@
+From bb16c0c7e30b12229e5a272b52e82b3fd6236965 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 2 Nov 2023 18:03:27 +0100
+Subject: [PATCH 1/2] mpc85xx: 5.15: Backport qca8k changes adding regmap bulk
+ methods
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ ...read-write-callbacks-into-regmap_con.patch | 285 ++++++++++++++++++
+ ...9-2-regmap-Add-missing-map-bus-check.patch |  31 ++
+ ...d-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch |  63 ++++
+ ...a8k-convert-to-regmap-read-write-API.patch | 261 ++++++++++++++++
+ ...-enable-use_single_write-for-qca8xxx.patch |  78 +++++
+ ...x-regmap-bulk-read-write-methods-on-.patch |  61 ++++
+ ...x-potential-MDIO-bus-conflict-when-a.patch | 106 +++++++
+ .../9000-fix-qca8k-on-turris1x.patch          |  24 ++
+ 8 files changed, 909 insertions(+)
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0003-v5.19-1-regmap-Add-bulk-read-write-callbacks-into-regmap_con.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.3-2-net-dsa-qca8k-convert-to-regmap-read-write-API.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.5-3-net-dsa-qca8k-enable-use_single_write-for-qca8xxx.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.6-4-net-dsa-qca8k-fix-regmap-bulk-read-write-methods-on-.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/9000-fix-qca8k-on-turris1x.patch
+
+diff --git a/target/linux/mpc85xx/patches-5.15/0003-v5.19-1-regmap-Add-bulk-read-write-callbacks-into-regmap_con.patch b/target/linux/mpc85xx/patches-5.15/0003-v5.19-1-regmap-Add-bulk-read-write-callbacks-into-regmap_con.patch
+new file mode 100644
+index 0000000000..7b272b8388
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0003-v5.19-1-regmap-Add-bulk-read-write-callbacks-into-regmap_con.patch
+@@ -0,0 +1,285 @@
++From d77e745613680c54708470402e2b623dcd769681 Mon Sep 17 00:00:00 2001
++From: Marek Vasut <marex@denx.de>
++Date: Sat, 30 Apr 2022 04:51:44 +0200
++Subject: [PATCH] regmap: Add bulk read/write callbacks into regmap_config
++
++Currently the regmap_config structure only allows the user to implement
++single element register read/write using .reg_read/.reg_write callbacks.
++The regmap_bus already implements bulk counterparts of both, and is being
++misused as a workaround for the missing bulk read/write callbacks in
++regmap_config by a couple of drivers. To stop this misuse, add the bulk
++read/write callbacks to regmap_config and call them from the regmap core
++code.
++
++Signed-off-by: Marek Vasut <marex@denx.de>
++Cc: Jagan Teki <jagan@amarulasolutions.com>
++Cc: Mark Brown <broonie@kernel.org>
++Cc: Maxime Ripard <maxime@cerno.tech>
++Cc: Robert Foss <robert.foss@linaro.org>
++Cc: Sam Ravnborg <sam@ravnborg.org>
++Cc: Thomas Zimmermann <tzimmermann@suse.de>
++To: dri-devel@lists.freedesktop.org
++Link: https://lore.kernel.org/r/20220430025145.640305-1-marex@denx.de
++Signed-off-by: Mark Brown <broonie@kernel.org>
++---
++ drivers/base/regmap/internal.h |  4 ++
++ drivers/base/regmap/regmap.c   | 76 ++++++++++++++++++----------------
++ include/linux/regmap.h         | 12 ++++++
++ 3 files changed, 56 insertions(+), 36 deletions(-)
++
++--- a/drivers/base/regmap/internal.h
+++++ b/drivers/base/regmap/internal.h
++@@ -108,6 +108,10 @@ struct regmap {
++ 	int (*reg_write)(void *context, unsigned int reg, unsigned int val);
++ 	int (*reg_update_bits)(void *context, unsigned int reg,
++ 			       unsigned int mask, unsigned int val);
+++	/* Bulk read/write */
+++	int (*read)(void *context, const void *reg_buf, size_t reg_size,
+++		    void *val_buf, size_t val_size);
+++	int (*write)(void *context, const void *data, size_t count);
++ 
++ 	bool defer_caching;
++ 
++--- a/drivers/base/regmap/regmap.c
+++++ b/drivers/base/regmap/regmap.c
++@@ -836,12 +836,15 @@ struct regmap *__regmap_init(struct devi
++ 		map->reg_stride_order = ilog2(map->reg_stride);
++ 	else
++ 		map->reg_stride_order = -1;
++-	map->use_single_read = config->use_single_read || !bus || !bus->read;
++-	map->use_single_write = config->use_single_write || !bus || !bus->write;
++-	map->can_multi_write = config->can_multi_write && bus && bus->write;
+++	map->use_single_read = config->use_single_read || !(config->read || (bus && bus->read));
+++	map->use_single_write = config->use_single_write || !(config->write || (bus && bus->write));
+++	map->can_multi_write = config->can_multi_write && (config->write || (bus && bus->write));
++ 	if (bus) {
++ 		map->max_raw_read = bus->max_raw_read;
++ 		map->max_raw_write = bus->max_raw_write;
+++	} else if (config->max_raw_read && config->max_raw_write) {
+++		map->max_raw_read = config->max_raw_read;
+++		map->max_raw_write = config->max_raw_write;
++ 	}
++ 	map->dev = dev;
++ 	map->bus = bus;
++@@ -875,7 +878,16 @@ struct regmap *__regmap_init(struct devi
++ 		map->read_flag_mask = bus->read_flag_mask;
++ 	}
++ 
++-	if (!bus) {
+++	if (config && config->read && config->write) {
+++		map->reg_read  = _regmap_bus_read;
+++
+++		/* Bulk read/write */
+++		map->read = config->read;
+++		map->write = config->write;
+++
+++		reg_endian = REGMAP_ENDIAN_NATIVE;
+++		val_endian = REGMAP_ENDIAN_NATIVE;
+++	} else if (!bus) {
++ 		map->reg_read  = config->reg_read;
++ 		map->reg_write = config->reg_write;
++ 		map->reg_update_bits = config->reg_update_bits;
++@@ -892,10 +904,13 @@ struct regmap *__regmap_init(struct devi
++ 	} else {
++ 		map->reg_read  = _regmap_bus_read;
++ 		map->reg_update_bits = bus->reg_update_bits;
++-	}
+++		/* Bulk read/write */
+++		map->read = bus->read;
+++		map->write = bus->write;
++ 
++-	reg_endian = regmap_get_reg_endian(bus, config);
++-	val_endian = regmap_get_val_endian(dev, bus, config);
+++		reg_endian = regmap_get_reg_endian(bus, config);
+++		val_endian = regmap_get_val_endian(dev, bus, config);
+++	}
++ 
++ 	switch (config->reg_bits + map->reg_shift) {
++ 	case 2:
++@@ -1669,8 +1684,6 @@ static int _regmap_raw_write_impl(struct
++ 	size_t len;
++ 	int i;
++ 
++-	WARN_ON(!map->bus);
++-
++ 	/* Check for unwritable or noinc registers in range
++ 	 * before we start
++ 	 */
++@@ -1750,7 +1763,7 @@ static int _regmap_raw_write_impl(struct
++ 		val = work_val;
++ 	}
++ 
++-	if (map->async && map->bus->async_write) {
+++	if (map->async && map->bus && map->bus->async_write) {
++ 		struct regmap_async *async;
++ 
++ 		trace_regmap_async_write_start(map, reg, val_len);
++@@ -1818,10 +1831,10 @@ static int _regmap_raw_write_impl(struct
++ 	 * write.
++ 	 */
++ 	if (val == work_val)
++-		ret = map->bus->write(map->bus_context, map->work_buf,
++-				      map->format.reg_bytes +
++-				      map->format.pad_bytes +
++-				      val_len);
+++		ret = map->write(map->bus_context, map->work_buf,
+++				 map->format.reg_bytes +
+++				 map->format.pad_bytes +
+++				 val_len);
++ 	else if (map->bus->gather_write)
++ 		ret = map->bus->gather_write(map->bus_context, map->work_buf,
++ 					     map->format.reg_bytes +
++@@ -1840,7 +1853,7 @@ static int _regmap_raw_write_impl(struct
++ 		memcpy(buf, map->work_buf, map->format.reg_bytes);
++ 		memcpy(buf + map->format.reg_bytes + map->format.pad_bytes,
++ 		       val, val_len);
++-		ret = map->bus->write(map->bus_context, buf, len);
+++		ret = map->write(map->bus_context, buf, len);
++ 
++ 		kfree(buf);
++ 	} else if (ret != 0 && !map->cache_bypass && map->format.parse_val) {
++@@ -1897,7 +1910,7 @@ static int _regmap_bus_formatted_write(v
++ 	struct regmap_range_node *range;
++ 	struct regmap *map = context;
++ 
++-	WARN_ON(!map->bus || !map->format.format_write);
+++	WARN_ON(!map->format.format_write);
++ 
++ 	range = _regmap_range_lookup(map, reg);
++ 	if (range) {
++@@ -1910,8 +1923,7 @@ static int _regmap_bus_formatted_write(v
++ 
++ 	trace_regmap_hw_write_start(map, reg, 1);
++ 
++-	ret = map->bus->write(map->bus_context, map->work_buf,
++-			      map->format.buf_size);
+++	ret = map->write(map->bus_context, map->work_buf, map->format.buf_size);
++ 
++ 	trace_regmap_hw_write_done(map, reg, 1);
++ 
++@@ -1931,7 +1943,7 @@ static int _regmap_bus_raw_write(void *c
++ {
++ 	struct regmap *map = context;
++ 
++-	WARN_ON(!map->bus || !map->format.format_val);
+++	WARN_ON(!map->format.format_val);
++ 
++ 	map->format.format_val(map->work_buf + map->format.reg_bytes
++ 			       + map->format.pad_bytes, val, 0);
++@@ -1945,7 +1957,7 @@ static int _regmap_bus_raw_write(void *c
++ 
++ static inline void *_regmap_map_get_context(struct regmap *map)
++ {
++-	return (map->bus) ? map : map->bus_context;
+++	return (map->bus || (!map->bus && map->read)) ? map : map->bus_context;
++ }
++ 
++ int _regmap_write(struct regmap *map, unsigned int reg,
++@@ -2355,7 +2367,7 @@ static int _regmap_raw_multi_reg_write(s
++ 	u8 = buf;
++ 	*u8 |= map->write_flag_mask;
++ 
++-	ret = map->bus->write(map->bus_context, buf, len);
+++	ret = map->write(map->bus_context, buf, len);
++ 
++ 	kfree(buf);
++ 
++@@ -2661,9 +2673,7 @@ static int _regmap_raw_read(struct regma
++ 	struct regmap_range_node *range;
++ 	int ret;
++ 
++-	WARN_ON(!map->bus);
++-
++-	if (!map->bus || !map->bus->read)
+++	if (!map->read)
++ 		return -EINVAL;
++ 
++ 	range = _regmap_range_lookup(map, reg);
++@@ -2679,9 +2689,9 @@ static int _regmap_raw_read(struct regma
++ 				      map->read_flag_mask);
++ 	trace_regmap_hw_read_start(map, reg, val_len / map->format.val_bytes);
++ 
++-	ret = map->bus->read(map->bus_context, map->work_buf,
++-			     map->format.reg_bytes + map->format.pad_bytes,
++-			     val, val_len);
+++	ret = map->read(map->bus_context, map->work_buf,
+++			map->format.reg_bytes + map->format.pad_bytes,
+++			val, val_len);
++ 
++ 	trace_regmap_hw_read_done(map, reg, val_len / map->format.val_bytes);
++ 
++@@ -2792,8 +2802,6 @@ int regmap_raw_read(struct regmap *map,
++ 	unsigned int v;
++ 	int ret, i;
++ 
++-	if (!map->bus)
++-		return -EINVAL;
++ 	if (val_len % map->format.val_bytes)
++ 		return -EINVAL;
++ 	if (!IS_ALIGNED(reg, map->reg_stride))
++@@ -2808,7 +2816,7 @@ int regmap_raw_read(struct regmap *map,
++ 		size_t chunk_count, chunk_bytes;
++ 		size_t chunk_regs = val_count;
++ 
++-		if (!map->bus->read) {
+++		if (!map->read) {
++ 			ret = -ENOTSUPP;
++ 			goto out;
++ 		}
++@@ -2868,7 +2876,7 @@ EXPORT_SYMBOL_GPL(regmap_raw_read);
++  * @val: Pointer to data buffer
++  * @val_len: Length of output buffer in bytes.
++  *
++- * The regmap API usually assumes that bulk bus read operations will read a
+++ * The regmap API usually assumes that bulk read operations will read a
++  * range of registers. Some devices have certain registers for which a read
++  * operation read will read from an internal FIFO.
++  *
++@@ -2886,10 +2894,6 @@ int regmap_noinc_read(struct regmap *map
++ 	size_t read_len;
++ 	int ret;
++ 
++-	if (!map->bus)
++-		return -EINVAL;
++-	if (!map->bus->read)
++-		return -ENOTSUPP;
++ 	if (val_len % map->format.val_bytes)
++ 		return -EINVAL;
++ 	if (!IS_ALIGNED(reg, map->reg_stride))
++@@ -3003,7 +3007,7 @@ int regmap_bulk_read(struct regmap *map,
++ 	if (val_count == 0)
++ 		return -EINVAL;
++ 
++-	if (map->bus && map->format.parse_inplace && (vol || map->cache_type == REGCACHE_NONE)) {
+++	if (map->format.parse_inplace && (vol || map->cache_type == REGCACHE_NONE)) {
++ 		ret = regmap_raw_read(map, reg, val, val_bytes * val_count);
++ 		if (ret != 0)
++ 			return ret;
++--- a/include/linux/regmap.h
+++++ b/include/linux/regmap.h
++@@ -295,6 +295,12 @@ typedef void (*regmap_unlock)(void *);
++  *		     if the function require special handling with lock and reg
++  *		     handling and the operation cannot be represented as a simple
++  *		     update_bits operation on a bus such as SPI, I2C, etc.
+++ * @read: Optional callback that if filled will be used to perform all the
+++ *        bulk reads from the registers. Data is returned in the buffer used
+++ *        to transmit data.
+++ * @write: Same as above for writing.
+++ * @max_raw_read: Max raw read size that can be used on the device.
+++ * @max_raw_write: Max raw write size that can be used on the device.
++  * @fast_io:	  Register IO is fast. Use a spinlock instead of a mutex
++  *	     	  to perform locking. This field is ignored if custom lock/unlock
++  *	     	  functions are used (see fields lock/unlock of struct regmap_config).
++@@ -379,6 +385,12 @@ struct regmap_config {
++ 	int (*reg_write)(void *context, unsigned int reg, unsigned int val);
++ 	int (*reg_update_bits)(void *context, unsigned int reg,
++ 			       unsigned int mask, unsigned int val);
+++	/* Bulk read/write */
+++	int (*read)(void *context, const void *reg_buf, size_t reg_size,
+++		    void *val_buf, size_t val_size);
+++	int (*write)(void *context, const void *data, size_t count);
+++	size_t max_raw_read;
+++	size_t max_raw_write;
++ 
++ 	bool fast_io;
++ 
+diff --git a/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch b/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
+new file mode 100644
+index 0000000000..5a50a9600e
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
+@@ -0,0 +1,31 @@
++From 5c422f0b970d287efa864b8390a02face404db5d Mon Sep 17 00:00:00 2001
++From: Marek Vasut <marex@denx.de>
++Date: Mon, 9 May 2022 02:30:35 +0200
++Subject: [PATCH] regmap: Add missing map->bus check
++
++The map->bus can be NULL here, add the missing NULL pointer check.
++
++Fixes: d77e745613680 ("regmap: Add bulk read/write callbacks into regmap_config")
++Reported-by: kernel test robot <lkp@intel.com>
++Reported-by: Dan Carpenter <dan.carpenter@oracle.com>
++Signed-off-by: Marek Vasut <marex@denx.de>
++Cc: Dan Carpenter <dan.carpenter@oracle.com>
++Cc: Mark Brown <broonie@kernel.org>
++To: linux-kernel@vger.kernel.org
++Link: https://lore.kernel.org/r/20220509003035.225272-1-marex@denx.de
++Signed-off-by: Mark Brown <broonie@kernel.org>
++---
++ drivers/base/regmap/regmap.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++--- a/drivers/base/regmap/regmap.c
+++++ b/drivers/base/regmap/regmap.c
++@@ -1835,7 +1835,7 @@ static int _regmap_raw_write_impl(struct
++ 				 map->format.reg_bytes +
++ 				 map->format.pad_bytes +
++ 				 val_len);
++-	else if (map->bus->gather_write)
+++	else if (map->bus && map->bus->gather_write)
++ 		ret = map->bus->gather_write(map->bus_context, map->work_buf,
++ 					     map->format.reg_bytes +
++ 					     map->format.pad_bytes,
+diff --git a/target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch b/target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch
+new file mode 100644
+index 0000000000..3a20bc6728
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch
+@@ -0,0 +1,63 @@
++From e03cea60c3db8c6b011cc36ecef9281dff8377f3 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Wed, 25 Jan 2023 21:35:16 +0100
++Subject: [PATCH 1/2] net: dsa: qca8k: add QCA8K_ATU_TABLE_SIZE define for fdb
++ access
++
++Add and use QCA8K_ATU_TABLE_SIZE instead of hardcoding the ATU size with
++a pure number and using sizeof on the array.
++
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-common.c | 10 ++++++----
++ drivers/net/dsa/qca/qca8k.h        |  2 ++
++ 2 files changed, 8 insertions(+), 4 deletions(-)
++
++--- a/drivers/net/dsa/qca/qca8k-common.c
+++++ b/drivers/net/dsa/qca/qca8k-common.c
++@@ -151,11 +151,12 @@ static int qca8k_busy_wait(struct qca8k_
++ 
++ static int qca8k_fdb_read(struct qca8k_priv *priv, struct qca8k_fdb *fdb)
++ {
++-	u32 reg[3];
+++	u32 reg[QCA8K_ATU_TABLE_SIZE];
++ 	int ret;
++ 
++ 	/* load the ARL table into an array */
++-	ret = qca8k_bulk_read(priv, QCA8K_REG_ATU_DATA0, reg, sizeof(reg));
+++	ret = qca8k_bulk_read(priv, QCA8K_REG_ATU_DATA0, reg,
+++			      QCA8K_ATU_TABLE_SIZE * sizeof(u32));
++ 	if (ret)
++ 		return ret;
++ 
++@@ -179,7 +180,7 @@ static int qca8k_fdb_read(struct qca8k_p
++ static void qca8k_fdb_write(struct qca8k_priv *priv, u16 vid, u8 port_mask,
++ 			    const u8 *mac, u8 aging)
++ {
++-	u32 reg[3] = { 0 };
+++	u32 reg[QCA8K_ATU_TABLE_SIZE] = { 0 };
++ 
++ 	/* vid - 83:72 */
++ 	reg[2] = FIELD_PREP(QCA8K_ATU_VID_MASK, vid);
++@@ -196,7 +197,8 @@ static void qca8k_fdb_write(struct qca8k
++ 	reg[0] |= FIELD_PREP(QCA8K_ATU_ADDR5_MASK, mac[5]);
++ 
++ 	/* load the array into the ARL table */
++-	qca8k_bulk_write(priv, QCA8K_REG_ATU_DATA0, reg, sizeof(reg));
+++	qca8k_bulk_write(priv, QCA8K_REG_ATU_DATA0, reg,
+++			 QCA8K_ATU_TABLE_SIZE * sizeof(u32));
++ }
++ 
++ static int qca8k_fdb_access(struct qca8k_priv *priv, enum qca8k_fdb_cmd cmd,
++--- a/drivers/net/dsa/qca/qca8k.h
+++++ b/drivers/net/dsa/qca/qca8k.h
++@@ -148,6 +148,8 @@
++ #define QCA8K_REG_IPV4_PRI_ADDR_MASK			0x474
++ 
++ /* Lookup registers */
+++#define QCA8K_ATU_TABLE_SIZE				3 /* 12 bytes wide table / sizeof(u32) */
+++
++ #define QCA8K_REG_ATU_DATA0				0x600
++ #define   QCA8K_ATU_ADDR2_MASK				GENMASK(31, 24)
++ #define   QCA8K_ATU_ADDR3_MASK				GENMASK(23, 16)
+diff --git a/target/linux/mpc85xx/patches-5.15/0004-v6.3-2-net-dsa-qca8k-convert-to-regmap-read-write-API.patch b/target/linux/mpc85xx/patches-5.15/0004-v6.3-2-net-dsa-qca8k-convert-to-regmap-read-write-API.patch
+new file mode 100644
+index 0000000000..adfb4e7637
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0004-v6.3-2-net-dsa-qca8k-convert-to-regmap-read-write-API.patch
+@@ -0,0 +1,261 @@
++From c766e077d927e1775902c18827205ea2ade3a35d Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Wed, 25 Jan 2023 21:35:17 +0100
++Subject: [PATCH 2/2] net: dsa: qca8k: convert to regmap read/write API
++
++Convert qca8k to regmap read/write bulk API. The mgmt eth can write up
++to 32 bytes of data at times. Currently we use a custom function to do
++it but regmap now supports declaration of read/write bulk even without a
++bus.
++
++Drop the custom function and rework the regmap function to this new
++implementation.
++
++Rework the qca8k_fdb_read/write function to use the new
++regmap_bulk_read/write as the old qca8k_bulk_read/write are now dropped.
++
++Cc: Mark Brown <broonie@kernel.org>
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-8xxx.c   | 92 ++++++++++++++++++++++++------
++ drivers/net/dsa/qca/qca8k-common.c | 47 ++-------------
++ drivers/net/dsa/qca/qca8k.h        |  3 -
++ 3 files changed, 77 insertions(+), 65 deletions(-)
++
++--- a/drivers/net/dsa/qca/qca8k-8xxx.c
+++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
++@@ -373,16 +373,12 @@ qca8k_regmap_update_bits_eth(struct qca8
++ }
++ 
++ static int
++-qca8k_regmap_read(void *ctx, uint32_t reg, uint32_t *val)
+++qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
++ {
++-	struct qca8k_priv *priv = (struct qca8k_priv *)ctx;
++ 	struct mii_bus *bus = priv->bus;
++ 	u16 r1, r2, page;
++ 	int ret;
++ 
++-	if (!qca8k_read_eth(priv, reg, val, sizeof(*val)))
++-		return 0;
++-
++ 	qca8k_split_addr(reg, &r1, &r2, &page);
++ 
++ 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
++@@ -399,16 +395,12 @@ exit:
++ }
++ 
++ static int
++-qca8k_regmap_write(void *ctx, uint32_t reg, uint32_t val)
+++qca8k_write_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t val)
++ {
++-	struct qca8k_priv *priv = (struct qca8k_priv *)ctx;
++ 	struct mii_bus *bus = priv->bus;
++ 	u16 r1, r2, page;
++ 	int ret;
++ 
++-	if (!qca8k_write_eth(priv, reg, &val, sizeof(val)))
++-		return 0;
++-
++ 	qca8k_split_addr(reg, &r1, &r2, &page);
++ 
++ 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
++@@ -425,17 +417,14 @@ exit:
++ }
++ 
++ static int
++-qca8k_regmap_update_bits(void *ctx, uint32_t reg, uint32_t mask, uint32_t write_val)
+++qca8k_regmap_update_bits_mii(struct qca8k_priv *priv, uint32_t reg,
+++			     uint32_t mask, uint32_t write_val)
++ {
++-	struct qca8k_priv *priv = (struct qca8k_priv *)ctx;
++ 	struct mii_bus *bus = priv->bus;
++ 	u16 r1, r2, page;
++ 	u32 val;
++ 	int ret;
++ 
++-	if (!qca8k_regmap_update_bits_eth(priv, reg, mask, write_val))
++-		return 0;
++-
++ 	qca8k_split_addr(reg, &r1, &r2, &page);
++ 
++ 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
++@@ -458,17 +447,84 @@ exit:
++ 	return ret;
++ }
++ 
+++static int
+++qca8k_bulk_read(void *ctx, const void *reg_buf, size_t reg_len,
+++		void *val_buf, size_t val_len)
+++{
+++	int i, count = val_len / sizeof(u32), ret;
+++	u32 reg = *(u32 *)reg_buf & U16_MAX;
+++	struct qca8k_priv *priv = ctx;
+++
+++	if (priv->mgmt_master &&
+++	    !qca8k_read_eth(priv, reg, val_buf, val_len))
+++		return 0;
+++
+++	/* loop count times and increment reg of 4 */
+++	for (i = 0; i < count; i++, reg += sizeof(u32)) {
+++		ret = qca8k_read_mii(priv, reg, val_buf + i);
+++		if (ret < 0)
+++			return ret;
+++	}
+++
+++	return 0;
+++}
+++
+++static int
+++qca8k_bulk_gather_write(void *ctx, const void *reg_buf, size_t reg_len,
+++			const void *val_buf, size_t val_len)
+++{
+++	int i, count = val_len / sizeof(u32), ret;
+++	u32 reg = *(u32 *)reg_buf & U16_MAX;
+++	struct qca8k_priv *priv = ctx;
+++	u32 *val = (u32 *)val_buf;
+++
+++	if (priv->mgmt_master &&
+++	    !qca8k_write_eth(priv, reg, val, val_len))
+++		return 0;
+++
+++	/* loop count times, increment reg of 4 and increment val ptr to
+++	 * the next value
+++	 */
+++	for (i = 0; i < count; i++, reg += sizeof(u32), val++) {
+++		ret = qca8k_write_mii(priv, reg, *val);
+++		if (ret < 0)
+++			return ret;
+++	}
+++
+++	return 0;
+++}
+++
+++static int
+++qca8k_bulk_write(void *ctx, const void *data, size_t bytes)
+++{
+++	return qca8k_bulk_gather_write(ctx, data, sizeof(u16), data + sizeof(u16),
+++				       bytes - sizeof(u16));
+++}
+++
+++static int
+++qca8k_regmap_update_bits(void *ctx, uint32_t reg, uint32_t mask, uint32_t write_val)
+++{
+++	struct qca8k_priv *priv = ctx;
+++
+++	if (!qca8k_regmap_update_bits_eth(priv, reg, mask, write_val))
+++		return 0;
+++
+++	return qca8k_regmap_update_bits_mii(priv, reg, mask, write_val);
+++}
+++
++ static struct regmap_config qca8k_regmap_config = {
++ 	.reg_bits = 16,
++ 	.val_bits = 32,
++ 	.reg_stride = 4,
++ 	.max_register = 0x16ac, /* end MIB - Port6 range */
++-	.reg_read = qca8k_regmap_read,
++-	.reg_write = qca8k_regmap_write,
+++	.read = qca8k_bulk_read,
+++	.write = qca8k_bulk_write,
++ 	.reg_update_bits = qca8k_regmap_update_bits,
++ 	.rd_table = &qca8k_readable_table,
++ 	.disable_locking = true, /* Locking is handled by qca8k read/write */
++ 	.cache_type = REGCACHE_NONE, /* Explicitly disable CACHE */
+++	.max_raw_read = 32, /* mgmt eth can read/write up to 8 registers at time */
+++	.max_raw_write = 32,
++ };
++ 
++ static int
++@@ -1987,8 +2043,6 @@ static SIMPLE_DEV_PM_OPS(qca8k_pm_ops,
++ 
++ static const struct qca8k_info_ops qca8xxx_ops = {
++ 	.autocast_mib = qca8k_get_ethtool_stats_eth,
++-	.read_eth = qca8k_read_eth,
++-	.write_eth = qca8k_write_eth,
++ };
++ 
++ static const struct qca8k_match_data qca8327 = {
++--- a/drivers/net/dsa/qca/qca8k-common.c
+++++ b/drivers/net/dsa/qca/qca8k-common.c
++@@ -102,45 +102,6 @@ const struct regmap_access_table qca8k_r
++ 	.n_yes_ranges = ARRAY_SIZE(qca8k_readable_ranges),
++ };
++ 
++-/* TODO: remove these extra ops when we can support regmap bulk read/write */
++-static int qca8k_bulk_read(struct qca8k_priv *priv, u32 reg, u32 *val, int len)
++-{
++-	int i, count = len / sizeof(u32), ret;
++-
++-	if (priv->mgmt_master && priv->info->ops->read_eth &&
++-	    !priv->info->ops->read_eth(priv, reg, val, len))
++-		return 0;
++-
++-	for (i = 0; i < count; i++) {
++-		ret = regmap_read(priv->regmap, reg + (i * 4), val + i);
++-		if (ret < 0)
++-			return ret;
++-	}
++-
++-	return 0;
++-}
++-
++-/* TODO: remove these extra ops when we can support regmap bulk read/write */
++-static int qca8k_bulk_write(struct qca8k_priv *priv, u32 reg, u32 *val, int len)
++-{
++-	int i, count = len / sizeof(u32), ret;
++-	u32 tmp;
++-
++-	if (priv->mgmt_master && priv->info->ops->write_eth &&
++-	    !priv->info->ops->write_eth(priv, reg, val, len))
++-		return 0;
++-
++-	for (i = 0; i < count; i++) {
++-		tmp = val[i];
++-
++-		ret = regmap_write(priv->regmap, reg + (i * 4), tmp);
++-		if (ret < 0)
++-			return ret;
++-	}
++-
++-	return 0;
++-}
++-
++ static int qca8k_busy_wait(struct qca8k_priv *priv, u32 reg, u32 mask)
++ {
++ 	u32 val;
++@@ -155,8 +116,8 @@ static int qca8k_fdb_read(struct qca8k_p
++ 	int ret;
++ 
++ 	/* load the ARL table into an array */
++-	ret = qca8k_bulk_read(priv, QCA8K_REG_ATU_DATA0, reg,
++-			      QCA8K_ATU_TABLE_SIZE * sizeof(u32));
+++	ret = regmap_bulk_read(priv->regmap, QCA8K_REG_ATU_DATA0, reg,
+++			       QCA8K_ATU_TABLE_SIZE);
++ 	if (ret)
++ 		return ret;
++ 
++@@ -197,8 +158,8 @@ static void qca8k_fdb_write(struct qca8k
++ 	reg[0] |= FIELD_PREP(QCA8K_ATU_ADDR5_MASK, mac[5]);
++ 
++ 	/* load the array into the ARL table */
++-	qca8k_bulk_write(priv, QCA8K_REG_ATU_DATA0, reg,
++-			 QCA8K_ATU_TABLE_SIZE * sizeof(u32));
+++	regmap_bulk_write(priv->regmap, QCA8K_REG_ATU_DATA0, reg,
+++			  QCA8K_ATU_TABLE_SIZE);
++ }
++ 
++ static int qca8k_fdb_access(struct qca8k_priv *priv, enum qca8k_fdb_cmd cmd,
++--- a/drivers/net/dsa/qca/qca8k.h
+++++ b/drivers/net/dsa/qca/qca8k.h
++@@ -330,9 +330,6 @@ struct qca8k_priv;
++ 
++ struct qca8k_info_ops {
++ 	int (*autocast_mib)(struct dsa_switch *ds, int port, u64 *data);
++-	/* TODO: remove these extra ops when we can support regmap bulk read/write */
++-	int (*read_eth)(struct qca8k_priv *priv, u32 reg, u32 *val, int len);
++-	int (*write_eth)(struct qca8k_priv *priv, u32 reg, u32 *val, int len);
++ };
++ 
++ struct qca8k_match_data {
+diff --git a/target/linux/mpc85xx/patches-5.15/0004-v6.5-3-net-dsa-qca8k-enable-use_single_write-for-qca8xxx.patch b/target/linux/mpc85xx/patches-5.15/0004-v6.5-3-net-dsa-qca8k-enable-use_single_write-for-qca8xxx.patch
+new file mode 100644
+index 0000000000..46170bdc8d
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0004-v6.5-3-net-dsa-qca8k-enable-use_single_write-for-qca8xxx.patch
+@@ -0,0 +1,78 @@
++From 2c39dd025da489cf87d26469d9f5ff19715324a0 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Mon, 24 Jul 2023 05:25:28 +0200
++Subject: [PATCH] net: dsa: qca8k: enable use_single_write for qca8xxx
++
++The qca8xxx switch supports 2 way to write reg values, a slow way using
++mdio and a fast way by sending specially crafted mgmt packet to
++read/write reg.
++
++The fast way can support up to 32 bytes of data as eth packet are used
++to send/receive.
++
++This correctly works for almost the entire regmap of the switch but with
++the use of some kernel selftests for dsa drivers it was found a funny
++and interesting hw defect/limitation.
++
++For some specific reg, bulk write won't work and will result in writing
++only part of the requested regs resulting in half data written. This was
++especially hard to track and discover due to the total strangeness of
++the problem and also by the specific regs where this occurs.
++
++This occurs in the specific regs of the ATU table, where multiple entry
++needs to be written to compose the entire entry.
++It was discovered that with a bulk write of 12 bytes on
++QCA8K_REG_ATU_DATA0 only QCA8K_REG_ATU_DATA0 and QCA8K_REG_ATU_DATA2
++were written, but QCA8K_REG_ATU_DATA1 was always zero.
++Tcpdump was used to make sure the specially crafted packet was correct
++and this was confirmed.
++
++The problem was hard to track as the lack of QCA8K_REG_ATU_DATA1
++resulted in an entry somehow possible as the first bytes of the mac
++address are set in QCA8K_REG_ATU_DATA0 and the entry type is set in
++QCA8K_REG_ATU_DATA2.
++
++Funlly enough writing QCA8K_REG_ATU_DATA1 results in the same problem
++with QCA8K_REG_ATU_DATA2 empty and QCA8K_REG_ATU_DATA1 and
++QCA8K_REG_ATU_FUNC correctly written.
++A speculation on the problem might be that there are some kind of
++indirection internally when accessing these regs and they can't be
++accessed all together, due to the fact that it's really a table mapped
++somewhere in the switch SRAM.
++
++Even more funny is the fact that every other reg was tested with all
++kind of combination and they are not affected by this problem. Read
++operation was also tested and always worked so it's not affected by this
++problem.
++
++The problem is not present if we limit writing a single reg at times.
++
++To handle this hardware defect, enable use_single_write so that bulk
++api can correctly split the write in multiple different operation
++effectively reverting to a non-bulk write.
++
++Cc: Mark Brown <broonie@kernel.org>
++Fixes: c766e077d927 ("net: dsa: qca8k: convert to regmap read/write API")
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-8xxx.c | 7 +++++--
++ 1 file changed, 5 insertions(+), 2 deletions(-)
++
++--- a/drivers/net/dsa/qca/qca8k-8xxx.c
+++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
++@@ -523,8 +523,11 @@ static struct regmap_config qca8k_regmap
++ 	.rd_table = &qca8k_readable_table,
++ 	.disable_locking = true, /* Locking is handled by qca8k read/write */
++ 	.cache_type = REGCACHE_NONE, /* Explicitly disable CACHE */
++-	.max_raw_read = 32, /* mgmt eth can read/write up to 8 registers at time */
++-	.max_raw_write = 32,
+++	.max_raw_read = 32, /* mgmt eth can read up to 8 registers at time */
+++	/* ATU regs suffer from a bug where some data are not correctly
+++	 * written. Disable bulk write to correctly write ATU entry.
+++	 */
+++	.use_single_write = true,
++ };
++ 
++ static int
+diff --git a/target/linux/mpc85xx/patches-5.15/0004-v6.6-4-net-dsa-qca8k-fix-regmap-bulk-read-write-methods-on-.patch b/target/linux/mpc85xx/patches-5.15/0004-v6.6-4-net-dsa-qca8k-fix-regmap-bulk-read-write-methods-on-.patch
+new file mode 100644
+index 0000000000..e9abb8bbd0
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0004-v6.6-4-net-dsa-qca8k-fix-regmap-bulk-read-write-methods-on-.patch
+@@ -0,0 +1,61 @@
++From 5652d1741574eb89cc02576e50ee3e348bd6dd77 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 4 Oct 2023 11:19:03 +0200
++Subject: [PATCH] net: dsa: qca8k: fix regmap bulk read/write methods on big
++ endian systems
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Commit c766e077d927 ("net: dsa: qca8k: convert to regmap read/write
++API") introduced bulk read/write methods to qca8k's regmap.
++
++The regmap bulk read/write methods get the register address in a buffer
++passed as a void pointer parameter (the same buffer contains also the
++read/written values). The register address occupies only as many bytes
++as it requires at the beginning of this buffer. For example if the
++.reg_bits member in regmap_config is 16 (as is the case for this
++driver), the register address occupies only the first 2 bytes in this
++buffer, so it can be cast to u16.
++
++But the original commit implementing these bulk read/write methods cast
++the buffer to u32:
++  u32 reg = *(u32 *)reg_buf & U16_MAX;
++taking the first 4 bytes. This works on little endian systems where the
++first 2 bytes of the buffer correspond to the low 16-bits, but it
++obviously cannot work on big endian systems.
++
++Fix this by casting the beginning of the buffer to u16 as
++   u32 reg = *(u16 *)reg_buf;
++
++Fixes: c766e077d927 ("net: dsa: qca8k: convert to regmap read/write API")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++Tested-by: Christian Marangi <ansuelsmth@gmail.com>
++Reviewed-by: Christian Marangi <ansuelsmth@gmail.com>
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-8xxx.c | 4 ++--
++ 1 file changed, 2 insertions(+), 2 deletions(-)
++
++--- a/drivers/net/dsa/qca/qca8k-8xxx.c
+++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
++@@ -452,8 +452,8 @@ qca8k_bulk_read(void *ctx, const void *r
++ 		void *val_buf, size_t val_len)
++ {
++ 	int i, count = val_len / sizeof(u32), ret;
++-	u32 reg = *(u32 *)reg_buf & U16_MAX;
++ 	struct qca8k_priv *priv = ctx;
+++	u32 reg = *(u16 *)reg_buf;
++ 
++ 	if (priv->mgmt_master &&
++ 	    !qca8k_read_eth(priv, reg, val_buf, val_len))
++@@ -474,8 +474,8 @@ qca8k_bulk_gather_write(void *ctx, const
++ 			const void *val_buf, size_t val_len)
++ {
++ 	int i, count = val_len / sizeof(u32), ret;
++-	u32 reg = *(u32 *)reg_buf & U16_MAX;
++ 	struct qca8k_priv *priv = ctx;
+++	u32 reg = *(u16 *)reg_buf;
++ 	u32 *val = (u32 *)val_buf;
++ 
++ 	if (priv->mgmt_master &&
+diff --git a/target/linux/mpc85xx/patches-5.15/9000-fix-qca8k-on-turris1x.patch b/target/linux/mpc85xx/patches-5.15/9000-fix-qca8k-on-turris1x.patch
+new file mode 100644
+index 0000000000..f06a7d258c
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/9000-fix-qca8k-on-turris1x.patch
+@@ -0,0 +1,24 @@
++From: Marek Behún <kabel@kernel.org>
++
++Accessing internal PHYs over management ethernet on kernel 5.15 is broken.
++It can cause MDIO conflict when the system is accessing the WAN PHY via
++MDIO, rendering eth2 broken until next boot.
++
++It should have been fixed with upstream commit
++  526c8ee04bdb ("net: dsa: qca8k: fix potential MDIO bus conflict when accessing internal PHYs via management frames")
++but for some reason this fix is insufficient when backported to kernel 5.15.
++
++Disable accessing internal PHYs over management ethernet for now.
++
++--- a/drivers/net/dsa/qca/qca8k-8xxx.c
+++++ b/drivers/net/dsa/qca/qca8k-8xxx.c
++@@ -574,6 +574,9 @@ qca8k_phy_eth_command(struct qca8k_priv
++ 	int ret, ret1;
++ 	bool ack;
++ 
+++	/* Currently causes conflicts with WAN PHY on Turris 1.x on kernel 5.15 */
+++	return -EOPNOTSUPP;
+++
++ 	if (regnum >= QCA8K_MDIO_MASTER_MAX_REG)
++ 		return -EINVAL;
++ 
+-- 
+2.41.0
+

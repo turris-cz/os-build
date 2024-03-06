@@ -1,4 +1,4 @@
-From 488ec2ff4e1d1dab151d4f4cec5e168e9a1ed96d Mon Sep 17 00:00:00 2001
+From 43f7d7407402940b2c4b7436a98e933ede1ba8ae Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <karel.koci@nic.cz>
 Date: Mon, 17 Feb 2020 11:56:15 +0100
 Subject: [PATCH] Add Turris 1.X support (kernel 5.15)
@@ -11,10 +11,10 @@ Signed-off-by: Karel Kočí <karel.koci@nic.cz>
 ---
  package/boot/uboot-tools/files/mpc85xx        |  3 +
  .../mpc85xx/base-files/etc/board.d/02_network |  4 ++
- target/linux/mpc85xx/config-5.15              | 56 ++++++++++++++++++-
+ target/linux/mpc85xx/config-5.15              | 65 +++++++++++++++++--
  target/linux/mpc85xx/image/p2020.mk           |  9 +++
- target/linux/mpc85xx/p2020/config-default     | 27 +++++++++
- 5 files changed, 98 insertions(+), 1 deletion(-)
+ target/linux/mpc85xx/p2020/config-default     | 28 ++++++++
+ 5 files changed, 103 insertions(+), 6 deletions(-)
 
 diff --git a/package/boot/uboot-tools/files/mpc85xx b/package/boot/uboot-tools/files/mpc85xx
 index a74466ab3a..58f73c6036 100644
@@ -31,10 +31,10 @@ index a74466ab3a..58f73c6036 100644
  	ubootenv_add_uci_config "$(find_mtd_part 'cfg1')" "0x0" "0x10000" "0x10000"
  	ubootenv_add_uci_config "$(find_mtd_part 'cfg2')" "0x0" "0x10000" "0x10000"
 diff --git a/target/linux/mpc85xx/base-files/etc/board.d/02_network b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-index 04c27769a9..1a263afdf0 100644
+index 41859362b5..68a336c81c 100644
 --- a/target/linux/mpc85xx/base-files/etc/board.d/02_network
 +++ b/target/linux/mpc85xx/base-files/etc/board.d/02_network
-@@ -25,6 +25,10 @@ tplink,tl-wdr4900-v1)
+@@ -28,6 +28,10 @@ tplink,tl-wdr4900-v1)
  watchguard,firebox-t10)
  	ucidef_set_interfaces_lan_wan "eth1 eth2" "eth0"
  	;;
@@ -46,10 +46,10 @@ index 04c27769a9..1a263afdf0 100644
  	ucidef_set_interfaces_lan_wan "eth0" "eth1"
  	;;
 diff --git a/target/linux/mpc85xx/config-5.15 b/target/linux/mpc85xx/config-5.15
-index 9c051e63c1..3bf93d343f 100644
+index 86b300ffc3..e8b63f02b9 100644
 --- a/target/linux/mpc85xx/config-5.15
 +++ b/target/linux/mpc85xx/config-5.15
-@@ -22,6 +22,15 @@ CONFIG_BOOKE=y
+@@ -23,6 +23,15 @@ CONFIG_BOOKE_WDT=y
  # CONFIG_BR200_WP is not set
  # CONFIG_BSC9131_RDB is not set
  # CONFIG_BSC9132_QDS is not set
@@ -65,7 +65,7 @@ index 9c051e63c1..3bf93d343f 100644
  # CONFIG_C293_PCIE is not set
  CONFIG_CLONE_BACKWARDS=y
  CONFIG_CLZ_TAB=y
-@@ -36,6 +45,7 @@ CONFIG_CPU_BIG_ENDIAN=y
+@@ -37,6 +46,7 @@ CONFIG_CPU_BIG_ENDIAN=y
  # CONFIG_CRYPTO_AES_PPC_SPE is not set
  CONFIG_CRYPTO_AUTHENC=y
  CONFIG_CRYPTO_HW=y
@@ -73,7 +73,7 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_CRYPTO_LIB_BLAKE2S_GENERIC=y
  CONFIG_CRYPTO_LIB_POLY1305_RSIZE=1
  # CONFIG_CRYPTO_MD5_PPC is not set
-@@ -110,6 +120,10 @@ CONFIG_IRQ_DOMAIN=y
+@@ -112,6 +122,10 @@ CONFIG_IRQ_DOMAIN=y
  CONFIG_IRQ_FORCED_THREADING=y
  CONFIG_IRQ_WORK=y
  CONFIG_ISA_DMA_API=y
@@ -84,10 +84,11 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_KERNEL_START=0xc0000000
  # CONFIG_KSI8560 is not set
  CONFIG_LIBFDT=y
-@@ -118,6 +132,13 @@ CONFIG_LOWMEM_CAM_NUM=3
+@@ -119,7 +133,13 @@ CONFIG_LOCK_DEBUGGING_SUPPORT=y
+ CONFIG_LOWMEM_CAM_NUM=3
  CONFIG_LOWMEM_SIZE=0x30000000
  CONFIG_LXT_PHY=y
- # CONFIG_MATH_EMULATION is not set
+-# CONFIG_MATH_EMULATION is not set
 +CONFIG_LZO_COMPRESS=y
 +CONFIG_LZO_DECOMPRESS=y
 +CONFIG_HIGHMEM=y
@@ -98,7 +99,18 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_MDIO_BUS=y
  CONFIG_MDIO_DEVICE=y
  CONFIG_MDIO_DEVRES=y
-@@ -136,12 +157,22 @@ CONFIG_MPIC=y
+@@ -130,20 +150,30 @@ CONFIG_MODULES_USE_ELF_RELA=y
+ # CONFIG_MPC8536_DS is not set
+ # CONFIG_MPC8540_ADS is not set
+ # CONFIG_MPC8560_ADS is not set
+-# CONFIG_MPC85xx_CDS is not set
++CONFIG_MPC85xx_CDS=y
+ # CONFIG_MPC85xx_DS is not set
+-# CONFIG_MPC85xx_MDS is not set
+-# CONFIG_MPC85xx_RDB is not set
++CONFIG_MPC85xx_MDS=y
++CONFIG_MPC85xx_RDB=y
+ CONFIG_MPIC=y
  # CONFIG_MPIC_MSGR is not set
  CONFIG_MPIC_TIMER=y
  CONFIG_MPILIB=y
@@ -122,15 +134,19 @@ index 9c051e63c1..3bf93d343f 100644
  # CONFIG_MVME2500 is not set
  CONFIG_NEED_PER_CPU_KM=y
  CONFIG_NEED_SG_DMA_LENGTH=y
-@@ -159,6 +190,7 @@ CONFIG_OF_GPIO=y
+@@ -162,9 +192,10 @@ CONFIG_OF_GPIO=y
  CONFIG_OF_IRQ=y
  CONFIG_OF_KOBJ=y
  CONFIG_OF_MDIO=y
 +CONFIG_OF_MTD=y
  CONFIG_OLD_SIGACTION=y
  CONFIG_OLD_SIGSUSPEND=y
- # CONFIG_P1010_RDB is not set
-@@ -183,6 +215,8 @@ CONFIG_PHYSICAL_START=0x00000000
+-# CONFIG_P1010_RDB is not set
++CONFIG_P1010_RDB=y
+ # CONFIG_P1022_DS is not set
+ # CONFIG_P1022_RDK is not set
+ # CONFIG_P1023_RDB is not set
+@@ -186,6 +217,8 @@ CONFIG_PHYSICAL_START=0x00000000
  # CONFIG_PHYS_64BIT is not set
  # CONFIG_PMU_SYSFS is not set
  # CONFIG_PPA8548 is not set
@@ -139,7 +155,7 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_PPC=y
  CONFIG_PPC32=y
  # CONFIG_PPC64 is not set
-@@ -194,12 +228,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
+@@ -197,12 +230,14 @@ CONFIG_PPC_ADV_DEBUG_IACS=2
  CONFIG_PPC_ADV_DEBUG_REGS=y
  CONFIG_PPC_BARRIER_NOSPEC=y
  CONFIG_PPC_BOOK3E_MMU=y
@@ -154,7 +170,7 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_PPC_MMU_NOHASH=y
  CONFIG_PPC_PAGE_SHIFT=12
  # CONFIG_PPC_QEMU_E500 is not set
-@@ -228,12 +264,15 @@ CONFIG_SPE=y
+@@ -231,12 +266,15 @@ CONFIG_SPE=y
  CONFIG_SPE_POSSIBLE=y
  CONFIG_SPI=y
  CONFIG_SPI_FSL_ESPI=y
@@ -170,7 +186,7 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_SYSCTL_EXCEPTION_TRACE=y
  CONFIG_TARGET_CPU="8540"
  CONFIG_TARGET_CPU_BOOL=y
-@@ -254,6 +293,14 @@ CONFIG_UCC=y
+@@ -257,6 +295,14 @@ CONFIG_UCC=y
  CONFIG_UCC_FAST=y
  CONFIG_UCC_GETH=y
  # CONFIG_UGETH_TX_ON_DEMAND is not set
@@ -185,7 +201,7 @@ index 9c051e63c1..3bf93d343f 100644
  CONFIG_USB_SUPPORT=y
  CONFIG_VDSO32=y
  # CONFIG_VIRT_CPU_ACCOUNTING_NATIVE is not set
-@@ -266,3 +313,10 @@ CONFIG_WATCHDOG_CORE=y
+@@ -268,3 +314,10 @@ CONFIG_WATCHDOG_CORE=y
  # CONFIG_XES_MPC85xx is not set
  CONFIG_XZ_DEC_BCJ=y
  CONFIG_XZ_DEC_POWERPC=y
@@ -214,10 +230,18 @@ index 79b5fa660c..848d18bf77 100644
 +endef
 +TARGET_DEVICES += cznic_turris1x
 diff --git a/target/linux/mpc85xx/p2020/config-default b/target/linux/mpc85xx/p2020/config-default
-index 6d0ecc5b9e..7e2e275d13 100644
+index 6d0ecc5b9e..f11f6f62f3 100644
 --- a/target/linux/mpc85xx/p2020/config-default
 +++ b/target/linux/mpc85xx/p2020/config-default
-@@ -42,3 +42,30 @@ CONFIG_TARGET_CPU_BOOL=y
+@@ -29,6 +29,7 @@ CONFIG_PCI_MSI_ARCH_FALLBACKS=y
+ CONFIG_PCI_MSI_IRQ_DOMAIN=y
+ CONFIG_PPC_I8259=y
+ CONFIG_PPC_MSI_BITMAP=y
++CONFIG_PPC_QUEUED_SPINLOCKS=y
+ CONFIG_REGMAP=y
+ CONFIG_REGMAP_I2C=y
+ CONFIG_RFS_ACCEL=y
+@@ -42,3 +43,30 @@ CONFIG_TARGET_CPU_BOOL=y
  CONFIG_TREE_RCU=y
  CONFIG_TREE_SRCU=y
  CONFIG_XPS=y
@@ -249,5 +273,5 @@ index 6d0ecc5b9e..7e2e275d13 100644
 +CONFIG_RTC_NVMEM=y
 +CONFIG_NVMEM_SYSFS=y
 -- 
-2.40.1
+2.44.0
 

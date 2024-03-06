@@ -1,0 +1,857 @@
+From 62cc8bb9263633c3dbaa1bf0c0cd9c0bb15eb9c7 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Mon, 4 Mar 2024 16:08:34 +0100
+Subject: [PATCH] uboot-mvebu: update to version 2024.01
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Update to version 2024.01 and add several patches relevant for Turris
+Omnia.
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ package/boot/uboot-mvebu/Makefile             |   4 +-
+ ...x-missing-SMI-address-initialization.patch |  47 +++
+ ..._omnia-Enable-networking-via-etherne.patch |  98 ++++++
+ ..._omnia-Refactor-MCU-status-and-featu.patch | 153 +++++++++
+ ..._omnia-Implement-getting-board-infor.patch | 318 ++++++++++++++++++
+ ..._omnia-Print-board-ECDSA-public-key-.patch |  88 +++++
+ ..._omnia-Disable-Atmel-SHA-node-if-not.patch |  69 ++++
+ 7 files changed, 775 insertions(+), 2 deletions(-)
+ create mode 100644 package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
+
+diff --git a/package/boot/uboot-mvebu/Makefile b/package/boot/uboot-mvebu/Makefile
+index 58a74a4983..12d97e5c25 100644
+--- a/package/boot/uboot-mvebu/Makefile
++++ b/package/boot/uboot-mvebu/Makefile
+@@ -8,10 +8,10 @@
+ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+-PKG_VERSION:=2023.07.02
++PKG_VERSION:=2024.01
+ PKG_RELEASE:=1
+ 
+-PKG_HASH:=6b6a48581c14abb0f95bd87c1af4d740922406d7b801002a9f94727fdde021d5
++PKG_HASH:=b99611f1ed237bf3541bdc8434b68c96a6e05967061f992443cb30aabebef5b3
+ 
+ include $(INCLUDE_DIR)/u-boot.mk
+ include $(INCLUDE_DIR)/package.mk
+diff --git a/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch b/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
+new file mode 100644
+index 0000000000..294122eb27
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
+@@ -0,0 +1,47 @@
++From 6a874deb29222b256935e4a908d2f32d5ddd1d01 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Moj=C3=ADk?= <marek.mojik@nic.cz>
++Date: Wed, 6 Dec 2023 15:35:56 +0100
++Subject: [PATCH 1/6] net: mv88e6xxx: fix missing SMI address initialization
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The mv88e6xxx driver does not currently initialize the smi_addr field, but
++instead keeps the default zero value. This leads to driver being unusable
++on devices where the switch is not on address zero of the mdio bus. Fix
++this problem by reading the SMI address from device tree.
++
++Signed-off-by: Marek Mojík <marek.mojik@nic.cz>
++---
++ drivers/net/mv88e6xxx.c | 8 ++++++++
++ 1 file changed, 8 insertions(+)
++
++diff --git a/drivers/net/mv88e6xxx.c b/drivers/net/mv88e6xxx.c
++index c073f81e72d..8fbbc1cacca 100644
++--- a/drivers/net/mv88e6xxx.c
+++++ b/drivers/net/mv88e6xxx.c
++@@ -745,6 +745,7 @@ static int mv88e6xxx_probe(struct udevice *dev)
++ {
++ 	struct dsa_pdata *dsa_pdata = dev_get_uclass_plat(dev);
++ 	struct mv88e6xxx_priv *priv = dev_get_priv(dev);
+++	fdt_addr_t smi_addr;
++ 	int val, ret;
++ 
++ 	if (ofnode_valid(dev_ofnode(dev)) &&
++@@ -753,6 +754,13 @@ static int mv88e6xxx_probe(struct udevice *dev)
++ 		return -ENODEV;
++ 	}
++ 
+++	smi_addr = dev_read_addr(dev);
+++	if (smi_addr == FDT_ADDR_T_NONE) {
+++		dev_err(dev, "Missing SMI address\n");
+++		return -EINVAL;
+++	}
+++	priv->smi_addr = smi_addr;
+++
++ 	/* probe internal mdio bus */
++ 	ret = mv88e6xxx_probe_mdio(dev);
++ 	if (ret)
++-- 
++2.43.0
++
+diff --git a/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch b/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
+new file mode 100644
+index 0000000000..912d48a280
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
+@@ -0,0 +1,98 @@
++From c8f020ee291694aabd0241b9cb710a67faa394b2 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Moj=C3=ADk?= <marek.mojik@nic.cz>
++Date: Wed, 13 Dec 2023 11:05:35 +0100
++Subject: [PATCH 2/6] arm: mvebu: turris_omnia: Enable networking via ethernet
++ switch
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The Turris Omnia contains the Marvell 88E6176 ethernet switch. Add
++config options and device tree to enable the support.
++
++Signed-off-by: Marek Mojík <marek.mojik@nic.cz>
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ .../dts/armada-385-turris-omnia-u-boot.dtsi   | 51 +++++++++++++++++++
++ configs/turris_omnia_defconfig                |  2 +
++ 2 files changed, 53 insertions(+)
++
++diff --git a/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi b/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
++index 509d6ca69cd..c63a331d69b 100644
++--- a/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
+++++ b/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
++@@ -35,6 +35,57 @@
++ 	};
++ };
++ 
+++&mdio {
+++	switch@10 {
+++		mdio {
+++			#address-cells = <1>;
+++			#size-cells = <0>;
+++
+++			sw_phy0: ethernet-phy@0 {
+++				reg = <0x0>;
+++			};
+++
+++			sw_phy1: ethernet-phy@1 {
+++				reg = <0x1>;
+++			};
+++
+++			sw_phy2: ethernet-phy@2 {
+++				reg = <0x2>;
+++			};
+++
+++			sw_phy3: ethernet-phy@3 {
+++				reg = <0x3>;
+++			};
+++
+++			sw_phy4: ethernet-phy@4 {
+++				reg = <0x4>;
+++			};
+++		};
+++		ports {
+++			ports@0 {
+++				phy-handle = <&sw_phy0>;
+++				phy-mode = "internal";
+++			};
+++			ports@1 {
+++				phy-handle = <&sw_phy1>;
+++				phy-mode = "internal";
+++			};
+++			ports@2 {
+++				phy-handle = <&sw_phy2>;
+++				phy-mode = "internal";
+++			};
+++			ports@3 {
+++				phy-handle = <&sw_phy3>;
+++				phy-mode = "internal";
+++			};
+++			ports@4 {
+++				phy-handle = <&sw_phy4>;
+++				phy-mode = "internal";
+++			};
+++		};
+++	};
+++};
+++
++ #ifdef CONFIG_ENV_IS_IN_SPI_FLASH
++ &spi0 {
++ 	flash@0 {
++diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
++index 65d4a296e72..3aaee276ea6 100644
++--- a/configs/turris_omnia_defconfig
+++++ b/configs/turris_omnia_defconfig
++@@ -96,7 +96,9 @@ CONFIG_SPI_FLASH_WINBOND=y
++ CONFIG_SPI_FLASH_MTD=y
++ CONFIG_PHY_MARVELL=y
++ CONFIG_PHY_FIXED=y
+++CONFIG_DM_DSA=y
++ CONFIG_PHY_GIGE=y
+++CONFIG_MV88E6XXX=y
++ CONFIG_MVNETA=y
++ CONFIG_MII=y
++ CONFIG_MVMDIO=y
++-- 
++2.43.0
++
+diff --git a/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch b/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
+new file mode 100644
+index 0000000000..3430841e00
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
+@@ -0,0 +1,153 @@
++From 920b85b4474161707fbc40379c7c1d165d486069 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Thu, 29 Feb 2024 15:08:52 +0100
++Subject: [PATCH 3/6] arm: mvebu: turris_omnia: Refactor MCU status and
++ features reading
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Refactor MCU status word and MCU firmware features reading to make it
++simpler to use.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 81 ++++++++++++++++--------
++ 1 file changed, 53 insertions(+), 28 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 19c5043fcba..49ba55944c6 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -172,6 +172,48 @@ static int omnia_mcu_write(u8 cmd, const void *buf, int len)
++ 	return dm_i2c_write(chip, cmd, buf, len);
++ }
++ 
+++static int omnia_mcu_get_sts_and_features(u16 *psts, u16 *pfeatures)
+++{
+++	u16 sts;
+++	int ret;
+++
+++	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &sts, sizeof(sts));
+++	if (ret)
+++		return ret;
+++
+++	if (psts)
+++		*psts = sts;
+++
+++	if (!pfeatures)
+++		return 0;
+++
+++	if (sts & STS_FEATURES_SUPPORTED) {
+++		ret = omnia_mcu_read(CMD_GET_FEATURES, pfeatures,
+++				     sizeof(*pfeatures));
+++		if (ret)
+++			return ret;
+++	} else {
+++		*pfeatures = 0;
+++	}
+++
+++	return 0;
+++}
+++
+++static int omnia_mcu_get_sts(u16 *sts)
+++{
+++	return omnia_mcu_get_sts_and_features(sts, NULL);
+++}
+++
+++static bool omnia_mcu_has_feature(u16 feature)
+++{
+++	u16 features;
+++
+++	if (omnia_mcu_get_sts_and_features(NULL, &features))
+++		return false;
+++
+++	return feature & features;
+++}
+++
++ static void enable_a385_watchdog(unsigned int timeout_minutes)
++ {
++ 	struct sar_freq_modes sar_freq;
++@@ -249,7 +291,7 @@ static bool omnia_detect_sata(const char *msata_slot)
++ 		}
++ 	}
++ 
++-	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &stsword, sizeof(stsword));
+++	ret = omnia_mcu_get_sts(&stsword);
++ 	if (ret) {
++ 		printf("omnia_mcu_read failed: %i, defaulting to MiniPCIe card\n",
++ 		       ret);
++@@ -405,20 +447,17 @@ static const char * const omnia_get_mcu_type(void)
++ 		[STS_MCU_TYPE_MKL]   = "MKL (with peripheral resets)",
++ 		[STS_MCU_TYPE_UNKN]  = "unknown (with peripheral resets)",
++ 	};
++-	u16 stsword, features;
+++	u16 sts;
++ 	int ret;
++ 
++-	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &stsword, sizeof(stsword));
+++	ret = omnia_mcu_get_sts(&sts);
++ 	if (ret)
++ 		return "unknown";
++ 
++-	if (stsword & STS_FEATURES_SUPPORTED) {
++-		ret = omnia_mcu_read(CMD_GET_FEATURES, &features, sizeof(features));
++-		if (ret == 0 && (features & FEAT_PERIPH_MCU))
++-			return mcu_types_with_perip_resets[stsword & STS_MCU_TYPE_MASK];
++-	}
+++	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU))
+++		return mcu_types_with_perip_resets[sts & STS_MCU_TYPE_MASK];
++ 
++-	return mcu_types[stsword & STS_MCU_TYPE_MASK];
+++	return mcu_types[sts & STS_MCU_TYPE_MASK];
++ }
++ 
++ static const char * const omnia_get_mcu_version(void)
++@@ -695,9 +734,6 @@ int board_early_init_f(void)
++ 
++ void spl_board_init(void)
++ {
++-	u16 val;
++-	int ret;
++-
++ 	/*
++ 	 * If booting from UART, disable MCU watchdog in SPL, since uploading
++ 	 * U-Boot proper can take too much time and trigger it. Instead enable
++@@ -714,12 +750,8 @@ void spl_board_init(void)
++ 	 * resets then LAN eth switch is initialized automatically by bootstrap
++ 	 * pins when A385 is released from the reset.
++ 	 */
++-	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &val, sizeof(val));
++-	if (ret == 0 && (val & STS_FEATURES_SUPPORTED)) {
++-		ret = omnia_mcu_read(CMD_GET_FEATURES, &val, sizeof(val));
++-		if (ret == 0 && (val & FEAT_PERIPH_MCU))
++-			initialize_switch();
++-	}
+++	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU))
+++		initialize_switch();
++ }
++ 
++ #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP) || IS_ENABLED(CONFIG_OF_BOARD_SETUP)
++@@ -919,16 +951,9 @@ static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
++ #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP)
++ int board_fix_fdt(void *blob)
++ {
++-	u16 val;
++-	int ret;
++-
++-	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &val, sizeof(val));
++-	if (ret == 0 && (val & STS_FEATURES_SUPPORTED)) {
++-		ret = omnia_mcu_read(CMD_GET_FEATURES, &val, sizeof(val));
++-		if (ret == 0 && (val & FEAT_PERIPH_MCU)) {
++-			fixup_mcu_gpio_in_pcie_nodes(blob);
++-			fixup_mcu_gpio_in_eth_wan_node(blob);
++-		}
+++	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU)) {
+++		fixup_mcu_gpio_in_pcie_nodes(blob);
+++		fixup_mcu_gpio_in_eth_wan_node(blob);
++ 	}
++ 
++ 	fixup_msata_port_nodes(blob);
++-- 
++2.43.0
++
+diff --git a/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch b/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
+new file mode 100644
+index 0000000000..f7991c23e1
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
+@@ -0,0 +1,318 @@
++From ba22b19e91324aaf2d831c45dba082babbb4dbab Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Thu, 29 Feb 2024 17:38:16 +0100
++Subject: [PATCH 4/6] arm: mvebu: turris_omnia: Implement getting board
++ information from MCU
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Implement reading board serial number, first MAC address and board
++version from MCU. MCU supports board information if the FEAT_BOARD_INFO
++feature bit is set in MCU features.
++
++Prefer getting board information from MCU if supported, fallback to
++Atmel SHA chip.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_atsha_otp.c          | 27 +------
++ board/CZ.NIC/turris_common.c             | 42 ++++++++++
++ board/CZ.NIC/turris_common.h             | 10 +++
++ board/CZ.NIC/turris_omnia/Makefile       |  2 +-
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 98 +++++++++++++++++++++++-
++ 5 files changed, 149 insertions(+), 30 deletions(-)
++ create mode 100644 board/CZ.NIC/turris_common.c
++ create mode 100644 board/CZ.NIC/turris_common.h
++
++diff --git a/board/CZ.NIC/turris_atsha_otp.c b/board/CZ.NIC/turris_atsha_otp.c
++index a29fe362317..85eebcdf18e 100644
++--- a/board/CZ.NIC/turris_atsha_otp.c
+++++ b/board/CZ.NIC/turris_atsha_otp.c
++@@ -11,6 +11,7 @@
++ #include <atsha204a-i2c.h>
++ 
++ #include "turris_atsha_otp.h"
+++#include "turris_common.h"
++ 
++ #define TURRIS_ATSHA_OTP_VERSION	0
++ #define TURRIS_ATSHA_OTP_SERIAL		1
++@@ -32,26 +33,6 @@ static struct udevice *get_atsha204a_dev(void)
++ 	return dev;
++ }
++ 
++-static void increment_mac(u8 *mac)
++-{
++-	int i;
++-
++-	for (i = 5; i >= 3; i--) {
++-		mac[i] += 1;
++-		if (mac[i])
++-			break;
++-	}
++-}
++-
++-static void set_mac_if_invalid(int i, u8 *mac)
++-{
++-	u8 oldmac[6];
++-
++-	if (is_valid_ethaddr(mac) &&
++-	    !eth_env_get_enetaddr_by_index("eth", i, oldmac))
++-		eth_env_set_enetaddr_by_index("eth", i, mac);
++-}
++-
++ int turris_atsha_otp_init_mac_addresses(int first_idx)
++ {
++ 	struct udevice *dev = get_atsha204a_dev();
++@@ -84,11 +65,7 @@ int turris_atsha_otp_init_mac_addresses(int first_idx)
++ 	mac[4] = mac1[2];
++ 	mac[5] = mac1[3];
++ 
++-	set_mac_if_invalid((first_idx + 0) % 3, mac);
++-	increment_mac(mac);
++-	set_mac_if_invalid((first_idx + 1) % 3, mac);
++-	increment_mac(mac);
++-	set_mac_if_invalid((first_idx + 2) % 3, mac);
+++	turris_init_mac_addresses(first_idx, mac);
++ 
++ 	return 0;
++ }
++diff --git a/board/CZ.NIC/turris_common.c b/board/CZ.NIC/turris_common.c
++new file mode 100644
++index 00000000000..1717dda82eb
++--- /dev/null
+++++ b/board/CZ.NIC/turris_common.c
++@@ -0,0 +1,42 @@
+++// SPDX-License-Identifier: GPL-2.0+
+++/*
+++ * Copyright (C) 2017 Marek Behún <kabel@kernel.org>
+++ */
+++
+++#include <env.h>
+++#include <net.h>
+++
+++#include "turris_common.h"
+++
+++static void increment_mac(u8 *mac)
+++{
+++	int i;
+++
+++	for (i = 5; i >= 3; i--) {
+++		mac[i] += 1;
+++		if (mac[i])
+++			break;
+++	}
+++}
+++
+++static void set_mac_if_invalid(int i, u8 *mac)
+++{
+++	u8 oldmac[6];
+++
+++	if (is_valid_ethaddr(mac) &&
+++	    !eth_env_get_enetaddr_by_index("eth", i, oldmac))
+++		eth_env_set_enetaddr_by_index("eth", i, mac);
+++}
+++
+++void turris_init_mac_addresses(int first_idx, const u8 *first_mac)
+++{
+++	u8 mac[6];
+++
+++	memcpy(mac, first_mac, sizeof(mac));
+++
+++	set_mac_if_invalid((first_idx + 0) % 3, mac);
+++	increment_mac(mac);
+++	set_mac_if_invalid((first_idx + 1) % 3, mac);
+++	increment_mac(mac);
+++	set_mac_if_invalid((first_idx + 2) % 3, mac);
+++}
++diff --git a/board/CZ.NIC/turris_common.h b/board/CZ.NIC/turris_common.h
++new file mode 100644
++index 00000000000..5565ea9fd2a
++--- /dev/null
+++++ b/board/CZ.NIC/turris_common.h
++@@ -0,0 +1,10 @@
+++// SPDX-License-Identifier: GPL-2.0+
+++
+++#ifndef TURRIS_COMMON_H
+++#define TURRIS_COMMON_H
+++
+++#include <asm/types.h>
+++
+++void turris_init_mac_addresses(int first_idx, const u8 *first_mac);
+++
+++#endif
++diff --git a/board/CZ.NIC/turris_omnia/Makefile b/board/CZ.NIC/turris_omnia/Makefile
++index dc39b44ae19..341378b4e54 100644
++--- a/board/CZ.NIC/turris_omnia/Makefile
+++++ b/board/CZ.NIC/turris_omnia/Makefile
++@@ -2,4 +2,4 @@
++ #
++ # Copyright (C) 2017 Marek Behún <kabel@kernel.org>
++ 
++-obj-y	:= turris_omnia.o ../turris_atsha_otp.o
+++obj-y	:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 49ba55944c6..42f04d6eaf1 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -18,18 +18,21 @@
++ #include <asm/io.h>
++ #include <asm/arch/cpu.h>
++ #include <asm/arch/soc.h>
+++#include <asm/unaligned.h>
++ #include <dm/uclass.h>
++ #include <dt-bindings/gpio/gpio.h>
++ #include <fdt_support.h>
++ #include <hexdump.h>
++ #include <time.h>
++ #include <linux/bitops.h>
+++#include <linux/bitrev.h>
++ #include <linux/delay.h>
++ #include <u-boot/crc.h>
++ 
++ #include "../drivers/ddr/marvell/a38x/ddr3_init.h"
++ #include <../serdes/a38x/high_speed_env_spec.h>
++ #include "../turris_atsha_otp.h"
+++#include "../turris_common.h"
++ 
++ DECLARE_GLOBAL_DATA_PTR;
++ 
++@@ -71,6 +74,9 @@ enum mcu_commands {
++ 
++ 	/* available if EXT_CMD bit set in features */
++ 	CMD_EXT_CONTROL		= 0x12,
+++
+++	/* available if BOARD_INFO it set in features */
+++	CMD_BOARD_INFO_GET	= 0x2c,
++ };
++ 
++ enum status_word_bits {
++@@ -88,6 +94,7 @@ enum status_word_bits {
++ enum features_e {
++ 	FEAT_PERIPH_MCU		= BIT(0),
++ 	FEAT_EXT_CMDS		= BIT(1),
+++	FEAT_BOARD_INFO		= BIT(15),
++ };
++ 
++ /* CMD_EXT_CONTROL */
++@@ -214,6 +221,70 @@ static bool omnia_mcu_has_feature(u16 feature)
++ 	return feature & features;
++ }
++ 
+++static u32 omnia_mcu_crc32(const void *p, size_t len)
+++{
+++	u32 val, crc = 0;
+++
+++	compiletime_assert(!(len % 4), "length has to be a multiple of 4");
+++
+++	while (len) {
+++		val = bitrev32(get_unaligned_le32(p));
+++		crc = crc32(crc, (void *)&val, 4);
+++		p += 4;
+++		len -= 4;
+++	}
+++
+++	return ~bitrev32(crc);
+++}
+++
+++/* Can only be called after relocation, since it needs cleared BSS */
+++static int omnia_mcu_board_info(char *serial, u8 *mac, char *version)
+++{
+++	static u8 reply[17];
+++	static bool cached;
+++
+++	if (!cached) {
+++		u8 csum;
+++		int ret;
+++
+++		ret = omnia_mcu_read(CMD_BOARD_INFO_GET, reply, sizeof(reply));
+++		if (ret)
+++			return ret;
+++
+++		if (reply[0] != 16)
+++			return -EBADMSG;
+++
+++		csum = reply[16];
+++		reply[16] = 0;
+++
+++		if ((omnia_mcu_crc32(&reply[1], 16) & 0xff) != csum)
+++			return -EBADMSG;
+++
+++		cached = true;
+++	}
+++
+++	if (serial) {
+++		const char *serial_env;
+++
+++		serial_env = env_get("serial#");
+++		if (serial_env && strlen(serial_env) == 16) {
+++			strcpy(serial, serial_env);
+++		} else {
+++			sprintf(serial, "%016llX",
+++				get_unaligned_le64(&reply[1]));
+++			env_set("serial#", serial);
+++		}
+++	}
+++
+++	if (mac)
+++		memcpy(mac, &reply[9], ETH_ALEN);
+++
+++	if (version)
+++		sprintf(version, "%u", reply[15]);
+++
+++	return 0;
+++}
+++
++ static void enable_a385_watchdog(unsigned int timeout_minutes)
++ {
++ 	struct sar_freq_modes sar_freq;
++@@ -989,14 +1060,24 @@ int board_late_init(void)
++ 
++ int show_board_info(void)
++ {
++-	char serial[17];
+++	char serial[17], version[4];
+++	bool has_version;
++ 	int err;
++ 
++-	err = turris_atsha_otp_get_serial_number(serial);
++ 	printf("Model: Turris Omnia\n");
++ 	printf("  MCU type: %s\n", omnia_get_mcu_type());
++ 	printf("  MCU version: %s\n", omnia_get_mcu_version());
++ 	printf("  RAM size: %i MiB\n", omnia_get_ram_size_gb() * 1024);
+++
+++	if (omnia_mcu_has_feature(FEAT_BOARD_INFO)) {
+++		err = omnia_mcu_board_info(serial, NULL, version);
+++		has_version = !err;
+++	} else {
+++		err = turris_atsha_otp_get_serial_number(serial);
+++		has_version = false;
+++	}
+++
+++	printf("  Board version: %s\n", has_version ? version : "unknown");
++ 	printf("  Serial Number: %s\n", !err ? serial : "unknown");
++ 
++ 	return 0;
++@@ -1004,8 +1085,17 @@ int show_board_info(void)
++ 
++ int misc_init_r(void)
++ {
++-	turris_atsha_otp_init_mac_addresses(1);
++-	turris_atsha_otp_init_serial_number();
+++	if (omnia_mcu_has_feature(FEAT_BOARD_INFO)) {
+++		char serial[17];
+++		u8 first_mac[6];
+++
+++		if (!omnia_mcu_board_info(serial, first_mac, NULL))
+++			turris_init_mac_addresses(1, first_mac);
+++	} else {
+++		turris_atsha_otp_init_mac_addresses(1);
+++		turris_atsha_otp_init_serial_number();
+++	}
+++
++ 	return 0;
++ }
++ 
++-- 
++2.43.0
++
+diff --git a/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch b/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
+new file mode 100644
+index 0000000000..ac93e1a96d
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
+@@ -0,0 +1,88 @@
++From 7493bffa0642ad0ffb975360bb9fd28e1ce29de9 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Fri, 1 Mar 2024 11:49:50 +0100
++Subject: [PATCH 5/6] arm: mvebu: turris_omnia: Print board ECDSA public key if
++ available
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++If MCU supports the FEAT_CRYPTO feature, read board ECDSA public key
++from MCU and print it.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 29 +++++++++++++++++++++++-
++ 1 file changed, 28 insertions(+), 1 deletion(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 42f04d6eaf1..70c4be3ead3 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -75,6 +75,9 @@ enum mcu_commands {
++ 	/* available if EXT_CMD bit set in features */
++ 	CMD_EXT_CONTROL		= 0x12,
++ 
+++	/* available if CRYPTO bit set in features */
+++	CMD_CRYPTO_GET_PUBLIC_KEY	= 0x29,
+++
++ 	/* available if BOARD_INFO it set in features */
++ 	CMD_BOARD_INFO_GET	= 0x2c,
++ };
++@@ -94,6 +97,7 @@ enum status_word_bits {
++ enum features_e {
++ 	FEAT_PERIPH_MCU		= BIT(0),
++ 	FEAT_EXT_CMDS		= BIT(1),
+++	FEAT_CRYPTO		= BIT(14),
++ 	FEAT_BOARD_INFO		= BIT(15),
++ };
++ 
++@@ -285,6 +289,24 @@ static int omnia_mcu_board_info(char *serial, u8 *mac, char *version)
++ 	return 0;
++ }
++ 
+++static int omnia_mcu_get_board_public_key(char pub_key[static 67])
+++{
+++	u8 reply[34];
+++	int ret;
+++
+++	ret = omnia_mcu_read(CMD_CRYPTO_GET_PUBLIC_KEY, reply, sizeof(reply));
+++	if (ret)
+++		return ret;
+++
+++	if (reply[0] != 33)
+++		return -EBADMSG;
+++
+++	bin2hex(pub_key, &reply[1], 33);
+++	reply[66] = '\0';
+++
+++	return 0;
+++}
+++
++ static void enable_a385_watchdog(unsigned int timeout_minutes)
++ {
++ 	struct sar_freq_modes sar_freq;
++@@ -1060,7 +1082,7 @@ int board_late_init(void)
++ 
++ int show_board_info(void)
++ {
++-	char serial[17], version[4];
+++	char serial[17], version[4], pub_key[67];
++ 	bool has_version;
++ 	int err;
++ 
++@@ -1080,6 +1102,11 @@ int show_board_info(void)
++ 	printf("  Board version: %s\n", has_version ? version : "unknown");
++ 	printf("  Serial Number: %s\n", !err ? serial : "unknown");
++ 
+++	if (omnia_mcu_has_feature(FEAT_CRYPTO)) {
+++		err = omnia_mcu_get_board_public_key(pub_key);
+++		printf("  ECDSA Public Key: %s\n", !err ? pub_key : "unknown");
+++	}
+++
++ 	return 0;
++ }
++ 
++-- 
++2.43.0
++
+diff --git a/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch b/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
+new file mode 100644
+index 0000000000..915ae4abcf
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
+@@ -0,0 +1,69 @@
++From 7c8bad541d6d96f32174cec67ae195d261e220c4 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Fri, 1 Mar 2024 13:13:14 +0100
++Subject: [PATCH 6/6] arm: mvebu: turris_omnia: Disable Atmel SHA node if not
++ present
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++If the FEAT_CRYPTO feature bit is present in MCU features, the board
++crypto is implemented by MCU and the Atmel SHA chip is not present.
++Disable Atmel SHA device-tree node in that case.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 23 +++++++++++++++++++++++
++ 1 file changed, 23 insertions(+)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 70c4be3ead3..500125fed16 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -1039,6 +1039,25 @@ static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
++ 	return 0;
++ }
++ 
+++static void fixup_atsha_node(void *blob)
+++{
+++	int node;
+++
+++	if (!omnia_mcu_has_feature(FEAT_CRYPTO))
+++		return;
+++
+++	node = fdt_node_offset_by_compatible(blob, -1, "atmel,atsha204a");
+++	if (node < 0) {
+++		printf("Cannot find ATSHA204A node!\n");
+++		return;
+++	}
+++
+++	if (fdt_status_disabled(blob, node) < 0)
+++		printf("Cannot disable ATSHA204A node!\n");
+++	else
+++		debug("Disabled ATSHA204A node\n");
+++}
+++
++ #endif
++ 
++ #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP)
++@@ -1052,6 +1071,8 @@ int board_fix_fdt(void *blob)
++ 	fixup_msata_port_nodes(blob);
++ 	fixup_wwan_port_nodes(blob);
++ 
+++	fixup_atsha_node(blob);
+++
++ 	return 0;
++ }
++ #endif
++@@ -1244,6 +1265,8 @@ int ft_board_setup(void *blob, struct bd_info *bd)
++ 	fixup_msata_port_nodes(blob);
++ 	fixup_wwan_port_nodes(blob);
++ 
+++	fixup_atsha_node(blob);
+++
++ 	return 0;
++ }
++ #endif
++-- 
++2.43.0
++
+-- 
+2.43.0
+

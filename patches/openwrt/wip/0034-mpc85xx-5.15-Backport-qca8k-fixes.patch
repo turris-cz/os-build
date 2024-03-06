@@ -1,0 +1,189 @@
+From 551267fd83b11d5d86d42a2efbee97b2ac21333d Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 2 Nov 2023 18:05:54 +0100
+Subject: [PATCH 2/2] mpc85xx: 5.15: Backport qca8k fdb fixes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ ...x-search_and_insert-wrong-handling-o.patch | 69 +++++++++++++++++++
+ ...-dsa-qca8k-fix-broken-search_and_del.patch | 39 +++++++++++
+ ...ca8k-fix-mdb-add-del-case-with-0-VID.patch | 42 +++++++++++
+ 3 files changed, 150 insertions(+)
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0005-v6.5-1-net-dsa-qca8k-fix-search_and_insert-wrong-handling-o.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0005-v6.5-2-net-dsa-qca8k-fix-broken-search_and_del.patch
+ create mode 100644 target/linux/mpc85xx/patches-5.15/0005-v6.5-3-net-dsa-qca8k-fix-mdb-add-del-case-with-0-VID.patch
+
+diff --git a/target/linux/mpc85xx/patches-5.15/0005-v6.5-1-net-dsa-qca8k-fix-search_and_insert-wrong-handling-o.patch b/target/linux/mpc85xx/patches-5.15/0005-v6.5-1-net-dsa-qca8k-fix-search_and_insert-wrong-handling-o.patch
+new file mode 100644
+index 0000000000..1ecc80d863
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0005-v6.5-1-net-dsa-qca8k-fix-search_and_insert-wrong-handling-o.patch
+@@ -0,0 +1,69 @@
++From 80248d4160894d7e40b04111bdbaa4ff93fc4bd7 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Mon, 24 Jul 2023 05:25:29 +0200
++Subject: [PATCH] net: dsa: qca8k: fix search_and_insert wrong handling of new
++ rule
++
++On inserting a mdb entry, fdb_search_and_insert is used to add a port to
++the qca8k target entry in the FDB db.
++
++A FDB entry can't be modified so it needs to be removed and insert again
++with the new values.
++
++To detect if an entry already exist, the SEARCH operation is used and we
++check the aging of the entry. If the entry is not 0, the entry exist and
++we proceed to delete it.
++
++Current code have 2 main problem:
++- The condition to check if the FDB entry exist is wrong and should be
++  the opposite.
++- When a FDB entry doesn't exist, aging was never actually set to the
++  STATIC value resulting in allocating an invalid entry.
++
++Fix both problem by adding aging support to the function, calling the
++function with STATIC as aging by default and finally by correct the
++condition to check if the entry actually exist.
++
++Fixes: ba8f870dfa63 ("net: dsa: qca8k: add support for mdb_add/del")
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-common.c | 9 ++++++---
++ 1 file changed, 6 insertions(+), 3 deletions(-)
++
++--- a/drivers/net/dsa/qca/qca8k-common.c
+++++ b/drivers/net/dsa/qca/qca8k-common.c
++@@ -245,7 +245,7 @@ void qca8k_fdb_flush(struct qca8k_priv *
++ }
++ 
++ static int qca8k_fdb_search_and_insert(struct qca8k_priv *priv, u8 port_mask,
++-				       const u8 *mac, u16 vid)
+++				       const u8 *mac, u16 vid, u8 aging)
++ {
++ 	struct qca8k_fdb fdb = { 0 };
++ 	int ret;
++@@ -262,10 +262,12 @@ static int qca8k_fdb_search_and_insert(s
++ 		goto exit;
++ 
++ 	/* Rule exist. Delete first */
++-	if (!fdb.aging) {
+++	if (fdb.aging) {
++ 		ret = qca8k_fdb_access(priv, QCA8K_FDB_PURGE, -1);
++ 		if (ret)
++ 			goto exit;
+++	} else {
+++		fdb.aging = aging;
++ 	}
++ 
++ 	/* Add port to fdb portmask */
++@@ -806,7 +808,8 @@ int qca8k_port_mdb_add(struct dsa_switch
++ 	const u8 *addr = mdb->addr;
++ 	u16 vid = mdb->vid;
++ 
++-	return qca8k_fdb_search_and_insert(priv, BIT(port), addr, vid);
+++	return qca8k_fdb_search_and_insert(priv, BIT(port), addr, vid,
+++					   QCA8K_ATU_STATUS_STATIC);
++ }
++ 
++ int qca8k_port_mdb_del(struct dsa_switch *ds, int port,
+diff --git a/target/linux/mpc85xx/patches-5.15/0005-v6.5-2-net-dsa-qca8k-fix-broken-search_and_del.patch b/target/linux/mpc85xx/patches-5.15/0005-v6.5-2-net-dsa-qca8k-fix-broken-search_and_del.patch
+new file mode 100644
+index 0000000000..38a24ae643
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0005-v6.5-2-net-dsa-qca8k-fix-broken-search_and_del.patch
+@@ -0,0 +1,39 @@
++From ae70dcb9d9ecaf7d9836d3e1b5bef654d7ef5680 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Mon, 24 Jul 2023 05:25:30 +0200
++Subject: [PATCH] net: dsa: qca8k: fix broken search_and_del
++
++On deleting an MDB entry for a port, fdb_search_and_del is used.
++An FDB entry can't be modified so it needs to be deleted and readded
++again with the new portmap (and the port deleted as requested)
++
++We use the SEARCH operator to search the entry to edit by vid and mac
++address and then we check the aging if we actually found an entry.
++
++Currently the code suffer from a bug where the searched fdb entry is
++never read again with the found values (if found) resulting in the code
++always returning -EINVAL as aging was always 0.
++
++Fix this by correctly read the fdb entry after it was searched.
++
++Fixes: ba8f870dfa63 ("net: dsa: qca8k: add support for mdb_add/del")
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-common.c | 4 ++++
++ 1 file changed, 4 insertions(+)
++
++--- a/drivers/net/dsa/qca/qca8k-common.c
+++++ b/drivers/net/dsa/qca/qca8k-common.c
++@@ -294,6 +294,10 @@ static int qca8k_fdb_search_and_del(stru
++ 	if (ret < 0)
++ 		goto exit;
++ 
+++	ret = qca8k_fdb_read(priv, &fdb);
+++	if (ret < 0)
+++		goto exit;
+++
++ 	/* Rule doesn't exist. Why delete? */
++ 	if (!fdb.aging) {
++ 		ret = -EINVAL;
+diff --git a/target/linux/mpc85xx/patches-5.15/0005-v6.5-3-net-dsa-qca8k-fix-mdb-add-del-case-with-0-VID.patch b/target/linux/mpc85xx/patches-5.15/0005-v6.5-3-net-dsa-qca8k-fix-mdb-add-del-case-with-0-VID.patch
+new file mode 100644
+index 0000000000..7c0a64858e
+--- /dev/null
++++ b/target/linux/mpc85xx/patches-5.15/0005-v6.5-3-net-dsa-qca8k-fix-mdb-add-del-case-with-0-VID.patch
+@@ -0,0 +1,42 @@
++From dfd739f182b00b02bd7470ed94d112684cc04fa2 Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Mon, 24 Jul 2023 05:25:31 +0200
++Subject: [PATCH] net: dsa: qca8k: fix mdb add/del case with 0 VID
++
++The qca8k switch doesn't support using 0 as VID and require a default
++VID to be always set. MDB add/del function doesn't currently handle
++this and are currently setting the default VID.
++
++Fix this by correctly handling this corner case and internally use the
++default VID for VID 0 case.
++
++Fixes: ba8f870dfa63 ("net: dsa: qca8k: add support for mdb_add/del")
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++Cc: stable@vger.kernel.org
++Signed-off-by: David S. Miller <davem@davemloft.net>
++---
++ drivers/net/dsa/qca/qca8k-common.c | 6 ++++++
++ 1 file changed, 6 insertions(+)
++
++--- a/drivers/net/dsa/qca/qca8k-common.c
+++++ b/drivers/net/dsa/qca/qca8k-common.c
++@@ -812,6 +812,9 @@ int qca8k_port_mdb_add(struct dsa_switch
++ 	const u8 *addr = mdb->addr;
++ 	u16 vid = mdb->vid;
++ 
+++	if (!vid)
+++		vid = QCA8K_PORT_VID_DEF;
+++
++ 	return qca8k_fdb_search_and_insert(priv, BIT(port), addr, vid,
++ 					   QCA8K_ATU_STATUS_STATIC);
++ }
++@@ -823,6 +826,9 @@ int qca8k_port_mdb_del(struct dsa_switch
++ 	const u8 *addr = mdb->addr;
++ 	u16 vid = mdb->vid;
++ 
+++	if (!vid)
+++		vid = QCA8K_PORT_VID_DEF;
+++
++ 	return qca8k_fdb_search_and_del(priv, BIT(port), addr, vid);
++ }
++ 
+-- 
+2.41.0
+
