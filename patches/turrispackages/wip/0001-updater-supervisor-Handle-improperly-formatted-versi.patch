@@ -1,0 +1,91 @@
+From 8d94eeb91508bff552432fb22bb396f56d23d2c0 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Fri, 8 Mar 2024 09:26:11 +0100
+Subject: [PATCH] updater-supervisor: Handle improperly formatted version
+
+Make sure that supervisor can handle cases when there is something weird
+set as a version.
+---
+ ...01-notify-Handle-unparseable-version.patch | 70 +++++++++++++++++++
+ 1 file changed, 70 insertions(+)
+ create mode 100644 updater/updater-supervisor/patches/0001-notify-Handle-unparseable-version.patch
+
+diff --git a/updater/updater-supervisor/patches/0001-notify-Handle-unparseable-version.patch b/updater/updater-supervisor/patches/0001-notify-Handle-unparseable-version.patch
+new file mode 100644
+index 000000000..b52cdefad
+--- /dev/null
++++ b/updater/updater-supervisor/patches/0001-notify-Handle-unparseable-version.patch
+@@ -0,0 +1,70 @@
++From 75dfc75d0cb2c2ae63641318f52306235bef17ed Mon Sep 17 00:00:00 2001
++From: Michal Hrusecky <michal.hrusecky@turris.com>
++Date: Thu, 7 Mar 2024 23:10:07 +0100
++Subject: [PATCH] notify: Handle unparseable version
++
++Reported on our forum:
++
++```
++Mar  7 11:11:29 turris updater-supervisor: Traceback (most recent call last):
++   File "/usr/bin/updater-supervisor", line 33, in <module>
++    sys.exit(load_entry_point('svupdater==1.5.6', 'console_scripts', 'updater-supervisor')())
++   File "/usr/lib/python3.10/site-packages/svupdater/__main__.py", line 109, in main
++   File "/usr/lib/python3.10/site-packages/svupdater/_supervisor.py", line 146, in run
++   File "/usr/lib/python3.10/site-packages/svupdater/notify.py", line 77, in changes
++   File "/usr/lib/python3.10/site-packages/packaging/version.py", line 54, in parse
++   File "/usr/lib/python3.10/site-packages/packaging/version.py", line 200, in __init__
++ packaging.version.InvalidVersion: Invalid version: '5.15.148-1-ac3950207e90faa9d8a5b1c624fa87c0'
++```
++---
++ svupdater/notify.py | 34 +++++++++++++++++++---------------
++ 1 file changed, 19 insertions(+), 15 deletions(-)
++
++diff --git a/svupdater/notify.py b/svupdater/notify.py
++index cb32dc6..ddd645e 100644
++--- a/svupdater/notify.py
+++++ b/svupdater/notify.py
++@@ -77,21 +77,25 @@ def changes():
++                 text_en += f" • Removed package {pkg.name} version {pkg.old_version}\n"
++                 text_cs += f" • Odstraněn balíček {pkg.name} verze {pkg.old_version}\n"
++             else:
++-                old_version = packaging.version.parse(pkg.old_version)
++-                new_version = packaging.version.parse(pkg.new_version)
++-                if old_version > new_version:
++-                    text_en += f" • Downgraded package {pkg.name} from version {pkg.old_version} to version {pkg.new_version}\n"
++-                    text_cs += f" • Balíček {pkg.name} byl ponížen z verze {pkg.old_version} na verzi {pkg.new_version}\n"
++-                elif old_version < new_version:
++-                    text_en += (
++-                        f" • Updated package {pkg.name} from version {pkg.old_version} to version {pkg.new_version}\n"
++-                    )
++-                    text_cs += (
++-                        f" • Aktualizován balíček {pkg.name} z verze {pkg.old_version} na verzi {pkg.new_version}\n"
++-                    )
++-                else:
++-                    text_en += f" • Reinstalled package {pkg.name} version {pkg.old_version}\n"
++-                    text_cs += f" • Přeinstalován balíček {pkg.name} verze {pkg.old_version}\n"
+++                try:
+++                    old_version = packaging.version.parse(pkg.old_version)
+++                    new_version = packaging.version.parse(pkg.new_version)
+++                    if old_version > new_version:
+++                        text_en += f" • Downgraded package {pkg.name} from version {pkg.old_version} to version {pkg.new_version}\n"
+++                        text_cs += f" • Balíček {pkg.name} byl ponížen z verze {pkg.old_version} na verzi {pkg.new_version}\n"
+++                    elif old_version < new_version:
+++                        text_en += (
+++                            f" • Updated package {pkg.name} from version {pkg.old_version} to version {pkg.new_version}\n"
+++                        )
+++                        text_cs += (
+++                            f" • Aktualizován balíček {pkg.name} z verze {pkg.old_version} na verzi {pkg.new_version}\n"
+++                        )
+++                    else:
+++                        text_en += f" • Reinstalled package {pkg.name} version {pkg.old_version}\n"
+++                        text_cs += f" • Přeinstalován balíček {pkg.name} verze {pkg.old_version}\n"
+++                except packaging.version.InvalidVersion:
+++                    text_en += f" • Reinstalled package {pkg.name} from version {pkg.old_version} to version {pkg.new_version}\n"
+++                    text_cs += f" • Přeinstalován balíček {pkg.name} z verze {pkg.old_version} na verzi {pkg.new_version}\n"
++         for fail in transaction.fails:
++             type_en = {
++                 "preinst": "pre-installation",
++-- 
++2.44.0
++
+-- 
+2.44.0
+
