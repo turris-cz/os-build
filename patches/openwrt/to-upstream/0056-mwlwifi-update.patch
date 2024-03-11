@@ -1,0 +1,797 @@
+From 2f53a293dfdde3ae013c7a2d6c271d929e907882 Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Thu, 29 Feb 2024 15:14:27 +0100
+Subject: [PATCH] mwlwifi: Update to the latest version
+
+---
+ package/kernel/mwlwifi/Makefile               |  16 +-
+ ...mpilation-warning-with-64-bit-system.patch | 165 ++++++++
+ ...compile-with-mac80211-backports-5_3+.patch |  35 --
+ ...lwifi-remove-MODULE_SUPPORTED_DEVICE.patch |  32 --
+ ...003-mwlwifi-replace-get-set_fs-calls.patch |  39 --
+ ...CIe-DT-node-null-pointer-dereference.patch |   2 +-
+ ...nd-get_fs-calls-from-PCIe-for-Kenel-.patch |  51 +++
+ ...-the-deprecated-pci-dma-compat.h-API.patch | 352 ++++++++++++++++++
+ 8 files changed, 577 insertions(+), 115 deletions(-)
+ create mode 100644 package/kernel/mwlwifi/patches/001-Fix-compilation-warning-with-64-bit-system.patch
+ delete mode 100644 package/kernel/mwlwifi/patches/001-Fix-compile-with-mac80211-backports-5_3+.patch
+ delete mode 100644 package/kernel/mwlwifi/patches/002-mwlwifi-remove-MODULE_SUPPORTED_DEVICE.patch
+ delete mode 100644 package/kernel/mwlwifi/patches/003-mwlwifi-replace-get-set_fs-calls.patch
+ create mode 100644 package/kernel/mwlwifi/patches/006-remove-uaccess-and-get_fs-calls-from-PCIe-for-Kenel-.patch
+ create mode 100644 package/kernel/mwlwifi/patches/007-replace-usage-of-the-deprecated-pci-dma-compat.h-API.patch
+
+diff --git a/package/kernel/mwlwifi/Makefile b/package/kernel/mwlwifi/Makefile
+index bd2c7cfc4a..9244f656c8 100644
+--- a/package/kernel/mwlwifi/Makefile
++++ b/package/kernel/mwlwifi/Makefile
+@@ -8,16 +8,16 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=mwlwifi
+-PKG_RELEASE=3
++PKG_RELEASE=1
+ 
+ PKG_LICENSE:=ISC
+ PKG_LICENSE_FILES:=
+ 
+ PKG_SOURCE_URL:=https://github.com/kaloz/mwlwifi
+ PKG_SOURCE_PROTO:=git
+-PKG_SOURCE_DATE:=2020-02-06
+-PKG_SOURCE_VERSION:=a2fd00bb74c35820dfe233d762690c0433a87ef5
+-PKG_MIRROR_HASH:=0eda0e774a87e58e611d6436350e1cf2be3de50fddde334909a07a15b0c9862b
++PKG_SOURCE_DATE:=2023-11-20
++PKG_SOURCE_VERSION:=2a5a4ae31a2ad1b432a1dcb6ef6c3298e3330b2c
++PKG_MIRROR_HASH:=b1151051ed6eba063c05916d8dbc4f03f804772d217e8c65b7baa263ded7a961
+ 
+ PKG_MAINTAINER:=Imre Kaloz <kaloz@openwrt.org>
+ PKG_BUILD_PARALLEL:=1
+@@ -29,7 +29,7 @@ include $(INCLUDE_DIR)/package.mk
+ define KernelPackage/mwlwifi
+   SUBMENU:=Wireless Drivers
+   TITLE:=Marvell 88W8864/88W8897/88W8964/88W8997 wireless driver
+-  DEPENDS:=+kmod-mac80211 +@DRIVER_11N_SUPPORT +@DRIVER_11AC_SUPPORT @PCI_SUPPORT @TARGET_mvebu
++  DEPENDS:=+kmod-mac80211 +@DRIVER_11AC_SUPPORT @PCI_SUPPORT @TARGET_mvebu
+   FILES:=$(PKG_BUILD_DIR)/mwlwifi.ko
+   AUTOLOAD:=$(call AutoLoad,50,mwlwifi)
+ endef
+@@ -41,11 +41,11 @@ NOSTDINC_FLAGS := \
+ 	-I$(STAGING_DIR)/usr/include/mac80211-backport \
+ 	-I$(STAGING_DIR)/usr/include/mac80211/uapi \
+ 	-I$(STAGING_DIR)/usr/include/mac80211 \
+-	-include backport/backport.h
++	-include backport/backport.h \
++	-Wno-unused-result
+ 
+ define Build/Compile
+-	+$(MAKE) $(PKG_JOBS) -C "$(LINUX_DIR)" \
+-		$(KERNEL_MAKE_FLAGS) \
++	+$(KERNEL_MAKE) $(PKG_JOBS) \
+ 		M="$(PKG_BUILD_DIR)" \
+ 		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
+ 		modules
+diff --git a/package/kernel/mwlwifi/patches/001-Fix-compilation-warning-with-64-bit-system.patch b/package/kernel/mwlwifi/patches/001-Fix-compilation-warning-with-64-bit-system.patch
+new file mode 100644
+index 0000000000..80e708a5e1
+--- /dev/null
++++ b/package/kernel/mwlwifi/patches/001-Fix-compilation-warning-with-64-bit-system.patch
+@@ -0,0 +1,165 @@
++From ed4422e98ababf956674da3438ac42b3aa32c66e Mon Sep 17 00:00:00 2001
++From: Christian Marangi <ansuelsmth@gmail.com>
++Date: Wed, 10 May 2023 00:41:06 +0200
++Subject: [PATCH] Fix compilation warning with 64 bit system
++
++Use %zu and %zd where possible for ssize_t and size_t.
++Use PTR_ERR to correctly convert to negative error.
++Use universal pointer to support both 32 and 64bit systems.
++
++Fix compilation warning:
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/fwcmd.c: In function 'mwl_fwcmd_get_fw_core_dump':
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/fwcmd.c:3608:31: error: cast from pointer to integer of different size [-Werror=pointer-to-int-cast]
++ 3608 |                (const void *)((u32)pcmd +
++      |                               ^
++In file included from ./include/linux/device.h:15,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/device.h:3,
++                 from ./include/linux/dma-mapping.h:7,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/dma-mapping.h:3,
++                 from ./include/linux/skbuff.h:31,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/skbuff.h:3,
++                 from ./include/linux/if_ether.h:19,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/if_ether.h:3,
++                 from ./include/linux/etherdevice.h:20,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/etherdevice.h:3,
++                 from /home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:20:
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c: In function 'pcie_tx_init_ndp':
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:38: error: format '%d' expects argument of type 'int', but argument 3 has type 'long unsigned int' [-Werror=format=]
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++./include/linux/dev_printk.h:110:30: note: in definition of macro 'dev_printk_index_wrap'
++  110 |                 _p_func(dev, fmt, ##__VA_ARGS__);                       \
++      |                              ^~~
++./include/linux/dev_printk.h:144:56: note: in expansion of macro 'dev_fmt'
++  144 |         dev_printk_index_wrap(_dev_err, KERN_ERR, dev, dev_fmt(fmt), ##__VA_ARGS__)
++      |                                                        ^~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211/net/cfg80211.h:8828:9: note: in expansion of macro 'dev_err'
++ 8828 |         dev_err(&(wiphy)->dev, format, ##args)
++      |         ^~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:17: note: in expansion of macro 'wiphy_err'
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                 ^~~~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:67: note: format string is defined here
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                                                                  ~^
++      |                                                                   |
++      |                                                                   int
++      |                                                                  %ld
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:38: error: format '%d' expects argument of type 'int', but argument 4 has type 'long unsigned int' [-Werror=format=]
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++./include/linux/dev_printk.h:110:30: note: in definition of macro 'dev_printk_index_wrap'
++  110 |                 _p_func(dev, fmt, ##__VA_ARGS__);                       \
++      |                              ^~~
++./include/linux/dev_printk.h:144:56: note: in expansion of macro 'dev_fmt'
++  144 |         dev_printk_index_wrap(_dev_err, KERN_ERR, dev, dev_fmt(fmt), ##__VA_ARGS__)
++      |                                                        ^~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211/net/cfg80211.h:8828:9: note: in expansion of macro 'dev_err'
++ 8828 |         dev_err(&(wiphy)->dev, format, ##args)
++      |         ^~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:17: note: in expansion of macro 'wiphy_err'
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                 ^~~~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.c:338:71: note: format string is defined here
++  338 |                 wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++      |                                                                      ~^
++      |                                                                       |
++      |                                                                       int
++      |                                                                      %ld
++  CC [M]  /home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/debugfs.o
++In file included from ./include/linux/device.h:15,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/device.h:3,
++                 from ./include/linux/dma-mapping.h:7,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/dma-mapping.h:3,
++                 from ./include/linux/skbuff.h:31,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/skbuff.h:3,
++                 from ./include/linux/if_ether.h:19,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/if_ether.h:3,
++                 from ./include/linux/etherdevice.h:20,
++                 from /home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211-backport/linux/etherdevice.h:3,
++                 from /home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/pcie.c:19:
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/pcie.c: In function 'pcie_bf_mimo_ctrl_decode':
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/pcie.c:1325:37: error: cast from pointer to integer of different size [-Werror=pointer-to-int-cast]
++ 1325 |                           filename, (unsigned int)fp_data);
++      |                                     ^
++./include/linux/dev_printk.h:110:37: note: in definition of macro 'dev_printk_index_wrap'
++  110 |                 _p_func(dev, fmt, ##__VA_ARGS__);                       \
++      |                                     ^~~~~~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/staging_dir/target-aarch64_cortex-a53_musl/usr/include/mac80211/net/cfg80211.h:8828:9: note: in expansion of macro 'dev_err'
++ 8828 |         dev_err(&(wiphy)->dev, format, ##args)
++      |         ^~~~~~~
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/pcie.c:1324:17: note: in expansion of macro 'wiphy_err'
++ 1324 |                 wiphy_err(priv->hw->wiphy, "Error opening %s! %x\n",
++      |                 ^~~~~~~~~
++cc1: all warnings being treated as errors
++make[4]: *** [scripts/Makefile.build:289: /home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/tx_ndp.o] Error 1
++make[4]: *** Waiting for unfinished jobs....
++cc1: all warnings being treated as errors
++make[4]: *** [scripts/Makefile.build:289: /home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/hif/pcie/pcie.o] Error 1
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/debugfs.c: In function 'mwl_debugfs_regrdwr_read':
++/home/ansuel/openwrt-ansuel/openwrt/build_dir/target-aarch64_cortex-a53_musl/linux-ipq807x_generic/mwlwifi-2023-04-29-6a436714/debugfs.c:1335:43: error: format '%d' expects argument of type 'int', but argument 4 has type 'ssize_t' {aka 'long int'} [-Werror=format=]
++ 1335 |                                  "error: %d(%u 0x%08x 0x%08x)\n",
++      |                                          ~^
++      |                                           |
++      |                                           int
++      |                                          %ld
++ 1336 |                                  ret, priv->reg_type, priv->reg_offset,
++      |                                  ~~~
++      |                                  |
++      |                                  ssize_t {aka long int}
++cc1: all warnings being treated as errors
++
++Signed-off-by: Christian Marangi <ansuelsmth@gmail.com>
++---
++ debugfs.c         | 2 +-
++ hif/fwcmd.c       | 2 +-
++ hif/pcie/pcie.c   | 4 ++--
++ hif/pcie/tx_ndp.c | 2 +-
++ 4 files changed, 5 insertions(+), 5 deletions(-)
++
++--- a/debugfs.c
+++++ b/debugfs.c
++@@ -1342,7 +1342,7 @@ done:
++ 				 priv->reg_value);
++ 	else
++ 		len += scnprintf(p + len, size - len,
++-				 "error: %d(%u 0x%08x 0x%08x)\n",
+++				 "error: %zd(%u 0x%08x 0x%08x)\n",
++ 				 ret, priv->reg_type, priv->reg_offset,
++ 				 priv->reg_value);
++ 
++--- a/hif/fwcmd.c
+++++ b/hif/fwcmd.c
++@@ -3623,7 +3623,7 @@ int mwl_fwcmd_get_fw_core_dump(struct ie
++ 	core_dump->size_kb = pcmd->cmd_data.coredump.size_kb;
++ 	core_dump->flags = pcmd->cmd_data.coredump.flags;
++ 	memcpy(buff,
++-	       (const void *)((u32)pcmd +
+++	       (const void *)((uintptr_t)pcmd +
++ 	       sizeof(struct hostcmd_cmd_get_fw_core_dump) -
++ 	       sizeof(struct hostcmd_cmd_get_fw_core_dump_)),
++ 	       MAX_CORE_DUMP_BUFFER);
++--- a/hif/pcie/8964/tx_ndp.c
+++++ b/hif/pcie/8964/tx_ndp.c
++@@ -336,7 +336,7 @@ int pcie_tx_init_ndp(struct ieee80211_hw
++ 
++ 	if (sizeof(struct pcie_tx_ctrl_ndp) >
++ 	    sizeof(tx_info->driver_data)) {
++-		wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
+++		wiphy_err(hw->wiphy, "driver data is not enough: %zu (%zu)\n",
++ 			  sizeof(struct pcie_tx_ctrl_ndp),
++ 			  sizeof(tx_info->driver_data));
++ 		return -ENOMEM;
++--- a/hif/pcie/pcie.c
+++++ b/hif/pcie/pcie.c
++@@ -1464,8 +1464,8 @@ static void pcie_bf_mimo_ctrl_decode(str
++ 			       &fp_data->f_pos);
++ 		filp_close(fp_data, current->files);
++ 	} else {
++-		wiphy_err(priv->hw->wiphy, "Error opening %s! %x\n",
++-			  filename, (unsigned int)fp_data);
+++		wiphy_err(priv->hw->wiphy, "Error opening %s! %ld\n",
+++			  filename, PTR_ERR(fp_data));
++ 	}
++ 
++ #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
+diff --git a/package/kernel/mwlwifi/patches/001-Fix-compile-with-mac80211-backports-5_3+.patch b/package/kernel/mwlwifi/patches/001-Fix-compile-with-mac80211-backports-5_3+.patch
+deleted file mode 100644
+index fdba575f04..0000000000
+--- a/package/kernel/mwlwifi/patches/001-Fix-compile-with-mac80211-backports-5_3+.patch
++++ /dev/null
+@@ -1,35 +0,0 @@
+-From 182391a3c96ff6ad79bbba0758338a16a66abbd8 Mon Sep 17 00:00:00 2001
+-From: DENG Qingfang <dengqf6@mail2.sysu.edu.cn>
+-Date: Wed, 12 Feb 2020 14:18:58 +0800
+-Subject: [PATCH] Fix driver loading with backports 5.3+
+-
+-Commit 747796b2f126 did not solve the issue that it crashes when an older kernel
+-with a newer backport tries loading it, because it only detects kernel version.
+-
+-As net/cfg80211.h in 5.3+ defines VENDOR_CMD_RAW_DATA, use it as a condition.
+-
+-Signed-off-by: DENG Qingfang <dqfext@gmail.com>
+----
+- vendor_cmd.c | 4 ++--
+- 1 file changed, 2 insertions(+), 2 deletions(-)
+-
+---- a/vendor_cmd.c
+-+++ b/vendor_cmd.c
+-@@ -92,7 +92,7 @@ static const struct wiphy_vendor_command
+- 			  .subcmd = MWL_VENDOR_CMD_SET_BF_TYPE},
+- 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
+- 		.doit = mwl_vendor_cmd_set_bf_type,
+--#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,3,0))
+-+#ifdef VENDOR_CMD_RAW_DATA
+- 		.policy = mwl_vendor_attr_policy,
+- #endif
+- 	},
+-@@ -101,7 +101,7 @@ static const struct wiphy_vendor_command
+- 			  .subcmd = MWL_VENDOR_CMD_GET_BF_TYPE},
+- 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
+- 		.doit = mwl_vendor_cmd_get_bf_type,
+--#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,3,0))
+-+#ifdef VENDOR_CMD_RAW_DATA
+- 		.policy = mwl_vendor_attr_policy,
+- #endif
+- 	}
+diff --git a/package/kernel/mwlwifi/patches/002-mwlwifi-remove-MODULE_SUPPORTED_DEVICE.patch b/package/kernel/mwlwifi/patches/002-mwlwifi-remove-MODULE_SUPPORTED_DEVICE.patch
+deleted file mode 100644
+index 23b4ef7541..0000000000
+--- a/package/kernel/mwlwifi/patches/002-mwlwifi-remove-MODULE_SUPPORTED_DEVICE.patch
++++ /dev/null
+@@ -1,32 +0,0 @@
+-From 392f8e9d798acff3079e753dd881e272f6150d74 Mon Sep 17 00:00:00 2001
+-From: Robert Marko <robert.marko@sartura.hr>
+-Date: Wed, 30 Mar 2022 19:32:38 +0200
+-Subject: [PATCH] mwlwifi: remove MODULE_SUPPORTED_DEVICE
+-
+-Kernel 5.12 finally removed all MODULE_SUPPORTED_DEVICE references and
+-support for it as it was never actually implemented and was safe to
+-drop it completely.
+-
+-So, do the same in order to compile in 5.12 and newer.
+-
+-Signed-off-by: Robert Marko <robert.marko@sartura.hr>
+----
+- hif/pcie/pcie.c | 2 --
+- 1 file changed, 2 deletions(-)
+-
+---- a/hif/pcie/pcie.c
+-+++ b/hif/pcie/pcie.c
+-@@ -31,7 +31,6 @@
+- #include "hif/pcie/rx_ndp.h"
+- 
+- #define PCIE_DRV_DESC "Marvell Mac80211 Wireless PCIE Network Driver"
+--#define PCIE_DEV_NAME "Marvell 802.11ac PCIE Adapter"
+- 
+- #define MAX_WAIT_FW_COMPLETE_ITERATIONS 10000
+- #define CHECK_BA_TRAFFIC_TIME           300 /* msec */
+-@@ -1641,5 +1640,4 @@ MODULE_DESCRIPTION(PCIE_DRV_DESC);
+- MODULE_VERSION(PCIE_DRV_VERSION);
+- MODULE_AUTHOR("Marvell Semiconductor, Inc.");
+- MODULE_LICENSE("GPL v2");
+--MODULE_SUPPORTED_DEVICE(PCIE_DEV_NAME);
+- MODULE_DEVICE_TABLE(pci, pcie_id_tbl);
+diff --git a/package/kernel/mwlwifi/patches/003-mwlwifi-replace-get-set_fs-calls.patch b/package/kernel/mwlwifi/patches/003-mwlwifi-replace-get-set_fs-calls.patch
+deleted file mode 100644
+index 725a41c9ac..0000000000
+--- a/package/kernel/mwlwifi/patches/003-mwlwifi-replace-get-set_fs-calls.patch
++++ /dev/null
+@@ -1,39 +0,0 @@
+-From 16e51cb83f9fa1717383c9d67f5531df7348347c Mon Sep 17 00:00:00 2001
+-From: Robert Marko <robert.marko@sartura.hr>
+-Date: Wed, 30 Mar 2022 19:51:56 +0200
+-Subject: [PATCH] mwlwifi: replace get/set_fs() calls
+-
+-Since kernel 5.9 the get/set_fs() call implementation have started to get
+-dropped from individual architectures, ARM64 one got dropped in 5.11.
+-
+-Replace the get/set_fs() calls with force_uaccess_begin/end() to allow
+-compiling on newer kernels.
+-There is no need to add kernel version checks as the replacement functions
+-are available since kernel 5.9.
+-
+-Signed-off-by: Robert Marko <robert.marko@sartura.hr>
+----
+- hif/pcie/pcie.c | 5 ++---
+- 1 file changed, 2 insertions(+), 3 deletions(-)
+-
+---- a/hif/pcie/pcie.c
+-+++ b/hif/pcie/pcie.c
+-@@ -1293,8 +1293,7 @@ static void pcie_bf_mimo_ctrl_decode(str
+- 	char *buf = &str_buf[0];
+- 	mm_segment_t oldfs;
+- 
+--	oldfs = get_fs();
+--	set_fs(KERNEL_DS);
+-+	oldfs = force_uaccess_begin();
+- 
+- 	buf += sprintf(buf, "\nMAC: %pM\n", bf_mimo_ctrl->rec_mac);
+- 	buf += sprintf(buf, "SU_0_MU_1: %d\n", bf_mimo_ctrl->type);
+-@@ -1314,7 +1313,7 @@ static void pcie_bf_mimo_ctrl_decode(str
+- 			  filename, (unsigned int)fp_data);
+- 	}
+- 
+--	set_fs(oldfs);
+-+	force_uaccess_end(oldfs);
+- }
+- 
+- static void pcie_process_account(struct ieee80211_hw *hw)
+diff --git a/package/kernel/mwlwifi/patches/004-mwlwifi-fix-PCIe-DT-node-null-pointer-dereference.patch b/package/kernel/mwlwifi/patches/004-mwlwifi-fix-PCIe-DT-node-null-pointer-dereference.patch
+index 9b9e49b66a..f37d2f8171 100644
+--- a/package/kernel/mwlwifi/patches/004-mwlwifi-fix-PCIe-DT-node-null-pointer-dereference.patch
++++ b/package/kernel/mwlwifi/patches/004-mwlwifi-fix-PCIe-DT-node-null-pointer-dereference.patch
+@@ -19,7 +19,7 @@ Signed-off-by: Robert Marko <robert.marko@sartura.hr>
+ 
+ --- a/hif/pcie/pcie.c
+ +++ b/hif/pcie/pcie.c
+-@@ -570,7 +570,8 @@ static struct device_node *pcie_get_devi
++@@ -685,7 +685,8 @@ static struct device_node *pcie_get_devi
+  	struct device_node *dev_node;
+  
+  	dev_node = pci_bus_to_OF_node(pcie_priv->pdev->bus);
+diff --git a/package/kernel/mwlwifi/patches/006-remove-uaccess-and-get_fs-calls-from-PCIe-for-Kenel-.patch b/package/kernel/mwlwifi/patches/006-remove-uaccess-and-get_fs-calls-from-PCIe-for-Kenel-.patch
+new file mode 100644
+index 0000000000..2a49daa943
+--- /dev/null
++++ b/package/kernel/mwlwifi/patches/006-remove-uaccess-and-get_fs-calls-from-PCIe-for-Kenel-.patch
+@@ -0,0 +1,51 @@
++From ad911365cac3723d1c00d048905a5e22ff4a10f3 Mon Sep 17 00:00:00 2001
++From: Stefan Kalscheuer <stefan@stklcode.de>
++Date: Sun, 18 Jun 2023 17:53:27 +0200
++Subject: [PATCH 1/2] remove uaccess and get_fs calls from PCIe for Kenel >=
++ 5.18
++
++Remove the calls to deprecated get_fs and force_uaccess_* API for modern
++kernels.
++
++The get_fs functionality and the transitional force_uaccess_* calls have
++been removed Kernel 5.18 [1] while read and write operations have been
++refactored, so the code can work on kernel- and userspace data without
++the need to shifting the boundary using set_fs().
++
++[1] https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?id=967747bbc084b93b54e66f9047d342232314cd25
++
++Signed-off-by: Stefan Kalscheuer <stefan@stklcode.de>
++---
++ hif/pcie/pcie.c | 6 ++++--
++ 1 file changed, 4 insertions(+), 2 deletions(-)
++
++--- a/hif/pcie/pcie.c
+++++ b/hif/pcie/pcie.c
++@@ -1439,7 +1439,9 @@ static void pcie_bf_mimo_ctrl_decode(str
++ 	const char filename[] = "/tmp/BF_MIMO_Ctrl_Field_Output.txt";
++ 	char str_buf[256];
++ 	char *buf = &str_buf[0];
+++#if LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
++ 	mm_segment_t oldfs;
+++#endif
++ 
++ #if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
++ 	oldfs = get_fs();
++@@ -1447,7 +1449,7 @@ static void pcie_bf_mimo_ctrl_decode(str
++ #elif LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
++ 	oldfs = get_fs();
++ 	set_fs(KERNEL_DS);
++-#else
+++#elif LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
++ 	oldfs = force_uaccess_begin();
++ #endif
++ 
++@@ -1471,7 +1473,7 @@ static void pcie_bf_mimo_ctrl_decode(str
++ 
++ #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
++ 	set_fs(oldfs);
++-#else
+++#elif LINUX_VERSION_CODE < KERNEL_VERSION(5,18,0)
++ 	force_uaccess_end(oldfs);
++ #endif
++ }
+diff --git a/package/kernel/mwlwifi/patches/007-replace-usage-of-the-deprecated-pci-dma-compat.h-API.patch b/package/kernel/mwlwifi/patches/007-replace-usage-of-the-deprecated-pci-dma-compat.h-API.patch
+new file mode 100644
+index 0000000000..b752d72f78
+--- /dev/null
++++ b/package/kernel/mwlwifi/patches/007-replace-usage-of-the-deprecated-pci-dma-compat.h-API.patch
+@@ -0,0 +1,352 @@
++From 61c75dce424c180b633c64613a1948df5a41cf1e Mon Sep 17 00:00:00 2001
++From: Stefan Kalscheuer <stefan@stklcode.de>
++Date: Sun, 18 Jun 2023 17:59:07 +0200
++Subject: [PATCH 2/2] replace usage of the deprecated "pci-dma-compat.h" API
++
++The pci-dma-compat API has been legacy for quite a while and was removed
++with 5.18 [1]. Migrate all calls, so the module can be compiled against
++modern kernel versions.
++
++Replace some compat calls:
++* pci_set_dma_mask with dma_set_mask
++* pci_(un)map_single with dma_(un)map_single
++* pci_dma_mapping_error with dma_mapping_error
++* PCI_DMA_{FROM,TO}DEVICE with DMA_{FOM,TO}_DEVICE
++
++[1] https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/commit/?id=7968778914e53788a01c2dee2692cab157de9ac0
++
++Signed-off-by: Stefan Kalscheuer <stefan@stklcode.de>
++---
++ hif/pcie/pcie.c   |  2 +-
++ hif/pcie/rx.c     | 20 ++++++++++----------
++ hif/pcie/rx_ndp.c | 20 ++++++++++----------
++ hif/pcie/tx.c     | 22 +++++++++++-----------
++ hif/pcie/tx_ndp.c | 14 +++++++-------
++ 5 files changed, 39 insertions(+), 39 deletions(-)
++
++--- a/hif/pcie/pcie.c
+++++ b/hif/pcie/pcie.c
++@@ -1701,7 +1701,7 @@ static int pcie_probe(struct pci_dev *pd
++ 		return rc;
++ 	}
++ 
++-	rc = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+++	rc = dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
++ 	if (rc) {
++ 		pr_err("%s: 32-bit PCI DMA not supported\n",
++ 		       PCIE_DRV_NAME);
++--- a/hif/pcie/8864/rx.c
+++++ b/hif/pcie/8864/rx.c
++@@ -107,11 +107,11 @@ static int pcie_rx_ring_init(struct mwl_
++ 			desc->prx_ring[i].rssi = 0x00;
++ 			desc->prx_ring[i].pkt_len =
++ 				cpu_to_le16(SYSADPT_MAX_AGGR_SIZE);
++-			dma = pci_map_single(pcie_priv->pdev,
+++			dma = dma_map_single(&(pcie_priv->pdev)->dev,
++ 					     rx_hndl->psk_buff->data,
++ 					     desc->rx_buf_size,
++-					     PCI_DMA_FROMDEVICE);
++-			if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++					     DMA_FROM_DEVICE);
+++			if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 				wiphy_err(priv->hw->wiphy,
++ 					  "failed to map pci memory!\n");
++ 				return -ENOMEM;
++@@ -153,11 +153,11 @@ static void pcie_rx_ring_cleanup(struct
++ 			if (!rx_hndl->psk_buff)
++ 				continue;
++ 
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 le32_to_cpu
++ 					 (rx_hndl->pdesc->pphys_buff_data),
++ 					 desc->rx_buf_size,
++-					 PCI_DMA_FROMDEVICE);
+++					 DMA_FROM_DEVICE);
++ 
++ 			dev_kfree_skb_any(rx_hndl->psk_buff);
++ 
++@@ -332,11 +332,11 @@ static inline int pcie_rx_refill(struct
++ 	rx_hndl->pdesc->rssi = 0x00;
++ 	rx_hndl->pdesc->pkt_len = cpu_to_le16(desc->rx_buf_size);
++ 
++-	dma = pci_map_single(pcie_priv->pdev,
+++	dma = dma_map_single(&pcie_priv->pdev->dev,
++ 			     rx_hndl->psk_buff->data,
++ 			     desc->rx_buf_size,
++-			     PCI_DMA_FROMDEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++			     DMA_FROM_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		dev_kfree_skb_any(rx_hndl->psk_buff);
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "failed to map pci memory!\n");
++@@ -410,10 +410,10 @@ void pcie_8864_rx_recv(unsigned long dat
++ 		prx_skb = curr_hndl->psk_buff;
++ 		if (!prx_skb)
++ 			goto out;
++-		pci_unmap_single(pcie_priv->pdev,
+++		dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 				 le32_to_cpu(curr_hndl->pdesc->pphys_buff_data),
++ 				 desc->rx_buf_size,
++-				 PCI_DMA_FROMDEVICE);
+++				 DMA_FROM_DEVICE);
++ 		pkt_len = le16_to_cpu(curr_hndl->pdesc->pkt_len);
++ 
++ 		if (skb_tailroom(prx_skb) < pkt_len) {
++--- a/hif/pcie/8864/tx.c
+++++ b/hif/pcie/8864/tx.c
++@@ -171,11 +171,11 @@ static void pcie_tx_ring_cleanup(struct
++ 					    desc->tx_hndl[i].psk_buff->data,
++ 					    le32_to_cpu(
++ 					    desc->ptx_ring[i].pkt_ptr));
++-				pci_unmap_single(pcie_priv->pdev,
+++				dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 						 le32_to_cpu(
++ 						 desc->ptx_ring[i].pkt_ptr),
++ 						 desc->tx_hndl[i].psk_buff->len,
++-						 PCI_DMA_TODEVICE);
+++						 DMA_TO_DEVICE);
++ 				dev_kfree_skb_any(desc->tx_hndl[i].psk_buff);
++ 				desc->ptx_ring[i].status =
++ 					cpu_to_le32(EAGLE_TXD_STATUS_IDLE);
++@@ -291,9 +291,9 @@ static inline void pcie_tx_skb(struct mw
++ 	tx_desc->type = tx_ctrl->type;
++ 	tx_desc->xmit_control = tx_ctrl->xmit_control;
++ 	tx_desc->sap_pkt_info = 0;
++-	dma = pci_map_single(pcie_priv->pdev, tx_skb->data,
++-			     tx_skb->len, PCI_DMA_TODEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++	dma = dma_map_single(&(pcie_priv->pdev)->dev, tx_skb->data,
+++			     tx_skb->len, DMA_TO_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		dev_kfree_skb_any(tx_skb);
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "failed to map pci memory!\n");
++@@ -447,10 +447,10 @@ static void pcie_non_pfu_tx_done(struct
++ 		       (tx_desc->status & cpu_to_le32(EAGLE_TXD_STATUS_OK)) &&
++ 		       (!(tx_desc->status &
++ 		       cpu_to_le32(EAGLE_TXD_STATUS_FW_OWNED)))) {
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 le32_to_cpu(tx_desc->pkt_ptr),
++ 					 le16_to_cpu(tx_desc->pkt_len),
++-					 PCI_DMA_TODEVICE);
+++					 DMA_TO_DEVICE);
++ 			done_skb = tx_hndl->psk_buff;
++ 			rate = le32_to_cpu(tx_desc->rate_info);
++ 			tx_desc->pkt_ptr = 0;
++@@ -925,4 +925,4 @@ void pcie_8864_tx_del_sta_amsdu_pkts(str
++ 		}
++ 	}
++ 	spin_unlock_bh(&sta_info->amsdu_lock);
++-}
++\ No newline at end of file
+++}
++--- a/hif/pcie/8964/rx_ndp.c
+++++ b/hif/pcie/8964/rx_ndp.c
++@@ -86,11 +86,11 @@ static int pcie_rx_ring_init_ndp(struct
++ 			}
++ 			skb_reserve(psk_buff, MIN_BYTES_RX_HEADROOM);
++ 
++-			dma = pci_map_single(pcie_priv->pdev,
+++			dma = dma_map_single(&(pcie_priv->pdev)->dev,
++ 					     psk_buff->data,
++ 					     desc->rx_buf_size,
++-					     PCI_DMA_FROMDEVICE);
++-			if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++					     DMA_FROM_DEVICE);
+++			if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 				wiphy_err(priv->hw->wiphy,
++ 					  "failed to map pci memory!\n");
++ 				return -ENOMEM;
++@@ -120,11 +120,11 @@ static void pcie_rx_ring_cleanup_ndp(str
++ 	if (desc->prx_ring) {
++ 		for (i = 0; i < MAX_NUM_RX_DESC; i++) {
++ 			if (desc->rx_vbuflist[i]) {
++-				pci_unmap_single(pcie_priv->pdev,
+++				dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 						 le32_to_cpu(
++ 						 desc->prx_ring[i].data),
++ 						 desc->rx_buf_size,
++-						 PCI_DMA_FROMDEVICE);
+++						 DMA_FROM_DEVICE);
++ 				desc->rx_vbuflist[i] = NULL;
++ 			}
++ 		}
++@@ -411,11 +411,11 @@ static inline int pcie_rx_refill_ndp(str
++ 		return -ENOMEM;
++ 	skb_reserve(psk_buff, MIN_BYTES_RX_HEADROOM);
++ 
++-	dma = pci_map_single(pcie_priv->pdev,
+++	dma = dma_map_single(&(pcie_priv->pdev)->dev,
++ 			     psk_buff->data,
++ 			     desc->rx_buf_size,
++-			     PCI_DMA_FROMDEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++			     DMA_FROM_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "refill: failed to map pci memory!\n");
++ 		return -ENOMEM;
++@@ -520,10 +520,10 @@ recheck:
++ 			break;
++ 		}
++ 
++-		pci_unmap_single(pcie_priv->pdev,
+++		dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 				 le32_to_cpu(prx_desc->data),
++ 				 desc->rx_buf_size,
++-				 PCI_DMA_FROMDEVICE);
+++				 DMA_FROM_DEVICE);
++ 
++ 		bad_mic = false;
++ 		ctrl = le32_to_cpu(prx_ring_done->ctrl);
++--- a/hif/pcie/8964/tx_ndp.c
+++++ b/hif/pcie/8964/tx_ndp.c
++@@ -132,10 +132,10 @@ static void pcie_tx_ring_cleanup_ndp(str
++ 	for (i = 0; i < MAX_TX_RING_SEND_SIZE; i++) {
++ 		tx_skb = desc->tx_vbuflist[i];
++ 		if (tx_skb) {
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 desc->pphys_tx_buflist[i],
++ 					 tx_skb->len,
++-					 PCI_DMA_TODEVICE);
+++					 DMA_TO_DEVICE);
++ 			dev_kfree_skb_any(tx_skb);
++ 			desc->pphys_tx_buflist[i] = 0;
++ 			desc->tx_vbuflist[i] = NULL;
++@@ -267,9 +267,9 @@ static inline int pcie_tx_skb_ndp(struct
++ 			(TXRING_CTRL_TAG_MGMT << TXRING_CTRL_TAG_SHIFT));
++ 	}
++ 
++-	dma = pci_map_single(pcie_priv->pdev, tx_skb->data,
++-			     tx_skb->len, PCI_DMA_TODEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++	dma = dma_map_single(&(pcie_priv->pdev)->dev, tx_skb->data,
+++			     tx_skb->len, DMA_TO_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		dev_kfree_skb_any(tx_skb);
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "failed to map pci memory!\n");
++@@ -451,10 +451,10 @@ void pcie_tx_done_ndp(struct ieee80211_h
++ 				  "buffer is NULL for tx done ring\n");
++ 			break;
++ 		}
++-		pci_unmap_single(pcie_priv->pdev,
+++		dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 				 desc->pphys_tx_buflist[index],
++ 				 skb->len,
++-				 PCI_DMA_TODEVICE);
+++				 DMA_TO_DEVICE);
++ 		desc->pphys_tx_buflist[index] = 0;
++ 		desc->tx_vbuflist[index] = NULL;
++ 
++--- a/hif/pcie/8997/rx.c
+++++ b/hif/pcie/8997/rx.c
++@@ -107,11 +107,11 @@ static int pcie_rx_ring_init(struct mwl_
++ 			desc->prx_ring[i].rssi = 0x00;
++ 			desc->prx_ring[i].pkt_len =
++ 				cpu_to_le16(SYSADPT_MAX_AGGR_SIZE);
++-			dma = pci_map_single(pcie_priv->pdev,
+++			dma = dma_map_single(&(pcie_priv->pdev)->dev,
++ 					     rx_hndl->psk_buff->data,
++ 					     desc->rx_buf_size,
++-					     PCI_DMA_FROMDEVICE);
++-			if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++					     DMA_FROM_DEVICE);
+++			if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 				wiphy_err(priv->hw->wiphy,
++ 					  "failed to map pci memory!\n");
++ 				return -ENOMEM;
++@@ -153,11 +153,11 @@ static void pcie_rx_ring_cleanup(struct
++ 			if (!rx_hndl->psk_buff)
++ 				continue;
++ 
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 le32_to_cpu
++ 					 (rx_hndl->pdesc->pphys_buff_data),
++ 					 desc->rx_buf_size,
++-					 PCI_DMA_FROMDEVICE);
+++					 DMA_FROM_DEVICE);
++ 
++ 			dev_kfree_skb_any(rx_hndl->psk_buff);
++ 
++@@ -332,11 +332,11 @@ static inline int pcie_rx_refill(struct
++ 	rx_hndl->pdesc->rssi = 0x00;
++ 	rx_hndl->pdesc->pkt_len = cpu_to_le16(desc->rx_buf_size);
++ 
++-	dma = pci_map_single(pcie_priv->pdev,
+++	dma = dma_map_single(&pcie_priv->pdev->dev,
++ 			     rx_hndl->psk_buff->data,
++ 			     desc->rx_buf_size,
++-			     PCI_DMA_FROMDEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++			     DMA_FROM_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		dev_kfree_skb_any(rx_hndl->psk_buff);
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "failed to map pci memory!\n");
++@@ -410,10 +410,10 @@ void pcie_8997_rx_recv(unsigned long dat
++ 		prx_skb = curr_hndl->psk_buff;
++ 		if (!prx_skb)
++ 			goto out;
++-		pci_unmap_single(pcie_priv->pdev,
+++		dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 				 le32_to_cpu(curr_hndl->pdesc->pphys_buff_data),
++ 				 desc->rx_buf_size,
++-				 PCI_DMA_FROMDEVICE);
+++				 DMA_FROM_DEVICE);
++ 		pkt_len = le16_to_cpu(curr_hndl->pdesc->pkt_len);
++ 
++ 		if (skb_tailroom(prx_skb) < pkt_len) {
++--- a/hif/pcie/8997/tx.c
+++++ b/hif/pcie/8997/tx.c
++@@ -139,10 +139,10 @@ static void pcie_txbd_ring_delete(struct
++ 			skb = pcie_priv->tx_buf_list[num];
++ 			tx_desc = (struct pcie_tx_desc *)skb->data;
++ 
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 le32_to_cpu(tx_desc->pkt_ptr),
++ 					 skb->len,
++-					 PCI_DMA_TODEVICE);
+++					 DMA_TO_DEVICE);
++ 			dev_kfree_skb_any(skb);
++ 		}
++ 		pcie_priv->tx_buf_list[num] = NULL;
++@@ -222,9 +222,9 @@ static inline void pcie_tx_skb(struct mw
++ 	tx_desc->type = tx_ctrl->type;
++ 	tx_desc->xmit_control = tx_ctrl->xmit_control;
++ 	tx_desc->sap_pkt_info = 0;
++-	dma = pci_map_single(pcie_priv->pdev, tx_skb->data,
++-			     tx_skb->len, PCI_DMA_TODEVICE);
++-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+++	dma = dma_map_single(&(pcie_priv->pdev)->dev, tx_skb->data,
+++			     tx_skb->len, DMA_TO_DEVICE);
+++	if (dma_mapping_error(&(pcie_priv->pdev)->dev, dma)) {
++ 		dev_kfree_skb_any(tx_skb);
++ 		wiphy_err(priv->hw->wiphy,
++ 			  "failed to map pci memory!\n");
++@@ -401,10 +401,10 @@ static void pcie_pfu_tx_done(struct mwl_
++ 			pfu_dma = (struct pcie_pfu_dma_data *)done_skb->data;
++ 			tx_desc = &pfu_dma->tx_desc;
++ 			dma_data = &pfu_dma->dma_data;
++-			pci_unmap_single(pcie_priv->pdev,
+++			dma_unmap_single(&(pcie_priv->pdev)->dev,
++ 					 le32_to_cpu(data_buf->paddr),
++ 					 le16_to_cpu(data_buf->len),
++-					 PCI_DMA_TODEVICE);
+++					 DMA_TO_DEVICE);
++ 			tx_desc->pkt_ptr = 0;
++ 			tx_desc->pkt_len = 0;
++ 			tx_desc->status = cpu_to_le32(EAGLE_TXD_STATUS_IDLE);
++@@ -875,4 +875,4 @@ void pcie_8997_tx_del_sta_amsdu_pkts(str
++ 		}
++ 	}
++ 	spin_unlock_bh(&sta_info->amsdu_lock);
++-}
++\ No newline at end of file
+++}
+-- 
+2.44.0
+
