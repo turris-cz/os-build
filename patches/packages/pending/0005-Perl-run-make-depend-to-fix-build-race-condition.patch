@@ -1,0 +1,41 @@
+From 61d6be29dc678e1a2e9bdb82a94cd30a93977962 Mon Sep 17 00:00:00 2001
+From: Andreas Gnau <andreas.gnau@iopsys.eu>
+Date: Tue, 5 Mar 2024 19:30:09 +0100
+Subject: [PATCH] perl: Run make depend to fix build race condition
+
+Run make depend before building perl. This fixes parallel build failures
+on machines with a high number of cores.
+
+Example error 1:
+
+    /bin/ln -s /build/staging_dir/hostpkg/usr/bin/generate_uudmap generate_uidmap
+    make[5]: ./generate_uudmap: Command not found
+    make[5]: *** [Makefile:321: bitcount.h] Error 127
+
+Example error 2:
+
+    /bin/ln -s /build/staging_dir/hostpkg/usr/bin/generate_uudmap generate_udmap
+    ./generate_uudmap uudmap.h bitcount.h mg_data.h
+    /bin/ln: failed to create symbolic link 'generate_uudmap': File exists
+    make[5]: *** [Makefile:325: generate_uudmap] Error 1
+
+Link: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=996953
+Link: https://salsa.debian.org/perl-team/interpreter/perl/-/commit/366bc98c916a3455f15c532aa33a5636d2fe2803
+Closes: https://github.com/openwrt/packages/issues/8238
+Signed-off-by: Andreas Gnau <andreas.gnau@iopsys.eu>
+---
+ lang/perl/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/lang/perl/Makefile b/lang/perl/Makefile
+index afd82997fe558..691bcb515f025 100644
+--- a/lang/perl/Makefile
++++ b/lang/perl/Makefile
+@@ -120,5 +120,7 @@ endef
+ 
+ define Build/Compile
++	# make depend is required to avoid race conditions: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=996953
++	+$(MAKE) -C $(PKG_BUILD_DIR) depend
+ 	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)
+ endef
+ 

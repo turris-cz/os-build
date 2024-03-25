@@ -1,0 +1,157 @@
+From 95ba3229a88de0332ccde51923ff6a4f392c5ff8 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Fri, 1 Mar 2024 18:16:16 +0100
+Subject: [PATCH] network: firewall, firewall4, iptables: switch to legacy mode
+
+If firewall ver. 3 is installed, then iptables switched to legacy mode. With
+this option we keep compatibility with other packages like mwan3 which reguires
+iptables in legacy mode. When switche to firewall ver. 4, iptables is switched
+back to nft mode.
+---
+ package/network/config/firewall/Makefile  | 19 +++++++++++++++++-
+ package/network/config/firewall4/Makefile | 23 ++++++++++++++++++++++
+ package/network/utils/iptables/Makefile   | 24 -----------------------
+ 3 files changed, 41 insertions(+), 25 deletions(-)
+
+diff --git a/package/network/config/firewall/Makefile b/package/network/config/firewall/Makefile
+index 0e00f38689..983d470ffb 100644
+--- a/package/network/config/firewall/Makefile
++++ b/package/network/config/firewall/Makefile
+@@ -30,7 +30,7 @@ define Package/firewall
+   SECTION:=net
+   CATEGORY:=Base system
+   TITLE:=OpenWrt C Firewall
+-  DEPENDS:=+libubox +libubus +libuci +libip4tc +IPV6:libip6tc +libiptext +IPV6:libiptext6 +libxtables +kmod-ipt-core +kmod-ipt-conntrack +IPV6:kmod-nf-conntrack6 +kmod-ipt-nat
++  DEPENDS:=+libubox +libubus +libuci +libip4tc +IPV6:libip6tc +libiptext +IPV6:libiptext6 +libxtables +kmod-ipt-core +kmod-ipt-conntrack +IPV6:kmod-nf-conntrack6 +kmod-ipt-nat +iptables-zz-legacy +ip6tables-zz-legacy
+   PROVIDES:=uci-firewall
+   CONFLICTS:=firewall4
+ endef
+@@ -61,4 +61,21 @@ define Package/firewall/install
+ 	$(INSTALL_CONF) $(PKG_BUILD_DIR)/helpers.conf $(1)/usr/share/fw3
+ endef
+ 
++define Package/firewall/postinst
++#!/bin/sh
++
++	ln -sf iptables-legacy  "$${IPKG_INSTROOT}/usr/sbin/iptables"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore-translate"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-save"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-translate"
++
++	ln -sf ip6tables-legacy  "$${IPKG_INSTROOT}/usr/sbin/ip6tables"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-restore"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-restore-translate"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-save"
++	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-translate"
++
++endef
++
+ $(eval $(call BuildPackage,firewall))
+diff --git a/package/network/config/firewall4/Makefile b/package/network/config/firewall4/Makefile
+index 8764f5a401..6709cfd1b6 100644
+--- a/package/network/config/firewall4/Makefile
++++ b/package/network/config/firewall4/Makefile
+@@ -40,6 +40,29 @@ define Package/firewall4/conffiles
+ /etc/nftables.d/
+ endef
+ 
++define Package/firewall4/postinst
++#!/bin/sh
++
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-nft"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-nft-restore"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-nft-save"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore-translate"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-save"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-translate"
++
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-nft"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-nft-restore"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-nft-save"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-restore"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-restore-translate"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-save"
++        ln -sf xtables-nft-multi  "$${IPKG_INSTROOT}/usr/sbin/ip6tables-translate"
++
++endef
++
+ define Package/firewall4/install
+ 	$(CP) -a $(PKG_BUILD_DIR)/root/* $(1)/
+ endef
+diff --git a/package/network/utils/iptables/Makefile b/package/network/utils/iptables/Makefile
+index 45a2b49070..76a4bfe3f4 100644
+--- a/package/network/utils/iptables/Makefile
++++ b/package/network/utils/iptables/Makefile
+@@ -56,10 +56,6 @@ $(call Package/iptables/Default)
+   TITLE:=IP firewall administration tool
+   DEPENDS+= +xtables-legacy
+   PROVIDES:=iptables iptables-legacy
+-  ALTERNATIVES:=\
+-    200:/usr/sbin/iptables:/usr/sbin/xtables-legacy-multi \
+-    200:/usr/sbin/iptables-restore:/usr/sbin/xtables-legacy-multi \
+-    200:/usr/sbin/iptables-save:/usr/sbin/xtables-legacy-multi
+ endef
+ 
+ define Package/iptables-zz-legacy/description
+@@ -113,10 +109,6 @@ $(call Package/iptables/Default)
+   DEPENDS:=+kmod-nft-arp +xtables-nft +kmod-arptables
+   TITLE:=ARP firewall administration tool nft
+   PROVIDES:=arptables
+-  ALTERNATIVES:=\
+-    300:/usr/sbin/arptables:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/arptables-restore:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/arptables-save:/usr/sbin/xtables-nft-multi
+ endef
+ 
+ define Package/ebtables-nft
+@@ -124,10 +116,6 @@ $(call Package/iptables/Default)
+   DEPENDS:=+kmod-nft-bridge +xtables-nft +kmod-ebtables
+   TITLE:=Bridge firewall administration tool nft
+   PROVIDES:=ebtables
+-  ALTERNATIVES:=\
+-    300:/usr/sbin/ebtables:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/ebtables-restore:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/ebtables-save:/usr/sbin/xtables-nft-multi
+ endef
+ 
+ define Package/iptables-nft
+@@ -135,10 +123,6 @@ $(call Package/iptables/Default)
+   TITLE:=IP firewall administration tool nft
+   DEPENDS:=+kmod-ipt-core +xtables-nft
+   PROVIDES:=iptables
+-  ALTERNATIVES:=\
+-    300:/usr/sbin/iptables:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/iptables-restore:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/iptables-save:/usr/sbin/xtables-nft-multi
+ endef
+ 
+ define Package/iptables-nft/description
+@@ -477,10 +461,6 @@ $(call Package/iptables/Default)
+   CATEGORY:=Network
+   TITLE:=IPv6 firewall administration tool
+   PROVIDES:=ip6tables ip6tables-legacy
+-  ALTERNATIVES:=\
+-    200:/usr/sbin/ip6tables:/usr/sbin/xtables-legacy-multi \
+-    200:/usr/sbin/ip6tables-restore:/usr/sbin/xtables-legacy-multi \
+-    200:/usr/sbin/ip6tables-save:/usr/sbin/xtables-legacy-multi
+ endef
+ 
+ define Package/ip6tables-nft
+@@ -488,10 +468,6 @@ $(call Package/iptables/Default)
+   DEPENDS:=@IPV6 +kmod-ip6tables +xtables-nft
+   TITLE:=IP firewall administration tool nft
+   PROVIDES:=ip6tables
+-  ALTERNATIVES:=\
+-    300:/usr/sbin/ip6tables:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/ip6tables-restore:/usr/sbin/xtables-nft-multi \
+-    300:/usr/sbin/ip6tables-save:/usr/sbin/xtables-nft-multi
+ endef
+ 
+ define Package/ip6tables-nft/description
+-- 
+2.44.0
+
