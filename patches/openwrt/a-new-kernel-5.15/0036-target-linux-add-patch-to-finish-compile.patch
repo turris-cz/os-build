@@ -1,0 +1,35 @@
+From ff760e82984bde2417a68e6b7edc7c37e049e0a0 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@nic.cz>
+Date: Mon, 4 Mar 2024 13:18:45 +0100
+Subject: [PATCH] target/linux: add patch to finish compile
+
+The flow_offload_route_init function used to return int. Now it is void
+function. So chaning this not to expect int.
+Reference:
+https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/diff/net/netfilter/nft_flow_offload.c?id=v5.15.150&id2=v5.15.149
+---
+ ...netfilter-xt_FLOWOFFLOAD-int-to-void-change.patch | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+ create mode 100644 target/linux/generic/hack-5.15/940-net-netfilter-xt_FLOWOFFLOAD-int-to-void-change.patch
+
+diff --git a/target/linux/generic/hack-5.15/940-net-netfilter-xt_FLOWOFFLOAD-int-to-void-change.patch b/target/linux/generic/hack-5.15/940-net-netfilter-xt_FLOWOFFLOAD-int-to-void-change.patch
+new file mode 100644
+index 0000000000..73884dc4b7
+--- /dev/null
++++ b/target/linux/generic/hack-5.15/940-net-netfilter-xt_FLOWOFFLOAD-int-to-void-change.patch
+@@ -0,0 +1,12 @@
++--- a/net/netfilter/xt_FLOWOFFLOAD.c
+++++ b/net/netfilter/xt_FLOWOFFLOAD.c
++@@ -521,8 +521,7 @@ flowoffload_tg(struct sk_buff *skb, cons
++ 	if (!flow)
++ 		goto err_flow_alloc;
++ 
++-	if (flow_offload_route_init(flow, &route) < 0)
++-		goto err_flow_add;
+++	flow_offload_route_init(flow, &route);
++ 
++ 	if (tcph) {
++ 		ct->proto.tcp.seen[0].flags |= IP_CT_TCP_FLAG_BE_LIBERAL;
+-- 
+2.43.2
+
