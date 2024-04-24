@@ -1,0 +1,472 @@
+From e2cc401aa431a6bd27cdaa43c97bcabeeabd482f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Wed, 24 Apr 2024 10:49:38 +0200
+Subject: [PATCH 1/2] iproute2: update to 6.7.0
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Update the iproute2 package to 6.7.0 (up to OpenWRT master commit
+6f90118533cf ("iproute2: update to 6.7.0").
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ package/network/utils/iproute2/Makefile       |  7 +++--
+ .../iproute2/patches/100-configure.patch      | 12 --------
+ .../iproute2/patches/110-darwin_fixes.patch   |  8 ++---
+ .../patches/115-add-config-xtlibdir.patch     |  2 +-
+ .../130-no_netem_tipc_dcb_man_vdpa.patch      | 11 ++++---
+ .../patches/140-allow_pfifo_fast.patch        |  2 +-
+ .../patches/140-keep_libmnl_optional.patch    |  2 +-
+ .../patches/145-keep_libelf_optional.patch    |  2 +-
+ .../patches/150-keep_libcap_optional.patch    |  2 +-
+ .../patches/155-keep_tirpc_optional.patch     | 11 +++++++
+ .../utils/iproute2/patches/170-ip_tiny.patch  | 30 +++++++++----------
+ .../patches/175-reduce-dynamic-syms.patch     | 12 ++++----
+ .../patches/180-drop_FAILED_POLICY.patch      |  6 ++--
+ .../patches/190-fix-nls-rpath-link.patch      |  4 +--
+ .../patches/195-build_variant_ip_tc.patch     |  6 ++--
+ .../patches/200-drop_libbsd_dependency.patch  |  6 ++--
+ .../patches/300-selinux-configurable.patch    |  2 +-
+ 17 files changed, 63 insertions(+), 62 deletions(-)
+ delete mode 100644 package/network/utils/iproute2/patches/100-configure.patch
+ create mode 100644 package/network/utils/iproute2/patches/155-keep_tirpc_optional.patch
+
+diff --git a/package/network/utils/iproute2/Makefile b/package/network/utils/iproute2/Makefile
+index 939dfa9e8b..f91130b574 100644
+--- a/package/network/utils/iproute2/Makefile
++++ b/package/network/utils/iproute2/Makefile
+@@ -8,12 +8,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=iproute2
+-PKG_VERSION:=5.15.0
+-PKG_RELEASE:=$(AUTORELEASE)
++PKG_VERSION:=6.7.0
++PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+ PKG_SOURCE_URL:=@KERNEL/linux/utils/net/iproute2
+-PKG_HASH:=38e3e4a5f9a7f5575c015027a10df097c149111eeb739993128e5b2b35b291ff
++PKG_HASH:=ff942dd9828d7d1f867f61fe72ce433078c31e5d8e4a78e20f02cb5892e8841d
+ PKG_BUILD_PARALLEL:=1
+ PKG_BUILD_DEPENDS:=iptables
+ PKG_LICENSE:=GPL-2.0
+@@ -184,6 +184,7 @@ MAKE_FLAGS += \
+ 	HAVE_ELF=$(HAVE_ELF) \
+ 	HAVE_MNL=$(HAVE_MNL) \
+ 	HAVE_CAP=$(HAVE_CAP) \
++	HAVE_TIRPC=n \
+ 	IPT_LIB_DIR=/usr/lib/iptables \
+ 	XT_LIB_DIR=/usr/lib/iptables \
+ 	TC_CONFIG_XT=$(TC_CONFIG_XT) \
+diff --git a/package/network/utils/iproute2/patches/100-configure.patch b/package/network/utils/iproute2/patches/100-configure.patch
+deleted file mode 100644
+index 0c19b2086a..0000000000
+--- a/package/network/utils/iproute2/patches/100-configure.patch
++++ /dev/null
+@@ -1,12 +0,0 @@
+---- a/configure
+-+++ b/configure
+-@@ -34,7 +34,8 @@ int main(int argc, char **argv) {
+- }
+- EOF
+- 
+--    if $CC -I$INCLUDE -o $TMPDIR/atmtest $TMPDIR/atmtest.c -latm >/dev/null 2>&1; then
+-+# OpenWrt: disable ATM support even if present on host system
+-+    if [ 1 -eq 0 ]; then
+- 	echo "TC_CONFIG_ATM:=y" >>$CONFIG
+- 	echo yes
+-     else
+diff --git a/package/network/utils/iproute2/patches/110-darwin_fixes.patch b/package/network/utils/iproute2/patches/110-darwin_fixes.patch
+index 1f3eb101ea..06ae59f8b4 100644
+--- a/package/network/utils/iproute2/patches/110-darwin_fixes.patch
++++ b/package/network/utils/iproute2/patches/110-darwin_fixes.patch
+@@ -1,6 +1,6 @@
+ --- a/netem/maketable.c
+ +++ b/netem/maketable.c
+-@@ -10,7 +10,9 @@
++@@ -11,7 +11,9 @@
+  #include <stdio.h>
+  #include <stdlib.h>
+  #include <math.h>
+@@ -12,7 +12,7 @@
+  #include <sys/stat.h>
+ --- a/netem/normal.c
+ +++ b/netem/normal.c
+-@@ -8,8 +8,12 @@
++@@ -9,8 +9,12 @@
+  #include <string.h>
+  #include <limits.h>
+  
+@@ -27,7 +27,7 @@
+  #define TABLEFACTOR NETEM_DIST_SCALE
+ --- a/netem/pareto.c
+ +++ b/netem/pareto.c
+-@@ -7,8 +7,12 @@
++@@ -8,8 +8,12 @@
+  #include <math.h>
+  #include <limits.h>
+  
+@@ -42,7 +42,7 @@
+  #define TABLESIZE	16384
+ --- a/netem/paretonormal.c
+ +++ b/netem/paretonormal.c
+-@@ -14,10 +14,13 @@
++@@ -15,10 +15,13 @@
+  #include <string.h>
+  #include <math.h>
+  #include <limits.h>
+diff --git a/package/network/utils/iproute2/patches/115-add-config-xtlibdir.patch b/package/network/utils/iproute2/patches/115-add-config-xtlibdir.patch
+index 8702d5fd2d..c32863c364 100644
+--- a/package/network/utils/iproute2/patches/115-add-config-xtlibdir.patch
++++ b/package/network/utils/iproute2/patches/115-add-config-xtlibdir.patch
+@@ -1,6 +1,6 @@
+ --- a/tc/Makefile
+ +++ b/tc/Makefile
+-@@ -128,6 +128,9 @@ CFLAGS += -DCONFIG_GACT -DCONFIG_GACT_PR
++@@ -119,6 +119,9 @@ CFLAGS += -DCONFIG_GACT -DCONFIG_GACT_PR
+  ifneq ($(IPT_LIB_DIR),)
+  	CFLAGS += -DIPT_LIB_DIR=\"$(IPT_LIB_DIR)\"
+  endif
+diff --git a/package/network/utils/iproute2/patches/130-no_netem_tipc_dcb_man_vdpa.patch b/package/network/utils/iproute2/patches/130-no_netem_tipc_dcb_man_vdpa.patch
+index 8ddb316744..8c70c14489 100644
+--- a/package/network/utils/iproute2/patches/130-no_netem_tipc_dcb_man_vdpa.patch
++++ b/package/network/utils/iproute2/patches/130-no_netem_tipc_dcb_man_vdpa.patch
+@@ -1,11 +1,14 @@
+ --- a/Makefile
+ +++ b/Makefile
+-@@ -55,7 +55,7 @@ WFLAGS += -Wmissing-declarations -Wold-s
++@@ -68,9 +68,9 @@ WFLAGS += -Wmissing-declarations -Wold-s
+  CFLAGS := $(WFLAGS) $(CCOPTS) -I../include -I../include/uapi $(DEFINES) $(CFLAGS)
+  YACCFLAGS = -d -t -v
+  
+--SUBDIRS=lib ip tc bridge misc netem genl tipc devlink rdma dcb man vdpa
+-+SUBDIRS=lib ip tc bridge misc genl devlink rdma
++-SUBDIRS=lib ip tc bridge misc netem genl man
+++SUBDIRS=lib ip tc bridge misc genl
++ ifeq ($(HAVE_MNL),y)
++-SUBDIRS += tipc devlink rdma dcb vdpa
+++SUBDIRS += devlink rdma
++ endif
+  
+  LIBNETLINK=../lib/libutil.a ../lib/libnetlink.a
+- LDLIBS += $(LIBNETLINK)
+diff --git a/package/network/utils/iproute2/patches/140-allow_pfifo_fast.patch b/package/network/utils/iproute2/patches/140-allow_pfifo_fast.patch
+index 13de48f412..8f5a7d352e 100644
+--- a/package/network/utils/iproute2/patches/140-allow_pfifo_fast.patch
++++ b/package/network/utils/iproute2/patches/140-allow_pfifo_fast.patch
+@@ -1,6 +1,6 @@
+ --- a/tc/q_fifo.c
+ +++ b/tc/q_fifo.c
+-@@ -95,5 +95,6 @@ struct qdisc_util pfifo_head_drop_qdisc_
++@@ -90,5 +90,6 @@ struct qdisc_util pfifo_head_drop_qdisc_
+  
+  struct qdisc_util pfifo_fast_qdisc_util = {
+  	.id = "pfifo_fast",
+diff --git a/package/network/utils/iproute2/patches/140-keep_libmnl_optional.patch b/package/network/utils/iproute2/patches/140-keep_libmnl_optional.patch
+index ff7e9ca4e5..0d22875751 100644
+--- a/package/network/utils/iproute2/patches/140-keep_libmnl_optional.patch
++++ b/package/network/utils/iproute2/patches/140-keep_libmnl_optional.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -387,7 +387,7 @@ check_selinux()
++@@ -391,7 +391,7 @@ check_tirpc()
+  
+  check_mnl()
+  {
+diff --git a/package/network/utils/iproute2/patches/145-keep_libelf_optional.patch b/package/network/utils/iproute2/patches/145-keep_libelf_optional.patch
+index 079ca0512e..bffacddb21 100644
+--- a/package/network/utils/iproute2/patches/145-keep_libelf_optional.patch
++++ b/package/network/utils/iproute2/patches/145-keep_libelf_optional.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -255,7 +255,7 @@ EOF
++@@ -246,7 +246,7 @@ EOF
+  
+  check_elf()
+  {
+diff --git a/package/network/utils/iproute2/patches/150-keep_libcap_optional.patch b/package/network/utils/iproute2/patches/150-keep_libcap_optional.patch
+index 68e1624166..570e9c7038 100644
+--- a/package/network/utils/iproute2/patches/150-keep_libcap_optional.patch
++++ b/package/network/utils/iproute2/patches/150-keep_libcap_optional.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -445,7 +445,7 @@ EOF
++@@ -449,7 +449,7 @@ EOF
+  
+  check_cap()
+  {
+diff --git a/package/network/utils/iproute2/patches/155-keep_tirpc_optional.patch b/package/network/utils/iproute2/patches/155-keep_tirpc_optional.patch
+new file mode 100644
+index 0000000000..4d7fb76308
+--- /dev/null
++++ b/package/network/utils/iproute2/patches/155-keep_tirpc_optional.patch
+@@ -0,0 +1,11 @@
++--- a/configure
+++++ b/configure
++@@ -378,7 +378,7 @@ check_selinux()
++ 
++ check_tirpc()
++ {
++-	if ${PKG_CONFIG} libtirpc --exists; then
+++	if [ "${HAVE_TIRPC}" = "y" ] && ${PKG_CONFIG} libtirpc --exists; then
++ 		echo "HAVE_RPC:=y" >>$CONFIG
++ 		echo "yes"
++ 
+diff --git a/package/network/utils/iproute2/patches/170-ip_tiny.patch b/package/network/utils/iproute2/patches/170-ip_tiny.patch
+index cd687e7601..71081c36bc 100644
+--- a/package/network/utils/iproute2/patches/170-ip_tiny.patch
++++ b/package/network/utils/iproute2/patches/170-ip_tiny.patch
+@@ -1,6 +1,6 @@
+ --- a/ip/Makefile
+ +++ b/ip/Makefile
+-@@ -17,6 +17,13 @@ RTMONOBJ=rtmon.o
++@@ -19,6 +19,13 @@ RTMONOBJ=rtmon.o
+  
+  include ../config.mk
+  
+@@ -12,9 +12,9 @@
+ +STATIC_SYM_SOURCES:=$(filter-out $(STATIC_SYM_FILTER),$(wildcard *.c))
+ +
+  ALLOBJ=$(IPOBJ) $(RTMONOBJ)
+- SCRIPTS=ifcfg rtpr routel routef
++ SCRIPTS=routel
+  TARGETS=ip rtmon
+-@@ -46,7 +53,7 @@ else
++@@ -48,7 +55,7 @@ else
+  
+  ip: static-syms.o
+  static-syms.o: static-syms.h
+@@ -25,25 +25,25 @@
+  		sed -n '/'$$s'[^ ]* =/{s:.* \([^ ]*'$$s'[^ ]*\) .*:extern char \1[] __attribute__((weak)); if (!strcmp(sym, "\1")) return \1;:;p}' $$files ; \
+ --- a/ip/ip.c
+ +++ b/ip/ip.c
+-@@ -64,11 +64,17 @@ static void usage(void)
++@@ -61,11 +61,17 @@ static void usage(void)
+  	fprintf(stderr,
+  		"Usage: ip [ OPTIONS ] OBJECT { COMMAND | help }\n"
+  		"       ip [ -force ] -batch filename\n"
+ +#ifndef IPROUTE2_TINY
+- 		"where  OBJECT := { address | addrlabel | fou | help | ila | ioam | l2tp | link |\n"
+- 		"                   macsec | maddress | monitor | mptcp | mroute | mrule |\n"
++ 		"where  OBJECT := { address | addrlabel | amt | fou | help | ila | ioam | l2tp |\n"
++ 		"                   link | macsec | maddress | monitor | mptcp | mroute | mrule |\n"
+  		"                   neighbor | neighbour | netconf | netns | nexthop | ntable |\n"
+  		"                   ntbl | route | rule | sr | tap | tcpmetrics |\n"
+  		"                   token | tunnel | tuntap | vrf | xfrm }\n"
+ +#else
+-+		"where  OBJECT := { address | ila | link | macsec | maddress | monitor |\n"
+-+		"                   mroute | mrule | neighbor | neighbour | netns | route |\n"
+-+		"                   rule | sr | token | tunnel | vrf }\n"
+++		"where  OBJECT := { address | link | maddress | monitor |\n"
+++		"                   neighbor | neighbour | netns | route |\n"
+++		"                   rule | token | tunnel }\n"
+ +#endif
+  		"       OPTIONS := { -V[ersion] | -s[tatistics] | -d[etails] | -r[esolve] |\n"
+  		"                    -h[uman-readable] | -iec | -j[son] | -p[retty] |\n"
+  		"                    -f[amily] { inet | inet6 | mpls | bridge | link } |\n"
+-@@ -91,37 +97,51 @@ static const struct cmd {
++@@ -88,37 +94,49 @@ static const struct cmd {
+  	int (*func)(int argc, char **argv);
+  } cmds[] = {
+  	{ "address",	do_ipaddr },
+@@ -63,9 +63,9 @@
+ +#ifndef IPROUTE2_TINY
+  	{ "l2tp",	do_ipl2tp },
+  	{ "fou",	do_ipfou },
+-+#endif
+  	{ "ila",	do_ipila },
+  	{ "macsec",	do_ipmacsec },
+++#endif
+  	{ "tunnel",	do_iptunnel },
+  	{ "tunl",	do_iptunnel },
+ +#ifndef IPROUTE2_TINY
+@@ -78,23 +78,21 @@
+  	{ "monitor",	do_ipmonitor },
+ +#ifndef IPROUTE2_TINY
+  	{ "xfrm",	do_xfrm },
+-+#endif
+  	{ "mroute",	do_multiroute },
+  	{ "mrule",	do_multirule },
+++#endif
+  	{ "netns",	do_netns },
+ +#ifndef IPROUTE2_TINY
+  	{ "netconf",	do_ipnetconf },
+-+#endif
+  	{ "vrf",	do_ipvrf},
+  	{ "sr",		do_seg6 },
+-+#ifndef IPROUTE2_TINY
+  	{ "nexthop",	do_ipnh },
+  	{ "mptcp",	do_mptcp },
+  	{ "ioam",	do_ioam6 },
+ +#endif
+  	{ "help",	do_help },
++ 	{ "stats",	do_ipstats },
+  	{ 0 }
+- };
+ --- a/lib/Makefile
+ +++ b/lib/Makefile
+ @@ -3,6 +3,10 @@ include ../config.mk
+@@ -107,4 +105,4 @@
+ +
+  UTILOBJ = utils.o utils_math.o rt_names.o ll_map.o ll_types.o ll_proto.o ll_addr.o \
+  	inet_proto.o namespace.o json_writer.o json_print.o json_print_math.o \
+- 	names.o color.o bpf_legacy.o bpf_glue.o exec.o fs.o cg_map.o
++ 	names.o color.o bpf_legacy.o bpf_glue.o exec.o fs.o cg_map.o ppp_proto.o
+diff --git a/package/network/utils/iproute2/patches/175-reduce-dynamic-syms.patch b/package/network/utils/iproute2/patches/175-reduce-dynamic-syms.patch
+index c3892e5a0e..aef51395a9 100644
+--- a/package/network/utils/iproute2/patches/175-reduce-dynamic-syms.patch
++++ b/package/network/utils/iproute2/patches/175-reduce-dynamic-syms.patch
+@@ -1,6 +1,6 @@
+ --- a/tc/Makefile
+ +++ b/tc/Makefile
+-@@ -114,7 +114,7 @@ LDLIBS += -L. -lm
++@@ -106,7 +106,7 @@ LDLIBS += -L. -lm
+  
+  ifeq ($(SHARED_LIBS),y)
+  LDLIBS += -ldl
+@@ -9,7 +9,7 @@
+  endif
+  
+  TCLIB := tc_core.o
+-@@ -144,7 +144,7 @@ MODDESTDIR := $(DESTDIR)$(LIBDIR)/tc
++@@ -135,7 +135,7 @@ MODDESTDIR := $(DESTDIR)$(LIBDIR)/tc
+  all: tc $(TCSO)
+  
+  tc: $(TCOBJ) $(LIBNETLINK) libtc.a
+@@ -18,15 +18,15 @@
+  
+  libtc.a: $(TCLIB)
+  	$(QUIET_AR)$(AR) rcs $@ $^
+-@@ -166,6 +166,7 @@ install: all
++@@ -157,6 +157,7 @@ install: all
+  clean:
+  	rm -f $(TCOBJ) $(TCLIB) libtc.a tc *.so emp_ematch.tab.h; \
+  	rm -f emp_ematch.tab.*
+ +	rm -f dynsyms.list
+  
+- q_atm.so: q_atm.c
+- 	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic -o q_atm.so q_atm.c -latm
+-@@ -205,4 +206,16 @@ static-syms.h: $(wildcard *.c)
++ m_xt.so: m_xt.c
++ 	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic -o m_xt.so m_xt.c $$($(PKG_CONFIG) xtables --cflags --libs)
++@@ -193,4 +194,16 @@ static-syms.h: $(wildcard *.c)
+  		sed -n '/'$$s'[^ ]* =/{s:.* \([^ ]*'$$s'[^ ]*\) .*:extern char \1[] __attribute__((weak)); if (!strcmp(sym, "\1")) return \1;:;p}' $$files ; \
+  	done > $@
+  
+diff --git a/package/network/utils/iproute2/patches/180-drop_FAILED_POLICY.patch b/package/network/utils/iproute2/patches/180-drop_FAILED_POLICY.patch
+index 07d5230a6e..9ce7dd9a13 100644
+--- a/package/network/utils/iproute2/patches/180-drop_FAILED_POLICY.patch
++++ b/package/network/utils/iproute2/patches/180-drop_FAILED_POLICY.patch
+@@ -11,7 +11,7 @@ Subject: [PATCH] add support for dropping with FAILED_POLICY
+ 
+ --- a/ip/rtm_map.c
+ +++ b/ip/rtm_map.c
+-@@ -54,6 +54,8 @@ char *rtnl_rtntype_n2a(int id, char *buf
++@@ -49,6 +49,8 @@ char *rtnl_rtntype_n2a(int id, char *buf
+  		return "nat";
+  	case RTN_XRESOLVE:
+  		return "xresolve";
+@@ -20,7 +20,7 @@ Subject: [PATCH] add support for dropping with FAILED_POLICY
+  	default:
+  		snprintf(buf, len, "%d", id);
+  		return buf;
+-@@ -89,6 +91,8 @@ int rtnl_rtntype_a2n(int *id, char *arg)
++@@ -84,6 +86,8 @@ int rtnl_rtntype_a2n(int *id, char *arg)
+  		res = RTN_UNICAST;
+  	else if (strcmp(arg, "throw") == 0)
+  		res = RTN_THROW;
+@@ -31,7 +31,7 @@ Subject: [PATCH] add support for dropping with FAILED_POLICY
+  		if (!end || end == arg || *end || res > 255)
+ --- a/include/uapi/linux/rtnetlink.h
+ +++ b/include/uapi/linux/rtnetlink.h
+-@@ -256,6 +256,7 @@ enum {
++@@ -265,6 +265,7 @@ enum {
+  	RTN_THROW,		/* Not in this table		*/
+  	RTN_NAT,		/* Translate this address	*/
+  	RTN_XRESOLVE,		/* Use external resolver	*/
+diff --git a/package/network/utils/iproute2/patches/190-fix-nls-rpath-link.patch b/package/network/utils/iproute2/patches/190-fix-nls-rpath-link.patch
+index 92d02b9a4e..765e4ad2e8 100644
+--- a/package/network/utils/iproute2/patches/190-fix-nls-rpath-link.patch
++++ b/package/network/utils/iproute2/patches/190-fix-nls-rpath-link.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -279,7 +279,7 @@ int main(int argc, char **argv) {
++@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
+  }
+  EOF
+  
+@@ -9,7 +9,7 @@
+      local ret=$?
+  
+      rm -f $TMPDIR/libbpf_test.c $TMPDIR/libbpf_test
+-@@ -297,7 +297,7 @@ int main(int argc, char **argv) {
++@@ -288,7 +288,7 @@ int main(int argc, char **argv) {
+  }
+  EOF
+  
+diff --git a/package/network/utils/iproute2/patches/195-build_variant_ip_tc.patch b/package/network/utils/iproute2/patches/195-build_variant_ip_tc.patch
+index 13418662ee..8156adbf05 100644
+--- a/package/network/utils/iproute2/patches/195-build_variant_ip_tc.patch
++++ b/package/network/utils/iproute2/patches/195-build_variant_ip_tc.patch
+@@ -1,9 +1,9 @@
+ --- a/ip/Makefile
+ +++ b/ip/Makefile
+-@@ -26,7 +26,7 @@ STATIC_SYM_SOURCES:=$(filter-out $(STATI
++@@ -28,7 +28,7 @@ STATIC_SYM_SOURCES:=$(filter-out $(STATI
+  
+  ALLOBJ=$(IPOBJ) $(RTMONOBJ)
+- SCRIPTS=ifcfg rtpr routel routef
++ SCRIPTS=routel
+ -TARGETS=ip rtmon
+ +TARGETS=$(findstring ip,$(BUILD_VARIANT)) rtmon
+  
+@@ -11,7 +11,7 @@
+  
+ --- a/tc/Makefile
+ +++ b/tc/Makefile
+-@@ -141,7 +141,7 @@ MODDESTDIR := $(DESTDIR)$(LIBDIR)/tc
++@@ -132,7 +132,7 @@ MODDESTDIR := $(DESTDIR)$(LIBDIR)/tc
+  	$(QUIET_CC)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -shared -fpic $< -o $@
+  
+  
+diff --git a/package/network/utils/iproute2/patches/200-drop_libbsd_dependency.patch b/package/network/utils/iproute2/patches/200-drop_libbsd_dependency.patch
+index 12a1ccfa33..92bf5cb66d 100644
+--- a/package/network/utils/iproute2/patches/200-drop_libbsd_dependency.patch
++++ b/package/network/utils/iproute2/patches/200-drop_libbsd_dependency.patch
+@@ -1,12 +1,12 @@
+ --- a/configure
+ +++ b/configure
+-@@ -431,14 +431,8 @@ EOF
++@@ -435,14 +435,8 @@ EOF
+      if $CC -I$INCLUDE -o $TMPDIR/strtest $TMPDIR/strtest.c >/dev/null 2>&1; then
+  	echo "no"
+      else
+ -	if ${PKG_CONFIG} libbsd --exists; then
+--		echo 'CFLAGS += -DHAVE_LIBBSD' `${PKG_CONFIG} libbsd --cflags` >>$CONFIG
+--		echo 'LDLIBS +=' `${PKG_CONFIG} libbsd --libs` >> $CONFIG
++-		echo 'CFLAGS += -DHAVE_LIBBSD' "$(${PKG_CONFIG} libbsd --cflags)" >>$CONFIG
++-		echo 'LDLIBS +=' "$(${PKG_CONFIG} libbsd --libs)" >> $CONFIG
+ -		echo "no"
+ -	else
+ -		echo 'CFLAGS += -DNEED_STRLCPY' >>$CONFIG
+diff --git a/package/network/utils/iproute2/patches/300-selinux-configurable.patch b/package/network/utils/iproute2/patches/300-selinux-configurable.patch
+index b7e61fd3bd..a611ba75f0 100644
+--- a/package/network/utils/iproute2/patches/300-selinux-configurable.patch
++++ b/package/network/utils/iproute2/patches/300-selinux-configurable.patch
+@@ -1,6 +1,6 @@
+ --- a/configure
+ +++ b/configure
+-@@ -374,7 +374,7 @@ check_libbpf()
++@@ -365,7 +365,7 @@ check_libbpf()
+  check_selinux()
+  # SELinux is a compile time option in the ss utility
+  {
+-- 
+2.43.2
+
