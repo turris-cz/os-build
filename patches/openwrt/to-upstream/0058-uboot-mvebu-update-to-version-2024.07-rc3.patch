@@ -1,0 +1,4347 @@
+From 44f2e89c03ab0d9cbc93843e7c503ff38751b234 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Tue, 21 May 2024 10:16:29 +0200
+Subject: [PATCH] uboot-mvebu: update to version 2024.07-rc3
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Update to version 2024.07-rc3 and add patches relevant to Turris Omnia.
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ package/boot/uboot-mvebu/Makefile             |   4 +-
+ ...yout-Assign-default-layout-methods-a.patch |  46 +++
+ ...x-missing-SMI-address-initialization.patch |  47 ---
+ ..._omnia-Enable-networking-via-etherne.patch |  98 ------
+ ...yout-Split-field-finding-code-from-t.patch | 117 +++++++
+ ..._omnia-Refactor-MCU-status-and-featu.patch | 153 ---------
+ ...prom_field-Fix-updating-binary-field.patch |  34 ++
+ ..._omnia-Implement-getting-board-infor.patch | 318 ------------------
+ ...om_field-Drop-unnecessary-comparison.patch |  32 ++
+ ..._omnia-Print-board-ECDSA-public-key-.patch |  88 -----
+ ...ix-usage-help-for-the-eeprom-command.patch |  46 +++
+ ..._omnia-Disable-Atmel-SHA-node-if-not.patch |  69 ----
+ ...eeprom-layout-versioning-behind-a-Kc.patch | 135 ++++++++
+ ...Deduplicate-parse_i2c_bus_addr-calls.patch |  72 ++++
+ ...ctor-eeprom-device-specifier-parsing.patch | 180 ++++++++++
+ ...tor-command-execution-into-function-.patch | 180 ++++++++++
+ ..._omnia-Enable-LTO-by-default-on-Turr.patch |  34 --
+ ...-read-write-whole-EEPROM-if-not-nece.patch |  52 +++
+ ...d-to-EEPROMs-probed-via-driver-model.patch | 265 +++++++++++++++
+ ...-debug-return-from-ddr3_tip_print_lo.patch |  44 +++
+ ...l-a38x-debug-Remove-unused-variables.patch |  49 +++
+ ...-debug-Define-DDR_VIEWER_TOOL-variab.patch |  46 +++
+ ...-debug-Allow-compiling-with-immutabl.patch | 171 ++++++++++
+ ..._omnia-Enable-immutable-debug-settin.patch |  32 ++
+ ..._omnia-Fix-ethernet-PHY-reset-gpio-F.patch | 139 ++++++++
+ ..._omnia-Implement-EEPROM-layout-for-t.patch | 156 +++++++++
+ ...rris_omnia-Enable-the-eeprom-command.patch |  41 +++
+ ...s_omnia-Extend-EEPROM-info-structure.patch | 125 +++++++
+ ...ris_omnia-Read-DDR-speed-from-EEPROM.patch | 218 ++++++++++++
+ ...Import-old-DDR-training-code-from-2.patch} | 152 +++++----
+ ...old-Fix-some-compiler-warning-of-th.patch} |  22 +-
+ ...-old-Backport-immutable-debug-settin.patch | 259 ++++++++++++++
+ ...d-optional-support-for-using-old-DD.patch} |  23 +-
+ ...ris_omnia-Support-old-DDR3-training.patch} | 194 ++++++-----
+ 34 files changed, 2666 insertions(+), 975 deletions(-)
+ create mode 100644 package/boot/uboot-mvebu/patches/0001-common-eeprom_layout-Assign-default-layout-methods-a.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0002-common-eeprom_layout-Split-field-finding-code-from-t.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0003-common-eeprom_field-Fix-updating-binary-field.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0004-common-eeprom_field-Drop-unnecessary-comparison.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0005-cmd-eeprom-Fix-usage-help-for-the-eeprom-command.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0006-cmd-eeprom-Hide-eeprom-layout-versioning-behind-a-Kc.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0007-cmd-eeprom-Deduplicate-parse_i2c_bus_addr-calls.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0008-cmd-eeprom-Refactor-eeprom-device-specifier-parsing.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0009-cmd-eeprom-Refactor-command-execution-into-function-.patch
+ delete mode 100644 package/boot/uboot-mvebu/patches/0010-arm-mvebu-turris_omnia-Enable-LTO-by-default-on-Turr.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0010-cmd-eeprom-Don-t-read-write-whole-EEPROM-if-not-nece.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0011-cmd-eeprom-Extend-to-EEPROMs-probed-via-driver-model.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0012-ddr-marvell-a38x-debug-return-from-ddr3_tip_print_lo.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0013-ddr-marvell-a38x-debug-Remove-unused-variables.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0014-ddr-marvell-a38x-debug-Define-DDR_VIEWER_TOOL-variab.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0015-ddr-marvell-a38x-debug-Allow-compiling-with-immutabl.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0016-arm-mvebu-turris_omnia-Enable-immutable-debug-settin.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0017-arm-mvebu-turris_omnia-Fix-ethernet-PHY-reset-gpio-F.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0018-arm-mvebu-turris_omnia-Implement-EEPROM-layout-for-t.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0019-arm-mvebu-turris_omnia-Enable-the-eeprom-command.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0020-arm-mvebu-turris_omnia-Extend-EEPROM-info-structure.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/0021-arm-mvebu-turris_omnia-Read-DDR-speed-from-EEPROM.patch
+ rename package/boot/uboot-mvebu/patches/{0007-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch => 0022-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch} (99%)
+ rename package/boot/uboot-mvebu/patches/{0008-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch => 0023-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch} (89%)
+ create mode 100644 package/boot/uboot-mvebu/patches/0024-ddr-marvell-a38x-old-Backport-immutable-debug-settin.patch
+ rename package/boot/uboot-mvebu/patches/{0009-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch => 0025-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch} (96%)
+ rename package/boot/uboot-mvebu/patches/{0011-arm-mvebu-turris_omnia-Support-old-DDR3-training-sel.patch => 0026-arm-mvebu-turris_omnia-Support-old-DDR3-training.patch} (50%)
+
+diff --git a/package/boot/uboot-mvebu/Makefile b/package/boot/uboot-mvebu/Makefile
+index 12d97e5c25..dfc4317301 100644
+--- a/package/boot/uboot-mvebu/Makefile
++++ b/package/boot/uboot-mvebu/Makefile
+@@ -8,10 +8,10 @@
+ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+-PKG_VERSION:=2024.01
++PKG_VERSION:=2024.07-rc3
+ PKG_RELEASE:=$(AUTORELEASE)
+ 
+-PKG_HASH:=b99611f1ed237bf3541bdc8434b68c96a6e05967061f992443cb30aabebef5b3
++PKG_HASH:=077cf8ca283411103ad274a3724dacb5068ede824de749beff9c9e5b531b43ea
+ 
+ include $(INCLUDE_DIR)/u-boot.mk
+ include $(INCLUDE_DIR)/package.mk
+diff --git a/package/boot/uboot-mvebu/patches/0001-common-eeprom_layout-Assign-default-layout-methods-a.patch b/package/boot/uboot-mvebu/patches/0001-common-eeprom_layout-Assign-default-layout-methods-a.patch
+new file mode 100644
+index 0000000000..35e5763541
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0001-common-eeprom_layout-Assign-default-layout-methods-a.patch
+@@ -0,0 +1,46 @@
++From aefa92af9b5582ee06096da3c9b2441b4b164db8 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:20:44 +0200
++Subject: [PATCH 01/26] common: eeprom_layout: Assign default layout methods
++ and parameters before specific ones
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Assign the default eeprom layout parameter .data_size and methods
++.print() and .update() before calling eeprom_layout_assign() in
++eeprom_layout_setup().
++
++This allows eeprom_layout_assign() to overwrite these if needed.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ common/eeprom/eeprom_layout.c | 8 ++++----
++ 1 file changed, 4 insertions(+), 4 deletions(-)
++
++diff --git a/common/eeprom/eeprom_layout.c b/common/eeprom/eeprom_layout.c
++index 5a9be1da06..406db3f7d1 100644
++--- a/common/eeprom/eeprom_layout.c
+++++ b/common/eeprom/eeprom_layout.c
++@@ -111,14 +111,14 @@ void eeprom_layout_setup(struct eeprom_layout *layout, unsigned char *buf,
++ 	else
++ 		layout->layout_version = layout_version;
++ 
+++	layout->data_size = buf_size;
+++	layout->print = eeprom_layout_print;
+++	layout->update = eeprom_layout_update_field;
+++
++ 	eeprom_layout_assign(layout, layout_version);
++ 	layout->data = buf;
++ 	for (i = 0; i < layout->num_of_fields; i++) {
++ 		layout->fields[i].buf = buf;
++ 		buf += layout->fields[i].size;
++ 	}
++-
++-	layout->data_size = buf_size;
++-	layout->print = eeprom_layout_print;
++-	layout->update = eeprom_layout_update_field;
++ }
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch b/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
+deleted file mode 100644
+index 789f49b693..0000000000
+--- a/package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
++++ /dev/null
+@@ -1,47 +0,0 @@
+-From b25cef0b5c87a41552158855674c961c5728b89a Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Moj=C3=ADk?= <marek.mojik@nic.cz>
+-Date: Wed, 6 Dec 2023 15:35:56 +0100
+-Subject: [PATCH 01/11] net: mv88e6xxx: fix missing SMI address initialization
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-The mv88e6xxx driver does not currently initialize the smi_addr field, but
+-instead keeps the default zero value. This leads to driver being unusable
+-on devices where the switch is not on address zero of the mdio bus. Fix
+-this problem by reading the SMI address from device tree.
+-
+-Signed-off-by: Marek Mojík <marek.mojik@nic.cz>
+----
+- drivers/net/mv88e6xxx.c | 8 ++++++++
+- 1 file changed, 8 insertions(+)
+-
+-diff --git a/drivers/net/mv88e6xxx.c b/drivers/net/mv88e6xxx.c
+-index c073f81e72..8fbbc1cacc 100644
+---- a/drivers/net/mv88e6xxx.c
+-+++ b/drivers/net/mv88e6xxx.c
+-@@ -745,6 +745,7 @@ static int mv88e6xxx_probe(struct udevice *dev)
+- {
+- 	struct dsa_pdata *dsa_pdata = dev_get_uclass_plat(dev);
+- 	struct mv88e6xxx_priv *priv = dev_get_priv(dev);
+-+	fdt_addr_t smi_addr;
+- 	int val, ret;
+- 
+- 	if (ofnode_valid(dev_ofnode(dev)) &&
+-@@ -753,6 +754,13 @@ static int mv88e6xxx_probe(struct udevice *dev)
+- 		return -ENODEV;
+- 	}
+- 
+-+	smi_addr = dev_read_addr(dev);
+-+	if (smi_addr == FDT_ADDR_T_NONE) {
+-+		dev_err(dev, "Missing SMI address\n");
+-+		return -EINVAL;
+-+	}
+-+	priv->smi_addr = smi_addr;
+-+
+- 	/* probe internal mdio bus */
+- 	ret = mv88e6xxx_probe_mdio(dev);
+- 	if (ret)
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch b/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
+deleted file mode 100644
+index fc602120a5..0000000000
+--- a/package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
++++ /dev/null
+@@ -1,98 +0,0 @@
+-From d832c2eafb937a6e6ff083e0e98c841d92d7fadc Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Moj=C3=ADk?= <marek.mojik@nic.cz>
+-Date: Wed, 13 Dec 2023 11:05:35 +0100
+-Subject: [PATCH 02/11] arm: mvebu: turris_omnia: Enable networking via
+- ethernet switch
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-The Turris Omnia contains the Marvell 88E6176 ethernet switch. Add
+-config options and device tree to enable the support.
+-
+-Signed-off-by: Marek Mojík <marek.mojik@nic.cz>
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- .../dts/armada-385-turris-omnia-u-boot.dtsi   | 51 +++++++++++++++++++
+- configs/turris_omnia_defconfig                |  2 +
+- 2 files changed, 53 insertions(+)
+-
+-diff --git a/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi b/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
+-index 509d6ca69c..c63a331d69 100644
+---- a/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
+-+++ b/arch/arm/dts/armada-385-turris-omnia-u-boot.dtsi
+-@@ -35,6 +35,57 @@
+- 	};
+- };
+- 
+-+&mdio {
+-+	switch@10 {
+-+		mdio {
+-+			#address-cells = <1>;
+-+			#size-cells = <0>;
+-+
+-+			sw_phy0: ethernet-phy@0 {
+-+				reg = <0x0>;
+-+			};
+-+
+-+			sw_phy1: ethernet-phy@1 {
+-+				reg = <0x1>;
+-+			};
+-+
+-+			sw_phy2: ethernet-phy@2 {
+-+				reg = <0x2>;
+-+			};
+-+
+-+			sw_phy3: ethernet-phy@3 {
+-+				reg = <0x3>;
+-+			};
+-+
+-+			sw_phy4: ethernet-phy@4 {
+-+				reg = <0x4>;
+-+			};
+-+		};
+-+		ports {
+-+			ports@0 {
+-+				phy-handle = <&sw_phy0>;
+-+				phy-mode = "internal";
+-+			};
+-+			ports@1 {
+-+				phy-handle = <&sw_phy1>;
+-+				phy-mode = "internal";
+-+			};
+-+			ports@2 {
+-+				phy-handle = <&sw_phy2>;
+-+				phy-mode = "internal";
+-+			};
+-+			ports@3 {
+-+				phy-handle = <&sw_phy3>;
+-+				phy-mode = "internal";
+-+			};
+-+			ports@4 {
+-+				phy-handle = <&sw_phy4>;
+-+				phy-mode = "internal";
+-+			};
+-+		};
+-+	};
+-+};
+-+
+- #ifdef CONFIG_ENV_IS_IN_SPI_FLASH
+- &spi0 {
+- 	flash@0 {
+-diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
+-index 65d4a296e7..3aaee276ea 100644
+---- a/configs/turris_omnia_defconfig
+-+++ b/configs/turris_omnia_defconfig
+-@@ -96,7 +96,9 @@ CONFIG_SPI_FLASH_WINBOND=y
+- CONFIG_SPI_FLASH_MTD=y
+- CONFIG_PHY_MARVELL=y
+- CONFIG_PHY_FIXED=y
+-+CONFIG_DM_DSA=y
+- CONFIG_PHY_GIGE=y
+-+CONFIG_MV88E6XXX=y
+- CONFIG_MVNETA=y
+- CONFIG_MII=y
+- CONFIG_MVMDIO=y
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0002-common-eeprom_layout-Split-field-finding-code-from-t.patch b/package/boot/uboot-mvebu/patches/0002-common-eeprom_layout-Split-field-finding-code-from-t.patch
+new file mode 100644
+index 0000000000..e25ba71ce9
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0002-common-eeprom_layout-Split-field-finding-code-from-t.patch
+@@ -0,0 +1,117 @@
++From 47a999c3777a55ffb388584fec3de9970c3d7f24 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:25:36 +0200
++Subject: [PATCH 02/26] common: eeprom_layout: Split field finding code from
++ the field update function
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Split the eeprom layout field finding code from the
++eeprom_layout_update_field() function in order to make it usable in
++alternative implementations of update method.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ common/eeprom/eeprom_layout.c | 46 +++++++++++++++++++++++------------
++ include/eeprom_layout.h       |  4 +++
++ 2 files changed, 35 insertions(+), 15 deletions(-)
++
++diff --git a/common/eeprom/eeprom_layout.c b/common/eeprom/eeprom_layout.c
++index 406db3f7d1..801e90d38d 100644
++--- a/common/eeprom/eeprom_layout.c
+++++ b/common/eeprom/eeprom_layout.c
++@@ -56,6 +56,28 @@ static void eeprom_layout_print(const struct eeprom_layout *layout)
++ 		fields[i].print(&fields[i]);
++ }
++ 
+++/*
+++ * eeprom_layout_find_field() - finds a layout field by name
+++ * @layout:	A pointer to an existing struct layout.
+++ * @field_name:	The name of the field to update.
+++ * @warn:	Whether to print a warning if the field is not found.
+++ *
+++ * Returns: a pointer to the found field or NULL on failure.
+++ */
+++struct eeprom_field *eeprom_layout_find_field(struct eeprom_layout *layout,
+++					      char *field_name, bool warn)
+++{
+++	for (int i = 0; i < layout->num_of_fields; i++)
+++		if (layout->fields[i].name != RESERVED_FIELDS &&
+++		    !strcmp(layout->fields[i].name, field_name))
+++			return &layout->fields[i];
+++
+++	if (warn)
+++		printf("No such field '%s'\n", field_name);
+++
+++	return NULL;
+++}
+++
++ /*
++  * eeprom_layout_update_field() - update a single field in the layout data.
++  * @layout:	A pointer to an existing struct layout.
++@@ -67,8 +89,8 @@ static void eeprom_layout_print(const struct eeprom_layout *layout)
++ static int eeprom_layout_update_field(struct eeprom_layout *layout,
++ 				      char *field_name, char *new_data)
++ {
++-	int i, err;
++-	struct eeprom_field *fields = layout->fields;
+++	struct eeprom_field *field;
+++	int err;
++ 
++ 	if (new_data == NULL)
++ 		return 0;
++@@ -76,21 +98,15 @@ static int eeprom_layout_update_field(struct eeprom_layout *layout,
++ 	if (field_name == NULL)
++ 		return -1;
++ 
++-	for (i = 0; i < layout->num_of_fields; i++) {
++-		if (fields[i].name == RESERVED_FIELDS ||
++-		    strcmp(fields[i].name, field_name))
++-			continue;
++-
++-		err = fields[i].update(&fields[i], new_data);
++-		if (err)
++-			printf("Invalid data for field %s\n", field_name);
++-
++-		return err;
++-	}
+++	field = eeprom_layout_find_field(layout, field_name, true);
+++	if (field == NULL)
+++		return -1;
++ 
++-	printf("No such field '%s'\n", field_name);
+++	err = field->update(field, new_data);
+++	if (err)
+++		printf("Invalid data for field %s\n", field_name);
++ 
++-	return -1;
+++	return err;
++ }
++ 
++ /*
++diff --git a/include/eeprom_layout.h b/include/eeprom_layout.h
++index 730d963ab9..b1d6220595 100644
++--- a/include/eeprom_layout.h
+++++ b/include/eeprom_layout.h
++@@ -9,6 +9,8 @@
++ #ifndef _LAYOUT_
++ #define _LAYOUT_
++ 
+++#include <eeprom_field.h>
+++
++ #define RESERVED_FIELDS			NULL
++ #define LAYOUT_VERSION_UNRECOGNIZED	-1
++ #define LAYOUT_VERSION_AUTODETECT	-2
++@@ -24,6 +26,8 @@ struct eeprom_layout {
++ 		      char *new_data);
++ };
++ 
+++struct eeprom_field *eeprom_layout_find_field(struct eeprom_layout *layout,
+++					      char *field_name, bool warn);
++ void eeprom_layout_setup(struct eeprom_layout *layout, unsigned char *buf,
++ 			 unsigned int buf_size, int layout_version);
++ __weak void __eeprom_layout_assign(struct eeprom_layout *layout,
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch b/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
+deleted file mode 100644
+index 8e709a7400..0000000000
+--- a/package/boot/uboot-mvebu/patches/0003-arm-mvebu-turris_omnia-Refactor-MCU-status-and-featu.patch
++++ /dev/null
+@@ -1,153 +0,0 @@
+-From 21a003e57bf5b140a46230f75d4b0fc98f39c847 Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+-Date: Thu, 29 Feb 2024 15:08:52 +0100
+-Subject: [PATCH 03/11] arm: mvebu: turris_omnia: Refactor MCU status and
+- features reading
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-Refactor MCU status word and MCU firmware features reading to make it
+-simpler to use.
+-
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- board/CZ.NIC/turris_omnia/turris_omnia.c | 81 ++++++++++++++++--------
+- 1 file changed, 53 insertions(+), 28 deletions(-)
+-
+-diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-index 19c5043fcb..49ba55944c 100644
+---- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+-+++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-@@ -172,6 +172,48 @@ static int omnia_mcu_write(u8 cmd, const void *buf, int len)
+- 	return dm_i2c_write(chip, cmd, buf, len);
+- }
+- 
+-+static int omnia_mcu_get_sts_and_features(u16 *psts, u16 *pfeatures)
+-+{
+-+	u16 sts;
+-+	int ret;
+-+
+-+	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &sts, sizeof(sts));
+-+	if (ret)
+-+		return ret;
+-+
+-+	if (psts)
+-+		*psts = sts;
+-+
+-+	if (!pfeatures)
+-+		return 0;
+-+
+-+	if (sts & STS_FEATURES_SUPPORTED) {
+-+		ret = omnia_mcu_read(CMD_GET_FEATURES, pfeatures,
+-+				     sizeof(*pfeatures));
+-+		if (ret)
+-+			return ret;
+-+	} else {
+-+		*pfeatures = 0;
+-+	}
+-+
+-+	return 0;
+-+}
+-+
+-+static int omnia_mcu_get_sts(u16 *sts)
+-+{
+-+	return omnia_mcu_get_sts_and_features(sts, NULL);
+-+}
+-+
+-+static bool omnia_mcu_has_feature(u16 feature)
+-+{
+-+	u16 features;
+-+
+-+	if (omnia_mcu_get_sts_and_features(NULL, &features))
+-+		return false;
+-+
+-+	return feature & features;
+-+}
+-+
+- static void enable_a385_watchdog(unsigned int timeout_minutes)
+- {
+- 	struct sar_freq_modes sar_freq;
+-@@ -249,7 +291,7 @@ static bool omnia_detect_sata(const char *msata_slot)
+- 		}
+- 	}
+- 
+--	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &stsword, sizeof(stsword));
+-+	ret = omnia_mcu_get_sts(&stsword);
+- 	if (ret) {
+- 		printf("omnia_mcu_read failed: %i, defaulting to MiniPCIe card\n",
+- 		       ret);
+-@@ -405,20 +447,17 @@ static const char * const omnia_get_mcu_type(void)
+- 		[STS_MCU_TYPE_MKL]   = "MKL (with peripheral resets)",
+- 		[STS_MCU_TYPE_UNKN]  = "unknown (with peripheral resets)",
+- 	};
+--	u16 stsword, features;
+-+	u16 sts;
+- 	int ret;
+- 
+--	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &stsword, sizeof(stsword));
+-+	ret = omnia_mcu_get_sts(&sts);
+- 	if (ret)
+- 		return "unknown";
+- 
+--	if (stsword & STS_FEATURES_SUPPORTED) {
+--		ret = omnia_mcu_read(CMD_GET_FEATURES, &features, sizeof(features));
+--		if (ret == 0 && (features & FEAT_PERIPH_MCU))
+--			return mcu_types_with_perip_resets[stsword & STS_MCU_TYPE_MASK];
+--	}
+-+	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU))
+-+		return mcu_types_with_perip_resets[sts & STS_MCU_TYPE_MASK];
+- 
+--	return mcu_types[stsword & STS_MCU_TYPE_MASK];
+-+	return mcu_types[sts & STS_MCU_TYPE_MASK];
+- }
+- 
+- static const char * const omnia_get_mcu_version(void)
+-@@ -695,9 +734,6 @@ int board_early_init_f(void)
+- 
+- void spl_board_init(void)
+- {
+--	u16 val;
+--	int ret;
+--
+- 	/*
+- 	 * If booting from UART, disable MCU watchdog in SPL, since uploading
+- 	 * U-Boot proper can take too much time and trigger it. Instead enable
+-@@ -714,12 +750,8 @@ void spl_board_init(void)
+- 	 * resets then LAN eth switch is initialized automatically by bootstrap
+- 	 * pins when A385 is released from the reset.
+- 	 */
+--	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &val, sizeof(val));
+--	if (ret == 0 && (val & STS_FEATURES_SUPPORTED)) {
+--		ret = omnia_mcu_read(CMD_GET_FEATURES, &val, sizeof(val));
+--		if (ret == 0 && (val & FEAT_PERIPH_MCU))
+--			initialize_switch();
+--	}
+-+	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU))
+-+		initialize_switch();
+- }
+- 
+- #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP) || IS_ENABLED(CONFIG_OF_BOARD_SETUP)
+-@@ -919,16 +951,9 @@ static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
+- #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP)
+- int board_fix_fdt(void *blob)
+- {
+--	u16 val;
+--	int ret;
+--
+--	ret = omnia_mcu_read(CMD_GET_STATUS_WORD, &val, sizeof(val));
+--	if (ret == 0 && (val & STS_FEATURES_SUPPORTED)) {
+--		ret = omnia_mcu_read(CMD_GET_FEATURES, &val, sizeof(val));
+--		if (ret == 0 && (val & FEAT_PERIPH_MCU)) {
+--			fixup_mcu_gpio_in_pcie_nodes(blob);
+--			fixup_mcu_gpio_in_eth_wan_node(blob);
+--		}
+-+	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU)) {
+-+		fixup_mcu_gpio_in_pcie_nodes(blob);
+-+		fixup_mcu_gpio_in_eth_wan_node(blob);
+- 	}
+- 
+- 	fixup_msata_port_nodes(blob);
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0003-common-eeprom_field-Fix-updating-binary-field.patch b/package/boot/uboot-mvebu/patches/0003-common-eeprom_field-Fix-updating-binary-field.patch
+new file mode 100644
+index 0000000000..653123e762
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0003-common-eeprom_field-Fix-updating-binary-field.patch
+@@ -0,0 +1,34 @@
++From c08ebca5b6f176d7f350d318891ae95bb9378f3c Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:27:55 +0200
++Subject: [PATCH 03/26] common: eeprom_field: Fix updating binary field
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The __eeprom_field_update_bin() function is expected to parse a hex
++string into bytes (potentially in reverse order), but the
++simple_strtoul() function is given 0 as base. This does not work since
++the string does not contain '0x' prefix. Add explicit base 16.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ common/eeprom/eeprom_field.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/common/eeprom/eeprom_field.c b/common/eeprom/eeprom_field.c
++index f56eebe679..9b831414a4 100644
++--- a/common/eeprom/eeprom_field.c
+++++ b/common/eeprom/eeprom_field.c
++@@ -55,7 +55,7 @@ static int __eeprom_field_update_bin(struct eeprom_field *field,
++ 			tmp[k] = value[reverse ? i - 1 + k : i + k];
++ 		}
++ 
++-		byte = simple_strtoul(tmp, &endptr, 0);
+++		byte = simple_strtoul(tmp, &endptr, 16);
++ 		if (*endptr != '\0' || byte < 0)
++ 			return -1;
++ 
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch b/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
+deleted file mode 100644
+index 73b3e5aab7..0000000000
+--- a/package/boot/uboot-mvebu/patches/0004-arm-mvebu-turris_omnia-Implement-getting-board-infor.patch
++++ /dev/null
+@@ -1,318 +0,0 @@
+-From 0c048108d337b1f905222e3331d0765ca57a965a Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+-Date: Thu, 29 Feb 2024 17:38:16 +0100
+-Subject: [PATCH 04/11] arm: mvebu: turris_omnia: Implement getting board
+- information from MCU
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-Implement reading board serial number, first MAC address and board
+-version from MCU. MCU supports board information if the FEAT_BOARD_INFO
+-feature bit is set in MCU features.
+-
+-Prefer getting board information from MCU if supported, fallback to
+-Atmel SHA chip.
+-
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- board/CZ.NIC/turris_atsha_otp.c          | 27 +------
+- board/CZ.NIC/turris_common.c             | 42 ++++++++++
+- board/CZ.NIC/turris_common.h             | 10 +++
+- board/CZ.NIC/turris_omnia/Makefile       |  2 +-
+- board/CZ.NIC/turris_omnia/turris_omnia.c | 98 +++++++++++++++++++++++-
+- 5 files changed, 149 insertions(+), 30 deletions(-)
+- create mode 100644 board/CZ.NIC/turris_common.c
+- create mode 100644 board/CZ.NIC/turris_common.h
+-
+-diff --git a/board/CZ.NIC/turris_atsha_otp.c b/board/CZ.NIC/turris_atsha_otp.c
+-index a29fe36231..85eebcdf18 100644
+---- a/board/CZ.NIC/turris_atsha_otp.c
+-+++ b/board/CZ.NIC/turris_atsha_otp.c
+-@@ -11,6 +11,7 @@
+- #include <atsha204a-i2c.h>
+- 
+- #include "turris_atsha_otp.h"
+-+#include "turris_common.h"
+- 
+- #define TURRIS_ATSHA_OTP_VERSION	0
+- #define TURRIS_ATSHA_OTP_SERIAL		1
+-@@ -32,26 +33,6 @@ static struct udevice *get_atsha204a_dev(void)
+- 	return dev;
+- }
+- 
+--static void increment_mac(u8 *mac)
+--{
+--	int i;
+--
+--	for (i = 5; i >= 3; i--) {
+--		mac[i] += 1;
+--		if (mac[i])
+--			break;
+--	}
+--}
+--
+--static void set_mac_if_invalid(int i, u8 *mac)
+--{
+--	u8 oldmac[6];
+--
+--	if (is_valid_ethaddr(mac) &&
+--	    !eth_env_get_enetaddr_by_index("eth", i, oldmac))
+--		eth_env_set_enetaddr_by_index("eth", i, mac);
+--}
+--
+- int turris_atsha_otp_init_mac_addresses(int first_idx)
+- {
+- 	struct udevice *dev = get_atsha204a_dev();
+-@@ -84,11 +65,7 @@ int turris_atsha_otp_init_mac_addresses(int first_idx)
+- 	mac[4] = mac1[2];
+- 	mac[5] = mac1[3];
+- 
+--	set_mac_if_invalid((first_idx + 0) % 3, mac);
+--	increment_mac(mac);
+--	set_mac_if_invalid((first_idx + 1) % 3, mac);
+--	increment_mac(mac);
+--	set_mac_if_invalid((first_idx + 2) % 3, mac);
+-+	turris_init_mac_addresses(first_idx, mac);
+- 
+- 	return 0;
+- }
+-diff --git a/board/CZ.NIC/turris_common.c b/board/CZ.NIC/turris_common.c
+-new file mode 100644
+-index 0000000000..1717dda82e
+---- /dev/null
+-+++ b/board/CZ.NIC/turris_common.c
+-@@ -0,0 +1,42 @@
+-+// SPDX-License-Identifier: GPL-2.0+
+-+/*
+-+ * Copyright (C) 2017 Marek Behún <kabel@kernel.org>
+-+ */
+-+
+-+#include <env.h>
+-+#include <net.h>
+-+
+-+#include "turris_common.h"
+-+
+-+static void increment_mac(u8 *mac)
+-+{
+-+	int i;
+-+
+-+	for (i = 5; i >= 3; i--) {
+-+		mac[i] += 1;
+-+		if (mac[i])
+-+			break;
+-+	}
+-+}
+-+
+-+static void set_mac_if_invalid(int i, u8 *mac)
+-+{
+-+	u8 oldmac[6];
+-+
+-+	if (is_valid_ethaddr(mac) &&
+-+	    !eth_env_get_enetaddr_by_index("eth", i, oldmac))
+-+		eth_env_set_enetaddr_by_index("eth", i, mac);
+-+}
+-+
+-+void turris_init_mac_addresses(int first_idx, const u8 *first_mac)
+-+{
+-+	u8 mac[6];
+-+
+-+	memcpy(mac, first_mac, sizeof(mac));
+-+
+-+	set_mac_if_invalid((first_idx + 0) % 3, mac);
+-+	increment_mac(mac);
+-+	set_mac_if_invalid((first_idx + 1) % 3, mac);
+-+	increment_mac(mac);
+-+	set_mac_if_invalid((first_idx + 2) % 3, mac);
+-+}
+-diff --git a/board/CZ.NIC/turris_common.h b/board/CZ.NIC/turris_common.h
+-new file mode 100644
+-index 0000000000..5565ea9fd2
+---- /dev/null
+-+++ b/board/CZ.NIC/turris_common.h
+-@@ -0,0 +1,10 @@
+-+// SPDX-License-Identifier: GPL-2.0+
+-+
+-+#ifndef TURRIS_COMMON_H
+-+#define TURRIS_COMMON_H
+-+
+-+#include <asm/types.h>
+-+
+-+void turris_init_mac_addresses(int first_idx, const u8 *first_mac);
+-+
+-+#endif
+-diff --git a/board/CZ.NIC/turris_omnia/Makefile b/board/CZ.NIC/turris_omnia/Makefile
+-index dc39b44ae1..341378b4e5 100644
+---- a/board/CZ.NIC/turris_omnia/Makefile
+-+++ b/board/CZ.NIC/turris_omnia/Makefile
+-@@ -2,4 +2,4 @@
+- #
+- # Copyright (C) 2017 Marek Behún <kabel@kernel.org>
+- 
+--obj-y	:= turris_omnia.o ../turris_atsha_otp.o
+-+obj-y	:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
+-diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-index 49ba55944c..42f04d6eaf 100644
+---- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+-+++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-@@ -18,18 +18,21 @@
+- #include <asm/io.h>
+- #include <asm/arch/cpu.h>
+- #include <asm/arch/soc.h>
+-+#include <asm/unaligned.h>
+- #include <dm/uclass.h>
+- #include <dt-bindings/gpio/gpio.h>
+- #include <fdt_support.h>
+- #include <hexdump.h>
+- #include <time.h>
+- #include <linux/bitops.h>
+-+#include <linux/bitrev.h>
+- #include <linux/delay.h>
+- #include <u-boot/crc.h>
+- 
+- #include "../drivers/ddr/marvell/a38x/ddr3_init.h"
+- #include <../serdes/a38x/high_speed_env_spec.h>
+- #include "../turris_atsha_otp.h"
+-+#include "../turris_common.h"
+- 
+- DECLARE_GLOBAL_DATA_PTR;
+- 
+-@@ -71,6 +74,9 @@ enum mcu_commands {
+- 
+- 	/* available if EXT_CMD bit set in features */
+- 	CMD_EXT_CONTROL		= 0x12,
+-+
+-+	/* available if BOARD_INFO it set in features */
+-+	CMD_BOARD_INFO_GET	= 0x2c,
+- };
+- 
+- enum status_word_bits {
+-@@ -88,6 +94,7 @@ enum status_word_bits {
+- enum features_e {
+- 	FEAT_PERIPH_MCU		= BIT(0),
+- 	FEAT_EXT_CMDS		= BIT(1),
+-+	FEAT_BOARD_INFO		= BIT(15),
+- };
+- 
+- /* CMD_EXT_CONTROL */
+-@@ -214,6 +221,70 @@ static bool omnia_mcu_has_feature(u16 feature)
+- 	return feature & features;
+- }
+- 
+-+static u32 omnia_mcu_crc32(const void *p, size_t len)
+-+{
+-+	u32 val, crc = 0;
+-+
+-+	compiletime_assert(!(len % 4), "length has to be a multiple of 4");
+-+
+-+	while (len) {
+-+		val = bitrev32(get_unaligned_le32(p));
+-+		crc = crc32(crc, (void *)&val, 4);
+-+		p += 4;
+-+		len -= 4;
+-+	}
+-+
+-+	return ~bitrev32(crc);
+-+}
+-+
+-+/* Can only be called after relocation, since it needs cleared BSS */
+-+static int omnia_mcu_board_info(char *serial, u8 *mac, char *version)
+-+{
+-+	static u8 reply[17];
+-+	static bool cached;
+-+
+-+	if (!cached) {
+-+		u8 csum;
+-+		int ret;
+-+
+-+		ret = omnia_mcu_read(CMD_BOARD_INFO_GET, reply, sizeof(reply));
+-+		if (ret)
+-+			return ret;
+-+
+-+		if (reply[0] != 16)
+-+			return -EBADMSG;
+-+
+-+		csum = reply[16];
+-+		reply[16] = 0;
+-+
+-+		if ((omnia_mcu_crc32(&reply[1], 16) & 0xff) != csum)
+-+			return -EBADMSG;
+-+
+-+		cached = true;
+-+	}
+-+
+-+	if (serial) {
+-+		const char *serial_env;
+-+
+-+		serial_env = env_get("serial#");
+-+		if (serial_env && strlen(serial_env) == 16) {
+-+			strcpy(serial, serial_env);
+-+		} else {
+-+			sprintf(serial, "%016llX",
+-+				get_unaligned_le64(&reply[1]));
+-+			env_set("serial#", serial);
+-+		}
+-+	}
+-+
+-+	if (mac)
+-+		memcpy(mac, &reply[9], ETH_ALEN);
+-+
+-+	if (version)
+-+		sprintf(version, "%u", reply[15]);
+-+
+-+	return 0;
+-+}
+-+
+- static void enable_a385_watchdog(unsigned int timeout_minutes)
+- {
+- 	struct sar_freq_modes sar_freq;
+-@@ -989,14 +1060,24 @@ int board_late_init(void)
+- 
+- int show_board_info(void)
+- {
+--	char serial[17];
+-+	char serial[17], version[4];
+-+	bool has_version;
+- 	int err;
+- 
+--	err = turris_atsha_otp_get_serial_number(serial);
+- 	printf("Model: Turris Omnia\n");
+- 	printf("  MCU type: %s\n", omnia_get_mcu_type());
+- 	printf("  MCU version: %s\n", omnia_get_mcu_version());
+- 	printf("  RAM size: %i MiB\n", omnia_get_ram_size_gb() * 1024);
+-+
+-+	if (omnia_mcu_has_feature(FEAT_BOARD_INFO)) {
+-+		err = omnia_mcu_board_info(serial, NULL, version);
+-+		has_version = !err;
+-+	} else {
+-+		err = turris_atsha_otp_get_serial_number(serial);
+-+		has_version = false;
+-+	}
+-+
+-+	printf("  Board version: %s\n", has_version ? version : "unknown");
+- 	printf("  Serial Number: %s\n", !err ? serial : "unknown");
+- 
+- 	return 0;
+-@@ -1004,8 +1085,17 @@ int show_board_info(void)
+- 
+- int misc_init_r(void)
+- {
+--	turris_atsha_otp_init_mac_addresses(1);
+--	turris_atsha_otp_init_serial_number();
+-+	if (omnia_mcu_has_feature(FEAT_BOARD_INFO)) {
+-+		char serial[17];
+-+		u8 first_mac[6];
+-+
+-+		if (!omnia_mcu_board_info(serial, first_mac, NULL))
+-+			turris_init_mac_addresses(1, first_mac);
+-+	} else {
+-+		turris_atsha_otp_init_mac_addresses(1);
+-+		turris_atsha_otp_init_serial_number();
+-+	}
+-+
+- 	return 0;
+- }
+- 
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0004-common-eeprom_field-Drop-unnecessary-comparison.patch b/package/boot/uboot-mvebu/patches/0004-common-eeprom_field-Drop-unnecessary-comparison.patch
+new file mode 100644
+index 0000000000..ad3a91be62
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0004-common-eeprom_field-Drop-unnecessary-comparison.patch
+@@ -0,0 +1,32 @@
++From 8805d173bd6b5b7e7a79e80d1884c03aa7bf5efd Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:31:23 +0200
++Subject: [PATCH 04/26] common: eeprom_field: Drop unnecessary comparison
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The byte variable is of type unsigned char, it is never less than zero.
++The error case is handled by *endptr, so drop the comparison altogether.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ common/eeprom/eeprom_field.c | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/common/eeprom/eeprom_field.c b/common/eeprom/eeprom_field.c
++index 9b831414a4..26f6041e54 100644
++--- a/common/eeprom/eeprom_field.c
+++++ b/common/eeprom/eeprom_field.c
++@@ -56,7 +56,7 @@ static int __eeprom_field_update_bin(struct eeprom_field *field,
++ 		}
++ 
++ 		byte = simple_strtoul(tmp, &endptr, 16);
++-		if (*endptr != '\0' || byte < 0)
+++		if (*endptr != '\0')
++ 			return -1;
++ 
++ 		field->buf[j] = byte;
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch b/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
+deleted file mode 100644
+index 4bb3bcaa7b..0000000000
+--- a/package/boot/uboot-mvebu/patches/0005-arm-mvebu-turris_omnia-Print-board-ECDSA-public-key-.patch
++++ /dev/null
+@@ -1,88 +0,0 @@
+-From a9d1fce4e93ffe24ff03f0a3cfeb8936f8fe47f2 Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+-Date: Fri, 1 Mar 2024 11:49:50 +0100
+-Subject: [PATCH 05/11] arm: mvebu: turris_omnia: Print board ECDSA public key
+- if available
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-If MCU supports the FEAT_CRYPTO feature, read board ECDSA public key
+-from MCU and print it.
+-
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- board/CZ.NIC/turris_omnia/turris_omnia.c | 29 +++++++++++++++++++++++-
+- 1 file changed, 28 insertions(+), 1 deletion(-)
+-
+-diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-index 42f04d6eaf..70c4be3ead 100644
+---- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+-+++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-@@ -75,6 +75,9 @@ enum mcu_commands {
+- 	/* available if EXT_CMD bit set in features */
+- 	CMD_EXT_CONTROL		= 0x12,
+- 
+-+	/* available if CRYPTO bit set in features */
+-+	CMD_CRYPTO_GET_PUBLIC_KEY	= 0x29,
+-+
+- 	/* available if BOARD_INFO it set in features */
+- 	CMD_BOARD_INFO_GET	= 0x2c,
+- };
+-@@ -94,6 +97,7 @@ enum status_word_bits {
+- enum features_e {
+- 	FEAT_PERIPH_MCU		= BIT(0),
+- 	FEAT_EXT_CMDS		= BIT(1),
+-+	FEAT_CRYPTO		= BIT(14),
+- 	FEAT_BOARD_INFO		= BIT(15),
+- };
+- 
+-@@ -285,6 +289,24 @@ static int omnia_mcu_board_info(char *serial, u8 *mac, char *version)
+- 	return 0;
+- }
+- 
+-+static int omnia_mcu_get_board_public_key(char pub_key[static 67])
+-+{
+-+	u8 reply[34];
+-+	int ret;
+-+
+-+	ret = omnia_mcu_read(CMD_CRYPTO_GET_PUBLIC_KEY, reply, sizeof(reply));
+-+	if (ret)
+-+		return ret;
+-+
+-+	if (reply[0] != 33)
+-+		return -EBADMSG;
+-+
+-+	bin2hex(pub_key, &reply[1], 33);
+-+	pub_key[66] = '\0';
+-+
+-+	return 0;
+-+}
+-+
+- static void enable_a385_watchdog(unsigned int timeout_minutes)
+- {
+- 	struct sar_freq_modes sar_freq;
+-@@ -1060,7 +1082,7 @@ int board_late_init(void)
+- 
+- int show_board_info(void)
+- {
+--	char serial[17], version[4];
+-+	char serial[17], version[4], pub_key[67];
+- 	bool has_version;
+- 	int err;
+- 
+-@@ -1080,6 +1102,11 @@ int show_board_info(void)
+- 	printf("  Board version: %s\n", has_version ? version : "unknown");
+- 	printf("  Serial Number: %s\n", !err ? serial : "unknown");
+- 
+-+	if (omnia_mcu_has_feature(FEAT_CRYPTO)) {
+-+		err = omnia_mcu_get_board_public_key(pub_key);
+-+		printf("  ECDSA Public Key: %s\n", !err ? pub_key : "unknown");
+-+	}
+-+
+- 	return 0;
+- }
+- 
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0005-cmd-eeprom-Fix-usage-help-for-the-eeprom-command.patch b/package/boot/uboot-mvebu/patches/0005-cmd-eeprom-Fix-usage-help-for-the-eeprom-command.patch
+new file mode 100644
+index 0000000000..e90757e742
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0005-cmd-eeprom-Fix-usage-help-for-the-eeprom-command.patch
+@@ -0,0 +1,46 @@
++From 184d603e1ac5f89b5fa0a9ab37596c462e850c42 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:45:15 +0200
++Subject: [PATCH 05/26] cmd: eeprom: Fix usage help for the eeprom command
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The bus and devaddr arguments of the eeprom command are optional, and if
++only one is given, it is assumed to be devaddr. Change the usage help
++from
++  <bus> <devaddr>
++to
++  [[bus] [devaddr]
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 8 ++++----
++ 1 file changed, 4 insertions(+), 4 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index 322765ad02..0d604832e4 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -418,14 +418,14 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ U_BOOT_CMD(
++ 	eeprom,	8,	1,	do_eeprom,
++ 	"EEPROM sub-system",
++-	"read  <bus> <devaddr> addr off cnt\n"
++-	"eeprom write <bus> <devaddr> addr off cnt\n"
+++	"read  [[bus] devaddr] addr off cnt\n"
+++	"eeprom write [[bus] devaddr] addr off cnt\n"
++ 	"       - read/write `cnt' bytes from `devaddr` EEPROM at offset `off'"
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++ 	"\n"
++-	"eeprom print [-l <layout_version>] <bus> <devaddr>\n"
+++	"eeprom print [-l <layout_version>] [[bus] devaddr]\n"
++ 	"       - Print layout fields and their data in human readable format\n"
++-	"eeprom update [-l <layout_version>] <bus> <devaddr> field_name field_value\n"
+++	"eeprom update [-l <layout_version>] [[bus] devaddr] field_name field_value\n"
++ 	"       - Update a specific eeprom field with new data.\n"
++ 	"         The new data must be written in the same human readable format as shown by the print command.\n"
++ 	"\n"
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch b/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
+deleted file mode 100644
+index 6053fbb7db..0000000000
+--- a/package/boot/uboot-mvebu/patches/0006-arm-mvebu-turris_omnia-Disable-Atmel-SHA-node-if-not.patch
++++ /dev/null
+@@ -1,69 +0,0 @@
+-From 804fd4a2344576f79f2a4ef11e8d458b43ed1a5f Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+-Date: Fri, 1 Mar 2024 13:13:14 +0100
+-Subject: [PATCH 06/11] arm: mvebu: turris_omnia: Disable Atmel SHA node if not
+- present
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-If the FEAT_CRYPTO feature bit is present in MCU features, the board
+-crypto is implemented by MCU and the Atmel SHA chip is not present.
+-Disable Atmel SHA device-tree node in that case.
+-
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- board/CZ.NIC/turris_omnia/turris_omnia.c | 23 +++++++++++++++++++++++
+- 1 file changed, 23 insertions(+)
+-
+-diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-index 70c4be3ead..500125fed1 100644
+---- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+-+++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-@@ -1039,6 +1039,25 @@ static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
+- 	return 0;
+- }
+- 
+-+static void fixup_atsha_node(void *blob)
+-+{
+-+	int node;
+-+
+-+	if (!omnia_mcu_has_feature(FEAT_CRYPTO))
+-+		return;
+-+
+-+	node = fdt_node_offset_by_compatible(blob, -1, "atmel,atsha204a");
+-+	if (node < 0) {
+-+		printf("Cannot find ATSHA204A node!\n");
+-+		return;
+-+	}
+-+
+-+	if (fdt_status_disabled(blob, node) < 0)
+-+		printf("Cannot disable ATSHA204A node!\n");
+-+	else
+-+		debug("Disabled ATSHA204A node\n");
+-+}
+-+
+- #endif
+- 
+- #if IS_ENABLED(CONFIG_OF_BOARD_FIXUP)
+-@@ -1052,6 +1071,8 @@ int board_fix_fdt(void *blob)
+- 	fixup_msata_port_nodes(blob);
+- 	fixup_wwan_port_nodes(blob);
+- 
+-+	fixup_atsha_node(blob);
+-+
+- 	return 0;
+- }
+- #endif
+-@@ -1244,6 +1265,8 @@ int ft_board_setup(void *blob, struct bd_info *bd)
+- 	fixup_msata_port_nodes(blob);
+- 	fixup_wwan_port_nodes(blob);
+- 
+-+	fixup_atsha_node(blob);
+-+
+- 	return 0;
+- }
+- #endif
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0006-cmd-eeprom-Hide-eeprom-layout-versioning-behind-a-Kc.patch b/package/boot/uboot-mvebu/patches/0006-cmd-eeprom-Hide-eeprom-layout-versioning-behind-a-Kc.patch
+new file mode 100644
+index 0000000000..e22002b962
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0006-cmd-eeprom-Hide-eeprom-layout-versioning-behind-a-Kc.patch
+@@ -0,0 +1,135 @@
++From e7e23ad55cdbfbe3c0affa5ea0c63f4b979bc832 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:49:20 +0200
++Subject: [PATCH 06/26] cmd: eeprom: Hide eeprom layout versioning behind a
++ Kconfig option
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Add a new Kconfig option EEPROM_LAYOUT_VERSIONS, and hide eeprom
++layout versionsing code behind it. Only print the relevant help in
++'eeprom' command usage if this option is enabled.
++
++Enable this new option for cm_fx6_defconfig and cm_t43_defconfig.
++These are the only boards using EEPROM layout versioning.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/Kconfig              |  9 ++++++++-
++ cmd/eeprom.c             | 20 +++++++++++++++-----
++ configs/cm_fx6_defconfig |  1 +
++ configs/cm_t43_defconfig |  1 +
++ 4 files changed, 25 insertions(+), 6 deletions(-)
++
++diff --git a/cmd/Kconfig b/cmd/Kconfig
++index b026439c77..8c370993f6 100644
++--- a/cmd/Kconfig
+++++ b/cmd/Kconfig
++@@ -803,9 +803,16 @@ config CMD_EEPROM_LAYOUT
++ 			types of eeprom fields. Can be used for defining
++ 			custom layouts.
++ 
+++config EEPROM_LAYOUT_VERSIONS
+++	bool "Support specifying eeprom layout version"
+++	depends on CMD_EEPROM_LAYOUT
+++	help
+++	  Support specifying eeprom layout version in the 'eeprom' command
+++	  via the -l option.
+++
++ config EEPROM_LAYOUT_HELP_STRING
++ 	  string "Tells user what layout names are supported"
++-	  depends on CMD_EEPROM_LAYOUT
+++	  depends on EEPROM_LAYOUT_VERSIONS
++ 	  default "<not defined>"
++ 	  help
++ 	    Help printed with the LAYOUT VERSIONS part of the 'eeprom'
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index 0d604832e4..d610dc9931 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -252,10 +252,12 @@ static int parse_i2c_bus_addr(int *i2c_bus, ulong *i2c_addr, int argc,
++ 
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++ 
+++#ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++ __weak int eeprom_parse_layout_version(char *str)
++ {
++ 	return LAYOUT_VERSION_UNRECOGNIZED;
++ }
+++#endif
++ 
++ static unsigned char eeprom_buf[CONFIG_SYS_EEPROM_SIZE];
++ 
++@@ -359,7 +361,7 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	if (action == EEPROM_ACTION_INVALID)
++ 		return CMD_RET_USAGE;
++ 
++-#ifdef CONFIG_CMD_EEPROM_LAYOUT
+++#ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++ 	if (action == EEPROM_PRINT || action == EEPROM_UPDATE) {
++ 		if (!strcmp(argv[index], "-l")) {
++ 			NEXT_PARAM(argc, index);
++@@ -415,6 +417,12 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 				      field_name, field_value, addr, off, cnt);
++ }
++ 
+++#ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
+++#define EEPROM_LAYOUT_SPEC	"[-l <layout_version>] "
+++#else
+++#define EEPROM_LAYOUT_SPEC	""
+++#endif
+++
++ U_BOOT_CMD(
++ 	eeprom,	8,	1,	do_eeprom,
++ 	"EEPROM sub-system",
++@@ -423,16 +431,18 @@ U_BOOT_CMD(
++ 	"       - read/write `cnt' bytes from `devaddr` EEPROM at offset `off'"
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++ 	"\n"
++-	"eeprom print [-l <layout_version>] [[bus] devaddr]\n"
+++	"eeprom print " EEPROM_LAYOUT_SPEC "[[bus] devaddr]\n"
++ 	"       - Print layout fields and their data in human readable format\n"
++-	"eeprom update [-l <layout_version>] [[bus] devaddr] field_name field_value\n"
+++	"eeprom update " EEPROM_LAYOUT_SPEC "[[bus] devaddr] field_name field_value\n"
++ 	"       - Update a specific eeprom field with new data.\n"
++-	"         The new data must be written in the same human readable format as shown by the print command.\n"
++-	"\n"
+++	"         The new data must be written in the same human readable format as shown by the print command."
+++#ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
+++	"\n\n"
++ 	"LAYOUT VERSIONS\n"
++ 	"The -l option can be used to force the command to interpret the EEPROM data using the chosen layout.\n"
++ 	"If the -l option is omitted, the command will auto detect the layout based on the data in the EEPROM.\n"
++ 	"The values which can be provided with the -l option are:\n"
++ 	CONFIG_EEPROM_LAYOUT_HELP_STRING"\n"
++ #endif
+++#endif
++ );
++diff --git a/configs/cm_fx6_defconfig b/configs/cm_fx6_defconfig
++index a4d5f91b35..386616cc42 100644
++--- a/configs/cm_fx6_defconfig
+++++ b/configs/cm_fx6_defconfig
++@@ -46,6 +46,7 @@ CONFIG_SYS_MAXARGS=32
++ CONFIG_CMD_GREPENV=y
++ CONFIG_CMD_EEPROM=y
++ CONFIG_CMD_EEPROM_LAYOUT=y
+++CONFIG_EEPROM_LAYOUT_VERSIONS=y
++ CONFIG_EEPROM_LAYOUT_HELP_STRING="v2, v3"
++ CONFIG_SYS_I2C_EEPROM_BUS=2
++ CONFIG_SYS_EEPROM_PAGE_WRITE_BITS=4
++diff --git a/configs/cm_t43_defconfig b/configs/cm_t43_defconfig
++index 93e667292c..32f126a517 100644
++--- a/configs/cm_t43_defconfig
+++++ b/configs/cm_t43_defconfig
++@@ -50,6 +50,7 @@ CONFIG_SYS_PROMPT="CM-T43 # "
++ CONFIG_CMD_ASKENV=y
++ CONFIG_CMD_EEPROM=y
++ CONFIG_CMD_EEPROM_LAYOUT=y
+++CONFIG_EEPROM_LAYOUT_VERSIONS=y
++ CONFIG_EEPROM_LAYOUT_HELP_STRING="v2, v3"
++ CONFIG_SYS_EEPROM_PAGE_WRITE_BITS=4
++ CONFIG_SYS_EEPROM_PAGE_WRITE_DELAY_MS=5
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0007-cmd-eeprom-Deduplicate-parse_i2c_bus_addr-calls.patch b/package/boot/uboot-mvebu/patches/0007-cmd-eeprom-Deduplicate-parse_i2c_bus_addr-calls.patch
+new file mode 100644
+index 0000000000..242f6e0d0e
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0007-cmd-eeprom-Deduplicate-parse_i2c_bus_addr-calls.patch
+@@ -0,0 +1,72 @@
++From 18e053f994c1c8b707d687a6b1e86d9d8d68b0f0 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:54:08 +0200
++Subject: [PATCH 07/26] cmd: eeprom: Deduplicate parse_i2c_bus_addr() calls
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Deduplicate the calls to parse_i2c_bus_addr().
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 36 +++++++++++++++++-------------------
++ 1 file changed, 17 insertions(+), 19 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index d610dc9931..12902e812e 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -339,6 +339,21 @@ static int eeprom_execute_command(enum eeprom_action action, int i2c_bus,
++ 	return rcode;
++ }
++ 
+++static int eeprom_action_expected_argc(enum eeprom_action action)
+++{
+++	switch (action) {
+++	case EEPROM_READ:
+++	case EEPROM_WRITE:
+++		return 3;
+++	case EEPROM_PRINT:
+++		return 0;
+++	case EEPROM_UPDATE:
+++		return 2;
+++	default:
+++		return CMD_RET_USAGE;
+++	}
+++}
+++
++ #define NEXT_PARAM(argc, index)	{ (argc)--; (index)++; }
++ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ {
++@@ -371,25 +386,8 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	}
++ #endif
++ 
++-	switch (action) {
++-	case EEPROM_READ:
++-	case EEPROM_WRITE:
++-		ret = parse_i2c_bus_addr(&i2c_bus, &i2c_addr, argc,
++-					 argv + index, 3);
++-		break;
++-	case EEPROM_PRINT:
++-		ret = parse_i2c_bus_addr(&i2c_bus, &i2c_addr, argc,
++-					 argv + index, 0);
++-		break;
++-	case EEPROM_UPDATE:
++-		ret = parse_i2c_bus_addr(&i2c_bus, &i2c_addr, argc,
++-					 argv + index, 2);
++-		break;
++-	default:
++-		/* Get compiler to stop whining */
++-		return CMD_RET_USAGE;
++-	}
++-
+++	ret = parse_i2c_bus_addr(&i2c_bus, &i2c_addr, argc, argv + index,
+++				 eeprom_action_expected_argc(action));
++ 	if (ret == CMD_RET_USAGE)
++ 		return ret;
++ 
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0008-cmd-eeprom-Refactor-eeprom-device-specifier-parsing.patch b/package/boot/uboot-mvebu/patches/0008-cmd-eeprom-Refactor-eeprom-device-specifier-parsing.patch
+new file mode 100644
+index 0000000000..1575595057
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0008-cmd-eeprom-Refactor-eeprom-device-specifier-parsing.patch
+@@ -0,0 +1,180 @@
++From 791231e3c0aed4bd61b8c2aa8f41384c411c2833 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 10:57:39 +0200
++Subject: [PATCH 08/26] cmd: eeprom: Refactor eeprom device specifier parsing
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++In preparation for allowing to access eeprom by driver-model device
++name, refactor the eeprom device specifier parsing. Instead of filling
++two parameters (i2c_bus, i2c_addr), the parsing function now fills one
++parameter of type struct eeprom_dev_spec.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 77 ++++++++++++++++++++++++++++------------------------
++ 1 file changed, 41 insertions(+), 36 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index 12902e812e..e29639780d 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -208,41 +208,42 @@ static long parse_numeric_param(char *str)
++ 	return (*endptr != '\0') ? -1 : value;
++ }
++ 
+++struct eeprom_dev_spec {
+++	int i2c_bus;
+++	ulong i2c_addr;
+++};
+++
++ /**
++- * parse_i2c_bus_addr - parse the i2c bus and i2c devaddr parameters
+++ * parse_eeprom_dev_spec - parse the eeprom device specifier
++  *
++- * @i2c_bus:	address to store the i2c bus
++- * @i2c_addr:	address to store the device i2c address
++- * @argc:	count of command line arguments left to parse
+++ * @dev:	pointer to eeprom device specifier
+++ * @argc:	count of command line arguments that can be used to parse
+++ *		the device specifier
++  * @argv:	command line arguments left to parse
++- * @argc_no_bus_addr:	argc value we expect to see when bus & addr aren't given
++  *
++  * @returns:	number of arguments parsed or CMD_RET_USAGE if error
++  */
++-static int parse_i2c_bus_addr(int *i2c_bus, ulong *i2c_addr, int argc,
++-			      char *const argv[], int argc_no_bus_addr)
+++static int parse_eeprom_dev_spec(struct eeprom_dev_spec *dev, int argc,
+++				 char *const argv[])
++ {
++-	int argc_no_bus = argc_no_bus_addr + 1;
++-	int argc_bus_addr = argc_no_bus_addr + 2;
++-
++ #ifdef CONFIG_SYS_I2C_EEPROM_ADDR
++-	if (argc == argc_no_bus_addr) {
++-		*i2c_bus = -1;
++-		*i2c_addr = CONFIG_SYS_I2C_EEPROM_ADDR;
+++	if (argc == 0) {
+++		dev->i2c_bus = -1;
+++		dev->i2c_addr = CONFIG_SYS_I2C_EEPROM_ADDR;
++ 
++ 		return 0;
++ 	}
++ #endif
++-	if (argc == argc_no_bus) {
++-		*i2c_bus = -1;
++-		*i2c_addr = parse_numeric_param(argv[0]);
+++	if (argc == 1) {
+++		dev->i2c_bus = -1;
+++		dev->i2c_addr = parse_numeric_param(argv[0]);
++ 
++ 		return 1;
++ 	}
++ 
++-	if (argc == argc_bus_addr) {
++-		*i2c_bus = parse_numeric_param(argv[0]);
++-		*i2c_addr = parse_numeric_param(argv[1]);
+++	if (argc == 2) {
+++		dev->i2c_bus = parse_numeric_param(argv[0]);
+++		dev->i2c_addr = parse_numeric_param(argv[1]);
++ 
++ 		return 2;
++ 	}
++@@ -287,9 +288,10 @@ static enum eeprom_action parse_action(char *cmd)
++ 	return EEPROM_ACTION_INVALID;
++ }
++ 
++-static int eeprom_execute_command(enum eeprom_action action, int i2c_bus,
++-				  ulong i2c_addr, int layout_ver, char *key,
++-				  char *value, ulong addr, ulong off, ulong cnt)
+++static int eeprom_execute_command(enum eeprom_action action,
+++				  struct eeprom_dev_spec *dev,
+++				  int layout_ver, char *key, char *value,
+++				  ulong addr, ulong off, ulong cnt)
++ {
++ 	int rcode = 0;
++ 	const char *const fmt =
++@@ -301,25 +303,26 @@ static int eeprom_execute_command(enum eeprom_action action, int i2c_bus,
++ 	if (action == EEPROM_ACTION_INVALID)
++ 		return CMD_RET_USAGE;
++ 
++-	eeprom_init(i2c_bus);
+++	eeprom_init(dev->i2c_bus);
++ 	if (action == EEPROM_READ) {
++-		printf(fmt, i2c_addr, "read", addr, off, cnt);
+++		printf(fmt, dev->i2c_addr, "read", addr, off, cnt);
++ 
++-		rcode = eeprom_read(i2c_addr, off, (uchar *)addr, cnt);
+++		rcode = eeprom_read(dev->i2c_addr, off, (uchar *)addr, cnt);
++ 
++ 		puts("done\n");
++ 		return rcode;
++ 	} else if (action == EEPROM_WRITE) {
++-		printf(fmt, i2c_addr, "write", addr, off, cnt);
+++		printf(fmt, dev->i2c_addr, "write", addr, off, cnt);
++ 
++-		rcode = eeprom_write(i2c_addr, off, (uchar *)addr, cnt);
+++		rcode = eeprom_write(dev->i2c_addr, off, (uchar *)addr, cnt);
++ 
++ 		puts("done\n");
++ 		return rcode;
++ 	}
++ 
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++-	rcode = eeprom_read(i2c_addr, 0, eeprom_buf, CONFIG_SYS_EEPROM_SIZE);
+++	rcode = eeprom_read(dev->i2c_addr, 0, eeprom_buf,
+++			    CONFIG_SYS_EEPROM_SIZE);
++ 	if (rcode < 0)
++ 		return rcode;
++ 
++@@ -333,7 +336,8 @@ static int eeprom_execute_command(enum eeprom_action action, int i2c_bus,
++ 
++ 	layout.update(&layout, key, value);
++ 
++-	rcode = eeprom_write(i2c_addr, 0, layout.data, CONFIG_SYS_EEPROM_SIZE);
+++	rcode = eeprom_write(dev->i2c_addr, 0, layout.data,
+++			     CONFIG_SYS_EEPROM_SIZE);
++ #endif
++ 
++ 	return rcode;
++@@ -359,9 +363,9 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ {
++ 	int layout_ver = LAYOUT_VERSION_AUTODETECT;
++ 	enum eeprom_action action = EEPROM_ACTION_INVALID;
++-	int i2c_bus = -1, index = 0;
++-	ulong i2c_addr = -1, addr = 0, cnt = 0, off = 0;
++-	int ret;
+++	struct eeprom_dev_spec dev;
+++	ulong addr = 0, cnt = 0, off = 0;
+++	int ret, index = 0;
++ 	char *field_name = "";
++ 	char *field_value = "";
++ 
++@@ -386,8 +390,9 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	}
++ #endif
++ 
++-	ret = parse_i2c_bus_addr(&i2c_bus, &i2c_addr, argc, argv + index,
++-				 eeprom_action_expected_argc(action));
+++	ret = parse_eeprom_dev_spec(&dev,
+++				    argc - eeprom_action_expected_argc(action),
+++				    argv + index);
++ 	if (ret == CMD_RET_USAGE)
++ 		return ret;
++ 
++@@ -411,8 +416,8 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	}
++ #endif
++ 
++-	return eeprom_execute_command(action, i2c_bus, i2c_addr, layout_ver,
++-				      field_name, field_value, addr, off, cnt);
+++	return eeprom_execute_command(action, &dev, layout_ver, field_name,
+++				      field_value, addr, off, cnt);
++ }
++ 
++ #ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0009-cmd-eeprom-Refactor-command-execution-into-function-.patch b/package/boot/uboot-mvebu/patches/0009-cmd-eeprom-Refactor-command-execution-into-function-.patch
+new file mode 100644
+index 0000000000..527489d61b
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0009-cmd-eeprom-Refactor-command-execution-into-function-.patch
+@@ -0,0 +1,180 @@
++From 853ffd437091e2ac157468d18cdf8b3a8270a6fd Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 11:00:39 +0200
++Subject: [PATCH 09/26] cmd: eeprom: Refactor command execution into function
++ by action
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Refactor the eeprom_execute_command() function into separate functions
++do_eeprom_rw(), do_eeprom_print() and do_eeprom_update().
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 111 ++++++++++++++++++++++++++++++++-------------------
++ 1 file changed, 71 insertions(+), 40 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index e29639780d..c76cf43157 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -288,61 +288,75 @@ static enum eeprom_action parse_action(char *cmd)
++ 	return EEPROM_ACTION_INVALID;
++ }
++ 
++-static int eeprom_execute_command(enum eeprom_action action,
++-				  struct eeprom_dev_spec *dev,
++-				  int layout_ver, char *key, char *value,
++-				  ulong addr, ulong off, ulong cnt)
+++static int do_eeprom_rw(struct eeprom_dev_spec *dev, bool read,
+++			ulong addr, ulong off, ulong cnt)
++ {
++-	int rcode = 0;
++ 	const char *const fmt =
++ 		"\nEEPROM @0x%lX %s: addr 0x%08lx  off 0x%04lx  count %ld ... ";
+++	uchar *memloc = (uchar *)addr;
+++	int ret;
+++
+++	printf(fmt, dev->i2c_addr, read ? "read" : "write", addr, off, cnt);
+++	if (read)
+++		ret = eeprom_read(dev->i2c_addr, off, memloc, cnt);
+++	else
+++		ret = eeprom_write(dev->i2c_addr, off, memloc, cnt);
+++	puts("done\n");
+++
+++	return ret;
+++}
+++
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++-	struct eeprom_layout layout;
++-#endif
++ 
++-	if (action == EEPROM_ACTION_INVALID)
++-		return CMD_RET_USAGE;
+++static int do_eeprom_layout(struct eeprom_dev_spec *dev, int layout_ver,
+++			    struct eeprom_layout *layout)
+++{
+++	int ret;
++ 
++-	eeprom_init(dev->i2c_bus);
++-	if (action == EEPROM_READ) {
++-		printf(fmt, dev->i2c_addr, "read", addr, off, cnt);
+++	ret = eeprom_read(dev->i2c_addr, 0, eeprom_buf, CONFIG_SYS_EEPROM_SIZE);
+++	if (ret)
+++		return ret;
++ 
++-		rcode = eeprom_read(dev->i2c_addr, off, (uchar *)addr, cnt);
+++	eeprom_layout_setup(layout, eeprom_buf, CONFIG_SYS_EEPROM_SIZE,
+++			    layout_ver);
++ 
++-		puts("done\n");
++-		return rcode;
++-	} else if (action == EEPROM_WRITE) {
++-		printf(fmt, dev->i2c_addr, "write", addr, off, cnt);
+++	return 0;
+++}
++ 
++-		rcode = eeprom_write(dev->i2c_addr, off, (uchar *)addr, cnt);
+++static int do_eeprom_print(struct eeprom_dev_spec *dev, int layout_ver)
+++{
+++	struct eeprom_layout layout;
+++	int ret;
++ 
++-		puts("done\n");
++-		return rcode;
++-	}
+++	ret = do_eeprom_layout(dev, layout_ver, &layout);
+++	if (ret)
+++		return ret;
++ 
++-#ifdef CONFIG_CMD_EEPROM_LAYOUT
++-	rcode = eeprom_read(dev->i2c_addr, 0, eeprom_buf,
++-			    CONFIG_SYS_EEPROM_SIZE);
++-	if (rcode < 0)
++-		return rcode;
+++	layout.print(&layout);
++ 
++-	eeprom_layout_setup(&layout, eeprom_buf, CONFIG_SYS_EEPROM_SIZE,
++-			    layout_ver);
+++	return 0;
+++}
++ 
++-	if (action == EEPROM_PRINT) {
++-		layout.print(&layout);
++-		return 0;
++-	}
+++static int do_eeprom_update(struct eeprom_dev_spec *dev, int layout_ver,
+++			    char *key, char *value)
+++{
+++	struct eeprom_layout layout;
+++	int ret;
++ 
++-	layout.update(&layout, key, value);
+++	ret = do_eeprom_layout(dev, layout_ver, &layout);
+++	if (ret)
+++		return ret;
++ 
++-	rcode = eeprom_write(dev->i2c_addr, 0, layout.data,
++-			     CONFIG_SYS_EEPROM_SIZE);
++-#endif
+++	ret = layout.update(&layout, key, value);
+++	if (ret)
+++		return CMD_RET_FAILURE;
++ 
++-	return rcode;
+++	return eeprom_write(dev->i2c_addr, 0, layout.data,
+++			    CONFIG_SYS_EEPROM_SIZE);
++ }
++ 
+++#endif
+++
++ static int eeprom_action_expected_argc(enum eeprom_action action)
++ {
++ 	switch (action) {
++@@ -361,13 +375,15 @@ static int eeprom_action_expected_argc(enum eeprom_action action)
++ #define NEXT_PARAM(argc, index)	{ (argc)--; (index)++; }
++ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ {
++-	int layout_ver = LAYOUT_VERSION_AUTODETECT;
++ 	enum eeprom_action action = EEPROM_ACTION_INVALID;
++ 	struct eeprom_dev_spec dev;
++ 	ulong addr = 0, cnt = 0, off = 0;
++ 	int ret, index = 0;
+++#ifdef CONFIG_CMD_EEPROM_LAYOUT
++ 	char *field_name = "";
++ 	char *field_value = "";
+++	int layout_ver = LAYOUT_VERSION_AUTODETECT;
+++#endif
++ 
++ 	if (argc <= 1)
++ 		return CMD_RET_USAGE;
++@@ -416,8 +432,23 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	}
++ #endif
++ 
++-	return eeprom_execute_command(action, &dev, layout_ver, field_name,
++-				      field_value, addr, off, cnt);
+++	eeprom_init(dev.i2c_bus);
+++
+++	switch (action) {
+++	case EEPROM_READ:
+++	case EEPROM_WRITE:
+++		return do_eeprom_rw(&dev, action == EEPROM_READ,
+++				    addr, off, cnt);
+++#ifdef CONFIG_CMD_EEPROM_LAYOUT
+++	case EEPROM_PRINT:
+++		return do_eeprom_print(&dev, layout_ver);
+++	case EEPROM_UPDATE:
+++		return do_eeprom_update(&dev, layout_ver,
+++					field_name, field_value);
+++#endif
+++	default:
+++		return CMD_RET_USAGE;
+++	}
++ }
++ 
++ #ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0010-arm-mvebu-turris_omnia-Enable-LTO-by-default-on-Turr.patch b/package/boot/uboot-mvebu/patches/0010-arm-mvebu-turris_omnia-Enable-LTO-by-default-on-Turr.patch
+deleted file mode 100644
+index b7a1c9ec9b..0000000000
+--- a/package/boot/uboot-mvebu/patches/0010-arm-mvebu-turris_omnia-Enable-LTO-by-default-on-Turr.patch
++++ /dev/null
+@@ -1,34 +0,0 @@
+-From 417203367beafb1dd01b2308e60207ded9a17719 Mon Sep 17 00:00:00 2001
+-From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+-Date: Wed, 6 Mar 2024 09:09:53 +0100
+-Subject: [PATCH 10/11] arm: mvebu: turris_omnia: Enable LTO by default on
+- Turris Omnia
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-
+-U-Boot builds for Turris Omnia are approaching the limit of 0xf0000
+-bytes, which is the size of the U-Boot partition on Omnia.
+-
+-Enable LTO to get more size optimized binaries.
+-
+-Signed-off-by: Marek Behún <kabel@kernel.org>
+----
+- configs/turris_omnia_defconfig | 1 +
+- 1 file changed, 1 insertion(+)
+-
+-diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
+-index 3aaee276ea..46e8c99521 100644
+---- a/configs/turris_omnia_defconfig
+-+++ b/configs/turris_omnia_defconfig
+-@@ -31,6 +31,7 @@ CONFIG_AHCI=y
+- CONFIG_OF_BOARD_FIXUP=y
+- CONFIG_SYS_MEMTEST_START=0x00800000
+- CONFIG_SYS_MEMTEST_END=0x00ffffff
+-+CONFIG_LTO=y
+- CONFIG_HAS_BOARD_SIZE_LIMIT=y
+- CONFIG_BOARD_SIZE_LIMIT=983040
+- CONFIG_FIT=y
+--- 
+-2.43.0
+-
+diff --git a/package/boot/uboot-mvebu/patches/0010-cmd-eeprom-Don-t-read-write-whole-EEPROM-if-not-nece.patch b/package/boot/uboot-mvebu/patches/0010-cmd-eeprom-Don-t-read-write-whole-EEPROM-if-not-nece.patch
+new file mode 100644
+index 0000000000..e16c9ee556
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0010-cmd-eeprom-Don-t-read-write-whole-EEPROM-if-not-nece.patch
+@@ -0,0 +1,52 @@
++From d83fcaf92cad7b5abdabd38f00bba3e88ee8cbef Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 11:11:40 +0200
++Subject: [PATCH 10/26] cmd: eeprom: Don't read/write whole EEPROM if not
++ necessary
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Don't read/write whole EEPROM if not necessary when printing / updating
++EEPROM layout fields. Only read/write layout.data_size bytes.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 11 ++---------
++ 1 file changed, 2 insertions(+), 9 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index c76cf43157..9c4af88738 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -311,16 +311,10 @@ static int do_eeprom_rw(struct eeprom_dev_spec *dev, bool read,
++ static int do_eeprom_layout(struct eeprom_dev_spec *dev, int layout_ver,
++ 			    struct eeprom_layout *layout)
++ {
++-	int ret;
++-
++-	ret = eeprom_read(dev->i2c_addr, 0, eeprom_buf, CONFIG_SYS_EEPROM_SIZE);
++-	if (ret)
++-		return ret;
++-
++ 	eeprom_layout_setup(layout, eeprom_buf, CONFIG_SYS_EEPROM_SIZE,
++ 			    layout_ver);
++ 
++-	return 0;
+++	return eeprom_read(dev->i2c_addr, 0, eeprom_buf, layout->data_size);
++ }
++ 
++ static int do_eeprom_print(struct eeprom_dev_spec *dev, int layout_ver)
++@@ -351,8 +345,7 @@ static int do_eeprom_update(struct eeprom_dev_spec *dev, int layout_ver,
++ 	if (ret)
++ 		return CMD_RET_FAILURE;
++ 
++-	return eeprom_write(dev->i2c_addr, 0, layout.data,
++-			    CONFIG_SYS_EEPROM_SIZE);
+++	return eeprom_write(dev->i2c_addr, 0, layout.data, layout.data_size);
++ }
++ 
++ #endif
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0011-cmd-eeprom-Extend-to-EEPROMs-probed-via-driver-model.patch b/package/boot/uboot-mvebu/patches/0011-cmd-eeprom-Extend-to-EEPROMs-probed-via-driver-model.patch
+new file mode 100644
+index 0000000000..539826dfa8
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0011-cmd-eeprom-Extend-to-EEPROMs-probed-via-driver-model.patch
+@@ -0,0 +1,265 @@
++From dbeb6f52c36b01c26040c911bab5c3f92455099e Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 11:20:11 +0200
++Subject: [PATCH 11/26] cmd: eeprom: Extend to EEPROMs probed via driver model
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Extend the 'eeprom' command to allow accessing EEPROMs probed via
++driver model, uclass UCLASS_I2C_EEPROM.
++
++When the CONFIG_I2C_EEPROM config option is enabled (and so the
++i2c-eeprom driver is built), the 'eeprom' command now accepts driver
++model device name as EEPROM specifier for the 'eeprom' command, in
++addition to the legacy [[bus] devaddr] specifier.
++
++Moreover if no device specifier is given, then the first
++UCLASS_I2C_EEPROM device is used, if found.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ cmd/eeprom.c | 122 ++++++++++++++++++++++++++++++++++++++++++++++-----
++ 1 file changed, 112 insertions(+), 10 deletions(-)
++
++diff --git a/cmd/eeprom.c b/cmd/eeprom.c
++index 9c4af88738..a39fc5ffdc 100644
++--- a/cmd/eeprom.c
+++++ b/cmd/eeprom.c
++@@ -22,8 +22,10 @@
++ #include <common.h>
++ #include <config.h>
++ #include <command.h>
+++#include <dm.h>
++ #include <eeprom.h>
++ #include <i2c.h>
+++#include <i2c_eeprom.h>
++ #include <eeprom_layout.h>
++ #include <linux/delay.h>
++ 
++@@ -209,10 +211,41 @@ static long parse_numeric_param(char *str)
++ }
++ 
++ struct eeprom_dev_spec {
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	struct udevice *dev;
+++#endif
++ 	int i2c_bus;
++ 	ulong i2c_addr;
++ };
++ 
+++static void eeprom_dev_spec_init(struct eeprom_dev_spec *dev)
+++{
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (!dev->dev)
+++#endif
+++		eeprom_init(dev->i2c_bus);
+++}
+++
+++static int eeprom_dev_spec_read(struct eeprom_dev_spec *dev,
+++				unsigned offset, uchar *buffer, unsigned cnt)
+++{
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (dev->dev)
+++		return i2c_eeprom_read(dev->dev, offset, buffer, cnt);
+++#endif
+++	return eeprom_read(dev->i2c_addr, offset, buffer, cnt);
+++}
+++
+++static int eeprom_dev_spec_write(struct eeprom_dev_spec *dev,
+++				 unsigned offset, uchar *buffer, unsigned cnt)
+++{
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (dev->dev)
+++		return i2c_eeprom_write(dev->dev, offset, buffer, cnt);
+++#endif
+++	return eeprom_write(dev->i2c_addr, offset, buffer, cnt);
+++}
+++
++ /**
++  * parse_eeprom_dev_spec - parse the eeprom device specifier
++  *
++@@ -226,6 +259,28 @@ struct eeprom_dev_spec {
++ static int parse_eeprom_dev_spec(struct eeprom_dev_spec *dev, int argc,
++ 				 char *const argv[])
++ {
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (argc == 0) {
+++		if (!uclass_first_device_err(UCLASS_I2C_EEPROM, &dev->dev))
+++			return 0;
+++	}
+++
+++	if (argc == 1) {
+++		if (!uclass_get_device_by_name(UCLASS_I2C_EEPROM, argv[0],
+++					       &dev->dev))
+++			return 1;
+++
+++		/*
+++		 * If we could not find the device by name and the parameter is
+++		 * not numeric (and so won't be handled later), fail.
+++		 */
+++		if (parse_numeric_param(argv[0]) == -1) {
+++			printf("Can't get eeprom device: %s\n", argv[0]);
+++			return CMD_RET_USAGE;
+++		}
+++	}
+++#endif
+++
++ #ifdef CONFIG_SYS_I2C_EEPROM_ADDR
++ 	if (argc == 0) {
++ 		dev->i2c_bus = -1;
++@@ -265,6 +320,7 @@ static unsigned char eeprom_buf[CONFIG_SYS_EEPROM_SIZE];
++ #endif
++ 
++ enum eeprom_action {
+++	EEPROM_LIST,
++ 	EEPROM_READ,
++ 	EEPROM_WRITE,
++ 	EEPROM_PRINT,
++@@ -274,6 +330,10 @@ enum eeprom_action {
++ 
++ static enum eeprom_action parse_action(char *cmd)
++ {
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (!strncmp(cmd, "list", 4))
+++		return EEPROM_LIST;
+++#endif
++ 	if (!strncmp(cmd, "read", 4))
++ 		return EEPROM_READ;
++ 	if (!strncmp(cmd, "write", 5))
++@@ -288,6 +348,24 @@ static enum eeprom_action parse_action(char *cmd)
++ 	return EEPROM_ACTION_INVALID;
++ }
++ 
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++static int do_eeprom_list(void)
+++{
+++	struct udevice *dev;
+++	struct uclass *uc;
+++	int err;
+++
+++	err = uclass_get(UCLASS_I2C_EEPROM, &uc);
+++	if (err)
+++		return CMD_RET_FAILURE;
+++
+++	uclass_foreach_dev(dev, uc)
+++		printf("%s (%s)\n", dev->name, dev->driver->name);
+++
+++	return CMD_RET_SUCCESS;
+++}
+++#endif
+++
++ static int do_eeprom_rw(struct eeprom_dev_spec *dev, bool read,
++ 			ulong addr, ulong off, ulong cnt)
++ {
++@@ -298,9 +376,9 @@ static int do_eeprom_rw(struct eeprom_dev_spec *dev, bool read,
++ 
++ 	printf(fmt, dev->i2c_addr, read ? "read" : "write", addr, off, cnt);
++ 	if (read)
++-		ret = eeprom_read(dev->i2c_addr, off, memloc, cnt);
+++		ret = eeprom_dev_spec_read(dev, off, memloc, cnt);
++ 	else
++-		ret = eeprom_write(dev->i2c_addr, off, memloc, cnt);
+++		ret = eeprom_dev_spec_write(dev, off, memloc, cnt);
++ 	puts("done\n");
++ 
++ 	return ret;
++@@ -314,7 +392,7 @@ static int do_eeprom_layout(struct eeprom_dev_spec *dev, int layout_ver,
++ 	eeprom_layout_setup(layout, eeprom_buf, CONFIG_SYS_EEPROM_SIZE,
++ 			    layout_ver);
++ 
++-	return eeprom_read(dev->i2c_addr, 0, eeprom_buf, layout->data_size);
+++	return eeprom_dev_spec_read(dev, 0, eeprom_buf, layout->data_size);
++ }
++ 
++ static int do_eeprom_print(struct eeprom_dev_spec *dev, int layout_ver)
++@@ -345,7 +423,7 @@ static int do_eeprom_update(struct eeprom_dev_spec *dev, int layout_ver,
++ 	if (ret)
++ 		return CMD_RET_FAILURE;
++ 
++-	return eeprom_write(dev->i2c_addr, 0, layout.data, layout.data_size);
+++	return eeprom_dev_spec_write(dev, 0, layout.data, layout.data_size);
++ }
++ 
++ #endif
++@@ -353,6 +431,8 @@ static int do_eeprom_update(struct eeprom_dev_spec *dev, int layout_ver,
++ static int eeprom_action_expected_argc(enum eeprom_action action)
++ {
++ 	switch (action) {
+++	case EEPROM_LIST:
+++		return 0;
++ 	case EEPROM_READ:
++ 	case EEPROM_WRITE:
++ 		return 3;
++@@ -389,6 +469,11 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	if (action == EEPROM_ACTION_INVALID)
++ 		return CMD_RET_USAGE;
++ 
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	if (action == EEPROM_LIST)
+++		return do_eeprom_list();
+++#endif
+++
++ #ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++ 	if (action == EEPROM_PRINT || action == EEPROM_UPDATE) {
++ 		if (!strcmp(argv[index], "-l")) {
++@@ -425,7 +510,7 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ 	}
++ #endif
++ 
++-	eeprom_init(dev.i2c_bus);
+++	eeprom_dev_spec_init(&dev);
++ 
++ 	switch (action) {
++ 	case EEPROM_READ:
++@@ -450,19 +535,37 @@ int do_eeprom(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++ #define EEPROM_LAYOUT_SPEC	""
++ #endif
++ 
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++# define EEPROM_DEV_SPEC	"[device_specifier]"
+++#else
+++# define EEPROM_DEV_SPEC	"[[bus] devaddr]"
+++#endif
+++
++ U_BOOT_CMD(
++ 	eeprom,	8,	1,	do_eeprom,
++ 	"EEPROM sub-system",
++-	"read  [[bus] devaddr] addr off cnt\n"
++-	"eeprom write [[bus] devaddr] addr off cnt\n"
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	"list\n"
+++	"eeprom "
+++#endif
+++	"read  " EEPROM_DEV_SPEC " addr off cnt\n"
+++	"eeprom write " EEPROM_DEV_SPEC " addr off cnt\n"
++ 	"       - read/write `cnt' bytes from `devaddr` EEPROM at offset `off'"
++ #ifdef CONFIG_CMD_EEPROM_LAYOUT
++ 	"\n"
++-	"eeprom print " EEPROM_LAYOUT_SPEC "[[bus] devaddr]\n"
+++	"eeprom print " EEPROM_LAYOUT_SPEC EEPROM_DEV_SPEC "\n"
++ 	"       - Print layout fields and their data in human readable format\n"
++-	"eeprom update " EEPROM_LAYOUT_SPEC "[[bus] devaddr] field_name field_value\n"
+++	"eeprom update " EEPROM_LAYOUT_SPEC EEPROM_DEV_SPEC " field_name field_value\n"
++ 	"       - Update a specific eeprom field with new data.\n"
++ 	"         The new data must be written in the same human readable format as shown by the print command."
+++#endif
+++#if CONFIG_IS_ENABLED(I2C_EEPROM)
+++	"\n\n"
+++	"DEVICE SPECIFIER - the eeprom device can be specified\n"
+++	"  [dev_name] - by device name (devices can listed with the eeprom list command)\n"
+++	"  [[bus] devaddr] - or by I2C bus and I2C device address\n"
+++	"If no device specifier is given, the first driver-model found device is used."
+++#endif
++ #ifdef CONFIG_EEPROM_LAYOUT_VERSIONS
++ 	"\n\n"
++ 	"LAYOUT VERSIONS\n"
++@@ -471,5 +574,4 @@ U_BOOT_CMD(
++ 	"The values which can be provided with the -l option are:\n"
++ 	CONFIG_EEPROM_LAYOUT_HELP_STRING"\n"
++ #endif
++-#endif
++ );
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0012-ddr-marvell-a38x-debug-return-from-ddr3_tip_print_lo.patch b/package/boot/uboot-mvebu/patches/0012-ddr-marvell-a38x-debug-return-from-ddr3_tip_print_lo.patch
+new file mode 100644
+index 0000000000..f2cc4e6f1f
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0012-ddr-marvell-a38x-debug-return-from-ddr3_tip_print_lo.patch
+@@ -0,0 +1,44 @@
++From 65f9564e19a1a30ba9328cf0c493f3aa7b54592f Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 16:57:53 +0200
++Subject: [PATCH 12/26] ddr: marvell: a38x: debug: return from
++ ddr3_tip_print_log() early if we won't print anything
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Return from ddr3_tip_print_log() early if we won't print anything
++anyway.
++
++This way the compiler can optimize away the VALIDATE_IF_ACTIVE() calls
++in the for-loop, so if the SILENT_LIB macro is defined, no code is
++generated for the rest of the function, which saves some space.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/ddr/marvell/a38x/ddr3_debug.c | 9 +++++++++
++ 1 file changed, 9 insertions(+)
++
++diff --git a/drivers/ddr/marvell/a38x/ddr3_debug.c b/drivers/ddr/marvell/a38x/ddr3_debug.c
++index 9e499cfb99..0374a84387 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_debug.c
+++++ b/drivers/ddr/marvell/a38x/ddr3_debug.c
++@@ -399,6 +399,15 @@ int ddr3_tip_print_log(u32 dev_num, u32 mem_addr)
++ 	}
++ #endif /* DDR_VIEWER_TOOL */
++ 
+++	/* return early if we won't print anything anyway */
+++	if (
+++#if defined(SILENT_LIB)
+++	    1 ||
+++#endif
+++	    debug_training < DEBUG_LEVEL_INFO) {
+++		return MV_OK;
+++	}
+++
++ 	for (if_id = 0; if_id <= MAX_INTERFACE_NUM - 1; if_id++) {
++ 		VALIDATE_IF_ACTIVE(tm->if_act_mask, if_id);
++ 
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0013-ddr-marvell-a38x-debug-Remove-unused-variables.patch b/package/boot/uboot-mvebu/patches/0013-ddr-marvell-a38x-debug-Remove-unused-variables.patch
+new file mode 100644
+index 0000000000..95a4422f9e
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0013-ddr-marvell-a38x-debug-Remove-unused-variables.patch
+@@ -0,0 +1,49 @@
++From 52f17f8032f586d4e4f5c2036ecf3745b7325982 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 17:04:34 +0200
++Subject: [PATCH 13/26] ddr: marvell: a38x: debug: Remove unused variables
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The variables is_default_centralization, is_tune_result and
++is_bist_reset_bit are never used.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/ddr/marvell/a38x/ddr3_debug.c | 3 ---
++ drivers/ddr/marvell/a38x/ddr3_init.h  | 1 -
++ 2 files changed, 4 deletions(-)
++
++diff --git a/drivers/ddr/marvell/a38x/ddr3_debug.c b/drivers/ddr/marvell/a38x/ddr3_debug.c
++index 0374a84387..c659ae92d8 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_debug.c
+++++ b/drivers/ddr/marvell/a38x/ddr3_debug.c
++@@ -117,12 +117,9 @@ u32 ctrl_level_phase[MAX_CS_NUM * MAX_INTERFACE_NUM * MAX_BUS_NUM];
++ #endif /* DDR_VIEWER_TOOL */
++ 
++ struct hws_tip_config_func_db config_func_info[MAX_DEVICE_NUM];
++-u8 is_default_centralization = 0;
++-u8 is_tune_result = 0;
++ u8 is_validate_window_per_if = 0;
++ u8 is_validate_window_per_pup = 0;
++ u8 sweep_cnt = 1;
++-u32 is_bist_reset_bit = 1;
++ u8 is_run_leveling_sweep_tests;
++ 
++ static struct hws_xsb_info xsb_info[MAX_DEVICE_NUM];
++diff --git a/drivers/ddr/marvell/a38x/ddr3_init.h b/drivers/ddr/marvell/a38x/ddr3_init.h
++index 6854bb49de..9288073a78 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_init.h
+++++ b/drivers/ddr/marvell/a38x/ddr3_init.h
++@@ -116,7 +116,6 @@ extern u32 clamp_tbl[];
++ extern u32 freq_mask[MAX_DEVICE_NUM][MV_DDR_FREQ_LAST];
++ 
++ extern u32 maxt_poll_tries;
++-extern u32 is_bist_reset_bit;
++ 
++ extern u8 vref_window_size[MAX_INTERFACE_NUM][MAX_BUS_NUM];
++ extern u32 effective_cs;
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0014-ddr-marvell-a38x-debug-Define-DDR_VIEWER_TOOL-variab.patch b/package/boot/uboot-mvebu/patches/0014-ddr-marvell-a38x-debug-Define-DDR_VIEWER_TOOL-variab.patch
+new file mode 100644
+index 0000000000..cd2fb82cc5
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0014-ddr-marvell-a38x-debug-Define-DDR_VIEWER_TOOL-variab.patch
+@@ -0,0 +1,46 @@
++From 94f54949783ee40faa475c00e27106012cf6807d Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 17:06:38 +0200
++Subject: [PATCH 14/26] ddr: marvell: a38x: debug: Define DDR_VIEWER_TOOL
++ variables only if needed, and make them static
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The variables is_validate_window_per_if, is_validate_window_per_pup,
++sweep_cnt and is_run_leveling_sweep_tests are only used if
++DDR_VIEWER_TOOL macro is defined, so define them only in that case.
++
++Make them static since they are only used in ddr3_debug.c.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/ddr/marvell/a38x/ddr3_debug.c | 9 +++++----
++ 1 file changed, 5 insertions(+), 4 deletions(-)
++
++diff --git a/drivers/ddr/marvell/a38x/ddr3_debug.c b/drivers/ddr/marvell/a38x/ddr3_debug.c
++index c659ae92d8..d32d42c408 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_debug.c
+++++ b/drivers/ddr/marvell/a38x/ddr3_debug.c
++@@ -114,13 +114,14 @@ u32 ctrl_adll[MAX_CS_NUM * MAX_INTERFACE_NUM * MAX_BUS_NUM];
++ u32 ctrl_adll1[MAX_CS_NUM * MAX_INTERFACE_NUM * MAX_BUS_NUM];
++ u32 ctrl_level_phase[MAX_CS_NUM * MAX_INTERFACE_NUM * MAX_BUS_NUM];
++ #endif /* EXCLUDE_SWITCH_DEBUG */
+++
+++static u8 is_validate_window_per_if = 0;
+++static u8 is_validate_window_per_pup = 0;
+++static u8 sweep_cnt = 1;
+++static u8 is_run_leveling_sweep_tests;
++ #endif /* DDR_VIEWER_TOOL */
++ 
++ struct hws_tip_config_func_db config_func_info[MAX_DEVICE_NUM];
++-u8 is_validate_window_per_if = 0;
++-u8 is_validate_window_per_pup = 0;
++-u8 sweep_cnt = 1;
++-u8 is_run_leveling_sweep_tests;
++ 
++ static struct hws_xsb_info xsb_info[MAX_DEVICE_NUM];
++ 
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0015-ddr-marvell-a38x-debug-Allow-compiling-with-immutabl.patch b/package/boot/uboot-mvebu/patches/0015-ddr-marvell-a38x-debug-Allow-compiling-with-immutabl.patch
+new file mode 100644
+index 0000000000..59eb7f9dd2
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0015-ddr-marvell-a38x-debug-Allow-compiling-with-immutabl.patch
+@@ -0,0 +1,171 @@
++From fd7f454382267758bb54435f22c4aa926ebff22d Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 17:16:11 +0200
++Subject: [PATCH 15/26] ddr: marvell: a38x: debug: Allow compiling with
++ immutable debug settings to reduce binary size
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Allow compiling with immutable debug settings:
++- DEBUG_LEVEL is always set to DEBUG_LEVEL_ERROR
++- register dumps are disabled
++
++This can save around 10 KiB of space in the resulting binary, which is a
++lot in U-Boot SPL.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ arch/arm/mach-mvebu/Kconfig           | 10 +++++++
++ drivers/ddr/marvell/a38x/ddr3_debug.c |  9 ++++--
++ drivers/ddr/marvell/a38x/ddr3_init.c  |  3 +-
++ drivers/ddr/marvell/a38x/ddr3_init.h  | 42 ++++++++++++++++++++++-----
++ 4 files changed, 53 insertions(+), 11 deletions(-)
++
++diff --git a/arch/arm/mach-mvebu/Kconfig b/arch/arm/mach-mvebu/Kconfig
++index f15d3cc5ed..a320793a30 100644
++--- a/arch/arm/mach-mvebu/Kconfig
+++++ b/arch/arm/mach-mvebu/Kconfig
++@@ -250,6 +250,16 @@ config DDR_LOG_LEVEL
++ 	  At level 3, rovides the windows margin of each DQ as a results of
++ 	  DQS centeralization.
++ 
+++config DDR_IMMUTABLE_DEBUG_SETTINGS
+++	bool "Immutable DDR debug level (always DEBUG_LEVEL_ERROR)"
+++	depends on ARMADA_38X
+++	help
+++	  Makes the DDR training code debug level settings immutable.
+++	  The debug level setting from board topology definition is ignored.
+++	  The debug level is always set to DEBUG_LEVEL_ERROR and register
+++	  dumps are disabled.
+++	  This can save around 10 KiB of space in SPL binary.
+++
++ config DDR_RESET_ON_TRAINING_FAILURE
++ 	bool "Reset the board on DDR training failure instead of hanging"
++ 	depends on ARMADA_38X || ARMADA_XP
++diff --git a/drivers/ddr/marvell/a38x/ddr3_debug.c b/drivers/ddr/marvell/a38x/ddr3_debug.c
++index d32d42c408..0b65168d82 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_debug.c
+++++ b/drivers/ddr/marvell/a38x/ddr3_debug.c
++@@ -7,18 +7,21 @@
++ #include "mv_ddr_training_db.h"
++ #include "mv_ddr_regs.h"
++ 
+++#if !defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
++ u8 is_reg_dump = 0;
++ u8 debug_pbs = DEBUG_LEVEL_ERROR;
+++#endif
++ 
++ /*
++  * API to change flags outside of the lib
++  */
++-#if defined(SILENT_LIB)
+++#if defined(SILENT_LIB) || defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
++ void ddr3_hws_set_log_level(enum ddr_lib_debug_block block, u8 level)
++ {
++ 	/* do nothing */
++ }
++-#else /* SILENT_LIB */
+++#else /* !SILENT_LIB && !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
+++
++ /* Debug flags for other Training modules */
++ u8 debug_training_static = DEBUG_LEVEL_ERROR;
++ u8 debug_training = DEBUG_LEVEL_ERROR;
++@@ -104,7 +107,7 @@ void ddr3_hws_set_log_level(enum ddr_lib_debug_block block, u8 level)
++ #endif /* CONFIG_DDR4 */
++ 	}
++ }
++-#endif /* SILENT_LIB */
+++#endif /* !SILENT_LIB && !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
++ 
++ #if defined(DDR_VIEWER_TOOL)
++ static char *convert_freq(enum mv_ddr_freq freq);
++diff --git a/drivers/ddr/marvell/a38x/ddr3_init.c b/drivers/ddr/marvell/a38x/ddr3_init.c
++index 27eb3ac173..7c5147f474 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_init.c
+++++ b/drivers/ddr/marvell/a38x/ddr3_init.c
++@@ -41,7 +41,8 @@ int ddr3_init(void)
++ 	mv_ddr_pre_training_soc_config(ddr_type);
++ 
++ 	/* Set log level for training library */
++-	mv_ddr_user_log_level_set(DEBUG_BLOCK_ALL);
+++	if (!IS_ENABLED(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS))
+++		mv_ddr_user_log_level_set(DEBUG_BLOCK_ALL);
++ 
++ 	mv_ddr_early_init();
++ 
++diff --git a/drivers/ddr/marvell/a38x/ddr3_init.h b/drivers/ddr/marvell/a38x/ddr3_init.h
++index 9288073a78..b513a13c53 100644
++--- a/drivers/ddr/marvell/a38x/ddr3_init.h
+++++ b/drivers/ddr/marvell/a38x/ddr3_init.h
++@@ -45,15 +45,46 @@ enum log_level  {
++ #define MISL_PHY_ODT_N_OFFS	0x0
++ 
++ /* Globals */
++-extern u8 debug_training, debug_calibration, debug_ddr4_centralization,
++-	debug_tap_tuning, debug_dm_tuning;
+++#if defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
+++static const u8 is_reg_dump = 0;
+++static const u8 debug_training_static = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training = DEBUG_LEVEL_ERROR;
+++static const u8 debug_leveling = DEBUG_LEVEL_ERROR;
+++static const u8 debug_centralization = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_ip = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_bist = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_hw_alg = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_access = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_device = DEBUG_LEVEL_ERROR;
+++static const u8 debug_pbs = DEBUG_LEVEL_ERROR;
+++
+++static const u8 debug_tap_tuning = DEBUG_LEVEL_ERROR;
+++static const u8 debug_calibration = DEBUG_LEVEL_ERROR;
+++static const u8 debug_ddr4_centralization = DEBUG_LEVEL_ERROR;
+++static const u8 debug_dm_tuning = DEBUG_LEVEL_ERROR;
+++#else /* !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
++ extern u8 is_reg_dump;
+++extern u8 debug_training_static;
+++extern u8 debug_training;
+++extern u8 debug_leveling;
+++extern u8 debug_centralization;
+++extern u8 debug_training_ip;
+++extern u8 debug_training_bist;
+++extern u8 debug_training_hw_alg;
+++extern u8 debug_training_access;
+++extern u8 debug_training_device;
+++extern u8 debug_pbs;
+++
+++extern u8 debug_tap_tuning;
+++extern u8 debug_calibration;
+++extern u8 debug_ddr4_centralization;
+++extern u8 debug_dm_tuning;
+++#endif /* !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
+++
++ extern u8 generic_init_controller;
++ /* list of allowed frequency listed in order of enum mv_ddr_freq */
++ extern u32 is_pll_old;
++ extern struct pattern_info pattern_table[];
++-extern u8 debug_centralization, debug_training_ip, debug_training_bist,
++-	debug_pbs, debug_training_static, debug_leveling;
++ extern struct hws_tip_config_func_db config_func_info[];
++ extern u8 twr_mask_table[];
++ extern u8 cl_mask_table[];
++@@ -76,7 +107,6 @@ extern u32 g_rtt_nom;
++ extern u32 g_rtt_wr;
++ extern u32 g_rtt_park;
++ 
++-extern u8 debug_training_access;
++ extern u32 first_active_if;
++ extern u32 delay_enable, ck_delay, ca_delay;
++ extern u32 mask_tune_func;
++@@ -122,8 +152,6 @@ extern u32 effective_cs;
++ extern int ddr3_tip_centr_skip_min_win_check;
++ extern u32 *dq_map_table;
++ 
++-extern u8 debug_training_hw_alg;
++-
++ extern u32 start_xsb_offset;
++ extern u32 odt_config;
++ 
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0016-arm-mvebu-turris_omnia-Enable-immutable-debug-settin.patch b/package/boot/uboot-mvebu/patches/0016-arm-mvebu-turris_omnia-Enable-immutable-debug-settin.patch
+new file mode 100644
+index 0000000000..d103f21cd1
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0016-arm-mvebu-turris_omnia-Enable-immutable-debug-settin.patch
+@@ -0,0 +1,32 @@
++From 1bd0536365c383c1dc7adf0f5c05b6cbdfe626fd Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 17:33:06 +0200
++Subject: [PATCH 16/26] arm: mvebu: turris_omnia: Enable immutable debug
++ settings in DDR3 training by default
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Save 10 KiB in Turris Omnia's SPL binary by enabling immutable debug
++settings for DDR3 training code.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ configs/turris_omnia_defconfig | 1 +
++ 1 file changed, 1 insertion(+)
++
++diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
++index 9753e27095..11256be8dd 100644
++--- a/configs/turris_omnia_defconfig
+++++ b/configs/turris_omnia_defconfig
++@@ -10,6 +10,7 @@ CONFIG_NR_DRAM_BANKS=2
++ CONFIG_HAS_CUSTOM_SYS_INIT_SP_ADDR=y
++ CONFIG_CUSTOM_SYS_INIT_SP_ADDR=0xff0000
++ CONFIG_TARGET_TURRIS_OMNIA=y
+++CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS=y
++ CONFIG_DDR_RESET_ON_TRAINING_FAILURE=y
++ CONFIG_MVEBU_EFUSE_VHV_GPIO="mcu_56"
++ CONFIG_MVEBU_EFUSE_VHV_GPIO_ACTIVE_LOW=y
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0017-arm-mvebu-turris_omnia-Fix-ethernet-PHY-reset-gpio-F.patch b/package/boot/uboot-mvebu/patches/0017-arm-mvebu-turris_omnia-Fix-ethernet-PHY-reset-gpio-F.patch
+new file mode 100644
+index 0000000000..70579ddaa0
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0017-arm-mvebu-turris_omnia-Fix-ethernet-PHY-reset-gpio-F.patch
+@@ -0,0 +1,139 @@
++From 1eeb1d8c6af90dd6e499d734c3b71c394b04b33f Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Tue, 30 Apr 2024 15:18:52 +0200
++Subject: [PATCH 17/26] arm: mvebu: turris_omnia: Fix ethernet PHY reset gpio
++ FDT fixup
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++For board revisions where the WAN ethernet PHY reset GPIO is controllable
++via MCU we currently insert a phy-reset-gpios property into the ethernet
++controller node. The mvneta driver parses this property and uses the
++GPIO to reset the PHY.
++
++But this phy-reset-gpios property is not a valid DT binding in upstream
++kernel. Instead, a reset-gpios property should be inserted into the
++ethernet PHY node. This correct DT binding is supported by the DM ETH PHY
++U-Boot driver.
++
++Insert the reset-gpios property into the WAN PHY node instead the
++phy-reset-gpios property in WAN ETH node so that Linux will correctly use
++the reset GPIO.
++
++Enable the CONFIG_DM_ETH_PHY config option so that U-Boot will also use
++the correct DT property.
++
++Note: currently there are 4 ethernet controller drivers parsing the
++wrong DT property: dwc_eth_qos, fex_mxc, mvneta and mvpp2. We should
++convert all relevant device-trees to use reset-gpios so that we can get
++rid of these drivers parsing this property.
++
++Fixes: 1da53ae26afc ("arm: mvebu: turris_omnia: Add support for design with SW reset signals")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 44 ++++++++++++++----------
++ configs/turris_omnia_defconfig           |  1 +
++ 2 files changed, 26 insertions(+), 19 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 3b7a71bdad..448655c294 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -978,11 +978,21 @@ static int fixup_mcu_gpio_in_pcie_nodes(void *blob)
++ 	return 0;
++ }
++ 
++-static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
+++static int get_phy_wan_node_offset(const void *blob)
+++{
+++	u32 phy_wan_phandle;
+++
+++	phy_wan_phandle = fdt_getprop_u32_default(blob, "ethernet2", "phy-handle", 0);
+++	if (!phy_wan_phandle)
+++		return -FDT_ERR_NOTFOUND;
+++
+++	return fdt_node_offset_by_phandle(blob, phy_wan_phandle);
+++}
+++
+++static int fixup_mcu_gpio_in_phy_wan_node(void *blob)
++ {
++ 	unsigned int mcu_phandle;
++-	int eth_wan_node;
++-	int ret;
+++	int phy_wan_node, ret;
++ 
++ 	ret = fdt_increase_size(blob, 64);
++ 	if (ret < 0) {
++@@ -990,21 +1000,17 @@ static int fixup_mcu_gpio_in_eth_wan_node(void *blob)
++ 		return ret;
++ 	}
++ 
++-	eth_wan_node = fdt_path_offset(blob, "ethernet2");
++-	if (eth_wan_node < 0)
++-		return eth_wan_node;
+++	phy_wan_node = get_phy_wan_node_offset(blob);
+++	if (phy_wan_node < 0)
+++		return phy_wan_node;
++ 
++ 	mcu_phandle = fdt_create_phandle_by_compatible(blob, "cznic,turris-omnia-mcu");
++ 	if (!mcu_phandle)
++ 		return -FDT_ERR_NOPHANDLES;
++ 
++-	/* insert: phy-reset-gpios = <&mcu 2 gpio GPIO_ACTIVE_LOW>; */
++-	ret = insert_mcu_gpio_prop(blob, eth_wan_node, "phy-reset-gpios",
++-				   mcu_phandle, 2, ilog2(EXT_CTL_nRES_PHY), GPIO_ACTIVE_LOW);
++-	if (ret < 0)
++-		return ret;
++-
++-	return 0;
+++	/* insert: reset-gpios = <&mcu 2 gpio GPIO_ACTIVE_LOW>; */
+++	return insert_mcu_gpio_prop(blob, phy_wan_node, "reset-gpios",
+++				    mcu_phandle, 2, ilog2(EXT_CTL_nRES_PHY), GPIO_ACTIVE_LOW);
++ }
++ 
++ static void fixup_atsha_node(void *blob)
++@@ -1033,7 +1039,7 @@ int board_fix_fdt(void *blob)
++ {
++ 	if (omnia_mcu_has_feature(FEAT_PERIPH_MCU)) {
++ 		fixup_mcu_gpio_in_pcie_nodes(blob);
++-		fixup_mcu_gpio_in_eth_wan_node(blob);
+++		fixup_mcu_gpio_in_phy_wan_node(blob);
++ 	}
++ 
++ 	fixup_msata_port_nodes(blob);
++@@ -1218,14 +1224,14 @@ int ft_board_setup(void *blob, struct bd_info *bd)
++ 	int node;
++ 
++ 	/*
++-	 * U-Boot's FDT blob contains phy-reset-gpios in ethernet2
++-	 * node when MCU controls all peripherals resets.
+++	 * U-Boot's FDT blob contains reset-gpios in ethernet2 PHY node when MCU
+++	 * controls all peripherals resets.
++ 	 * Fixup MCU GPIO nodes in PCIe and eth wan nodes in this case.
++ 	 */
++-	node = fdt_path_offset(gd->fdt_blob, "ethernet2");
++-	if (node >= 0 && fdt_getprop(gd->fdt_blob, node, "phy-reset-gpios", NULL)) {
+++	node = get_phy_wan_node_offset(gd->fdt_blob);
+++	if (node >= 0 && fdt_getprop(gd->fdt_blob, node, "reset-gpios", NULL)) {
++ 		fixup_mcu_gpio_in_pcie_nodes(blob);
++-		fixup_mcu_gpio_in_eth_wan_node(blob);
+++		fixup_mcu_gpio_in_phy_wan_node(blob);
++ 	}
++ 
++ 	fixup_spi_nor_partitions(blob);
++diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
++index 11256be8dd..d7005e7334 100644
++--- a/configs/turris_omnia_defconfig
+++++ b/configs/turris_omnia_defconfig
++@@ -100,6 +100,7 @@ CONFIG_SPI_FLASH_MTD=y
++ CONFIG_PHY_MARVELL=y
++ CONFIG_PHY_FIXED=y
++ CONFIG_DM_DSA=y
+++CONFIG_DM_ETH_PHY=y
++ CONFIG_PHY_GIGE=y
++ CONFIG_MV88E6XXX=y
++ CONFIG_MVNETA=y
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0018-arm-mvebu-turris_omnia-Implement-EEPROM-layout-for-t.patch b/package/boot/uboot-mvebu/patches/0018-arm-mvebu-turris_omnia-Implement-EEPROM-layout-for-t.patch
+new file mode 100644
+index 0000000000..692dfc635f
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0018-arm-mvebu-turris_omnia-Implement-EEPROM-layout-for-t.patch
+@@ -0,0 +1,156 @@
++From 60e7bed7a1bfe04f8cf39d402e97a69c9c0eec72 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 16:47:44 +0200
++Subject: [PATCH 18/26] arm: mvebu: turris_omnia: Implement EEPROM layout for
++ the 'eeprom' command
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Implement Turris Omnia EEPROM layout for the 'eeprom' command.
++
++When the 'eeprom' command (with layout support) is enabled, we can now
++use the 'eeprom print' and 'eeprom update' commands, for example:
++
++  => eeprom print
++  Magic constant                34a04103
++  RAM size in GB                2
++  Wi-Fi Region
++  CRC32 checksum                cecbc2a1
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/Makefile |   1 +
++ board/CZ.NIC/turris_omnia/eeprom.c | 111 +++++++++++++++++++++++++++++
++ 2 files changed, 112 insertions(+)
++ create mode 100644 board/CZ.NIC/turris_omnia/eeprom.c
++
++diff --git a/board/CZ.NIC/turris_omnia/Makefile b/board/CZ.NIC/turris_omnia/Makefile
++index 341378b4e5..216e11958a 100644
++--- a/board/CZ.NIC/turris_omnia/Makefile
+++++ b/board/CZ.NIC/turris_omnia/Makefile
++@@ -3,3 +3,4 @@
++ # Copyright (C) 2017 Marek Behún <kabel@kernel.org>
++ 
++ obj-y	:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
+++obj-$(CONFIG_CMD_EEPROM_LAYOUT)	+= eeprom.o
++diff --git a/board/CZ.NIC/turris_omnia/eeprom.c b/board/CZ.NIC/turris_omnia/eeprom.c
++new file mode 100644
++index 0000000000..19e4a239db
++--- /dev/null
+++++ b/board/CZ.NIC/turris_omnia/eeprom.c
++@@ -0,0 +1,111 @@
+++// SPDX-License-Identifier: GPL-2.0+
+++/*
+++ * Copyright (C) 2024 Marek Behún <kabel@kernel.org>
+++ */
+++
+++#include <asm/unaligned.h>
+++#include <ctype.h>
+++#include <linux/compiler.h>
+++#include <linux/kernel.h>
+++#include <eeprom_field.h>
+++#include <eeprom_layout.h>
+++#include <u-boot/crc.h>
+++
+++#define _DEF_FIELD(_n, _s, _t) \
+++	{ _n, _s, NULL, eeprom_field_print_ ## _t, eeprom_field_update_ ## _t }
+++
+++static void eeprom_field_print_ramsz(const struct eeprom_field *field)
+++{
+++	printf(PRINT_FIELD_SEGMENT, field->name);
+++	printf("%u\n", get_unaligned_le32(field->buf));
+++}
+++
+++static int eeprom_field_update_ramsz(struct eeprom_field *field, char *value)
+++{
+++	u32 sz;
+++
+++	if (value[0] == '1' || value[0] == '2' || value[0] == '4')
+++		sz = value[0] - '0';
+++	else
+++		return -1;
+++
+++	if (value[1] != '\0')
+++		return -1;
+++
+++	put_unaligned_le32(sz, field->buf);
+++
+++	return 0;
+++}
+++
+++static void eeprom_field_print_region(const struct eeprom_field *field)
+++{
+++	eeprom_field_print_ascii(field);
+++}
+++
+++static int eeprom_field_update_region(struct eeprom_field *field, char *value)
+++{
+++	size_t len = strlen(value);
+++
+++	if (len > field->size) {
+++		printf("%s: new data too long\n", field->name);
+++		return -1;
+++	}
+++
+++	memset(field->buf, ' ', 4);
+++	memcpy(field->buf, value, len);
+++
+++	return 0;
+++}
+++
+++static struct eeprom_field omnia_layout[] = {
+++	_DEF_FIELD("Magic constant", 4, bin),
+++	_DEF_FIELD("RAM size in GB", 4, ramsz),
+++	_DEF_FIELD("Wi-Fi Region", 4, region),
+++	_DEF_FIELD("CRC32 checksum", 4, bin),
+++};
+++
+++static struct eeprom_field *crc_field = &omnia_layout[3];
+++
+++static int omnia_update_field(struct eeprom_layout *layout, char *field_name,
+++			      char *new_data)
+++{
+++	struct eeprom_field *field;
+++	int err;
+++
+++	if (!new_data)
+++		return 0;
+++
+++	if (!field_name)
+++		return -1;
+++
+++	field = eeprom_layout_find_field(layout, field_name, true);
+++	if (!field)
+++		return -1;
+++
+++	err = field->update(field, new_data);
+++	if (err) {
+++		printf("Invalid data for field %s\n", field_name);
+++		return err;
+++	}
+++
+++	if (field < crc_field) {
+++		u32 crc = crc32(0, layout->data, 12);
+++		put_unaligned_le32(crc, crc_field->buf);
+++	}
+++
+++	return 0;
+++}
+++
+++void eeprom_layout_assign(struct eeprom_layout *layout, int)
+++{
+++	layout->fields = omnia_layout;
+++	layout->num_of_fields = ARRAY_SIZE(omnia_layout);
+++	layout->update = omnia_update_field;
+++	layout->data_size = 16;
+++}
+++
+++int eeprom_layout_detect(unsigned char *)
+++{
+++	/* Turris Omnia has only one version of EEPROM layout */
+++	return 0;
+++}
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0019-arm-mvebu-turris_omnia-Enable-the-eeprom-command.patch b/package/boot/uboot-mvebu/patches/0019-arm-mvebu-turris_omnia-Enable-the-eeprom-command.patch
+new file mode 100644
+index 0000000000..b4829c62ec
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0019-arm-mvebu-turris_omnia-Enable-the-eeprom-command.patch
+@@ -0,0 +1,41 @@
++From 8cd52cbf6113649ebe8d7b099658ce902a2b5201 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 20 May 2024 16:51:08 +0200
++Subject: [PATCH 19/26] arm: mvebu: turris_omnia: Enable the 'eeprom' command
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Enable the 'eeprom' command with support for EEPROM layout for Turris
++Omnia. Enable the i2c-eeprom driver so that the EEPROM is accessed via
++driver model.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ configs/turris_omnia_defconfig | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
++index d7005e7334..aea996ccd5 100644
++--- a/configs/turris_omnia_defconfig
+++++ b/configs/turris_omnia_defconfig
++@@ -55,6 +55,8 @@ CONFIG_SPL_BOARD_INIT=y
++ CONFIG_SPL_ENV_SUPPORT=y
++ CONFIG_SPL_I2C=y
++ CONFIG_SYS_MAXARGS=32
+++CONFIG_CMD_EEPROM=y
+++CONFIG_CMD_EEPROM_LAYOUT=y
++ CONFIG_CMD_MEMTEST=y
++ CONFIG_SYS_ALT_MEMTEST=y
++ CONFIG_CMD_SHA1SUM=y
++@@ -90,6 +92,7 @@ CONFIG_SPL_OF_TRANSLATE=y
++ CONFIG_AHCI_PCI=y
++ CONFIG_AHCI_MVEBU=y
++ CONFIG_DM_PCA953X=y
+++CONFIG_I2C_EEPROM=y
++ CONFIG_MMC_SDHCI=y
++ CONFIG_MMC_SDHCI_MV=y
++ CONFIG_DM_MTD=y
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0020-arm-mvebu-turris_omnia-Extend-EEPROM-info-structure.patch b/package/boot/uboot-mvebu/patches/0020-arm-mvebu-turris_omnia-Extend-EEPROM-info-structure.patch
+new file mode 100644
+index 0000000000..416a5b7196
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0020-arm-mvebu-turris_omnia-Extend-EEPROM-info-structure.patch
+@@ -0,0 +1,125 @@
++From 994bb218d4d8125e7088853b7ecccd4a20bc940b Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Fri, 17 May 2024 17:15:09 +0200
++Subject: [PATCH 20/26] arm: mvebu: turris_omnia: Extend EEPROM info structure
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Extend the Omnia EEPROM information structure in preparation for more
++variables to be stored there.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/eeprom.c       | 11 ++++++-
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 42 ++++++++++++++++++++----
++ 2 files changed, 46 insertions(+), 7 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/eeprom.c b/board/CZ.NIC/turris_omnia/eeprom.c
++index 19e4a239db..ec7691d46f 100644
++--- a/board/CZ.NIC/turris_omnia/eeprom.c
+++++ b/board/CZ.NIC/turris_omnia/eeprom.c
++@@ -62,9 +62,13 @@ static struct eeprom_field omnia_layout[] = {
++ 	_DEF_FIELD("RAM size in GB", 4, ramsz),
++ 	_DEF_FIELD("Wi-Fi Region", 4, region),
++ 	_DEF_FIELD("CRC32 checksum", 4, bin),
+++	_DEF_FIELD("Extended reserved fields", 44, reserved),
+++	_DEF_FIELD("Extended CRC32 checksum", 4, bin),
++ };
++ 
++ static struct eeprom_field *crc_field = &omnia_layout[3];
+++static struct eeprom_field *ext_crc_field =
+++	&omnia_layout[ARRAY_SIZE(omnia_layout) - 1];
++ 
++ static int omnia_update_field(struct eeprom_layout *layout, char *field_name,
++ 			      char *new_data)
++@@ -93,6 +97,11 @@ static int omnia_update_field(struct eeprom_layout *layout, char *field_name,
++ 		put_unaligned_le32(crc, crc_field->buf);
++ 	}
++ 
+++	if (field < ext_crc_field) {
+++		u32 crc = crc32(0, layout->data, 44);
+++		put_unaligned_le32(crc, ext_crc_field->buf);
+++	}
+++
++ 	return 0;
++ }
++ 
++@@ -101,7 +110,7 @@ void eeprom_layout_assign(struct eeprom_layout *layout, int)
++ 	layout->fields = omnia_layout;
++ 	layout->num_of_fields = ARRAY_SIZE(omnia_layout);
++ 	layout->update = omnia_update_field;
++-	layout->data_size = 16;
+++	layout->data_size = 64;
++ }
++ 
++ int eeprom_layout_detect(unsigned char *)
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 448655c294..d3d8ce849f 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -429,12 +429,40 @@ struct omnia_eeprom {
++ 	u32 ramsize;
++ 	char region[4];
++ 	u32 crc;
+++
+++	/* second part (only considered if crc2 is not all-ones) */
+++	u8 reserved[44];
+++	u32 crc2;
++ };
++ 
+++static bool is_omnia_eeprom_second_part_valid(const struct omnia_eeprom *oep)
+++{
+++	return oep->crc2 != 0xffffffff;
+++}
+++
+++static void make_omnia_eeprom_second_part_invalid(struct omnia_eeprom *oep)
+++{
+++	oep->crc2 = 0xffffffff;
+++}
+++
+++static bool check_eeprom_crc(const void *buf, size_t size, u32 expected,
+++			     const char *name)
+++{
+++	u32 crc;
+++
+++	crc = crc32(0, buf, size);
+++	if (crc != expected) {
+++		printf("bad %s EEPROM CRC (stored %08x, computed %08x)\n",
+++		       name, expected, crc);
+++		return false;
+++	}
+++
+++	return true;
+++}
+++
++ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ {
++ 	struct udevice *chip;
++-	u32 crc;
++ 	int ret;
++ 
++ 	chip = omnia_get_i2c_chip("EEPROM", OMNIA_I2C_EEPROM_CHIP_ADDR,
++@@ -455,12 +483,14 @@ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ 		return false;
++ 	}
++ 
++-	crc = crc32(0, (void *)oep, sizeof(*oep) - 4);
++-	if (crc != oep->crc) {
++-		printf("bad EEPROM CRC (stored %08x, computed %08x)\n",
++-		       oep->crc, crc);
+++	if (!check_eeprom_crc(oep, offsetof(struct omnia_eeprom, crc), oep->crc,
+++			      "first"))
++ 		return false;
++-	}
+++
+++	if (is_omnia_eeprom_second_part_valid(oep) &&
+++	    !check_eeprom_crc(oep, offsetof(struct omnia_eeprom, crc2),
+++			      oep->crc2, "second"))
+++		make_omnia_eeprom_second_part_invalid(oep);
++ 
++ 	return true;
++ }
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0021-arm-mvebu-turris_omnia-Read-DDR-speed-from-EEPROM.patch b/package/boot/uboot-mvebu/patches/0021-arm-mvebu-turris_omnia-Read-DDR-speed-from-EEPROM.patch
+new file mode 100644
+index 0000000000..27c5a47d78
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0021-arm-mvebu-turris_omnia-Read-DDR-speed-from-EEPROM.patch
+@@ -0,0 +1,218 @@
++From 77157a5442737e9d6be5b8bee21adeb10037ca06 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Fri, 17 May 2024 18:09:48 +0200
++Subject: [PATCH 21/26] arm: mvebu: turris_omnia: Read DDR speed from EEPROM
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Some Turris Omnia boards experience memory issues, and by
++experimentation we found that some of these issues can be solved by
++slowing DDR speed.
++
++Add a new field in the extended EEPROM information structure, ddr_speed.
++Support several values in this field (for now 1066F, 1333H, and the
++default, 1600K) and use it to overwrite the DDR topology parameters
++used by the DDR training algorithm.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/eeprom.c       | 41 +++++++++-
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 99 +++++++++++++++++++++++-
++ 2 files changed, 135 insertions(+), 5 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/eeprom.c b/board/CZ.NIC/turris_omnia/eeprom.c
++index ec7691d46f..493ca49a07 100644
++--- a/board/CZ.NIC/turris_omnia/eeprom.c
+++++ b/board/CZ.NIC/turris_omnia/eeprom.c
++@@ -57,12 +57,49 @@ static int eeprom_field_update_region(struct eeprom_field *field, char *value)
++ 	return 0;
++ }
++ 
+++static void eeprom_field_print_ddr_speed(const struct eeprom_field *field)
+++{
+++	printf(PRINT_FIELD_SEGMENT, field->name);
+++
+++	if (field->buf[0] == '\0' || field->buf[0] == 0xff)
+++		puts("(empty, defaults to 1600K)\n");
+++	else
+++		printf("%.5s\n", field->buf);
+++}
+++
+++bool omnia_valid_ddr_speed(const char *name);
+++void omnia_print_ddr_speeds(void);
+++
+++static int eeprom_field_update_ddr_speed(struct eeprom_field *field,
+++					 char *value)
+++{
+++	if (value[0] == '\0') {
+++		/* setting default value */
+++		memset(field->buf, 0xff, field->size);
+++
+++		return 0;
+++	}
+++
+++	if (!omnia_valid_ddr_speed(value)) {
+++		printf("%s: invalid setting, supported values are:\n  ",
+++		       field->name);
+++		omnia_print_ddr_speeds();
+++
+++		return -1;
+++	}
+++
+++	strncpy(field->buf, value, field->size);
+++
+++	return 0;
+++}
+++
++ static struct eeprom_field omnia_layout[] = {
++ 	_DEF_FIELD("Magic constant", 4, bin),
++ 	_DEF_FIELD("RAM size in GB", 4, ramsz),
++ 	_DEF_FIELD("Wi-Fi Region", 4, region),
++ 	_DEF_FIELD("CRC32 checksum", 4, bin),
++-	_DEF_FIELD("Extended reserved fields", 44, reserved),
+++	_DEF_FIELD("DDR speed", 5, ddr_speed),
+++	_DEF_FIELD("Extended reserved fields", 39, reserved),
++ 	_DEF_FIELD("Extended CRC32 checksum", 4, bin),
++ };
++ 
++@@ -98,7 +135,7 @@ static int omnia_update_field(struct eeprom_layout *layout, char *field_name,
++ 	}
++ 
++ 	if (field < ext_crc_field) {
++-		u32 crc = crc32(0, layout->data, 44);
+++		u32 crc = crc32(0, layout->data, 60);
++ 		put_unaligned_le32(crc, ext_crc_field->buf);
++ 	}
++ 
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index d3d8ce849f..ce48252578 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -431,7 +431,8 @@ struct omnia_eeprom {
++ 	u32 crc;
++ 
++ 	/* second part (only considered if crc2 is not all-ones) */
++-	u8 reserved[44];
+++	char ddr_speed[5];
+++	u8 reserved[39];
++ 	u32 crc2;
++ };
++ 
++@@ -520,6 +521,26 @@ static int omnia_get_ram_size_gb(void)
++ 	return ram_size;
++ }
++ 
+++static const char *omnia_get_ddr_speed(void)
+++{
+++	struct omnia_eeprom oep;
+++	static char speed[sizeof(oep.ddr_speed) + 1];
+++
+++	if (!omnia_read_eeprom(&oep))
+++		return NULL;
+++
+++	if (!is_omnia_eeprom_second_part_valid(&oep))
+++		return NULL;
+++
+++	if (!oep.ddr_speed[0] || oep.ddr_speed[0] == 0xff)
+++		return NULL;
+++
+++	memcpy(&speed, &oep.ddr_speed, sizeof(oep.ddr_speed));
+++	speed[sizeof(speed) - 1] = '\0';
+++
+++	return speed;
+++}
+++
++ static const char * const omnia_get_mcu_type(void)
++ {
++ 	static char result[] = "xxxxxxx (with peripheral resets)";
++@@ -634,12 +655,84 @@ static struct mv_ddr_topology_map board_topology_map_2g = {
++ 	{0}				/* timing parameters */
++ };
++ 
+++static const struct omnia_ddr_speed {
+++	char name[5];
+++	u8 speed_bin;
+++	u8 freq;
+++} omnia_ddr_speeds[] = {
+++	{ "1066F", SPEED_BIN_DDR_1066F, MV_DDR_FREQ_533 },
+++	{ "1333H", SPEED_BIN_DDR_1333H, MV_DDR_FREQ_667 },
+++	{ "1600K", SPEED_BIN_DDR_1600K, MV_DDR_FREQ_800 },
+++};
+++
+++static const struct omnia_ddr_speed *find_ddr_speed_setting(const char *name)
+++{
+++	for (int i = 0; i < ARRAY_SIZE(omnia_ddr_speeds); ++i)
+++		if (!strncmp(name, omnia_ddr_speeds[i].name, 5))
+++			return &omnia_ddr_speeds[i];
+++
+++	return NULL;
+++}
+++
+++bool omnia_valid_ddr_speed(const char *name)
+++{
+++	return find_ddr_speed_setting(name) != NULL;
+++}
+++
+++void omnia_print_ddr_speeds(void)
+++{
+++	for (int i = 0; i < ARRAY_SIZE(omnia_ddr_speeds); ++i)
+++		printf("%.5s%s", omnia_ddr_speeds[i].name,
+++		       i == ARRAY_SIZE(omnia_ddr_speeds) - 1 ? "\n" : ", ");
+++}
+++
+++static void fixup_speed_in_ddr_topology(struct mv_ddr_topology_map *topology)
+++{
+++	typeof(topology->interface_params[0]) *params;
+++	const struct omnia_ddr_speed *setting;
+++	const char *speed;
+++	static bool done;
+++
+++	if (done)
+++		return;
+++
+++	done = true;
+++
+++	speed = omnia_get_ddr_speed();
+++	if (!speed)
+++		return;
+++
+++	setting = find_ddr_speed_setting(speed);
+++	if (!setting) {
+++		printf("Unsupported value %s for DDR3 speed in EEPROM!\n",
+++		       speed);
+++		return;
+++	}
+++
+++	params = &topology->interface_params[0];
+++
+++	/* don't inform if we are not changing the speed from the default one */
+++	if (params->speed_bin_index == setting->speed_bin)
+++		return;
+++
+++	printf("Fixing up DDR3 speed (EEPROM defines %s)\n", speed);
+++
+++	params->speed_bin_index = setting->speed_bin;
+++	params->memory_freq = setting->freq;
+++}
+++
++ struct mv_ddr_topology_map *mv_ddr_topology_map_get(void)
++ {
+++	struct mv_ddr_topology_map *topology;
+++
++ 	if (omnia_get_ram_size_gb() == 2)
++-		return &board_topology_map_2g;
+++		topology = &board_topology_map_2g;
++ 	else
++-		return &board_topology_map_1g;
+++		topology = &board_topology_map_1g;
+++
+++	fixup_speed_in_ddr_topology(topology);
+++
+++	return topology;
++ }
++ 
++ static int set_regdomain(void)
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0007-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch b/package/boot/uboot-mvebu/patches/0022-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch
+similarity index 99%
+rename from package/boot/uboot-mvebu/patches/0007-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch
+rename to package/boot/uboot-mvebu/patches/0022-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch
+index 357adbe0b4..82cee4d0a7 100644
+--- a/package/boot/uboot-mvebu/patches/0007-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch
++++ b/package/boot/uboot-mvebu/patches/0022-ddr-marvell-a38x-Import-old-DDR-training-code-from-2.patch
+@@ -1,7 +1,7 @@
+-From dd4f5aaff65c1d1ae09785e451978885e08fb6f7 Mon Sep 17 00:00:00 2001
++From 3fd18b009d3d5b3e5f37efc9f44ed9790d72ee64 Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+ Date: Tue, 5 Mar 2024 14:38:19 +0100
+-Subject: [PATCH 07/11] ddr: marvell: a38x: Import old DDR training code from
++Subject: [PATCH 22/26] ddr: marvell: a38x: Import old DDR training code from
+  2017 version of U-Boot
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+@@ -9,52 +9,96 @@ Content-Transfer-Encoding: 8bit
+ 
+ Import DDR training code from commit 1b69ce2fc0ec ("arm: mvebu:
+ ddr3_debug: remove self assignments") into
+-drivers/ddr/marvell/a38x/old/.
++drivers/ddr/marvell/a38x/old/. The code is not used yet.
++
++Explanation:
++
++Since 2019, on some Turris Omnia boards we have been having problems
++with newer versions of Marvell's DDR3 training code for Armada 38x,
++which is ported from mv-ddr-marvell [1] to U-Boot into the
++drivers/ddr/marvell/a38x/ directory:
++- sometimes the DDR3 training fails on some older boards, sometime it
++  fails on some newer boards
++- other times it succeeds, but some boards experience crashes of the
++  operating system after running for some time.
++
++Using the stock version of Turris Omnia's U-Boot from solved these
++issues, but this solution was not satisfactory, since we wanted
++features from new U-Boot.
++
++Back in 2020-2022 we have spent several months trying to debug the
++issues, working with Marvell, on our own, and also with U-Boot
++community, but these issues persist still.
++
++One solution we used back in 2019 was a "hybrid U-Boot": the SPL part
++(containing the DDR3 training code) was taken from the stock version,
++while the proper part was current U-Boot at the time. This solution also
++has its drawbacks, of which the main one is the need to glue binaries
++from two separate builds.
++
++Since then there have been some more changes to the DDR3 training code
++in upstream mv-ddr-marvell that have been ported to U-Boot. We have
++provided our users experimental builds of U-Boot in the TurrisOS so that
++they could try upgrading the firmware and let us know if those problems
++still exist. And they do.
++
++We do not have the time nor manpower to debug this problem and fix it
++properly. Marvell was also no able to provide a solution to this,
++probably because they do not have the manpower as well.
++
++I have therefore come up with this "not that pretty" solution: take the
++DDR3 training code from an older version of U-Boot that is known to
++work, put it into current U-Boot under old/ subdirectory within
++drivers/ddr/marvell/a38x/, build into the SPL binary both the old and
++new versions and make it possible to select the old version via an env
++variable.
++
++[1] https://github.com/MarvellEmbeddedProcessors/mv-ddr-marvell
+ 
+ Signed-off-by: Marek Behún <kabel@kernel.org>
+ ---
+  drivers/ddr/marvell/a38x/old/Makefile         |   18 +
+- drivers/ddr/marvell/a38x/old/ddr3_a38x.c      |  737 +++++
++ drivers/ddr/marvell/a38x/old/ddr3_a38x.c      |  736 +++++
+  drivers/ddr/marvell/a38x/old/ddr3_a38x.h      |   93 +
+  .../marvell/a38x/old/ddr3_a38x_mc_static.h    |  226 ++
+  .../ddr/marvell/a38x/old/ddr3_a38x_topology.h |   22 +
+- .../ddr/marvell/a38x/old/ddr3_a38x_training.c |   40 +
+- drivers/ddr/marvell/a38x/old/ddr3_debug.c     | 1527 ++++++++++
+- .../marvell/a38x/old/ddr3_hws_hw_training.c   |  148 +
++ .../ddr/marvell/a38x/old/ddr3_a38x_training.c |   39 +
++ drivers/ddr/marvell/a38x/old/ddr3_debug.c     | 1526 ++++++++++
++ .../marvell/a38x/old/ddr3_hws_hw_training.c   |  147 +
+  .../marvell/a38x/old/ddr3_hws_hw_training.h   |   49 +
+  .../a38x/old/ddr3_hws_hw_training_def.h       |  464 +++
+  .../marvell/a38x/old/ddr3_hws_sil_training.h  |   17 +
+- drivers/ddr/marvell/a38x/old/ddr3_init.c      |  769 +++++
++ drivers/ddr/marvell/a38x/old/ddr3_init.c      |  768 +++++
+  drivers/ddr/marvell/a38x/old/ddr3_init.h      |  393 +++
+  .../ddr/marvell/a38x/old/ddr3_logging_def.h   |  101 +
+  .../marvell/a38x/old/ddr3_patterns_64bit.h    |  924 ++++++
+  .../ddr/marvell/a38x/old/ddr3_topology_def.h  |   76 +
+- drivers/ddr/marvell/a38x/old/ddr3_training.c  | 2650 +++++++++++++++++
+- .../ddr/marvell/a38x/old/ddr3_training_bist.c |  289 ++
+- .../a38x/old/ddr3_training_centralization.c   |  712 +++++
+- .../ddr/marvell/a38x/old/ddr3_training_db.c   |  652 ++++
+- .../marvell/a38x/old/ddr3_training_hw_algo.c  |  686 +++++
++ drivers/ddr/marvell/a38x/old/ddr3_training.c  | 2649 +++++++++++++++++
++ .../ddr/marvell/a38x/old/ddr3_training_bist.c |  288 ++
++ .../a38x/old/ddr3_training_centralization.c   |  711 +++++
++ .../ddr/marvell/a38x/old/ddr3_training_db.c   |  651 ++++
++ .../marvell/a38x/old/ddr3_training_hw_algo.c  |  685 +++++
+  .../marvell/a38x/old/ddr3_training_hw_algo.h  |   14 +
+  .../ddr/marvell/a38x/old/ddr3_training_ip.h   |  178 ++
+  .../marvell/a38x/old/ddr3_training_ip_bist.h  |   54 +
+  .../old/ddr3_training_ip_centralization.h     |   15 +
+  .../marvell/a38x/old/ddr3_training_ip_db.h    |   34 +
+  .../marvell/a38x/old/ddr3_training_ip_def.h   |  173 ++
+- .../a38x/old/ddr3_training_ip_engine.c        | 1354 +++++++++
++ .../a38x/old/ddr3_training_ip_engine.c        | 1353 +++++++++
+  .../a38x/old/ddr3_training_ip_engine.h        |   85 +
+  .../marvell/a38x/old/ddr3_training_ip_flow.h  |  349 +++
+  .../marvell/a38x/old/ddr3_training_ip_pbs.h   |   41 +
+  .../a38x/old/ddr3_training_ip_prv_if.h        |  107 +
+  .../a38x/old/ddr3_training_ip_static.h        |   31 +
+- .../marvell/a38x/old/ddr3_training_leveling.c | 1836 ++++++++++++
++ .../marvell/a38x/old/ddr3_training_leveling.c | 1835 ++++++++++++
+  .../marvell/a38x/old/ddr3_training_leveling.h |   17 +
+- .../ddr/marvell/a38x/old/ddr3_training_pbs.c  |  995 +++++++
+- .../marvell/a38x/old/ddr3_training_static.c   |  538 ++++
++ .../ddr/marvell/a38x/old/ddr3_training_pbs.c  |  994 +++++++
++ .../marvell/a38x/old/ddr3_training_static.c   |  537 ++++
+  .../ddr/marvell/a38x/old/ddr_topology_def.h   |  121 +
+  .../ddr/marvell/a38x/old/ddr_training_ip_db.h |   16 +
+  drivers/ddr/marvell/a38x/old/silicon_if.h     |   17 +
+  drivers/ddr/marvell/a38x/old/xor.h            |   92 +
+- 41 files changed, 16660 insertions(+)
++ 41 files changed, 16646 insertions(+)
+  create mode 100644 drivers/ddr/marvell/a38x/old/Makefile
+  create mode 100644 drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+  create mode 100644 drivers/ddr/marvell/a38x/old/ddr3_a38x.h
+@@ -123,17 +167,16 @@ index 0000000000..e7b723bb24
+ +obj-$(CONFIG_SPL_BUILD) += ddr3_training_static.o
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_a38x.c b/drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+ new file mode 100644
+-index 0000000000..c082122f25
++index 0000000000..cc2e498d50
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+-@@ -0,0 +1,737 @@
++@@ -0,0 +1,736 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <i2c.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+@@ -1225,17 +1268,16 @@ index 0000000000..f27bbff733
+ +#endif /* _DDR3_A38X_TOPOLOGY_H */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_a38x_training.c b/drivers/ddr/marvell/a38x/old/ddr3_a38x_training.c
+ new file mode 100644
+-index 0000000000..52c43f75e0
++index 0000000000..edb2e706bb
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_a38x_training.c
+-@@ -0,0 +1,40 @@
++@@ -0,0 +1,39 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <i2c.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+@@ -1271,17 +1313,16 @@ index 0000000000..52c43f75e0
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_debug.c b/drivers/ddr/marvell/a38x/old/ddr3_debug.c
+ new file mode 100644
+-index 0000000000..a704a3e9d3
++index 0000000000..d8bd328dfd
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_debug.c
+-@@ -0,0 +1,1527 @@
++@@ -0,0 +1,1526 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <i2c.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+@@ -2804,17 +2845,16 @@ index 0000000000..a704a3e9d3
+ +#endif
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_hws_hw_training.c b/drivers/ddr/marvell/a38x/old/ddr3_hws_hw_training.c
+ new file mode 100644
+-index 0000000000..560da7ee80
++index 0000000000..b9b0eb7a64
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_hws_hw_training.c
+-@@ -0,0 +1,148 @@
++@@ -0,0 +1,147 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <i2c.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+@@ -3506,17 +3546,16 @@ index 0000000000..544237a276
+ +#endif /* _DDR3_HWS_SIL_TRAINING_H */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_init.c b/drivers/ddr/marvell/a38x/old/ddr3_init.c
+ new file mode 100644
+-index 0000000000..55baad498a
++index 0000000000..9818c3d494
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_init.c
+-@@ -0,0 +1,769 @@
++@@ -0,0 +1,768 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <i2c.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+@@ -5799,17 +5838,16 @@ index 0000000000..64a0447dd1
+ +#endif /* _DDR3_TOPOLOGY_DEF_H */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training.c b/drivers/ddr/marvell/a38x/old/ddr3_training.c
+ new file mode 100644
+-index 0000000000..e70ca4b425
++index 0000000000..c5ebd7c16d
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training.c
+-@@ -0,0 +1,2650 @@
++@@ -0,0 +1,2649 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -8455,17 +8493,16 @@ index 0000000000..e70ca4b425
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_bist.c b/drivers/ddr/marvell/a38x/old/ddr3_training_bist.c
+ new file mode 100644
+-index 0000000000..bd0e26068e
++index 0000000000..fadce2dda5
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_bist.c
+-@@ -0,0 +1,289 @@
++@@ -0,0 +1,288 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -8750,17 +8787,16 @@ index 0000000000..bd0e26068e
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_centralization.c b/drivers/ddr/marvell/a38x/old/ddr3_training_centralization.c
+ new file mode 100644
+-index 0000000000..2909ae3c6f
++index 0000000000..248db49338
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_centralization.c
+-@@ -0,0 +1,712 @@
++@@ -0,0 +1,711 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -9468,17 +9504,16 @@ index 0000000000..2909ae3c6f
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_db.c b/drivers/ddr/marvell/a38x/old/ddr3_training_db.c
+ new file mode 100644
+-index 0000000000..861dfb19c3
++index 0000000000..bd5413e233
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_db.c
+-@@ -0,0 +1,652 @@
++@@ -0,0 +1,651 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -10126,17 +10161,16 @@ index 0000000000..861dfb19c3
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_hw_algo.c b/drivers/ddr/marvell/a38x/old/ddr3_training_hw_algo.c
+ new file mode 100644
+-index 0000000000..56fce174d4
++index 0000000000..3a88527de3
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_hw_algo.c
+-@@ -0,0 +1,686 @@
++@@ -0,0 +1,685 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -11322,17 +11356,16 @@ index 0000000000..51a66d8491
+ +#endif /* _DDR3_TRAINING_IP_DEF_H */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c b/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c
+ new file mode 100644
+-index 0000000000..011824ab42
++index 0000000000..7ac23aedc6
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c
+-@@ -0,0 +1,1354 @@
++@@ -0,0 +1,1353 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -13325,17 +13358,16 @@ index 0000000000..878068b24d
+ +#endif /* _DDR3_TRAINING_IP_STATIC_H_ */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c b/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c
+ new file mode 100644
+-index 0000000000..3c40f198e7
++index 0000000000..8073c2baaf
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c
+-@@ -0,0 +1,1836 @@
++@@ -0,0 +1,1835 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -15190,17 +15222,16 @@ index 0000000000..f2b4177082
+ +#endif /* _DDR3_TRAINING_LEVELING_H_ */
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_pbs.c b/drivers/ddr/marvell/a38x/old/ddr3_training_pbs.c
+ new file mode 100644
+-index 0000000000..2b4a58fb9f
++index 0000000000..c6f58c9ea7
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_pbs.c
+-@@ -0,0 +1,995 @@
++@@ -0,0 +1,994 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -16191,17 +16222,16 @@ index 0000000000..2b4a58fb9f
+ +}
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_static.c b/drivers/ddr/marvell/a38x/old/ddr3_training_static.c
+ new file mode 100644
+-index 0000000000..5101f3f383
++index 0000000000..3129dfa04e
+ --- /dev/null
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_static.c
+-@@ -0,0 +1,538 @@
++@@ -0,0 +1,537 @@
+ +/*
+ + * Copyright (C) Marvell International Ltd. and its affiliates
+ + *
+ + * SPDX-License-Identifier:	GPL-2.0
+ + */
+ +
+-+#include <common.h>
+ +#include <spl.h>
+ +#include <asm/io.h>
+ +#include <asm/arch/cpu.h>
+@@ -17004,5 +17034,5 @@ index 0000000000..7b1e316177
+ +
+ +#endif
+ -- 
+-2.43.0
++2.44.1
+ 
+diff --git a/package/boot/uboot-mvebu/patches/0008-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch b/package/boot/uboot-mvebu/patches/0023-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch
+similarity index 89%
+rename from package/boot/uboot-mvebu/patches/0008-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch
+rename to package/boot/uboot-mvebu/patches/0023-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch
+index 17305cd3e5..1c02379261 100644
+--- a/package/boot/uboot-mvebu/patches/0008-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch
++++ b/package/boot/uboot-mvebu/patches/0023-ddr-marvell-a38x-old-Fix-some-compiler-warning-of-th.patch
+@@ -1,7 +1,7 @@
+-From 13fae853dea0440d17569d5168bad94ba72e9898 Mon Sep 17 00:00:00 2001
++From e286e695b2ec8f0f4f4c6b50f8100681fa99b7fe Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+ Date: Tue, 5 Mar 2024 14:47:55 +0100
+-Subject: [PATCH 08/11] ddr: marvell: a38x: old: Fix some compiler warning of
++Subject: [PATCH 23/26] ddr: marvell: a38x: old: Fix some compiler warning of
+  the old code
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+@@ -19,10 +19,10 @@ Signed-off-by: Marek Behún <kabel@kernel.org>
+  5 files changed, 6 insertions(+)
+ 
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_a38x.c b/drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+-index c082122f25..32a14ca4c9 100644
++index cc2e498d50..8504b9b40c 100644
+ --- a/drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_a38x.c
+-@@ -10,6 +10,7 @@
++@@ -9,6 +9,7 @@
+  #include <asm/io.h>
+  #include <asm/arch/cpu.h>
+  #include <asm/arch/soc.h>
+@@ -45,10 +45,10 @@ index 8cb08864c2..ad95cc9ef8 100644
+  extern u32 freq_val[];
+  extern u8 debug_training_static;
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training.c b/drivers/ddr/marvell/a38x/old/ddr3_training.c
+-index e70ca4b425..572a69d45a 100644
++index c5ebd7c16d..29b31a059a 100644
+ --- a/drivers/ddr/marvell/a38x/old/ddr3_training.c
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training.c
+-@@ -9,6 +9,7 @@
++@@ -8,6 +8,7 @@
+  #include <asm/io.h>
+  #include <asm/arch/cpu.h>
+  #include <asm/arch/soc.h>
+@@ -57,10 +57,10 @@ index e70ca4b425..572a69d45a 100644
+  #include "ddr3_init.h"
+  
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c b/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c
+-index 011824ab42..ee789f0993 100644
++index 7ac23aedc6..869f397b7f 100644
+ --- a/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_ip_engine.c
+-@@ -9,6 +9,7 @@
++@@ -8,6 +8,7 @@
+  #include <asm/io.h>
+  #include <asm/arch/cpu.h>
+  #include <asm/arch/soc.h>
+@@ -69,10 +69,10 @@ index 011824ab42..ee789f0993 100644
+  #include "ddr3_init.h"
+  
+ diff --git a/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c b/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c
+-index 3c40f198e7..c5043eefa3 100644
++index 8073c2baaf..d41845a4f4 100644
+ --- a/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c
+ +++ b/drivers/ddr/marvell/a38x/old/ddr3_training_leveling.c
+-@@ -9,6 +9,7 @@
++@@ -8,6 +8,7 @@
+  #include <asm/io.h>
+  #include <asm/arch/cpu.h>
+  #include <asm/arch/soc.h>
+@@ -81,5 +81,5 @@ index 3c40f198e7..c5043eefa3 100644
+  #include "ddr3_init.h"
+  
+ -- 
+-2.43.0
++2.44.1
+ 
+diff --git a/package/boot/uboot-mvebu/patches/0024-ddr-marvell-a38x-old-Backport-immutable-debug-settin.patch b/package/boot/uboot-mvebu/patches/0024-ddr-marvell-a38x-old-Backport-immutable-debug-settin.patch
+new file mode 100644
+index 0000000000..20dcf7e77a
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/0024-ddr-marvell-a38x-old-Backport-immutable-debug-settin.patch
+@@ -0,0 +1,259 @@
++From d43bee5a41264c59ffc7feabe40fb9b7f7ae83a9 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 15 Apr 2024 17:49:16 +0200
++Subject: [PATCH 24/26] ddr: marvell: a38x: old: Backport immutable debug
++ settings
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Backport the option to compile with immutable debug settings also to
++the old implementation of the DDR3 training code.
++
++The original PR for mv-ddr-marvell can be seen at
++  https://github.com/MarvellEmbeddedProcessors/mv-ddr-marvell/pull/45/
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/ddr/marvell/a38x/old/ddr3_debug.c | 34 +++++++++++++++----
++ drivers/ddr/marvell/a38x/old/ddr3_init.c  |  3 +-
++ drivers/ddr/marvell/a38x/old/ddr3_init.h  | 40 ++++++++++++++---------
++ 3 files changed, 54 insertions(+), 23 deletions(-)
++
++diff --git a/drivers/ddr/marvell/a38x/old/ddr3_debug.c b/drivers/ddr/marvell/a38x/old/ddr3_debug.c
++index d8bd328dfd..d559a84a68 100644
++--- a/drivers/ddr/marvell/a38x/old/ddr3_debug.c
+++++ b/drivers/ddr/marvell/a38x/old/ddr3_debug.c
++@@ -12,13 +12,15 @@
++ 
++ #include "ddr3_init.h"
++ 
+++#if !defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
++ u8 is_reg_dump = 0;
++ u8 debug_pbs = DEBUG_LEVEL_ERROR;
+++#endif
++ 
++ /*
++  * API to change flags outside of the lib
++  */
++-#ifndef SILENT_LIB
+++#if !defined(SILENT_LIB) && !defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
++ /* Debug flags for other Training modules */
++ u8 debug_training_static = DEBUG_LEVEL_ERROR;
++ u8 debug_training = DEBUG_LEVEL_ERROR;
++@@ -83,12 +85,13 @@ void ddr3_hws_set_log_level(enum ddr_lib_debug_block block, u8 level)
++ #endif
++ 
++ struct hws_tip_config_func_db config_func_info[HWS_MAX_DEVICE_NUM];
++-u8 is_default_centralization = 0;
++-u8 is_tune_result = 0;
++-u8 is_validate_window_per_if = 0;
++-u8 is_validate_window_per_pup = 0;
++-u8 sweep_cnt = 1;
++-u32 is_bist_reset_bit = 1;
+++
+++#if 0
+++static u8 is_validate_window_per_if = 0;
+++static u8 is_validate_window_per_pup = 0;
+++static u8 sweep_cnt = 1;
+++#endif
+++
++ static struct hws_xsb_info xsb_info[HWS_MAX_DEVICE_NUM];
++ 
++ /*
++@@ -291,6 +294,7 @@ int print_device_info(u8 dev_num)
++ 	return MV_OK;
++ }
++ 
+++#if 0
++ void hws_ddr3_tip_sweep_test(int enable)
++ {
++ 	if (enable) {
++@@ -303,6 +307,7 @@ void hws_ddr3_tip_sweep_test(int enable)
++ 	}
++ }
++ #endif
+++#endif
++ 
++ char *ddr3_tip_convert_tune_result(enum hws_result tune_result)
++ {
++@@ -326,6 +331,7 @@ int ddr3_tip_print_log(u32 dev_num, u32 mem_addr)
++ 	u32 if_id = 0;
++ 	struct hws_topology_map *tm = ddr3_get_topology_map();
++ 
+++#if 0
++ #ifndef EXCLUDE_SWITCH_DEBUG
++ 	if ((is_validate_window_per_if != 0) ||
++ 	    (is_validate_window_per_pup != 0)) {
++@@ -346,8 +352,18 @@ int ddr3_tip_print_log(u32 dev_num, u32 mem_addr)
++ 		CHECK_STATUS(ddr3_tip_restore_dunit_regs(dev_num));
++ 		ddr3_tip_reg_dump(dev_num);
++ 	}
+++#endif
++ #endif
++ 
+++	/* return early if we won't print anything anyway */
+++	if (
+++#if defined(SILENT_LIB)
+++	    1 ||
+++#endif
+++	    debug_training < DEBUG_LEVEL_INFO) {
+++		return MV_OK;
+++	}
+++
++ 	for (if_id = 0; if_id <= MAX_INTERFACE_NUM - 1; if_id++) {
++ 		VALIDATE_ACTIVE(tm->if_act_mask, if_id);
++ 
++@@ -756,7 +772,9 @@ u32 xsb_test_table[][8] = {
++ 	 0xffffffff, 0xffffffff}
++ };
++ 
+++#if 0
++ static int ddr3_tip_access_atr(u32 dev_num, u32 flag_id, u32 value, u32 **ptr);
+++#endif
++ 
++ int ddr3_tip_print_adll(void)
++ {
++@@ -788,6 +806,7 @@ int ddr3_tip_print_adll(void)
++ 	return MV_OK;
++ }
++ 
+++#if 0
++ /*
++  * Set attribute value
++  */
++@@ -1155,6 +1174,7 @@ static int ddr3_tip_access_atr(u32 dev_num, u32 flag_id, u32 value, u32 **ptr)
++ 
++ 	return MV_OK;
++ }
+++#endif
++ 
++ #ifndef EXCLUDE_SWITCH_DEBUG
++ /*
++diff --git a/drivers/ddr/marvell/a38x/old/ddr3_init.c b/drivers/ddr/marvell/a38x/old/ddr3_init.c
++index 9818c3d494..b3c04eb3ab 100644
++--- a/drivers/ddr/marvell/a38x/old/ddr3_init.c
+++++ b/drivers/ddr/marvell/a38x/old/ddr3_init.c
++@@ -385,7 +385,8 @@ int ddr3_init(void)
++ 		return status;
++ 
++ 	/* Set log level for training lib */
++-	ddr3_hws_set_log_level(DEBUG_BLOCK_ALL, DEBUG_LEVEL_ERROR);
+++	if (!IS_ENABLED(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS))
+++		ddr3_hws_set_log_level(DEBUG_BLOCK_ALL, DEBUG_LEVEL_ERROR);
++ 
++ 	/* Start New Training IP */
++ 	status = ddr3_hws_hw_training();
++diff --git a/drivers/ddr/marvell/a38x/old/ddr3_init.h b/drivers/ddr/marvell/a38x/old/ddr3_init.h
++index ad95cc9ef8..5090cf97a7 100644
++--- a/drivers/ddr/marvell/a38x/old/ddr3_init.h
+++++ b/drivers/ddr/marvell/a38x/old/ddr3_init.h
++@@ -152,17 +152,38 @@ enum log_level  {
++ };
++ 
++ /* Globals */
++-extern u8 debug_training;
+++#if defined(CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS)
+++static const u8 is_reg_dump = 0;
+++static const u8 debug_training_static = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training = DEBUG_LEVEL_ERROR;
+++static const u8 debug_leveling = DEBUG_LEVEL_ERROR;
+++static const u8 debug_centralization = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_ip = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_bist = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_hw_alg = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_access = DEBUG_LEVEL_ERROR;
+++static const u8 debug_training_a38x = DEBUG_LEVEL_ERROR;
+++static const u8 debug_pbs = DEBUG_LEVEL_ERROR;
+++#else /* !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
++ extern u8 is_reg_dump;
+++extern u8 debug_training_static;
+++extern u8 debug_training;
+++extern u8 debug_leveling;
+++extern u8 debug_centralization;
+++extern u8 debug_training_ip;
+++extern u8 debug_training_bist;
+++extern u8 debug_training_hw_alg;
+++extern u8 debug_training_access;
+++extern u8 debug_training_a38x;
+++extern u8 debug_pbs;
+++#endif /* !CONFIG_DDR_IMMUTABLE_DEBUG_SETTINGS */
+++
++ extern u8 generic_init_controller;
++ extern u32 freq_val[];
++ extern u32 is_pll_old;
++ extern struct cl_val_per_freq cas_latency_table[];
++ extern struct pattern_info pattern_table[];
++ extern struct cl_val_per_freq cas_write_latency_table[];
++-extern u8 debug_training;
++-extern u8 debug_centralization, debug_training_ip, debug_training_bist,
++-	debug_pbs, debug_training_static, debug_leveling;
++ extern u32 pipe_multicast_mask;
++ extern struct hws_tip_config_func_db config_func_info[];
++ extern u8 cs_mask_reg[];
++@@ -186,8 +207,6 @@ extern u32 g_dic;
++ extern u32 g_odt_config;
++ extern u32 g_rtt_nom;
++ 
++-extern u8 debug_training_access;
++-extern u8 debug_training_a38x;
++ extern u32 first_active_if;
++ extern enum hws_ddr_freq init_freq;
++ extern u32 delay_enable, ck_delay, ck_delay_16, ca_delay;
++@@ -227,7 +246,6 @@ extern u32 znri_data_phy_val;
++ extern u32 zpri_data_phy_val;
++ extern u32 znri_ctrl_phy_val;
++ extern u32 zpri_ctrl_phy_val;
++-extern u8 debug_training_access;
++ extern u32 finger_test, p_finger_start, p_finger_end, n_finger_start,
++ 	n_finger_end, p_finger_step, n_finger_step;
++ extern u32 mode2_t;
++@@ -243,8 +261,6 @@ extern u32 freq_mask[HWS_MAX_DEVICE_NUM][DDR_FREQ_LIMIT];
++ extern u32 start_pattern, end_pattern;
++ 
++ extern u32 maxt_poll_tries;
++-extern u32 is_bist_reset_bit;
++-extern u8 debug_training_bist;
++ 
++ extern u8 vref_window_size[MAX_INTERFACE_NUM][MAX_BUS_NUM];
++ extern u32 debug_mode;
++@@ -252,20 +268,16 @@ extern u32 effective_cs;
++ extern int ddr3_tip_centr_skip_min_win_check;
++ extern u32 *dq_map_table;
++ extern enum auto_tune_stage training_stage;
++-extern u8 debug_centralization;
++ 
++ extern u32 delay_enable;
++ extern u32 start_pattern, end_pattern;
++ extern u32 freq_val[DDR_FREQ_LIMIT];
++-extern u8 debug_training_hw_alg;
++ extern enum auto_tune_stage training_stage;
++ 
++-extern u8 debug_training_ip;
++ extern enum hws_result training_result[MAX_STAGE_LIMIT][MAX_INTERFACE_NUM];
++ extern enum auto_tune_stage training_stage;
++ extern u32 effective_cs;
++ 
++-extern u8 debug_leveling;
++ extern enum hws_result training_result[MAX_STAGE_LIMIT][MAX_INTERFACE_NUM];
++ extern enum auto_tune_stage training_stage;
++ extern u32 rl_version;
++@@ -276,7 +288,6 @@ extern u32 odt_config;
++ extern u32 effective_cs;
++ extern u32 phy_reg1_val;
++ 
++-extern u8 debug_pbs;
++ extern u32 effective_cs;
++ extern u16 mask_results_dq_reg_map[];
++ extern enum hws_ddr_freq medium_freq;
++@@ -296,7 +307,6 @@ extern u32 init_freq;
++ #endif
++ /* list of allowed frequency listed in order of enum hws_ddr_freq */
++ extern u32 freq_val[];
++-extern u8 debug_training_static;
++ extern u32 first_active_if;
++ 
++ /* Prototypes */
++-- 
++2.44.1
++
+diff --git a/package/boot/uboot-mvebu/patches/0009-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch b/package/boot/uboot-mvebu/patches/0025-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch
+similarity index 96%
+rename from package/boot/uboot-mvebu/patches/0009-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch
+rename to package/boot/uboot-mvebu/patches/0025-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch
+index 193e622dcf..e2c2839f91 100644
+--- a/package/boot/uboot-mvebu/patches/0009-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch
++++ b/package/boot/uboot-mvebu/patches/0025-arm-mvebu-a38x-Add-optional-support-for-using-old-DD.patch
+@@ -1,7 +1,7 @@
+-From 9b033aad81594fc4d4fb816fd4b1731b0f541632 Mon Sep 17 00:00:00 2001
++From 86ac414c8ce25580ec27399bf3ad277286803ebe Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+ Date: Tue, 5 Mar 2024 15:37:13 +0100
+-Subject: [PATCH 09/11] arm: mvebu: a38x: Add optional support for using old
++Subject: [PATCH 25/26] arm: mvebu: a38x: Add optional support for using old
+  DDR3 training code
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+@@ -31,16 +31,16 @@ Signed-off-by: Marek Behún <kabel@kernel.org>
+  arch/arm/mach-mvebu/include/mach/cpu.h        |   1 +
+  arch/arm/mach-mvebu/spl.c                     |  37 ++-
+  drivers/ddr/marvell/a38x/Makefile             |   2 +
+- drivers/ddr/marvell/a38x/old/Makefile         |   6 +
++ drivers/ddr/marvell/a38x/old/Makefile         |  11 +
+  .../marvell/a38x/old/glue_symbol_renames.h    | 247 ++++++++++++++++++
+- 6 files changed, 288 insertions(+), 9 deletions(-)
++ 6 files changed, 293 insertions(+), 9 deletions(-)
+  create mode 100644 drivers/ddr/marvell/a38x/old/glue_symbol_renames.h
+ 
+ diff --git a/arch/arm/mach-mvebu/Kconfig b/arch/arm/mach-mvebu/Kconfig
+-index c80d8587b1..0075749148 100644
++index a320793a30..e377e8a48a 100644
+ --- a/arch/arm/mach-mvebu/Kconfig
+ +++ b/arch/arm/mach-mvebu/Kconfig
+-@@ -34,6 +34,10 @@ config ARMADA_38X_HS_IMPEDANCE_THRESH
++@@ -37,6 +37,10 @@ config ARMADA_38X_HS_IMPEDANCE_THRESH
+  	default 0x6
+  	range 0x0 0x7
+  
+@@ -132,10 +132,10 @@ index fcfb615686..4e8a9d190d 100644
+  	obj-$(CONFIG_SPL_BUILD) += mv_ddr4_mpr_pda_if.o
+  	obj-$(CONFIG_SPL_BUILD) += mv_ddr4_training.o
+ diff --git a/drivers/ddr/marvell/a38x/old/Makefile b/drivers/ddr/marvell/a38x/old/Makefile
+-index e7b723bb24..fb92b36e85 100644
++index e7b723bb24..1645a79b40 100644
+ --- a/drivers/ddr/marvell/a38x/old/Makefile
+ +++ b/drivers/ddr/marvell/a38x/old/Makefile
+-@@ -16,3 +16,9 @@ obj-$(CONFIG_SPL_BUILD) += ddr3_training_ip_engine.o
++@@ -16,3 +16,14 @@ obj-$(CONFIG_SPL_BUILD) += ddr3_training_ip_engine.o
+  obj-$(CONFIG_SPL_BUILD) += ddr3_training_leveling.o
+  obj-$(CONFIG_SPL_BUILD) += ddr3_training_pbs.o
+  obj-$(CONFIG_SPL_BUILD) += ddr3_training_static.o
+@@ -145,6 +145,11 @@ index e7b723bb24..fb92b36e85 100644
+ +endef
+ +
+ +$(foreach obj,$(obj-y),$(eval $(call IncludeSymbolRename,$(obj))))
+++
+++# The old version of DDR training fails weirdly on some boards if the whole
+++# driver is compiled with LTO. It seems to work if at least ddr3_init.c is
+++# compiled without LTO.
+++CFLAGS_REMOVE_ddr3_init.o := $(LTO_CFLAGS)
+ diff --git a/drivers/ddr/marvell/a38x/old/glue_symbol_renames.h b/drivers/ddr/marvell/a38x/old/glue_symbol_renames.h
+ new file mode 100644
+ index 0000000000..9bdfecd2d6
+@@ -399,5 +404,5 @@ index 0000000000..9bdfecd2d6
+ +
+ +#endif /* !GLUE_SYMBOL_RENAMES_H */
+ -- 
+-2.43.0
++2.44.1
+ 
+diff --git a/package/boot/uboot-mvebu/patches/0011-arm-mvebu-turris_omnia-Support-old-DDR3-training-sel.patch b/package/boot/uboot-mvebu/patches/0026-arm-mvebu-turris_omnia-Support-old-DDR3-training.patch
+similarity index 50%
+rename from package/boot/uboot-mvebu/patches/0011-arm-mvebu-turris_omnia-Support-old-DDR3-training-sel.patch
+rename to package/boot/uboot-mvebu/patches/0026-arm-mvebu-turris_omnia-Support-old-DDR3-training.patch
+index ebdecb36a0..5f38f90850 100644
+--- a/package/boot/uboot-mvebu/patches/0011-arm-mvebu-turris_omnia-Support-old-DDR3-training-sel.patch
++++ b/package/boot/uboot-mvebu/patches/0026-arm-mvebu-turris_omnia-Support-old-DDR3-training.patch
+@@ -1,77 +1,35 @@
+-From 1a813c9b38f765da84b9202d61cea5e41acb277c Mon Sep 17 00:00:00 2001
++From bda3eb16ce5b7f1de254237143d82db8713b096b Mon Sep 17 00:00:00 2001
+ From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+ Date: Wed, 6 Mar 2024 09:18:19 +0100
+-Subject: [PATCH 11/11] arm: mvebu: turris_omnia: Support old DDR3 training,
+- selectable via env var
++Subject: [PATCH 26/26] arm: mvebu: turris_omnia: Support old DDR3 training
+ MIME-Version: 1.0
+ Content-Type: text/plain; charset=UTF-8
+ Content-Transfer-Encoding: 8bit
+ 
+-Support old DDR3 training code on Turris Omnia, selectable by U-Boot
+-enviroment variable.
++Support old DDR3 training code on Turris Omnia, selectable via EEPROM
++field.
+ 
+ Users experiencing DDR3 initialization failures or random crashes of the
+ operating system due to incorrect DDR3 configuration can select the old
+-DDR3 training implementation to fix those issues by setting the
+-environment variable
+-  env set omnia_ddr3_training old
+-
+-Explanation:
+-
+-Since 2019 we have been having problems with newer versions of Marvell's
+-DDR3 training code for Armada 38x, which is ported from mv-ddr-marvell
+-[1] to U-Boot into the drivers/ddr/marvell/a38x/ directory:
+-- sometimes the DDR3 training fails on some older boards, sometime it
+-  fails on some newer boards
+-- other times it succeeds, but some boards experience crashes of the
+-  operating system after running for some time.
+-
+-Using the old version of U-Boot from 2015 solved these issues, but this
+-solution was not satisfactory, since we wanted features from new U-Boot.
+-
+-Back in 2020-2022 we have spent several months trying to debug the
+-issues, working with Marvell, on our own, and also with U-Boot
+-community, but these issues persist still.
+-
+-One solution we used back in 2019 was a "hybrid U-Boot": the SPL part
+-(containing the DDR3 training code) was taken from the 2015 version,
+-while the proper part was current U-Boot at the time. This solution also
+-has its drawbacks, of which the main one is the need to glue binaries
+-from two separate builds.
+-
+-Since then there have been some more changes to the DDR3 training code
+-in upstream mv-ddr-marvell that have been ported to U-Boot. We have
+-provided our users experimental builds of U-Boot in the TurrisOS so that
+-they could try upgrading the firmware and let us know if those problems
+-still exist. And they do.
+-
+-We do not have the time nor manpower to debug this problem and fix it
+-properly. Marvell was also no able to provide a solution to this,
+-probably because they do not have the manpower as well.
+-
+-I have therefore come up with this "not that pretty" solution: take the
+-DDR3 training code from older version of U-Boot that is known to work,
+-put it into current U-Boot under old/ subdirectory within
+-drivers/ddr/marvell/a38x/, build into the SPL binary both the old and
+-new versions and make it possible to select the old version via an env
+-variable.
+-
+-[1] https://github.com/MarvellEmbeddedProcessors/mv-ddr-marvell
++DDR3 training implementation to fix those issues by setting the EEPROM
++field "Use old DDR training":
++  eeprom update "Use old DDR training" 1
+ 
+ Signed-off-by: Marek Behún <kabel@kernel.org>
+ ---
+  arch/arm/mach-mvebu/Kconfig                   |  1 +
+- board/CZ.NIC/turris_omnia/Makefile            |  3 +-
+- board/CZ.NIC/turris_omnia/old_ddr3_training.c | 79 +++++++++++++++++++
+- board/CZ.NIC/turris_omnia/turris_omnia.c      |  2 +-
+- 4 files changed, 83 insertions(+), 2 deletions(-)
++ board/CZ.NIC/turris_omnia/Makefile            |  1 +
++ board/CZ.NIC/turris_omnia/eeprom.c            | 37 ++++++++++-
++ board/CZ.NIC/turris_omnia/old_ddr3_training.c | 63 +++++++++++++++++++
++ board/CZ.NIC/turris_omnia/turris_omnia.c      | 18 +++++-
++ 5 files changed, 117 insertions(+), 3 deletions(-)
+  create mode 100644 board/CZ.NIC/turris_omnia/old_ddr3_training.c
+ 
+ diff --git a/arch/arm/mach-mvebu/Kconfig b/arch/arm/mach-mvebu/Kconfig
+-index 0075749148..be93856676 100644
++index e377e8a48a..4a8328760e 100644
+ --- a/arch/arm/mach-mvebu/Kconfig
+ +++ b/arch/arm/mach-mvebu/Kconfig
+-@@ -146,6 +146,7 @@ config TARGET_TURRIS_OMNIA
++@@ -149,6 +149,7 @@ config TARGET_TURRIS_OMNIA
+  	select SPL_SYS_MALLOC_SIMPLE
+  	select SYS_I2C_MVTWSI
+  	select ATSHA204A
+@@ -80,30 +38,81 @@ index 0075749148..be93856676 100644
+  config TARGET_TURRIS_MOX
+  	bool "Support CZ.NIC's Turris Mox / RIPE Atlas Probe"
+ diff --git a/board/CZ.NIC/turris_omnia/Makefile b/board/CZ.NIC/turris_omnia/Makefile
+-index 341378b4e5..37f99b759a 100644
++index 216e11958a..d1ef5cb860 100644
+ --- a/board/CZ.NIC/turris_omnia/Makefile
+ +++ b/board/CZ.NIC/turris_omnia/Makefile
+-@@ -2,4 +2,5 @@
+- #
+- # Copyright (C) 2017 Marek Behún <kabel@kernel.org>
++@@ -4,3 +4,4 @@
++ 
++ obj-y	:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
++ obj-$(CONFIG_CMD_EEPROM_LAYOUT)	+= eeprom.o
+++obj-$(CONFIG_SPL_BUILD)		+= old_ddr3_training.o
++diff --git a/board/CZ.NIC/turris_omnia/eeprom.c b/board/CZ.NIC/turris_omnia/eeprom.c
++index 493ca49a07..e5551286b7 100644
++--- a/board/CZ.NIC/turris_omnia/eeprom.c
+++++ b/board/CZ.NIC/turris_omnia/eeprom.c
++@@ -93,13 +93,48 @@ static int eeprom_field_update_ddr_speed(struct eeprom_field *field,
++ 	return 0;
++ }
++ 
+++static void eeprom_field_print_bool(const struct eeprom_field *field)
+++{
+++	unsigned char val = field->buf[0];
+++
+++	printf(PRINT_FIELD_SEGMENT, field->name);
+++
+++	if (val == 0xff)
+++		puts("(empty, defaults to 0)\n");
+++	else
+++		printf("%u\n", val);
+++}
+++
+++static int eeprom_field_update_bool(struct eeprom_field *field, char *value)
+++{
+++	unsigned char *val = &field->buf[0];
+++
+++	if (value[0] == '\0') {
+++		/* setting default value */
+++		*val = 0xff;
+++
+++		return 0;
+++	}
+++
+++	if (value[1] != '\0')
+++		return -1;
+++
+++	if (value[0] == '1' || value[0] == '0')
+++		*val = value[0] - '0';
+++	else
+++		return -1;
+++
+++	return 0;
+++}
+++
++ static struct eeprom_field omnia_layout[] = {
++ 	_DEF_FIELD("Magic constant", 4, bin),
++ 	_DEF_FIELD("RAM size in GB", 4, ramsz),
++ 	_DEF_FIELD("Wi-Fi Region", 4, region),
++ 	_DEF_FIELD("CRC32 checksum", 4, bin),
++ 	_DEF_FIELD("DDR speed", 5, ddr_speed),
++-	_DEF_FIELD("Extended reserved fields", 39, reserved),
+++	_DEF_FIELD("Use old DDR training", 1, bool),
+++	_DEF_FIELD("Extended reserved fields", 38, reserved),
++ 	_DEF_FIELD("Extended CRC32 checksum", 4, bin),
++ };
+  
+--obj-y	:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
+-+obj-y			:= turris_omnia.o ../turris_atsha_otp.o ../turris_common.o
+-+obj-$(CONFIG_SPL_BUILD)	+= old_ddr3_training.o
+ diff --git a/board/CZ.NIC/turris_omnia/old_ddr3_training.c b/board/CZ.NIC/turris_omnia/old_ddr3_training.c
+ new file mode 100644
+-index 0000000000..f7e89c58d4
++index 0000000000..cdb3487ad9
+ --- /dev/null
+ +++ b/board/CZ.NIC/turris_omnia/old_ddr3_training.c
+-@@ -0,0 +1,79 @@
++@@ -0,0 +1,63 @@
+ +// SPDX-License-Identifier: GPL-2.0+
+ +/*
+ + * Copyright (C) 2024 Marek Behún <kabel@kernel.org>
+ + */
+ +
+-+#include <common.h>
+++#include <asm/arch/soc.h>
+ +#include <asm/io.h>
+-+#include <env.h>
+ +
+ +#include "../drivers/ddr/marvell/a38x/old/ddr3_init.h"
+ +
+@@ -156,30 +165,25 @@ index 0000000000..f7e89c58d4
+ +		return &board_topology_map_1g;
+ +}
+ +
+-+bool board_use_old_ddr3_training(void)
+-+{
+-+	const char *env_val = NULL;
+-+
+-+	if (CONFIG_IS_ENABLED(ENV_SUPPORT) && !env_init())
+-+		env_val = env_get("omnia_ddr3_training");
+-+
+-+	if (env_val && !strcmp(env_val, "old")) {
+-+		printf("Using old DDR3 training implementation\n");
+-+		return true;
+-+	}
+-+
+-+	return false;
+-+}
+-+
+ +__weak u32 sys_env_get_topology_update_info(struct topology_update_info *tui)
+ +{
+ +	return MV_OK;
+ +}
+ diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-index 500125fed1..c40bbbdea4 100644
++index ce48252578..a92dc1dbce 100644
+ --- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+ +++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
+-@@ -501,7 +501,7 @@ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++@@ -432,7 +432,8 @@ struct omnia_eeprom {
++ 
++ 	/* second part (only considered if crc2 is not all-ones) */
++ 	char ddr_speed[5];
++-	u8 reserved[39];
+++	u8 old_ddr_training;
+++	u8 reserved[38];
++ 	u32 crc2;
++ };
++ 
++@@ -496,7 +497,7 @@ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
+  	return true;
+  }
+  
+@@ -188,6 +192,26 @@ index 500125fed1..c40bbbdea4 100644
+  {
+  	static int ram_size;
+  	struct omnia_eeprom oep;
++@@ -521,6 +522,19 @@ static int omnia_get_ram_size_gb(void)
++ 	return ram_size;
++ }
++ 
+++bool board_use_old_ddr3_training(void)
+++{
+++	struct omnia_eeprom oep;
+++
+++	if (!omnia_read_eeprom(&oep))
+++		return false;
+++
+++	if (!is_omnia_eeprom_second_part_valid(&oep))
+++		return false;
+++
+++	return oep.old_ddr_training == 1;
+++}
+++
++ static const char *omnia_get_ddr_speed(void)
++ {
++ 	struct omnia_eeprom oep;
+ -- 
+-2.43.0
++2.44.1
+ 
+-- 
+2.44.1
+
