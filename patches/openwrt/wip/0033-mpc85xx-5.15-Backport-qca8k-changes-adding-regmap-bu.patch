@@ -9,58 +9,19 @@ Content-Transfer-Encoding: 8bit
 
 Signed-off-by: Marek Behún <kabel@kernel.org>
 ---
- ...9-2-regmap-Add-missing-map-bus-check.patch |  31 ++
  ...d-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch |  63 ++++
  ...a8k-convert-to-regmap-read-write-API.patch | 261 ++++++++++++++++
  ...-enable-use_single_write-for-qca8xxx.patch |  78 +++++
  ...x-regmap-bulk-read-write-methods-on-.patch |  61 ++++
  ...x-potential-MDIO-bus-conflict-when-a.patch | 106 +++++++
  .../9000-fix-qca8k-on-turris1x.patch          |  24 ++
- 8 files changed, 909 insertions(+)
- create mode 100644 target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
+ 7 files changed, 878 insertions(+)
  create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch
  create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.3-2-net-dsa-qca8k-convert-to-regmap-read-write-API.patch
  create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.5-3-net-dsa-qca8k-enable-use_single_write-for-qca8xxx.patch
  create mode 100644 target/linux/mpc85xx/patches-5.15/0004-v6.6-4-net-dsa-qca8k-fix-regmap-bulk-read-write-methods-on-.patch
  create mode 100644 target/linux/mpc85xx/patches-5.15/9000-fix-qca8k-on-turris1x.patch
 
-diff --git a/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch b/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
-new file mode 100644
-index 0000000000..5a50a9600e
---- /dev/null
-+++ b/target/linux/mpc85xx/patches-5.15/0003-v5.19-2-regmap-Add-missing-map-bus-check.patch
-@@ -0,0 +1,31 @@
-+From 5c422f0b970d287efa864b8390a02face404db5d Mon Sep 17 00:00:00 2001
-+From: Marek Vasut <marex@denx.de>
-+Date: Mon, 9 May 2022 02:30:35 +0200
-+Subject: [PATCH] regmap: Add missing map->bus check
-+
-+The map->bus can be NULL here, add the missing NULL pointer check.
-+
-+Fixes: d77e745613680 ("regmap: Add bulk read/write callbacks into regmap_config")
-+Reported-by: kernel test robot <lkp@intel.com>
-+Reported-by: Dan Carpenter <dan.carpenter@oracle.com>
-+Signed-off-by: Marek Vasut <marex@denx.de>
-+Cc: Dan Carpenter <dan.carpenter@oracle.com>
-+Cc: Mark Brown <broonie@kernel.org>
-+To: linux-kernel@vger.kernel.org
-+Link: https://lore.kernel.org/r/20220509003035.225272-1-marex@denx.de
-+Signed-off-by: Mark Brown <broonie@kernel.org>
-+---
-+ drivers/base/regmap/regmap.c | 2 +-
-+ 1 file changed, 1 insertion(+), 1 deletion(-)
-+
-+--- a/drivers/base/regmap/regmap.c
-++++ b/drivers/base/regmap/regmap.c
-+@@ -1835,7 +1835,7 @@ static int _regmap_raw_write_impl(struct
-+ 				 map->format.reg_bytes +
-+ 				 map->format.pad_bytes +
-+ 				 val_len);
-+-	else if (map->bus->gather_write)
-++	else if (map->bus && map->bus->gather_write)
-+ 		ret = map->bus->gather_write(map->bus_context, map->work_buf,
-+ 					     map->format.reg_bytes +
-+ 					     map->format.pad_bytes,
 diff --git a/target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch b/target/linux/mpc85xx/patches-5.15/0004-v6.3-1-net-dsa-qca8k-add-QCA8K_ATU_TABLE_SIZE-define-for-fd.patch
 new file mode 100644
 index 0000000000..3a20bc6728
