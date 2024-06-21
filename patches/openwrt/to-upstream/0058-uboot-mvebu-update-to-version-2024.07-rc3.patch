@@ -35,7 +35,7 @@ Signed-off-by: Marek Behún <kabel@kernel.org>
  ...-debug-Allow-compiling-with-immutabl.patch | 171 ++++++++++
  ..._omnia-Enable-immutable-debug-settin.patch |  32 ++
  ..._omnia-Fix-ethernet-PHY-reset-gpio-F.patch | 139 ++++++++
- ..._omnia-Implement-EEPROM-layout-for-t.patch | 156 +++++++++
+ ..._omnia-Implement-EEPROM-layout-for-t.patch | 154 +++++++++
  ...rris_omnia-Enable-the-eeprom-command.patch |  41 +++
  ...s_omnia-Extend-EEPROM-info-structure.patch | 125 +++++++
  ...ris_omnia-Read-DDR-speed-from-EEPROM.patch | 218 ++++++++++++
@@ -44,7 +44,7 @@ Signed-off-by: Marek Behún <kabel@kernel.org>
  ...-old-Backport-immutable-debug-settin.patch | 259 ++++++++++++++
  ...d-optional-support-for-using-old-DD.patch} |  23 +-
  ...ris_omnia-Support-old-DDR3-training.patch} | 194 ++++++-----
- 34 files changed, 2666 insertions(+), 975 deletions(-)
+ 34 files changed, 2664 insertions(+), 975 deletions(-)
  create mode 100644 package/boot/uboot-mvebu/patches/0001-common-eeprom_layout-Assign-default-layout-methods-a.patch
  delete mode 100644 package/boot/uboot-mvebu/patches/0001-net-mv88e6xxx-fix-missing-SMI-address-initialization.patch
  delete mode 100644 package/boot/uboot-mvebu/patches/0002-arm-mvebu-turris_omnia-Enable-networking-via-etherne.patch
@@ -2692,7 +2692,7 @@ new file mode 100644
 index 0000000000..692dfc635f
 --- /dev/null
 +++ b/package/boot/uboot-mvebu/patches/0018-arm-mvebu-turris_omnia-Implement-EEPROM-layout-for-t.patch
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,154 @@
 +From 60e7bed7a1bfe04f8cf39d402e97a69c9c0eec72 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
 +Date: Mon, 20 May 2024 16:47:44 +0200
@@ -2716,8 +2716,8 @@ index 0000000000..692dfc635f
 +Signed-off-by: Marek Behún <kabel@kernel.org>
 +---
 + board/CZ.NIC/turris_omnia/Makefile |   1 +
-+ board/CZ.NIC/turris_omnia/eeprom.c | 111 +++++++++++++++++++++++++++++
-+ 2 files changed, 112 insertions(+)
++ board/CZ.NIC/turris_omnia/eeprom.c | 109 +++++++++++++++++++++++++++++
++ 2 files changed, 110 insertions(+)
 + create mode 100644 board/CZ.NIC/turris_omnia/eeprom.c
 +
 +diff --git a/board/CZ.NIC/turris_omnia/Makefile b/board/CZ.NIC/turris_omnia/Makefile
@@ -2734,7 +2734,7 @@ index 0000000000..692dfc635f
 +index 0000000000..19e4a239db
 +--- /dev/null
 ++++ b/board/CZ.NIC/turris_omnia/eeprom.c
-+@@ -0,0 +1,111 @@
++@@ -0,0 +1,109 @@
 ++// SPDX-License-Identifier: GPL-2.0+
 ++/*
 ++ * Copyright (C) 2024 Marek Behún <kabel@kernel.org>
@@ -2781,15 +2781,13 @@ index 0000000000..692dfc635f
 ++
 ++static int eeprom_field_update_region(struct eeprom_field *field, char *value)
 ++{
-++	size_t len = strlen(value);
-++
-++	if (len > field->size) {
-++		printf("%s: new data too long\n", field->name);
+++	if (strlen(value) != 2) {
+++		printf("%s: has to be 2 characters\n", field->name);
 ++		return -1;
 ++	}
 ++
-++	memset(field->buf, ' ', 4);
-++	memcpy(field->buf, value, len);
+++	memcpy(field->buf, value, 2);
+++	memset(&field->buf[2], '\0', 2);
 ++
 ++	return 0;
 ++}
