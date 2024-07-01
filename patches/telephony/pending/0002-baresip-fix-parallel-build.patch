@@ -1,0 +1,68 @@
+From 865469f45a9b9c32e2ec4b02d4649dd76d9183b3 Mon Sep 17 00:00:00 2001
+From: Eneas U de Queiroz <cotequeiroz@gmail.com>
+Date: Fri, 10 Feb 2023 08:30:44 -0300
+Subject: [PATCH 2/2] baresip: fix parallel build
+
+Include an upstream patch to fix random parallel build failures, such
+as:
+
+  CC [M]  build-arm/modules/ctrl_dbus/ctrl_dbus.o
+modules/ctrl_dbus/ctrl_dbus.c:69:10: fatal error: baresipbus.h: No such
+file or directory
+   69 | #include "baresipbus.h"
+      |          ^~~~~~~~~~~~~~
+
+Signed-off-by: Eneas U de Queiroz <cotequeiroz@gmail.com>
+(cherry picked from commit d1d08eae09fc09f610a3cac76d9710c16ee641ef)
+Signed-off-by: Richard Muzik <richard.muzik@nic.cz>
+---
+ net/baresip/Makefile                          |  2 +-
+ .../patches/010-fix-parallel-build.patch      | 23 +++++++++++++++++++
+ 2 files changed, 24 insertions(+), 1 deletion(-)
+ create mode 100644 net/baresip/patches/010-fix-parallel-build.patch
+
+diff --git a/net/baresip/Makefile b/net/baresip/Makefile
+index 225ebf2..a377d8e 100644
+--- a/net/baresip/Makefile
++++ b/net/baresip/Makefile
+@@ -10,7 +10,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=baresip
+ PKG_VERSION:=1.1.0
+-PKG_RELEASE:=$(AUTORELEASE)
++PKG_RELEASE:=6
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://codeload.github.com/baresip/baresip/tar.gz/v$(PKG_VERSION)?
+diff --git a/net/baresip/patches/010-fix-parallel-build.patch b/net/baresip/patches/010-fix-parallel-build.patch
+new file mode 100644
+index 0000000..25f9013
+--- /dev/null
++++ b/net/baresip/patches/010-fix-parallel-build.patch
+@@ -0,0 +1,23 @@
++From d7aeb9393876af3746dacdbacd70c4a5d6dfcf39 Mon Sep 17 00:00:00 2001
++From: Christian Spielberger <c.spielberger@commend.com>
++Date: Sun, 23 May 2021 10:01:04 +0200
++Subject: [PATCH] ctrl_dbus: add dependency to baresipbus.h (#1447) (#1457)
++
++---
++ modules/ctrl_dbus/module.mk | 5 ++++-
++ 1 file changed, 4 insertions(+), 1 deletion(-)
++
++--- a/modules/ctrl_dbus/module.mk
+++++ b/modules/ctrl_dbus/module.mk
++@@ -16,7 +16,10 @@ $(MOD)_CFLAGS	+= -Wno-unused-parameter -
++ 
++ $(MOD)_CCHECK_OPT	= -e baresipbus.h -e baresipbus.c
++ 
++-modules/ctrl_dbus/baresipbus.h modules/ctrl_dbus/baresipbus.c: \
+++modules/$(MOD)/baresipbus.o :	modules/$(MOD)/baresipbus.h
+++modules/$(MOD)/ctrl_dbus.o :	modules/$(MOD)/baresipbus.h
+++
+++modules/$(MOD)/baresipbus.h modules/$(MOD)/baresipbus.c: \
++ 	modules/ctrl_dbus/com.github.Baresip.xml
++ 	@cd $(dir $@) && ./gen.sh
++ 
+-- 
+2.45.2
+
