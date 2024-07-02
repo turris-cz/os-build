@@ -1,0 +1,72 @@
+From 85ae58eecfde30d14372cb3e6f3a6d484fc568f8 Mon Sep 17 00:00:00 2001
+From: John Audia <therealgraysky@proton.me>
+Date: Mon, 1 Jul 2024 21:14:22 +0200
+Subject: [PATCH] openssh: bump to 9.8p1
+
+Release notes: https://www.openssh.com/txt/release-9.8
+
+Adjusted Makefile to provide /usr/lib/sshd-session
+
+Build system: x86/64
+Build-tested: x86/64/AMD Cezanne
+Run-tested: x86/64/AMD Cezanne
+
+https://github.com/openwrt/packages/pull/24494
+
+Signed-off-by: John Audia <therealgraysky@proton.me>
+---
+ net/openssh/Makefile        | 8 +++++---
+ net/openssh/files/sshd.init | 5 +++++
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/net/openssh/Makefile b/net/openssh/Makefile
+index 399f12dca..39b412afe 100644
+--- a/net/openssh/Makefile
++++ b/net/openssh/Makefile
+@@ -8,13 +8,13 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=openssh
+-PKG_VERSION:=9.7p1
++PKG_VERSION:=9.8p1
+ PKG_RELEASE:=1
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+ PKG_SOURCE_URL:=https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/ \
+ 		https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/
+-PKG_HASH:=490426f766d82a2763fcacd8d83ea3d70798750c7bd2aff2e57dc5660f773ffd
++PKG_HASH:=dd8bd002a379b5d499dfb050dd1fa9af8029e80461f4bb6c523c49973f5a39f3
+ 
+ PKG_LICENSE:=BSD ISC
+ PKG_LICENSE_FILES:=LICENCE
+@@ -236,6 +236,8 @@ define Package/openssh-server/install
+ 	$(INSTALL_BIN) ./files/sshd.failsafe $(1)/lib/preinit/99_10_failsafe_sshd
+ 	$(INSTALL_DIR) $(1)/usr/sbin
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/sshd $(1)/usr/sbin/
++	$(INSTALL_DIR) $(1)/usr/lib
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/sshd-session $(1)/usr/lib/
+ endef
+ 
+ define Package/openssh-server-pam/install
+diff --git a/net/openssh/files/sshd.init b/net/openssh/files/sshd.init
+index e7735364d..0b859e146 100644
+--- a/net/openssh/files/sshd.init
++++ b/net/openssh/files/sshd.init
+@@ -27,9 +27,14 @@ start_service() {
+ 	procd_open_instance
+ 	procd_add_mdns "ssh" "tcp" "$lport"
+ 	procd_set_param command $PROG -D
++	procd_set_param respawn
+ 	procd_close_instance
+ }
+ 
++reload_service() {
++	procd_send_signal sshd
++}
++
+ shutdown() {
+ 	local pid
+ 
+-- 
+2.45.2
+
