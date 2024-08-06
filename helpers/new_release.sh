@@ -1,6 +1,6 @@
 #!/bin/bash
 # Turris OS script verifying new release
-# (C) 2019-2021 CZ.NIC, z.s.p.o.
+# (C) 2019-2024 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -240,7 +240,7 @@ print_help() {
 	echo "Turris OS new releases managing tool."
 	echo
 	echo "Options:"
-	echo "  -v  Run script with verbose output"
+	echo "  -d  Run script in debugging (verbose) mode"
 	echo "  -h  Print this help text"
 	echo "Modes:"
 	echo "  verify"
