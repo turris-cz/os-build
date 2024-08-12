@@ -1,0 +1,389 @@
+From 54c8587d617d15f5a42e3659c060596e507a9855 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Thu, 9 May 2024 19:19:59 +0200
+Subject: [PATCH] packages: transmission: temporary downgrade to v3
+
+Temporary downgrade of transmission to v3, because v4 was not able to download
+torrents.
+---
+ net/transmission/Makefile                     | 71 +++++++------------
+ .../files/transmission-daemon.json            | 30 +-------
+ net/transmission/files/transmission.config    |  2 +-
+ net/transmission/files/transmission.init      | 48 ++-----------
+ .../patches/010-no-intltool.patch             | 12 ++++
+ net/transmission/patches/020-mbedcrypto.patch | 13 ++++
+ .../patches/080-disable-webseeding.patch      | 11 +++
+ 7 files changed, 70 insertions(+), 117 deletions(-)
+ create mode 100644 net/transmission/patches/010-no-intltool.patch
+ create mode 100644 net/transmission/patches/020-mbedcrypto.patch
+ create mode 100644 net/transmission/patches/080-disable-webseeding.patch
+
+diff --git a/net/transmission/Makefile b/net/transmission/Makefile
+index 40fcd5a0f..4fafe228b 100644
+--- a/net/transmission/Makefile
++++ b/net/transmission/Makefile
+@@ -8,21 +8,20 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=transmission
+-PKG_VERSION:=4.0.6
+-PKG_RELEASE:=1
++PKG_VERSION:=3.00
++PKG_RELEASE:=12
+ 
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
+-PKG_SOURCE_URL:=https://github.com/transmission/transmission/releases/download/$(PKG_VERSION)/
+-PKG_HASH:=2a38fe6d8a23991680b691c277a335f8875bdeca2b97c6b26b598bc9c7b0c45f
++PKG_SOURCE_URL:=@GITHUB/transmission/transmission-releases/master
++PKG_HASH:=9144652fe742f7f7dd6657716e378da60b751aaeda8bef8344b3eefc4db255f2
+ 
+-PKG_MAINTAINER:=Daniel Golle <daniel@makrotopia.org>
++PKG_MAINTAINER:=Rosen Penev <rosenp@gmail.com>
+ PKG_LICENSE:=GPL-2.0-or-later
+ PKG_LICENSE_FILES:=COPYING
+ PKG_CPE_ID:=cpe:/a:transmissionbt:transmission
+ 
++PKG_FIXUP:=autoreconf
+ PKG_INSTALL:=1
+-PKG_BUILD_DEPENDS:=libb64 node/host
+ PKG_BUILD_PARALLEL:=1
+-PKG_BUILD_FLAGS:=gc-sections lto
+ PKG_CONFIG_DEPENDS:= \
+ 	CONFIG_LIBCURL_GNUTLS \
+@@ -31,7 +31,6 @@ PKG_CONFIG_DEPENDS:= \
+ 	CONFIG_LIBCURL_NOSSL
+ 
+ include $(INCLUDE_DIR)/package.mk
+-include $(INCLUDE_DIR)/cmake.mk
+ include $(INCLUDE_DIR)/package-seccomp.mk
+ include $(INCLUDE_DIR)/nls.mk
+ 
+@@ -41,10 +40,7 @@ define Package/transmission/template
+   CATEGORY:=Network
+   TITLE:=BitTorrent client
+   URL:=https://www.transmissionbt.com
+-  DEPENDS:=+libatomic +libcurl +libdeflate +libdht +libevent2 \
+-	   +libevent2-pthreads +libminiupnpc +libnatpmp +libpthread +libpsl \
+-	   +librt +libutp +zlib +LIBCURL_NOSSL:libmbedtls \
+-	   +LIBCURL_GNUTLS:libmbedtls +LIBCURL_MBEDTLS:libmbedtls
++  DEPENDS:=+libcurl +libevent2 +libminiupnpc +libnatpmp +libpthread +librt +zlib +LIBCURL_NOSSL:libmbedtls +LIBCURL_GNUTLS:libmbedtls +LIBCURL_WOLFSSL:libmbedtls $(ICONV_DEPENDS)
+ endef
+ 
+ define Package/transmission-daemon
+@@ -92,40 +88,23 @@ define Package/transmission-daemon/conffiles
+ /etc/config/transmission
+ endef
+ 
+-TARGET_CFLAGS += -DHAVE_SIZE_T -latomic
+-TARGET_LDFLAGS += -Wl,--as-needed
+-
+-CMAKE_OPTIONS += \
+-	-DENABLE_CLI:BOOL=YES \
+-	-DENABLE_GTK:BOOL=NO \
+-	-DENABLE_QT:BOOL=NO \
+-	-DENABLE_MAC:BOOL=NO \
+-	-DENABLE_TESTS:BOOL=NO \
+-	-DENABLE_NLS:BOOL=NO \
+-	-DENABLE_UTP:BOOL=YES \
+-	-DRUN_CLANG_TIDY:BOOL=NO \
+-	-DUSE_SYSTEM_EVENT2:BOOL=YES \
+-	-DUSE_SYSTEM_DEFLATE:BOOL=YES \
+-	-DUSE_SYSTEM_DHT:BOOL=YES \
+-	-DUSE_SYSTEM_MINIUPNPC:BOOL=YES \
+-	-DUSE_SYSTEM_NATPMP:BOOL=YES \
+-	-DUSE_SYSTEM_UTP:BOOL=YES \
+-	-DUSE_SYSTEM_B64:BOOL=YES \
+-	-DUSE_SYSTEM_PSL:BOOL=YES \
+-	-DWITH_INOTIFY:BOOL=YES \
+-	-DWITH_KQUEUE:BOOL=NO \
+-	-DWITH_SYSTEMD:BOOL=NO \
+-	-DB64_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
+-	-DB64_LIBRARY=$(STAGING_DIR)/usr/lib/libb64.a \
+-	-DDHT_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
+-	-DDHT_LIBRARY=$(STAGING_DIR)/usr/lib/libdht.so \
+-	-DUTP_INCLUDE_DIR=$(STAGING_DIR)/usr/include \
+-	-DUTP_LIBRARY=$(STAGING_DIR)/usr/lib/libutp.so \
+-	$(if $(CONFIG_LIBCURL_NOSSL),-DWITH_CRYPTO=mbedtls) \
+-	$(if $(CONFIG_LIBCURL_GNUTLS),-DWITH_CRYPTO=mbedtls) \
+-	$(if $(CONFIG_LIBCURL_MBEDTLS),-DWITH_CRYPTO=mbedtls) \
+-	$(if $(CONFIG_LIBCURL_OPENSSL),-DWITH_CRYPTO=openssl) \
+-	$(if $(CONFIG_LIBCURL_WOLFSSL),-DWITH_CRYPTO=wolfssl)
++TARGET_CFLAGS += -ffunction-sections -fdata-sections -flto
++TARGET_LDFLAGS += -Wl,--gc-sections -Wl,--as-needed -liconv
++
++CONFIGURE_ARGS += \
++	--enable-cli \
++	--enable-daemon \
++	--enable-external-natpmp \
++	--enable-largefile \
++	--enable-lightweight \
++	--without-gtk \
++	--without-kqueue \
++	--without-systemd-daemon \
++	$(if $(CONFIG_LIBCURL_NOSSL),--with-crypto=polarssl) \
++	$(if $(CONFIG_LIBCURL_GNUTLS),--with-crypto=polarssl) \
++	$(if $(CONFIG_LIBCURL_MBEDTLS),--with-crypto=polarssl) \
++	$(if $(CONFIG_LIBCURL_OPENSSL),--with-crypto=openssl) \
++	$(if $(CONFIG_LIBCURL_WOLFSSL),--with-crypto=polarssl)
+ 
+ define Package/transmission-daemon/install
+ 	$(INSTALL_DIR) $(1)/usr/bin
+@@ -155,7 +134,7 @@ endef
+ 
+ define Package/transmission-web/install
+ 	$(INSTALL_DIR) $(1)/usr/share/transmission
+-	$(CP) $(PKG_INSTALL_DIR)/usr/share/transmission/public_html $(1)/usr/share/transmission/
++	$(CP) $(PKG_INSTALL_DIR)/usr/share/transmission/web $(1)/usr/share/transmission/
+ endef
+ 
+ $(eval $(call BuildPackage,transmission-daemon))
+diff --git a/net/transmission/files/transmission-daemon.json b/net/transmission/files/transmission-daemon.json
+index 77e0cc413..7711f1561 100644
+--- a/net/transmission/files/transmission-daemon.json
++++ b/net/transmission/files/transmission-daemon.json
+@@ -10,34 +10,27 @@
+ 				"bind",
+ 				"brk",
+ 				"clock_gettime",
+-				"clock_gettime64",
+ 				"clone",
+ 				"close",
+ 				"connect",
+-				"copy_file_range",
+ 				"epoll_create1",
+ 				"epoll_ctl",
+ 				"epoll_pwait",
+-				"eventfd2",
+ 				"exit",
+ 				"exit_group",
+-				"faccessat",
+ 				"fadvise64",
+ 				"fadvise64_64",
+ 				"fallocate",
+ 				"fchmod",
+ 				"fcntl",
+ 				"fcntl64",
+-				"ftruncate",
+-				"ftruncate64",
+ 				"fstat",
+ 				"fstat64",
+ 				"fsync",
+ 				"futex",
+ 				"getdents64",
+ 				"getegid32",
+-				"getenv",
+ 				"geteuid32",
+ 				"getgid32",
+ 				"getpeername",
+ 				"getpid",
+@@ -49,9 +39,6 @@
+ 				"getsockopt",
+ 				"getuid",
+ 				"getuid32",
+-				"inotify_add_watch",
+-				"inotify_init1",
+-				"inotify_rm_watch",
+ 				"ioctl",
+ 				"listen",
+ 				"_llseek",
+@@ -59,34 +46,26 @@
+ 				"madvise",
+ 				"membarrier",
+ 				"mkdir",
+-				"mkdirat",
+ 				"mmap",
+ 				"mmap2",
+ 				"mprotect",
+ 				"mremap",
+ 				"munmap",
+ 				"nanosleep",
+-				"newfstatat",
+ 				"_newselect",
+ 				"open",
+-				"openat",
+ 				"pipe",
+ 				"pipe2",
+ 				"poll",
+-				"ppoll",
+ 				"pread64",
+ 				"prlimit64",
+-				"pselect6",
+ 				"pwrite64",
+ 				"quotactl",
+ 				"read",
+ 				"readlink",
+-				"readlinkat",
+ 				"readv",
+ 				"recvfrom",
+-				"recvmsg",
+ 				"rename",
+-				"renameat",
+ 				"rmdir",
+ 				"rt_sigaction",
+ 				"rt_sigprocmask",
+@@ -95,19 +74,16 @@
+ 				"sendto",
+ 				"setsockopt",
+ 				"shutdown",
+-				"signalfd4",
+ 				"sigreturn",
+ 				"socket",
+-				"socketpair",
+ 				"stat",
+ 				"stat64",
+-				"statfs",
+-				"statfs64",
+-				"statx",
++				"socketpair",
+ 				"umask",
+ 				"uname",
+ 				"unlink",
+-				"unlinkat",
++				"statfs64",
++				"umask",
+ 				"write",
+ 				"writev"
+ 			],
+diff --git a/net/transmission/files/transmission.init b/net/transmission/files/transmission.init
+index 896cee18f..242157277 100644
+--- a/net/transmission/files/transmission.init
++++ b/net/transmission/files/transmission.init
+@@ -58,22 +58,15 @@ transmission() {
+ 	local incomplete_dir
+ 	config_get incomplete_dir "$cfg" 'incomplete_dir' '/var/etc/transmission'
+ 	local incomplete_dir_enabled
+-	config_get_bool incomplete_dir_enabled "$cfg" 'incomplete_dir_enabled' 0
+-	local watch_dir
+-	config_get watch_dir "$cfg" 'watch_dir' '/var/etc/transmission'
+-	local watch_dir_enabled
+-	config_get_bool watch_dir_enabled "$cfg" 'watch_dir_enabled' 0
++	config_get incomplete_dir_enabled "$cfg" 'incomplete_dir_enabled' 0
+ 	local mem_percentage
+ 	config_get mem_percentage "$cfg" 'mem_percentage' '50'
+ 	local config_overwrite
+-	config_get_bool config_overwrite "$cfg" config_overwrite 1
++	config_get config_overwrite "$cfg" config_overwrite 1
+ 	local nice
+ 	config_get nice "$cfg" nice 0
+ 	local web_home
+ 	config_get web_home "$cfg" 'web_home'
+-	local ca_bundle
+-	config_get_bool ca_bundle "$cfg" ca_bundle 1
+-	[ "$ca_bundle" -gt 0 ] && ca_bundle_file="/etc/ssl/certs/ca-certificates.crt"
+ 	local seccomp_path
+ 
+ 	local MEM
+@@ -158,8 +151,7 @@ transmission() {
+ 		logger -t transmission "Starting with $USE virt mem"
+ 	fi
+ 
+-	[ -d "$web_home" ] && procd_append_param env TRANSMISSION_WEB_HOME="$web_home"
+-	[ "$ca_bundle" -gt 0 ] && procd_append_param env CURL_CA_BUNDLE="$ca_bundle_file"
++	[ -d "$web_home" ] && procd_set_param env TRANSMISSION_WEB_HOME="$web_home"
+ 
+ 	procd_add_jail transmission log
+ 	procd_add_jail_mount "$config_file"
+@@ -168,11 +160,7 @@ transmission() {
+ 	procd_add_jail_mount_rw "$config_dir/blocklists"
+ 	procd_add_jail_mount_rw "$config_dir/stats.json"
+ 	procd_add_jail_mount_rw "$download_dir"
+-	[ "$incomplete_dir_enabled" = "1" ] && procd_add_jail_mount_rw "$incomplete_dir"
+-	[ "$watch_dir_enabled" = "1" ] && procd_add_jail_mount_rw "$watch_dir"
+-	web_home="${web_home:-/usr/share/transmission/public_html}"
+-	[ -d "$web_home" ] && procd_add_jail_mount "$web_home"
+-	[ -f "$ca_bundle_file" ] && procd_add_jail_mount "$ca_bundle_file"
++	[ -d "$web_home" ] && procd_add_jail_mount_rw "$web_home"
+ 	procd_close_instance
+ }
+ 
+@@ -185,32 +173,6 @@ reload_service() {
+ 	procd_send_signal "$PROG"
+ }
+ 
+-transmission_mount_triggers() {
+-	local cfg="$1"
+-
+-	local enabled
+-	config_get_bool enabled "$cfg" enabled 0
+-	[ "$enabled" -gt 0 ] || return 0
+-
+-	local config_dir download_dir incomplete_dir incomplete_dir_enabled \
+-		watch_dir watch_dir_enabled web_home service_dirs
+-	config_get config_dir "$cfg" 'config_dir' '/var/etc/transmission'
+-	config_get download_dir "$cfg" 'download_dir' '/var/etc/transmission'
+-	config_get_bool incomplete_dir_enabled "$cfg" 'incomplete_dir_enabled' 0
+-	config_get incomplete_dir "$cfg" 'incomplete_dir' '/var/etc/transmission'
+-	config_get_bool watch_dir_enabled "$cfg" 'watch_dir_enabled' 0
+-	config_get watch_dir "$cfg" 'watch_dir' '/var/etc/transmission'
+-	config_get web_home "$cfg" 'web_home'
+-
+-	service_dirs="$config_dir $download_dir $web_home"
+-	[ "$incomplete_dir_enabled" = "0" ] || service_dirs="$service_dirs $incomplete_dir"
+-	[ "$watch_dir_enabled" = "0" ] || service_dirs="$service_dirs $watch_dir"
+-
+-	procd_add_restart_mount_trigger $service_dirs
+-}
+-
+ service_triggers() {
+-	procd_add_reload_trigger 'transmission'
+-	config_load 'transmission'
+-	config_foreach transmission_mount_triggers 'transmission'
++	procd_add_reload_trigger "transmission"
+ }
+diff --git a/net/transmission/patches/010-no-intltool.patch b/net/transmission/patches/010-no-intltool.patch
+new file mode 100644
+index 000000000..ba59092bc
+--- /dev/null
++++ b/net/transmission/patches/010-no-intltool.patch
+@@ -0,0 +1,12 @@
++--- a/configure.ac
+++++ b/configure.ac
++@@ -555,9 +555,6 @@ dnl it should be safe to re-edit 0.40 ba
++ use_nls=no
++ if test "x$enable_nls" = "xyes" ; then
++     use_nls=yes
++-    m4_ifdef([IT_PROG_INTLTOOL],
++-             [IT_PROG_INTLTOOL([0.35.0],[no-xml])],
++-             [AC_MSG_ERROR("--enable-nls requires intltool to be installed.")])
++     AC_CHECK_HEADERS([libintl.h])
++     GETTEXT_PACKAGE=transmission-gtk
++     AC_SUBST(GETTEXT_PACKAGE)
+diff --git a/net/transmission/patches/020-mbedcrypto.patch b/net/transmission/patches/020-mbedcrypto.patch
+new file mode 100644
+index 000000000..18c33f5b7
+--- /dev/null
++++ b/net/transmission/patches/020-mbedcrypto.patch
+@@ -0,0 +1,13 @@
++--- a/configure.ac
+++++ b/configure.ac
++@@ -152,8 +152,8 @@ AS_IF([test "x$want_crypto" = "xauto" -o
++     )
++ ])
++ AS_IF([test "x$want_crypto" = "xauto" -o "x$want_crypto" = "xpolarssl"], [
++-    PKG_CHECK_MODULES(MBEDTLS, [mbedtls >= $POLARSSL_MINIMUM],
++-        [want_crypto="polarssl"; CRYPTO_PKG="polarssl"; CRYPTO_CFLAGS="$MBEDTLS_CFLAGS"; CRYPTO_LIBS="$MBEDTLS_LIBS"; POLARSSL_IS_MBEDTLS=yes],
+++    AC_CHECK_LIB(mbedcrypto, mbedtls_strerror,
+++        [want_crypto="polarssl"; CRYPTO_PKG="polarssl"; CRYPTO_LIBS="-lmbedcrypto"; POLARSSL_IS_MBEDTLS=yes],
++         [AC_CHECK_HEADER([polarssl/version.h],
++             [AC_EGREP_CPP([version_ok], [#include <polarssl/version.h>
++                                          #if defined (POLARSSL_VERSION_NUMBER) && POLARSSL_VERSION_NUMBER >= $POLARSSL_MINIMUM
+diff --git a/net/transmission/patches/080-disable-webseeding.patch b/net/transmission/patches/080-disable-webseeding.patch
+new file mode 100644
+index 000000000..f63d78d3e
+--- /dev/null
++++ b/net/transmission/patches/080-disable-webseeding.patch
+@@ -0,0 +1,11 @@
++--- a/libtransmission/webseed.c
+++++ b/libtransmission/webseed.c
++@@ -510,8 +510,6 @@ static void webseed_timer_func(evutil_so
++         ++w->retry_tickcount;
++     }
++ 
++-    on_idle(w);
++-
++     tr_timerAddMsec(w->timer, TR_IDLE_TIMER_MSEC);
++ }
++ 
+-- 
+2.45.0
+
