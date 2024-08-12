@@ -1,0 +1,46 @@
+From dc5d97d3a0f00fa03055f516b4940a3ea3503c45 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@turris.com>
+Date: Mon, 12 Aug 2024 08:31:39 +0200
+Subject: [PATCH] boost: GCC options in Makefile for old versions
+
+This reverts drop of old version of GCC and repairs them.
+
+Ref:
+- https://github.com/openwrt/packages/pull/24641
+
+Using the filter-out function, the GCC version 6,7,8 and 9 fell to
+`-std=gnu++20` even though this option can be used with GCC >=10.
+
+The GCC version 8 and 9 do support C++20, but needs to be used as
+`-std=gnu++2a`.
+
+Ref:
+- https://gcc.gnu.org/projects/cxx-status.html#cxx20
+
+Signed-off-by: Richard Muzik <richard.muzik@nic.cz>
+---
+ libs/boost/Makefile | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/libs/boost/Makefile b/libs/boost/Makefile
+index b8292dcf5..59bad6c8c 100644
+--- a/libs/boost/Makefile
++++ b/libs/boost/Makefile
+@@ -384,7 +384,13 @@ TARGET_LDFLAGS += -pthread -lrt -lstdc++ -Wl,--as-needed,--print-gc-sections
+ TARGET_CFLAGS += \
+ 	$(if $(CONFIG_SOFT_FLOAT),-DBOOST_NO_FENV_H) -fPIC
+ 
+-ifeq ($(word 1,$(subst ., ,$(call qstrip,$(CONFIG_GCC_VERSION)))),11)
++ifeq ($(word 1,$(subst ., ,$(call qstrip,$(CONFIG_GCC_VERSION)))),5)
++    EXTRA_CXXFLAGS += -std=gnu++14
++else ifneq ($(filter 6 7,$(word 1,$(subst ., ,$(call qstrip,$(CONFIG_GCC_VERSION))))),)
++    EXTRA_CXXFLAGS += -std=gnu++17
++else ifneq ($(filter 8 9,$(word 1,$(subst ., ,$(call qstrip,$(CONFIG_GCC_VERSION))))),)
++    EXTRA_CXXFLAGS += -std=gnu++2a
++else ifeq ($(word 1,$(subst ., ,$(call qstrip,$(CONFIG_GCC_VERSION)))),11)
+     EXTRA_CXXFLAGS += -std=gnu++20
+ else
+     EXTRA_CXXFLAGS += -std=gnu++23
+-- 
+2.46.0
+
