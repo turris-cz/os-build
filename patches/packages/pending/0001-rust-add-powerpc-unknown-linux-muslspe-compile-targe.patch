@@ -1,0 +1,168 @@
+From e33c31028fe7163aeb6b04cae50f23181ebacae9 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@turris.com>
+Date: Tue, 13 Aug 2024 17:27:22 +0200
+Subject: [PATCH] rust: add powerpc-unknown-linux-muslspe compile target
+
+---
+ ...unknown-linux-muslspe-compile-target.patch | 149 ++++++++++++++++++
+ 1 file changed, 149 insertions(+)
+ create mode 100644 lang/rust/patches/0004-Add-powerpc-unknown-linux-muslspe-compile-target.patch
+
+diff --git a/lang/rust/patches/0004-Add-powerpc-unknown-linux-muslspe-compile-target.patch b/lang/rust/patches/0004-Add-powerpc-unknown-linux-muslspe-compile-target.patch
+new file mode 100644
+index 000000000..cf640ae66
+--- /dev/null
++++ b/lang/rust/patches/0004-Add-powerpc-unknown-linux-muslspe-compile-target.patch
+@@ -0,0 +1,149 @@
++From 89f3064e344dd1ea2046c05e070fbc3a4ee7f7f7 Mon Sep 17 00:00:00 2001
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Date: Tue, 9 Aug 2022 01:28:42 +0200
++Subject: [PATCH] Add powerpc-unknown-linux-muslspe compile target
++
++This is almost identical to already existing targets:
++- powerpc_unknown_linux_musl.rs
++- powerpc_unknown_linux_gnuspe.rs
++
++It has support for PowerPC SPE (muslspe), which
++can be used with GCC version up to 8. It is useful for Freescale or IBM
++cores like e500.
++
++This was verified to be working with OpenWrt build system for CZ.NIC's
++Turris 1.x routers, which are using Freescale P2020, e500v2, so add it as
++a Tier 3 target.
++---
++ compiler/rustc_target/src/spec/mod.rs         |  1 +
++ .../targets/powerpc_unknown_linux_muslspe.rs  | 28 ++++++++++++++++
++ src/doc/rustc/src/SUMMARY.md                  |  1 +
++ src/doc/rustc/src/platform-support.md         |  1 +
++ .../powerpc-unknown-linux-muslspe.md          | 32 +++++++++++++++++++
++ tests/assembly/targets/targets-elf.rs         |  3 ++
++ 6 files changed, 66 insertions(+)
++ create mode 100644 compiler/rustc_target/src/spec/targets/powerpc_unknown_linux_muslspe.rs
++ create mode 100644 src/doc/rustc/src/platform-support/powerpc-unknown-linux-muslspe.md
++
++diff --git a/compiler/rustc_target/src/spec/mod.rs b/compiler/rustc_target/src/spec/mod.rs
++index 607eeac7ccdc3..e5ffc94d083ce 100644
++--- a/compiler/rustc_target/src/spec/mod.rs
+++++ b/compiler/rustc_target/src/spec/mod.rs
++@@ -1558,6 +1558,7 @@ supported_targets! {
++     ("powerpc-unknown-linux-gnu", powerpc_unknown_linux_gnu),
++     ("powerpc-unknown-linux-gnuspe", powerpc_unknown_linux_gnuspe),
++     ("powerpc-unknown-linux-musl", powerpc_unknown_linux_musl),
+++    ("powerpc-unknown-linux-muslspe", powerpc_unknown_linux_muslspe),
++     ("powerpc64-ibm-aix", powerpc64_ibm_aix),
++     ("powerpc64-unknown-linux-gnu", powerpc64_unknown_linux_gnu),
++     ("powerpc64-unknown-linux-musl", powerpc64_unknown_linux_musl),
++diff --git a/compiler/rustc_target/src/spec/targets/powerpc_unknown_linux_muslspe.rs b/compiler/rustc_target/src/spec/targets/powerpc_unknown_linux_muslspe.rs
++new file mode 100644
++index 0000000000000..d19015729ec19
++--- /dev/null
+++++ b/compiler/rustc_target/src/spec/targets/powerpc_unknown_linux_muslspe.rs
++@@ -0,0 +1,28 @@
+++use crate::abi::Endian;
+++use crate::spec::{base, Cc, LinkerFlavor, Lld, StackProbeType, Target, TargetOptions};
+++
+++pub fn target() -> Target {
+++    let mut base = base::linux_musl::opts();
+++    base.add_pre_link_args(LinkerFlavor::Gnu(Cc::Yes, Lld::No), &["-mspe"]);
+++    base.max_atomic_width = Some(32);
+++    base.stack_probes = StackProbeType::Inline;
+++
+++    Target {
+++        llvm_target: "powerpc-unknown-linux-muslspe".into(),
+++        metadata: crate::spec::TargetMetadata {
+++            description: Some("PowerPC SPE Linux with musl".into()),
+++            tier: Some(3),
+++            host_tools: Some(false),
+++            std: Some(true),
+++        },
+++        pointer_width: 32,
+++        data_layout: "E-m:e-p:32:32-Fn32-i64:64-n32".into(),
+++        arch: "powerpc".into(),
+++        options: TargetOptions {
+++            abi: "spe".into(),
+++            endian: Endian::Big,
+++            mcount: "_mcount".into(),
+++            ..base
+++        },
+++    }
+++}
++diff --git a/src/doc/rustc/src/SUMMARY.md b/src/doc/rustc/src/SUMMARY.md
++index 1a8ff931f0177..e5883cb971491 100644
++--- a/src/doc/rustc/src/SUMMARY.md
+++++ b/src/doc/rustc/src/SUMMARY.md
++@@ -61,5 +61,6 @@
++     - [mipsisa\*r6\*-unknown-linux-gnu\*](platform-support/mips-release-6.md)
++     - [nvptx64-nvidia-cuda](platform-support/nvptx64-nvidia-cuda.md)
+++    - [powerpc-unknown-linux-muslspe](platform-support/powerpc-unknown-linux-muslspe.md)
++     - [powerpc64-ibm-aix](platform-support/aix.md)
++     - [riscv32im-risc0-zkvm-elf](platform-support/riscv32im-risc0-zkvm-elf.md)
++     - [riscv32imac-unknown-xous-elf](platform-support/riscv32imac-unknown-xous-elf.md)
++diff --git a/src/doc/rustc/src/platform-support.md b/src/doc/rustc/src/platform-support.md
++index 370dbed50fa1a..57187bbe902a4 100644
++--- a/src/doc/rustc/src/platform-support.md
+++++ b/src/doc/rustc/src/platform-support.md
++@@ -331,6 +331,7 @@ target | std | host | notes
++ `msp430-none-elf` | * |  | 16-bit MSP430 microcontrollers
++ `powerpc-unknown-linux-gnuspe` | ✓ |  | PowerPC SPE Linux
++ `powerpc-unknown-linux-musl` | ? |  | PowerPC Linux with musl 1.2.3
+++[`powerpc-unknown-linux-muslspe`](platform-support/powerpc-unknown-linux-muslspe.md) | ? |  | PowerPC SPE Linux
++ [`powerpc-unknown-netbsd`](platform-support/netbsd.md) | ✓ | ✓ | NetBSD 32-bit powerpc systems
++ [`powerpc-unknown-openbsd`](platform-support/powerpc-unknown-openbsd.md) | * |  |
++ `powerpc-wrs-vxworks-spe` | ? |  |
++diff --git a/src/doc/rustc/src/platform-support/powerpc-unknown-linux-muslspe.md b/src/doc/rustc/src/platform-support/powerpc-unknown-linux-muslspe.md
++new file mode 100644
++index 0000000000000..4c416b5192994
++--- /dev/null
+++++ b/src/doc/rustc/src/platform-support/powerpc-unknown-linux-muslspe.md
++@@ -0,0 +1,32 @@
+++# powerpc-unknown-linux-muslspe
+++
+++**Tier: 3**
+++
+++This target is very similar to already existing ones like `powerpc_unknown_linux_musl` and `powerpc_unknown_linux_gnuspe`.
+++This one has PowerPC SPE support for musl. Unfortunately, the last supported gcc version with PowerPC SPE is 8.4.0.
+++
+++## Target maintainers
+++
+++- [@BKPepe](https://github.com/BKPepe)
+++
+++## Requirements
+++
+++This target is cross-compiled. There is no support for `std`. There is no
+++default allocator, but it's possible to use `alloc` by supplying an allocator.
+++
+++This target generated binaries in the ELF format.
+++
+++## Building the target
+++
+++This target was tested and used within the `OpenWrt` build system for CZ.NIC Turris 1.x routers using Freescale P2020.
+++
+++## Building Rust programs
+++
+++Rust does not yet ship pre-compiled artifacts for this target. To compile for
+++this target, you will either need to build Rust with the target enabled (see
+++"Building the target" above), or build your own copy of `core` by using
+++`build-std` or similar.
+++
+++## Testing
+++
+++This is a cross-compiled target and there is no support to run rustc test suite.
++diff --git a/tests/assembly/targets/targets-elf.rs b/tests/assembly/targets/targets-elf.rs
++index 32cce3839dc26..59ee0d47bba08 100644
++--- a/tests/assembly/targets/targets-elf.rs
+++++ b/tests/assembly/targets/targets-elf.rs
++@@ -345,6 +345,9 @@
++ //@ revisions: powerpc_unknown_linux_musl
++ //@ [powerpc_unknown_linux_musl] compile-flags: --target powerpc-unknown-linux-musl
++ //@ [powerpc_unknown_linux_musl] needs-llvm-components: powerpc
+++//@ revisions: powerpc_unknown_linux_muslspe
+++//@ [powerpc_unknown_linux_muslspe] compile-flags: --target powerpc-unknown-linux-muslspe
+++//@ [powerpc_unknown_linux_muslspe] needs-llvm-components: powerpc
++ //@ revisions: powerpc_unknown_netbsd
++ //@ [powerpc_unknown_netbsd] compile-flags: --target powerpc-unknown-netbsd
++ //@ [powerpc_unknown_netbsd] needs-llvm-components: powerpc
++
+-- 
+2.46.0
+
