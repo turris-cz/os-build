@@ -1,0 +1,57 @@
+From 3a08a3ef3eab3c38077f41673e7b4e7124c60367 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Thu, 22 Aug 2024 11:04:26 +0200
+Subject: [PATCH] uqmi: fix compilation on turris1x
+
+For older gcc ver. 8 on turris1x we need to remove dangling-pointer
+and fix uninitialized state of variable - card_application_state
+---
+ package/network/utils/uqmi/Makefile                   | 11 +++++++++--
+ ...001-fix-uninitialized-card-application-state.patch | 11 +++++++++++
+ 2 files changed, 20 insertions(+), 2 deletions(-)
+ create mode 100644 package/network/utils/uqmi/patches/0001-fix-uninitialized-card-application-state.patch
+
+diff --git a/package/network/utils/uqmi/Makefile b/package/network/utils/uqmi/Makefile
+index e7de3ef77d..d3a6550406 100644
+--- a/package/network/utils/uqmi/Makefile
++++ b/package/network/utils/uqmi/Makefile
+@@ -32,10 +32,17 @@ define Package/uqmi/description
+   the QMI-protocol.
+ endef
+ 
++# Check if version compiler is ver. 8, then dangling-pointer is ignored
++ifneq ($(CONFIG_GCC_USE_VERSION_8),y)
++NULL :=
++EXTRA_TARGET_CFLAGS=$(NULL) -Wno-error=dangling-pointer
++endif
++
++
+ TARGET_CFLAGS += \
+ 	-I$(STAGING_DIR)/usr/include \
+-	-Wno-error=dangling-pointer \
+-	-Wno-error=maybe-uninitialized
++	-Wno-error=maybe-uninitialized \
++	$(EXTRA_TARGET_CFLAGS)
+ 
+ CMAKE_OPTIONS += \
+ 	-DDEBUG=1
+diff --git a/package/network/utils/uqmi/patches/0001-fix-uninitialized-card-application-state.patch b/package/network/utils/uqmi/patches/0001-fix-uninitialized-card-application-state.patch
+new file mode 100644
+index 0000000000..eae5f47e5f
+--- /dev/null
++++ b/package/network/utils/uqmi/patches/0001-fix-uninitialized-card-application-state.patch
+@@ -0,0 +1,11 @@
++--- a/commands-uim.c
+++++ b/commands-uim.c
++@@ -78,7 +78,7 @@ static void cmd_uim_get_sim_state_cb(str
++ 		if (res.data.card_status.cards[i].card_state != QMI_UIM_CARD_STATE_PRESENT)
++ 			continue;
++ 
++-		uint8_t card_application_state;
+++		uint8_t card_application_state = QMI_UIM_CARD_APPLICATION_STATE_UNKNOWN;
++ 		uint8_t pin1_state = res.data.card_status.cards[i].upin_state;
++ 		uint8_t pin1_retries = res.data.card_status.cards[i].upin_retries;
++ 		uint8_t puk1_retries = res.data.card_status.cards[i].upuk_retries;
+-- 
+2.46.0
+
