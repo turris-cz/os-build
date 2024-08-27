@@ -1,0 +1,383 @@
+From 1a8b2e5a26a1c8eadd35e0386016c8de09034295 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Tue, 27 Aug 2024 09:07:40 +0200
+Subject: [PATCH] uboot-mvebu: update to version 2024.10-rc3
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Update mvebu U-Boot to version 2024.10-rc3 and add Turris Omnia related
+pending patches.
+
+TODO: Update to 2024.10 once released.
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ package/boot/uboot-mvebu/Makefile             |   4 +-
+ ..._omnia-Rename-variable-holding-EEPRO.patch |  45 ++++
+ ..._omnia-Use-the-i2c_eeprom-misc-drive.patch |  75 +++++++
+ ..._omnia-Switch-DDR-speed-to-1333H-whe.patch | 201 ++++++++++++++++++
+ 4 files changed, 323 insertions(+), 2 deletions(-)
+ create mode 100644 package/boot/uboot-mvebu/patches/201-arm-mvebu-turris_omnia-Rename-variable-holding-EEPRO.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/202-arm-mvebu-turris_omnia-Use-the-i2c_eeprom-misc-drive.patch
+ create mode 100644 package/boot/uboot-mvebu/patches/203-arm-mvebu-turris_omnia-Switch-DDR-speed-to-1333H-whe.patch
+
+diff --git a/package/boot/uboot-mvebu/Makefile b/package/boot/uboot-mvebu/Makefile
+index 58a74a4983..eeba109297 100644
+--- a/package/boot/uboot-mvebu/Makefile
++++ b/package/boot/uboot-mvebu/Makefile
+@@ -8,10 +8,10 @@
+ include $(TOPDIR)/rules.mk
+ include $(INCLUDE_DIR)/kernel.mk
+ 
+-PKG_VERSION:=2023.01
++PKG_VERSION:=2024.10-rc3
+ PKG_RELEASE:=$(AUTORELEASE)
+ 
+-PKG_HASH:=69423bad380f89a0916636e89e6dcbd2e4512d584308d922d1039d1e4331950f
++PKG_HASH:=724d4bcbfd644bb0f43eea4f76c9c3da1aea94e6ce10ec17e6bead08e63802b2
+ 
+ include $(INCLUDE_DIR)/u-boot.mk
+ include $(INCLUDE_DIR)/package.mk
+diff --git a/package/boot/uboot-mvebu/patches/201-arm-mvebu-turris_omnia-Rename-variable-holding-EEPRO.patch b/package/boot/uboot-mvebu/patches/201-arm-mvebu-turris_omnia-Rename-variable-holding-EEPRO.patch
+new file mode 100644
+index 0000000000..cf52573b95
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/201-arm-mvebu-turris_omnia-Rename-variable-holding-EEPRO.patch
+@@ -0,0 +1,45 @@
++From a96d4c58fce89d2dfd94b483a437cc9d1fade029 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 26 Aug 2024 15:07:32 +0200
++Subject: [PATCH 1/3] arm: mvebu: turris_omnia: Rename variable holding EEPROM
++ udevice
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Rename the variable holding the EEPROM udevice from `chip` to `eeprom`.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 10 +++++-----
++ 1 file changed, 5 insertions(+), 5 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 2f29d26edf8..392df53a6d8 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -464,16 +464,16 @@ static bool check_eeprom_crc(const void *buf, size_t size, u32 expected,
++ 
++ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ {
++-	struct udevice *chip;
+++	struct udevice *eeprom;
++ 	int ret;
++ 
++-	chip = omnia_get_i2c_chip("EEPROM", OMNIA_I2C_EEPROM_CHIP_ADDR,
++-				  OMNIA_I2C_EEPROM_CHIP_LEN);
+++	eeprom = omnia_get_i2c_chip("EEPROM", OMNIA_I2C_EEPROM_CHIP_ADDR,
+++				    OMNIA_I2C_EEPROM_CHIP_LEN);
++ 
++-	if (!chip)
+++	if (!eeprom)
++ 		return false;
++ 
++-	ret = dm_i2c_read(chip, 0, (void *)oep, sizeof(*oep));
+++	ret = dm_i2c_read(eeprom, 0, (void *)oep, sizeof(*oep));
++ 	if (ret) {
++ 		printf("dm_i2c_read failed: %i, cannot read EEPROM\n", ret);
++ 		return false;
++-- 
++2.44.2
++
+diff --git a/package/boot/uboot-mvebu/patches/202-arm-mvebu-turris_omnia-Use-the-i2c_eeprom-misc-drive.patch b/package/boot/uboot-mvebu/patches/202-arm-mvebu-turris_omnia-Use-the-i2c_eeprom-misc-drive.patch
+new file mode 100644
+index 0000000000..5540c9e5ef
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/202-arm-mvebu-turris_omnia-Use-the-i2c_eeprom-misc-drive.patch
+@@ -0,0 +1,75 @@
++From 18e6e237e3303d040297a4beba07f0298b28ef5a Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 26 Aug 2024 15:23:31 +0200
++Subject: [PATCH 2/3] arm: mvebu: turris_omnia: Use the i2c_eeprom misc driver
++ for EEPROM reading in U-Boot proper
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Use the i2c_eeprom miscellaneous driver for reading Turris Omnia EEPROM
++in U-Boot proper. Keep using dm_i2c_read() in SPL build, since adding
++the i2c_eeprom driver to SPL build increases the image by 1.5 KiB.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ arch/arm/mach-mvebu/Kconfig              | 1 +
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 9 +++++++--
++ configs/turris_omnia_defconfig           | 1 -
++ 3 files changed, 8 insertions(+), 3 deletions(-)
++
++diff --git a/arch/arm/mach-mvebu/Kconfig b/arch/arm/mach-mvebu/Kconfig
++index 4a8328760eb..c1a1a333e6c 100644
++--- a/arch/arm/mach-mvebu/Kconfig
+++++ b/arch/arm/mach-mvebu/Kconfig
++@@ -149,6 +149,7 @@ config TARGET_TURRIS_OMNIA
++ 	select SPL_SYS_MALLOC_SIMPLE
++ 	select SYS_I2C_MVTWSI
++ 	select ATSHA204A
+++	select I2C_EEPROM
++ 	select ARMADA_38X_SUPPORT_OLD_DDR3_TRAINING
++ 
++ config TARGET_TURRIS_MOX
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 392df53a6d8..46f20f05c05 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -23,6 +23,7 @@
++ #include <dt-bindings/gpio/gpio.h>
++ #include <fdt_support.h>
++ #include <hexdump.h>
+++#include <i2c_eeprom.h>
++ #include <time.h>
++ #include <turris-omnia-mcu-interface.h>
++ #include <linux/bitops.h>
++@@ -473,9 +474,13 @@ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ 	if (!eeprom)
++ 		return false;
++ 
++-	ret = dm_i2c_read(eeprom, 0, (void *)oep, sizeof(*oep));
+++	if (IS_ENABLED(CONFIG_SPL_BUILD))
+++		ret = dm_i2c_read(eeprom, 0, (void *)oep, sizeof(*oep));
+++	else
+++		ret = i2c_eeprom_read(eeprom, 0, (void *)oep, sizeof(*oep));
+++
++ 	if (ret) {
++-		printf("dm_i2c_read failed: %i, cannot read EEPROM\n", ret);
+++		printf("cannot read EEPROM: %d\n", ret);
++ 		return false;
++ 	}
++ 
++diff --git a/configs/turris_omnia_defconfig b/configs/turris_omnia_defconfig
++index c8756a3a788..93f0bc53f9e 100644
++--- a/configs/turris_omnia_defconfig
+++++ b/configs/turris_omnia_defconfig
++@@ -92,7 +92,6 @@ CONFIG_SPL_OF_TRANSLATE=y
++ CONFIG_AHCI_PCI=y
++ CONFIG_AHCI_MVEBU=y
++ CONFIG_DM_PCA953X=y
++-CONFIG_I2C_EEPROM=y
++ CONFIG_MMC_SDHCI=y
++ CONFIG_MMC_SDHCI_MV=y
++ CONFIG_DM_MTD=y
++-- 
++2.44.2
++
+diff --git a/package/boot/uboot-mvebu/patches/203-arm-mvebu-turris_omnia-Switch-DDR-speed-to-1333H-whe.patch b/package/boot/uboot-mvebu/patches/203-arm-mvebu-turris_omnia-Switch-DDR-speed-to-1333H-whe.patch
+new file mode 100644
+index 0000000000..c8b1e79904
+--- /dev/null
++++ b/package/boot/uboot-mvebu/patches/203-arm-mvebu-turris_omnia-Switch-DDR-speed-to-1333H-whe.patch
+@@ -0,0 +1,201 @@
++From 79f6f30f4e83f98c81f8b6f298e152e2a6f678de Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Mon, 26 Aug 2024 16:16:09 +0200
++Subject: [PATCH 3/3] arm: mvebu: turris_omnia: Switch DDR speed to 1333H when
++ reset 9 is selected
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Users experiencing random kernel crashes due to new versions of
++Marvell's DDR training algorithm can solve the issue by setting DDR
++speed to 1333H.
++
++But if kernel crashes, it has to be done in U-Boot, which is impossible
++without UART connection.
++
++In order to make it easier for users, use the rescue button mechanism:
++when rescue mode 9 is selected (that is when 10 LEDs are ON), U-Boot
++will train DDR in 1333H mode and also update EEPROM so that subsequent
++boot will use this mode.
++
++User has to use the `eeprom` command in U-Boot or `omnia-eeprom` command
++in OS to switch back to 1600K mode.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ board/CZ.NIC/turris_omnia/turris_omnia.c | 91 ++++++++++++++++++++----
++ 1 file changed, 78 insertions(+), 13 deletions(-)
++
++diff --git a/board/CZ.NIC/turris_omnia/turris_omnia.c b/board/CZ.NIC/turris_omnia/turris_omnia.c
++index 46f20f05c05..c12450f5d29 100644
++--- a/board/CZ.NIC/turris_omnia/turris_omnia.c
+++++ b/board/CZ.NIC/turris_omnia/turris_omnia.c
++@@ -47,6 +47,9 @@ DECLARE_GLOBAL_DATA_PTR;
++ #define OMNIA_I2C_EEPROM_CHIP_LEN	2
++ #define OMNIA_I2C_EEPROM_MAGIC		0x0341a034
++ 
+++#define OMNIA_RESET_TO_LOWER_DDR_SPEED	9
+++#define OMNIA_LOWER_DDR_SPEED		"1333H"
+++
++ #define A385_SYS_RSTOUT_MASK		MVEBU_REGISTER(0x18260)
++ #define   A385_SYS_RSTOUT_MASK_WD	BIT(10)
++ 
++@@ -206,6 +209,21 @@ static u32 omnia_mcu_crc32(const void *p, size_t len)
++ 	return ~bitrev32(crc);
++ }
++ 
+++static int omnia_mcu_get_reset(void)
+++{
+++	u8 reset_status;
+++	int ret;
+++
+++	ret = omnia_mcu_read(CMD_GET_RESET, &reset_status, 1);
+++	if (ret) {
+++		printf("omnia_mcu_read failed: %i, reset status unknown!\n",
+++		       ret);
+++		return ret;
+++	}
+++
+++	return reset_status;
+++}
+++
++ /* Can only be called after relocation, since it needs cleared BSS */
++ static int omnia_mcu_board_info(char *serial, u8 *mac, char *version)
++ {
++@@ -463,14 +481,17 @@ static bool check_eeprom_crc(const void *buf, size_t size, u32 expected,
++ 	return true;
++ }
++ 
+++static struct udevice *omnia_get_eeprom(void)
+++{
+++	return omnia_get_i2c_chip("EEPROM", OMNIA_I2C_EEPROM_CHIP_ADDR,
+++				  OMNIA_I2C_EEPROM_CHIP_LEN);
+++}
+++
++ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ {
++-	struct udevice *eeprom;
+++	struct udevice *eeprom = omnia_get_eeprom();
++ 	int ret;
++ 
++-	eeprom = omnia_get_i2c_chip("EEPROM", OMNIA_I2C_EEPROM_CHIP_ADDR,
++-				    OMNIA_I2C_EEPROM_CHIP_LEN);
++-
++ 	if (!eeprom)
++ 		return false;
++ 
++@@ -502,6 +523,35 @@ static bool omnia_read_eeprom(struct omnia_eeprom *oep)
++ 	return true;
++ }
++ 
+++static void omnia_eeprom_set_lower_ddr_speed(void)
+++{
+++	struct udevice *eeprom = omnia_get_eeprom();
+++	struct omnia_eeprom oep;
+++	int ret;
+++
+++	if (!eeprom || !omnia_read_eeprom(&oep))
+++		return;
+++
+++	puts("Setting DDR speed to " OMNIA_LOWER_DDR_SPEED " in EEPROM as requested by reset button... ");
+++
+++	/* check if already set */
+++	if (!strncmp(oep.ddr_speed, OMNIA_LOWER_DDR_SPEED, sizeof(oep.ddr_speed)) &&
+++	    (oep.old_ddr_training == 0 || oep.old_ddr_training == 0xff)) {
+++		puts("was already set\n");
+++		return;
+++	}
+++
+++	strncpy(oep.ddr_speed, OMNIA_LOWER_DDR_SPEED, sizeof(oep.ddr_speed));
+++	oep.old_ddr_training = 0xff;
+++	oep.crc2 = crc32(0, (const void *)&oep, offsetof(struct omnia_eeprom, crc2));
+++
+++	ret = i2c_eeprom_write(eeprom, 0, (const void *)&oep, sizeof(oep));
+++	if (ret)
+++		printf("cannot write EEPROM: %d\n", ret);
+++	else
+++		puts("done\n");
+++}
+++
++ int omnia_get_ram_size_gb(void)
++ {
++ 	static int ram_size;
++@@ -531,6 +581,13 @@ bool board_use_old_ddr3_training(void)
++ {
++ 	struct omnia_eeprom oep;
++ 
+++	/*
+++	 * If lower DDR speed is requested by reset button, we can't use old DDR
+++	 * training algorithm.
+++	 */
+++	if (omnia_mcu_get_reset() == OMNIA_RESET_TO_LOWER_DDR_SPEED)
+++		return false;
+++
++ 	if (!omnia_read_eeprom(&oep))
++ 		return false;
++ 
++@@ -711,13 +768,19 @@ static void fixup_speed_in_ddr_topology(struct mv_ddr_topology_map *topology)
++ 	const struct omnia_ddr_speed *setting;
++ 	const char *speed;
++ 	static bool done;
+++	int reset_status;
++ 
++ 	if (done)
++ 		return;
++ 
++ 	done = true;
++ 
++-	speed = omnia_get_ddr_speed();
+++	reset_status = omnia_mcu_get_reset();
+++	if (reset_status == OMNIA_RESET_TO_LOWER_DDR_SPEED)
+++		speed = OMNIA_LOWER_DDR_SPEED;
+++	else
+++		speed = omnia_get_ddr_speed();
+++
++ 	if (!speed)
++ 		return;
++ 
++@@ -734,7 +797,10 @@ static void fixup_speed_in_ddr_topology(struct mv_ddr_topology_map *topology)
++ 	if (params->speed_bin_index == setting->speed_bin)
++ 		return;
++ 
++-	printf("Fixing up DDR3 speed (EEPROM defines %s)\n", speed);
+++	if (reset_status == OMNIA_RESET_TO_LOWER_DDR_SPEED)
+++		printf("Fixing up DDR3 speed to %s as requested by reset button\n", speed);
+++	else
+++		printf("Fixing up DDR3 speed (EEPROM defines %s)\n", speed);
++ 
++ 	params->speed_bin_index = setting->speed_bin;
++ 	params->memory_freq = setting->freq;
++@@ -771,8 +837,7 @@ static int set_regdomain(void)
++ static void handle_reset_button(void)
++ {
++ 	const char * const vars[1] = { "bootcmd_rescue", };
++-	int ret;
++-	u8 reset_status;
+++	int reset_status;
++ 
++ 	/*
++ 	 * Ensure that bootcmd_rescue has always stock value, so that running
++@@ -781,12 +846,12 @@ static void handle_reset_button(void)
++ 	 */
++ 	env_set_default_vars(1, (char * const *)vars, 0);
++ 
++-	ret = omnia_mcu_read(CMD_GET_RESET, &reset_status, 1);
++-	if (ret) {
++-		printf("omnia_mcu_read failed: %i, reset status unknown!\n",
++-		       ret);
+++	reset_status = omnia_mcu_get_reset();
+++	if (reset_status < 0)
++ 		return;
++-	}
+++
+++	if (reset_status == OMNIA_RESET_TO_LOWER_DDR_SPEED)
+++		return omnia_eeprom_set_lower_ddr_speed();
++ 
++ 	env_set_ulong("omnia_reset", reset_status);
++ 
++-- 
++2.44.2
++
+-- 
+2.44.2
+
