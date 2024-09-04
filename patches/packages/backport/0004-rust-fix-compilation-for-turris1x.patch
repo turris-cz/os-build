@@ -1,0 +1,37 @@
+From 422d836e876c046e390add9a3f91ebeb82830e60 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Wed, 4 Sep 2024 10:00:46 +0200
+Subject: [PATCH] rust: fix compilation for turris1x
+
+Becuase we are using unsupported target for compiling rust, we need to add flag
+for skipping target check
+---
+ lang/rust/Makefile | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/lang/rust/Makefile b/lang/rust/Makefile
+index 0afa39ca8..7f4e3c7ed 100644
+--- a/lang/rust/Makefile
++++ b/lang/rust/Makefile
+@@ -84,10 +84,17 @@ define Host/Uninstall
+ 		$(BASH) $(RUST_UNINSTALL) || echo No Uninstall
+ endef
+ 
++# Check if version compiler is ver. 8, then bootstrap check is ignored
++ifeq ($(CONFIG_GCC_USE_VERSION_8),y)
++NULL :=
++EXTRA_TARGET_CFLAGS=$(NULL)BOOTSTRAP_SKIP_TARGET_SANITY=1
++endif
++
++
+ define Host/Compile
+ 	$(RUST_SCCACHE_VARS) \
+ 	CARGO_HOME=$(CARGO_HOME) \
+-	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
++	TARGET_CFLAGS="$(TARGET_CFLAGS)" $(EXTRA_TARGET_CFLAGS) \
+ 	$(PYTHON) $(HOST_BUILD_DIR)/x.py \
+ 		--build-dir $(HOST_BUILD_DIR)/build \
+ 		--config $(HOST_BUILD_DIR)/config.toml \
+-- 
+2.46.0
+
