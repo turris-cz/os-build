@@ -146,7 +146,6 @@ Subject: [PATCH] linux: backport PCI improvements for mvebu
  create mode 100644 target/linux/generic/pending-5.15/0049-PCI-mvebu-Add-support-for-sending-Set_Slot_Power_Lim.patch
  create mode 100644 target/linux/generic/pending-5.15/0050-ARM-dts-turris-omnia-Set-PCIe-slot-power-limit-milli.patch
  create mode 100644 target/linux/generic/pending-5.15/0051-PCI-pci-bridge-emul-Set-position-of-PCI-capabilities.patch
- create mode 100644 target/linux/generic/pending-5.15/0052-irqchip-armada-370-xp-Do-not-allow-mapping-IRQ-0-and.patch
  create mode 100644 target/linux/generic/pending-5.15/0053-PCI-mvebu-Use-devm_request_irq-for-registering-inter.patch
  create mode 100644 target/linux/generic/pending-5.15/0054-PCI-mvebu-Dispose-INTx-irqs-prior-to-removing-INTx-d.patch
  create mode 100644 target/linux/generic/pending-5.15/0055-PCI-Assign-PCI-domain-by-ida_alloc.patch
@@ -5679,49 +5678,6 @@ index 0000000000..0d3b16034f
 + 	bool has_pcie;
 + 	u16 subsystem_vendor_id;
 + 	u16 subsystem_id;
-+-- 
-+2.34.1
-+
-diff --git a/target/linux/generic/pending-5.15/0052-irqchip-armada-370-xp-Do-not-allow-mapping-IRQ-0-and.patch b/target/linux/generic/pending-5.15/0052-irqchip-armada-370-xp-Do-not-allow-mapping-IRQ-0-and.patch
-new file mode 100644
-index 0000000000..f93f96f642
---- /dev/null
-+++ b/target/linux/generic/pending-5.15/0052-irqchip-armada-370-xp-Do-not-allow-mapping-IRQ-0-and.patch
-@@ -0,0 +1,37 @@
-+From 9e71688dc62f92af7691bc3c0c30c25f82022f6d Mon Sep 17 00:00:00 2001
-+From: =?UTF-8?q?Pali=20Roh=C3=A1r?= <pali@kernel.org>
-+Date: Sun, 17 Apr 2022 22:56:55 +0200
-+Subject: [PATCH 52/90] irqchip/armada-370-xp: Do not allow mapping IRQ 0 and 1
-+MIME-Version: 1.0
-+Content-Type: text/plain; charset=UTF-8
-+Content-Transfer-Encoding: 8bit
-+
-+IRQs 0 and 1 cannot be mapped, they are handled internally by this driver
-+and this driver does not call generic_handle_domain_irq() for these IRQs.
-+So do not allow mapping these IRQs and correctly propagate error from the
-+.irq_map callback.
-+
-+Signed-off-by: Pali Rohár <pali@kernel.org>
-+Cc: stable@vger.kernel.org
-+---
-+ drivers/irqchip/irq-armada-370-xp.c | 4 ++++
-+ 1 file changed, 4 insertions(+)
-+
-+diff --git a/drivers/irqchip/irq-armada-370-xp.c b/drivers/irqchip/irq-armada-370-xp.c
-+index 01709c61e364..3fa6bd70684b 100644
-+--- a/drivers/irqchip/irq-armada-370-xp.c
-++++ b/drivers/irqchip/irq-armada-370-xp.c
-+@@ -546,6 +546,10 @@ static struct irq_chip armada_370_xp_irq_chip = {
-+ static int armada_370_xp_mpic_irq_map(struct irq_domain *h,
-+ 				      unsigned int virq, irq_hw_number_t hw)
-+ {
-++	/* IRQs 0 and 1 cannot be mapped, they are handled internally */
-++	if (hw <= 1)
-++		return -EINVAL;
-++
-+ 	armada_370_xp_irq_mask(irq_get_irq_data(virq));
-+ 	if (!is_percpu_irq(hw))
-+ 		writel(hw, per_cpu_int_base +
 +-- 
 +2.34.1
 +
