@@ -1,0 +1,78 @@
+From 4df85a242bf20ac1c2c804aecef02cc6e5f4d4ce Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Thu, 13 Oct 2022 12:16:50 +0200
+Subject: [PATCH] aardvark: implement workaround for PCIe completion timeout:
+ rebase
+
+---
+ .../100-aardvark-workaround-PCIe.patch        | 32 +++++++++----------
+ 1 file changed, 16 insertions(+), 16 deletions(-)
+
+diff --git a/target/linux/mvebu/patches-5.15/100-aardvark-workaround-PCIe.patch b/target/linux/mvebu/patches-5.15/100-aardvark-workaround-PCIe.patch
+index 975eadb80e..39a7934854 100644
+--- a/target/linux/mvebu/patches-5.15/100-aardvark-workaround-PCIe.patch
++++ b/target/linux/mvebu/patches-5.15/100-aardvark-workaround-PCIe.patch
+@@ -1,13 +1,8 @@
+-Subject: [PATCH v2] PCI: aardvark: Implement workaround for PCIe Completion Timeout
+-Date:   Tue,  2 Aug 2022 14:38:16 +0200
+-Message-Id: <20220802123816.21817-1-pali@kernel.org>
+-X-Mailer: git-send-email 2.20.1
+-MIME-Version: 1.0
+-Content-Type: text/plain; charset=UTF-8
+-Content-Transfer-Encoding: 8bit
+-Precedence: bulk
+-List-ID: <linux-pci.vger.kernel.org>
+-X-Mailing-List: linux-pci@vger.kernel.org
++From b004eff0818f657f66a6e1dc63aca0ffd9b1fb2f Mon Sep 17 00:00:00 2001
++From: Pali Rohár <pali@kernel.org>
++Date: Wed, 31 Aug 2022 19:44:08 +0200
++Subject: [PATCH] PCI: aardvark: Implement workaround for PCIe Completion
++ Timeout
+ 
+ Marvell Armada 3700 Functional Errata, Guidelines, and Restrictions
+ document describes in erratum 3.12 PCIe Completion Timeout (Ref #: 251),
+@@ -46,18 +41,20 @@ Cc: stable@vger.kernel.org
+  drivers/pci/controller/pci-aardvark.c | 10 ++++++++++
+  1 file changed, 10 insertions(+)
+ 
++diff --git a/drivers/pci/controller/pci-aardvark.c b/drivers/pci/controller/pci-aardvark.c
++index f3984bdf1d96..defaf74935a3 100644
+ --- a/drivers/pci/controller/pci-aardvark.c
+ +++ b/drivers/pci/controller/pci-aardvark.c
+-@@ -210,6 +210,8 @@ enum {
++@@ -215,6 +215,8 @@ enum {
+  };
+  
+  #define VENDOR_ID_REG				(LMI_BASE_ADDR + 0x44)
+ +#define DEBUG_MUX_CTRL_REG			(LMI_BASE_ADDR + 0x208)
+ +#define     DIS_ORD_CHK				BIT(30)
+- 
+- /* PCIe core controller registers */
+- #define CTRL_CORE_BASE_ADDR			0x18000
+-@@ -558,6 +560,11 @@ static void advk_pcie_setup_hw(struct ad
++ #define PME_MSG_GEN_CTRL			(LMI_BASE_ADDR + 0x220)
++ #define     SEND_SET_SLOT_POWER_LIMIT		BIT(13)
++ #define     SEND_PME_TURN_OFF			BIT(14)
++@@ -611,6 +613,11 @@ static void advk_pcie_setup_hw(struct advk_pcie *pcie)
+  		PCIE_CORE_CTRL2_TD_ENABLE;
+  	advk_writel(pcie, reg, PCIE_CORE_CTRL2_REG);
+  
+@@ -69,7 +66,7 @@ Cc: stable@vger.kernel.org
+  	/* Set lane X1 */
+  	reg = advk_readl(pcie, PCIE_CORE_CTRL0_REG);
+  	reg &= ~LANE_CNT_MSK;
+-@@ -1580,6 +1587,9 @@ static irqreturn_t advk_pcie_irq_handler
++@@ -1803,6 +1810,9 @@ static irqreturn_t advk_pcie_irq_handler(int irq, void *arg)
+  	struct advk_pcie *pcie = arg;
+  	u32 status;
+  
+@@ -79,3 +76,6 @@ Cc: stable@vger.kernel.org
+  	status = advk_readl(pcie, HOST_CTRL_INT_STATUS_REG);
+  	if (!(status & PCIE_IRQ_CORE_INT))
+  		return IRQ_NONE;
++-- 
++2.34.1
++
+-- 
+2.34.1
+

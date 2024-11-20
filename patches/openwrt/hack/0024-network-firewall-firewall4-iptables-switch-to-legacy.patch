@@ -1,4 +1,4 @@
-From 98db3329864904824e9437adc2303130f2866008 Mon Sep 17 00:00:00 2001
+From 95ba3229a88de0332ccde51923ff6a4f392c5ff8 Mon Sep 17 00:00:00 2001
 From: Tomas Zak <tomas.zak@turris.com>
 Date: Fri, 1 Mar 2024 18:16:16 +0100
 Subject: [PATCH] network: firewall, firewall4, iptables: switch to legacy mode
@@ -14,10 +14,10 @@ back to nft mode.
  3 files changed, 41 insertions(+), 25 deletions(-)
 
 diff --git a/package/network/config/firewall/Makefile b/package/network/config/firewall/Makefile
-index e4a3ad97f7..9b425a1a63 100644
+index 0e00f38689..983d470ffb 100644
 --- a/package/network/config/firewall/Makefile
 +++ b/package/network/config/firewall/Makefile
-@@ -28,7 +28,7 @@ define Package/firewall
+@@ -30,7 +30,7 @@ define Package/firewall
    SECTION:=net
    CATEGORY:=Base system
    TITLE:=OpenWrt C Firewall
@@ -26,13 +26,13 @@ index e4a3ad97f7..9b425a1a63 100644
    PROVIDES:=uci-firewall
    CONFLICTS:=firewall4
  endef
-@@ -42,6 +42,23 @@ define Package/firewall/conffiles
- /etc/firewall.user
+@@ -61,4 +61,21 @@ define Package/firewall/install
+ 	$(INSTALL_CONF) $(PKG_BUILD_DIR)/helpers.conf $(1)/usr/share/fw3
  endef
  
 +define Package/firewall/postinst
 +#!/bin/sh
-+	
++
 +	ln -sf iptables-legacy  "$${IPKG_INSTROOT}/usr/sbin/iptables"
 +	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore"
 +	ln -sf xtables-legacy-multi  "$${IPKG_INSTROOT}/usr/sbin/iptables-restore-translate"
@@ -47,11 +47,9 @@ index e4a3ad97f7..9b425a1a63 100644
 +
 +endef
 +
- TARGET_CFLAGS += -ffunction-sections -fdata-sections -flto
- TARGET_LDFLAGS += -Wl,--gc-sections -flto
- CMAKE_OPTIONS += $(if $(CONFIG_IPV6),,-DDISABLE_IPV6=1)
+ $(eval $(call BuildPackage,firewall))
 diff --git a/package/network/config/firewall4/Makefile b/package/network/config/firewall4/Makefile
-index 47c2cc5bf3..ea73940cdf 100644
+index 8764f5a401..6709cfd1b6 100644
 --- a/package/network/config/firewall4/Makefile
 +++ b/package/network/config/firewall4/Makefile
 @@ -40,6 +40,29 @@ define Package/firewall4/conffiles
@@ -85,10 +83,10 @@ index 47c2cc5bf3..ea73940cdf 100644
  	$(CP) -a $(PKG_BUILD_DIR)/root/* $(1)/
  endef
 diff --git a/package/network/utils/iptables/Makefile b/package/network/utils/iptables/Makefile
-index 5fc2db07fb..6d5ee0e625 100644
+index 45a2b49070..76a4bfe3f4 100644
 --- a/package/network/utils/iptables/Makefile
 +++ b/package/network/utils/iptables/Makefile
-@@ -55,10 +55,6 @@ $(call Package/iptables/Default)
+@@ -56,10 +56,6 @@ $(call Package/iptables/Default)
    TITLE:=IP firewall administration tool
    DEPENDS+= +xtables-legacy
    PROVIDES:=iptables iptables-legacy
@@ -99,7 +97,7 @@ index 5fc2db07fb..6d5ee0e625 100644
  endef
  
  define Package/iptables-zz-legacy/description
-@@ -112,10 +108,6 @@ $(call Package/iptables/Default)
+@@ -113,10 +109,6 @@ $(call Package/iptables/Default)
    DEPENDS:=+kmod-nft-arp +xtables-nft +kmod-arptables
    TITLE:=ARP firewall administration tool nft
    PROVIDES:=arptables
@@ -110,7 +108,7 @@ index 5fc2db07fb..6d5ee0e625 100644
  endef
  
  define Package/ebtables-nft
-@@ -123,10 +115,6 @@ $(call Package/iptables/Default)
+@@ -124,10 +116,6 @@ $(call Package/iptables/Default)
    DEPENDS:=+kmod-nft-bridge +xtables-nft +kmod-ebtables
    TITLE:=Bridge firewall administration tool nft
    PROVIDES:=ebtables
@@ -121,7 +119,7 @@ index 5fc2db07fb..6d5ee0e625 100644
  endef
  
  define Package/iptables-nft
-@@ -134,10 +122,6 @@ $(call Package/iptables/Default)
+@@ -135,10 +123,6 @@ $(call Package/iptables/Default)
    TITLE:=IP firewall administration tool nft
    DEPENDS:=+kmod-ipt-core +xtables-nft
    PROVIDES:=iptables
@@ -132,7 +130,7 @@ index 5fc2db07fb..6d5ee0e625 100644
  endef
  
  define Package/iptables-nft/description
-@@ -476,10 +460,6 @@ $(call Package/iptables/Default)
+@@ -477,10 +461,6 @@ $(call Package/iptables/Default)
    CATEGORY:=Network
    TITLE:=IPv6 firewall administration tool
    PROVIDES:=ip6tables ip6tables-legacy
@@ -143,7 +141,7 @@ index 5fc2db07fb..6d5ee0e625 100644
  endef
  
  define Package/ip6tables-nft
-@@ -487,10 +467,6 @@ $(call Package/iptables/Default)
+@@ -488,10 +468,6 @@ $(call Package/iptables/Default)
    DEPENDS:=@IPV6 +kmod-ip6tables +xtables-nft
    TITLE:=IP firewall administration tool nft
    PROVIDES:=ip6tables

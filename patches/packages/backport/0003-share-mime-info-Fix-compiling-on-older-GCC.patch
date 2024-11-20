@@ -1,0 +1,50 @@
+From f37ac499522a22d6dbb644a4dc31c557f981e654 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Wed, 28 Aug 2024 13:53:12 +0200
+Subject: [PATCH] share-mime-info: Fix compiling on older GCC
+
+This patch fixing error undefined-reference during compilation
+---
+ ...02-fix-older-gcc-undefined-reference.patch | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 utils/shared-mime-info/patches/002-fix-older-gcc-undefined-reference.patch
+
+diff --git a/utils/shared-mime-info/patches/002-fix-older-gcc-undefined-reference.patch b/utils/shared-mime-info/patches/002-fix-older-gcc-undefined-reference.patch
+new file mode 100644
+index 000000000..7eb33a312
+--- /dev/null
++++ b/utils/shared-mime-info/patches/002-fix-older-gcc-undefined-reference.patch
+@@ -0,0 +1,30 @@
++--- a/meson.build
+++++ b/meson.build
++@@ -11,6 +11,7 @@ config = configuration_data()
++ i18n = import('i18n')
++ 
++ cc = meson.get_compiler('c')
+++cxx = meson.get_compiler('cpp')
++ 
++ ###############################################################################
++ # Project configuration
++@@ -47,6 +48,19 @@ if not xdgmime_found
++ endif
++ 
++ ###############################################################################
+++# Check if GCC needs -lstdc++fs (before 9.1)
+++
+++if not cxx.links('''
+++        #include <filesystem>
+++        int main() {
+++            return std::filesystem::is_directory(
+++                std::filesystem::status("/tmp")) ? 0 : 1;
+++        }
+++        ''', name: 'std++fs-check')
+++    add_project_link_arguments('-lstdc++fs', language : 'cpp')
+++endif
+++
+++###############################################################################
++ # Dependencies
++ 
++ config.set('HAVE_FDATASYNC', cc.has_function('fdatasync', prefix: '#include <unistd.h>'))
+-- 
+2.46.0
+

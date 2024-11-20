@@ -1,0 +1,49 @@
+From af8f0c996331350bf390a29bf326dd1ab61c45ef Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@nic.cz>
+Date: Tue, 23 Jul 2024 12:40:59 +0200
+Subject: [PATCH] gcc: fix build failure
+
+---
+ ...failure-if-configured-with-disable-d.patch | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 devel/gcc/patches/8.4.0/0001-libatomic-build-failure-if-configured-with-disable-d.patch
+
+diff --git a/devel/gcc/patches/8.4.0/0001-libatomic-build-failure-if-configured-with-disable-d.patch b/devel/gcc/patches/8.4.0/0001-libatomic-build-failure-if-configured-with-disable-d.patch
+new file mode 100644
+index 000000000..6f56b15bd
+--- /dev/null
++++ b/devel/gcc/patches/8.4.0/0001-libatomic-build-failure-if-configured-with-disable-d.patch
+@@ -0,0 +1,30 @@
++From 1dfba45302da522d8acc712e31b3da98dfa8a114 Mon Sep 17 00:00:00 2001
++From: Richard Muzik <richard.muzik@nic.cz>
++Date: Tue, 23 Jul 2024 11:43:56 +0200
++Subject: [PATCH] libatomic: build failure if configured with
++ --disable-dependency-tracking
++
++load_n.c:115:1: fatal error: opening dependency file .deps/load_1_.lo.Ppo: No such file or directory
++
++http://gcc.gnu.org/PR55930
++---
++ libatomic/Makefile.in | 3 ++-
++ 1 file changed, 2 insertions(+), 1 deletion(-)
++
++diff --git a/libatomic/Makefile.in b/libatomic/Makefile.in
++index c8f38be5835..4fab7cec3ea 100644
++--- a/libatomic/Makefile.in
+++++ b/libatomic/Makefile.in
++@@ -335,7 +335,8 @@ PAT_N = $(word 2,$(PAT_SPLIT))
++ PAT_S = $(word 3,$(PAT_SPLIT))
++ IFUNC_DEF = -DIFUNC_ALT=$(PAT_S)
++ IFUNC_OPT = $(word $(PAT_S),$(IFUNC_OPTIONS))
++-M_DEPS = -MT $@ -MD -MP -MF $(DEPDIR)/$(@F).Ppo
+++@AMDEP_TRUE@M_DEPS = -MT $@ -MD -MP -MF $(DEPDIR)/$(@F).Ppo
+++@AMDEP_FALSE@M_DEPS =
++ M_SIZE = -DN=$(PAT_N)
++ M_IFUNC = $(if $(PAT_S),$(IFUNC_DEF) $(IFUNC_OPT))
++ M_FILE = $(PAT_BASE)_n.c
++-- 
++2.45.2
++
+-- 
+2.45.2
+
