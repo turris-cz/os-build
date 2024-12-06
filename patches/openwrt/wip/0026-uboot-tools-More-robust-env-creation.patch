@@ -1,0 +1,40 @@
+From 5a65a09727d10b9ec5ec2639b181339af016ebff Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 3 Dec 2024 12:49:16 +0100
+Subject: [PATCH] uboot-tools: More robust env creation
+
+Making sure that we write down the correct environment and just that.
+---
+ package/boot/uboot-tools/files/mvebu             | 4 +---
+ package/boot/uboot-tools/files/uboot-envtools.sh | 2 +-
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/package/boot/uboot-tools/files/mvebu b/package/boot/uboot-tools/files/mvebu
+index 8c05c91cf7..af6ecccac6 100644
+--- a/package/boot/uboot-tools/files/mvebu
++++ b/package/boot/uboot-tools/files/mvebu
+@@ -3,9 +3,7 @@
+ # Copyright (C) 2016 LEDE-Project.org
+ #
+ 
+-[ -e /etc/config/ubootenv ] && exit 0
+-
+-touch /etc/config/ubootenv
++[ -e /etc/config/ubootenv ] || touch /etc/config/ubootenv
+ 
+ . /lib/uboot-envtools.sh
+ . /lib/functions.sh
+diff --git a/package/boot/uboot-tools/files/uboot-envtools.sh b/package/boot/uboot-tools/files/uboot-envtools.sh
+index 980c9962b1..e679597a49 100644
+--- a/package/boot/uboot-tools/files/uboot-envtools.sh
++++ b/package/boot/uboot-tools/files/uboot-envtools.sh
+@@ -42,5 +42,5 @@ ubootenv_add_app_config() {
+ 	config_get envsize "$1" envsize
+ 	config_get secsize "$1" secsize
+ 	config_get numsec "$1" numsec
+-	grep -q "^[[:space:]]*${dev}[[:space:]]*${offset}" "/etc/fw_${cfgtype#uboot}.config" || echo "$dev $offset $envsize $secsize $numsec" >>"/etc/fw_${cfgtype#uboot}.config"
++	grep -q "^[[:space:]]*${dev}[[:space:]]*${offset}" "/etc/fw_${cfgtype#uboot}.config" || echo "$dev $offset $envsize $secsize $numsec" >"/etc/fw_${cfgtype#uboot}.config"
+ }
+-- 
+2.47.1
+
