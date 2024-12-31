@@ -211,9 +211,9 @@ available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	report "Patching OpenWRT repository"
 	patch_repository "openwrt"
-	if [ -d "$src_dir/src" ]; then
-		cp -r "$src_dir"/src/* .
-		find "$src_dir"/src -printf "%P\\0" | xargs --null git add
+	if [ -d "$src_dir/src/openwrt" ]; then
+		cp -r "$src_dir"/src/openwrt/* .
+		find "$src_dir"/src/openwrt -type f -printf "%P\\0" | xargs --null git add
 		_git commit -m 'Add additional files'
 	fi
 }
@@ -250,9 +250,16 @@ repatch_feeds() {
 	_perl ./scripts/feeds update -a
 
 	report "Patching feeds"
+    set -x
 	while read -r vcs name url rest; do
 		if [ "$vcs" = src-git-full ]; then
 			patch_repository "$name" "$build_dir/feeds/$name"
+			if [ -d "$src_dir/src/$name" ] && pushd "$build_dir/feeds/$name"; then
+				cp -r "$src_dir"/src/"$name"/* .
+				find "$src_dir"/src/"$name" -type f -printf "%P\\0" | xargs --null git add
+				_git commit -m 'Add additional files'
+				popd
+			fi
 		fi
 	done < feeds.conf
 
