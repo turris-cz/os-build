@@ -42,6 +42,6 @@ RUN \
 ## Add a user for build environment as it is not possible to build OpenWrt as root
 RUN useradd -ms /bin/bash -d /build build
 USER build
-ENV HOME /build
+ENV HOME="/build"
 
 CMD [ "bash" ]
