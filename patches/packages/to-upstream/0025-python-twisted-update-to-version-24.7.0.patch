@@ -1,0 +1,141 @@
+From 73152e2e970395374e98edc70fb21cd9ebf2f067 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@nic.cz>
+Date: Thu, 24 Apr 2025 10:09:15 +0200
+Subject: [PATCH 3/3] python-twisted: update to version 24.7.0
+
+---
+ lang/python/python-twisted/Makefile           | 17 ++++-------
+ .../patches/001-omit-tkconch.patch            | 20 ++++++-------
+ .../patches/002-omit-tests.patch              | 28 ++++++-------------
+ lang/python/python-twisted/test.sh            |  5 ++++
+ 4 files changed, 30 insertions(+), 40 deletions(-)
+ create mode 100644 lang/python/python-twisted/test.sh
+
+diff --git a/lang/python/python-twisted/Makefile b/lang/python/python-twisted/Makefile
+index 1b54cb0c4..32f396f2f 100644
+--- a/lang/python/python-twisted/Makefile
++++ b/lang/python/python-twisted/Makefile
+@@ -9,11 +9,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=python-twisted
+-PKG_VERSION:=22.10.0
++PKG_VERSION:=24.7.0
+ PKG_RELEASE:=1
+ 
+ PYPI_NAME:=Twisted
+-PKG_HASH:=32acbd40a94f5f46e7b42c109bfae2b302250945561783a8b7a059048f2d4d31
++PYPI_SOURCE_NAME:=twisted
++PKG_HASH:=5a60147f044187a127ec7da96d170d49bcce50c6fd36f594e60f4587eff4d394
+ 
+ PKG_BUILD_DEPENDS:=libtirpc
+ 
+@@ -22,7 +23,7 @@ PKG_LICENSE_FILES:=LICENSE
+ PKG_MAINTAINER:=Jeffery To <jeffery.to@gmail.com>
+ PKG_CPE_ID:=cpe:/a:twistedmatrix:twisted
+ 
+-PKG_BUILD_DEPENDS:=python-incremental/host
++PKG_BUILD_DEPENDS:=python-hatchling/host python-hatch-fancy-pypi-readme/host python-incremental/host
+ 
+ include ../pypi.mk
+ include $(INCLUDE_DIR)/package.mk
+@@ -45,8 +46,6 @@ define Package/python3-twisted
+       +python3-hyperlink \
+       +python3-idna \
+       +python3-incremental \
+-      +python3-pkg-resources \
+-      +python3-pyasn1 \
+       +python3-pyopenssl \
+       +python3-service-identity \
+       +python3-typing-extensions \
+@@ -55,12 +54,8 @@ endef
+ 
+ define Package/python3-twisted/description
+ Twisted is a networking engine written in Python, supporting numerous
+-protocols. It contains a web server, numerous chat clients, chat servers,
+-mail servers, and more.
+-endef
+-
+-define Build/Configure
+-	$(SED) 's/^version = attr: twisted.__version__$$$$/version = $(PKG_VERSION)/' $(PKG_BUILD_DIR)/setup.cfg
++protocols. It contains a web server, numerous chat clients, chat
++servers, mail servers, and more.
+ endef
+ 
+ define Py3Package/python3-twisted/filespec
+diff --git a/lang/python/python-twisted/patches/001-omit-tkconch.patch b/lang/python/python-twisted/patches/001-omit-tkconch.patch
+index a1a37771b..d9ad0d59e 100644
+--- a/lang/python/python-twisted/patches/001-omit-tkconch.patch
++++ b/lang/python/python-twisted/patches/001-omit-tkconch.patch
+@@ -1,13 +1,13 @@
+---- a/setup.cfg
+-+++ b/setup.cfg
+-@@ -115,7 +115,6 @@ console_scripts =
+- 	conch = twisted.conch.scripts.conch:run
+- 	mailmail = twisted.mail.scripts.mailmail:run
+- 	pyhtmlizer = twisted.scripts.htmlizer:run
+--	tkconch = twisted.conch.scripts.tkconch:run
+- 	trial = twisted.scripts.trial:run
+- 	twist = twisted.application.twist._twist:Twist.main
+- 	twistd = twisted.scripts.twistd:run
++--- a/pyproject.toml
+++++ b/pyproject.toml
++@@ -138,7 +138,6 @@ ckeygen = "twisted.conch.scripts.ckeygen
++ conch = "twisted.conch.scripts.conch:run"
++ mailmail = "twisted.mail.scripts.mailmail:run"
++ pyhtmlizer = "twisted.scripts.htmlizer:run"
++-tkconch = "twisted.conch.scripts.tkconch:run"
++ trial = "twisted.scripts.trial:run"
++ twist = "twisted.application.twist._twist:Twist.main"
++ twistd = "twisted.scripts.twistd:run"
+ --- a/src/twisted/python/twisted-completion.zsh
+ +++ b/src/twisted/python/twisted-completion.zsh
+ @@ -1,4 +1,4 @@
+diff --git a/lang/python/python-twisted/patches/002-omit-tests.patch b/lang/python/python-twisted/patches/002-omit-tests.patch
+index 3ec59fd48..ddf8f9e30 100644
+--- a/lang/python/python-twisted/patches/002-omit-tests.patch
++++ b/lang/python/python-twisted/patches/002-omit-tests.patch
+@@ -1,20 +1,10 @@
+---- a/setup.cfg
+-+++ b/setup.cfg
+-@@ -107,6 +107,9 @@ mypy =
++--- a/pyproject.toml
+++++ b/pyproject.toml
++@@ -182,6 +182,7 @@ exclude = [
++     "*.pxi",
++     "*.pyx",
++     "build.bat",
+++    "test",
++ ]
+  
+- [options.packages.find]
+- where = src
+-+exclude = 
+-+	*.test
+-+	*.test.*
+- 
+- [options.entry_points]
+- console_scripts = 
+-@@ -126,6 +129,7 @@ console_scripts =
+- 	*.pxi
+- 	*.pyx
+- 	build.bat
+-+	test/*
+- 
+- [flake8]
+- disable-noqa = True
++ [tool.hatch.build.targets.sdist]
+diff --git a/lang/python/python-twisted/test.sh b/lang/python/python-twisted/test.sh
+new file mode 100644
+index 000000000..3b9310791
+--- /dev/null
++++ b/lang/python/python-twisted/test.sh
+@@ -0,0 +1,5 @@
++#!/bin/sh
++
++[ "$1" = python3-twisted ] || exit 0
++
++python3 -c 'from twisted.internet import reactor'
+-- 
+2.49.0
+
