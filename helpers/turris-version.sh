@@ -18,7 +18,7 @@
 news_file="$(dirname "$(dirname "$(readlink -f "$0")")")/NEWS"
 
 get_version() {
-	sed -n '/^-\+$/{x;p;q}; x' "$news_file"
+	awk 'prev && /^-+$/ { print prev; exit } { prev = $0 }' "$news_file"
 }
 
 news_text() {
