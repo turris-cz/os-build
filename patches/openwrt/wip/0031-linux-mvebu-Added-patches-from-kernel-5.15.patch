@@ -1,0 +1,286 @@
+From 4d4ce8fe849e96d087ff5bc33ffd4a8cbb30fda0 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@nic.cz>
+Date: Thu, 23 Jan 2025 16:40:26 +0100
+Subject: [PATCH] linux/mvebu: Added patches from kernel 5.15
+
+Added patches from older kernel 5.15 for support separate two dts boot
+files for physical and sfp interface
+---
+ ...mvebu-a3700-comphy-Change-2500base-x.patch |  63 ++++++++
+ ...mada-385-turris-omnia-separate-dts-f.patch | 151 ++++++++++++++++++
+ ...urris-omnia-mcu-Change-compatible-to.patch |  35 ++++
+ 3 files changed, 249 insertions(+)
+ create mode 100644 target/linux/mvebu/patches-6.6/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+ create mode 100644 target/linux/mvebu/patches-6.6/880-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+ create mode 100644 target/linux/mvebu/patches-6.6/990-platform-cznic-turris-omnia-mcu-Change-compatible-to.patch
+
+diff --git a/target/linux/mvebu/patches-6.6/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch b/target/linux/mvebu/patches-6.6/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+new file mode 100644
+index 0000000000..253b945745
+--- /dev/null
++++ b/target/linux/mvebu/patches-6.6/710-phy-marvell-phy-mvebu-a3700-comphy-Change-2500base-x.patch
+@@ -0,0 +1,63 @@
++From e1f0728b3596b49f20cda9b8a794a439086bc4fa Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 17 Aug 2022 14:35:59 +0200
++Subject: [PATCH] phy: marvell: phy-mvebu-a3700-comphy: Change 2500base-x
++ transmit amplitude
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Change transmit amplitude to 1025 mV for 2500base-x mode.
++
++This fixes issue wherein if the 8b/10b encoded packet contains a long
++enough alternating sequence of bits (010101... or 101010...), which
++happens if the packet contains a sequence of 'J' or '\xb5' bytes, the
++packet may be lost due to FCS error. The probability of loss grows with
++the number of 'J's with default transmit amplitude setting - with 114
++'J's the probability is about 50%, with 125 'J's almost 100% of packets
++are lost.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/phy/marvell/phy-mvebu-a3700-comphy.c | 18 ++++++++++++++++++
++ 1 file changed, 18 insertions(+)
++
++diff --git a/drivers/phy/marvell/phy-mvebu-a3700-comphy.c b/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
++index a4d7d9bd100d..4a18f9ca6d25 100644
++--- a/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
+++++ b/drivers/phy/marvell/phy-mvebu-a3700-comphy.c
++@@ -68,6 +68,12 @@
++ #define SPEED_PLL_MASK			GENMASK(7, 2)
++ #define SPEED_PLL_VALUE_16		FIELD_PREP(SPEED_PLL_MASK, 0x10)
++ 
+++#define COMPHY_GEN3_SET0		0x0d
+++#define Gx_TX_AMP_MASK			GENMASK(5, 1)
+++#define Gx_TX_AMP_VALUE(x)		FIELD_PREP(Gx_TX_AMP_MASK, x)
+++#define Gx_TX_AMP_ADJ			BIT(6)
+++#define Gx_TX_AMP_1025MV		(Gx_TX_AMP_VALUE(0x12) | Gx_TX_AMP_ADJ)
+++
++ #define COMPHY_DIG_LOOPBACK_EN		0x23
++ #define SEL_DATA_WIDTH_MASK		GENMASK(11, 10)
++ #define DATA_WIDTH_10BIT		FIELD_PREP(SEL_DATA_WIDTH_MASK, 0x0)
++@@ -746,6 +752,18 @@ mvebu_a3700_comphy_ethernet_power_on(struct mvebu_a3700_comphy_lane *lane)
++ 		comphy_gbe_phy_init(lane,
++ 				    lane->submode != PHY_INTERFACE_MODE_2500BASEX);
++ 
+++	/*
+++	 * Fix issue wherein a packet may be lost if it contains a long enough
+++	 * sequence of 'J' or '\xb5' bytes.
+++	 * This only happens with 2500base-x mode. Fix this by changing transmit
+++	 * amplitude to 1025 mV.
+++	 */
+++	if (lane->submode == PHY_INTERFACE_MODE_2500BASEX) {
+++		data = Gx_TX_AMP_1025MV;
+++		mask = Gx_TX_AMP_MASK | Gx_TX_AMP_ADJ;
+++		comphy_lane_reg_set(lane, COMPHY_GEN3_SET0, data, mask);
+++	}
+++
++ 	/*
++ 	 * 14. Check the PHY Polarity invert bit
++ 	 */
++-- 
++2.35.1
++
+diff --git a/target/linux/mvebu/patches-6.6/880-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch b/target/linux/mvebu/patches-6.6/880-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+new file mode 100644
+index 0000000000..6c4a1e45f9
+--- /dev/null
++++ b/target/linux/mvebu/patches-6.6/880-ARM-dts-mvebu-armada-385-turris-omnia-separate-dts-f.patch
+@@ -0,0 +1,151 @@
++From 47c3c4379cd32f70a95dbf9028465a4aaf71388b Mon Sep 17 00:00:00 2001
++From: Tomas Hlavacek <tmshlvck@gmail.com>
++Date: Tue, 5 May 2020 20:40:24 +0200
++Subject: [PATCH] ARM: dts: mvebu: armada-385-turris-omnia: separate dts for
++ SFP and PHY
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++The Turris Omnia board contains dual-personality ethernet NIC eth2 with
++two operation modes: 1) SFP cage and 2) metalic 1000BASE-X PHY.
++The differential pair carrying SGMII/1000BASE-X of eth2 is wired through
++a multiplexor driven by the module-detect signal from the SFP cage.
++The pin status can be read through I2C GPIO expander chip in userspace
++when the sfp driver module is unloaded and / or in U-Boot prior to the
++start of the kernel and the proper DTS file can be selected for the
++(floolowing) boot.
++
++Split DTS for Turris Omnia (that does not have any support for SFP cage)
++into three files:
++  armada-385-turris-omnia.dtsi - common base
++  armada-385-turris-omnia-sfp.dts - DT with the SFP configuration and
++PHY disabled
++  armada-385-turris-omnia-phy.dts - DT with the PHY configuration and
++SFP disabled
++
++Current DSA driver does not allow multiple CPU ports and Turris Omnia
++has two RGMII iterfaces wired between CPU and DSA switch.
++Disable the second CPU port until there is a suitable driver to use it.
++
++Signed-off-by: Tomas Hlavacek <tmshlvck@gmail.com>
++Signed-off-by: Marek Behún <marek.behun@nic.cz>
++---
++ arch/arm/boot/dts/Makefile                    |  3 ++-
++ .../boot/dts/marvell/armada-385-turris-omnia-phy.dts  | 23 ++++++++++++++++++
++ .../boot/dts/marvell/armada-385-turris-omnia-sfp.dts  | 24 +++++++++++++++++++
++ ...omnia.dts => armada-385-turris-omnia.dtsi} |  5 +---
++ 4 files changed, 50 insertions(+), 5 deletions(-)
++ create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-phy.dts
++ create mode 100644 arch/arm/boot/dts/armada-385-turris-omnia-sfp.dts
++ rename arch/arm/boot/dts/marvell/{armada-385-turris-omnia.dts => armada-385-turris-omnia.dtsi} (99%)
++
++diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
++index 7a72fc6..9ae9710 100644
++--- a/arch/arm/boot/dts/marvell/Makefile
+++++ b/arch/arm/boot/dts/marvell/Makefile
++@@ -44,7 +44,8 @@ dtb-$(CONFIG_MACH_ARMADA_38X) += \
++ 	armada-385-linksys-rango.dtb \
++ 	armada-385-linksys-shelby.dtb \
++ 	armada-385-synology-ds116.dtb \
++-	armada-385-turris-omnia.dtb \
+++	armada-385-turris-omnia-phy.dtb \
+++	armada-385-turris-omnia-sfp.dtb \
++ 	armada-388-clearfog.dtb \
++ 	armada-388-clearfog-base.dtb \
++ 	armada-388-clearfog-pro.dtb \
++diff --git a/arch/arm/boot/dts/marvell/armada-385-turris-omnia-phy.dts b/arch/arm/boot/dts/marvell/armada-385-turris-omnia-phy.dts
++new file mode 100644
++index 0000000..cb26a8a
++--- /dev/null
+++++ b/arch/arm/boot/dts/marvell/armada-385-turris-omnia-phy.dts
++@@ -0,0 +1,23 @@
+++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+++/*
+++ * Device Tree file for the Turris Omnia
+++ *
+++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
+++ *
+++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
+++ */
+++
+++/dts-v1/;
+++
+++#include "armada-385-turris-omnia.dtsi"
+++
+++&phy1 {
+++	status = "okay";
+++};
+++
+++&eth2 {
+++	phy-mode = "sgmii";
+++	phy = <&phy1>;
+++};
+++
++diff --git a/arch/arm/boot/dts/marvell/armada-385-turris-omnia-sfp.dts b/arch/arm/boot/dts/marvell/armada-385-turris-omnia-sfp.dts
++new file mode 100644
++index 0000000..0754d58
++--- /dev/null
+++++ b/arch/arm/boot/dts/marvell/armada-385-turris-omnia-sfp.dts
++@@ -0,0 +1,24 @@
+++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+++/*
+++ * Device Tree file for the Turris Omnia
+++ *
+++ * Copyright (C) 2016 Uwe Kleine-König <uwe@kleine-koenig.org>
+++ * Copyright (C) 2016-2019 Tomas Hlavacek <tmshlvkc@gmail.com>
+++ *
+++ * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
+++ */
+++
+++/dts-v1/;
+++
+++#include "armada-385-turris-omnia.dtsi"
+++
+++&sfp {
+++	status = "okay";
+++};
+++
+++&eth2 {
+++	phy-mode = "sgmii";
+++	managed = "in-band-status";
+++	sfp = <&sfp>;
+++};
+++
++diff --git a/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dts b/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dtsi
++similarity index 99%
++rename from arch/arm/boot/dts/marvell/armada-385-turris-omnia.dts
++rename to arch/arm/boot/dts/marvell/armada-385-turris-omnia.dtsi
++index a31a0eb..24832ad 100644
++--- a/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dts
+++++ b/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dtsi
++@@ -8,7 +8,6 @@
++  * Schematic available at https://www.turris.cz/doc/_media/rtrom01-schema.pdf
++  */
++ 
++-/dts-v1/;
++ 
++ #include <dt-bindings/gpio/gpio.h>
++ #include <dt-bindings/input/input.h>
++@@ -166,7 +165,7 @@
++ 	};
++ };
++ 
++-/* WAN port */
+++/* WAN dual-personality port */
++ &eth2 {
++ 	/*
++ 	 * eth2 is connected via a multiplexor to both the SFP cage and to
++@@ -178,8 +177,6 @@
++ 	 * handle and add managed = "in-band-status" property.
++ 	 */
++ 	status = "okay";
++-	phy-mode = "sgmii";
++-	phy-handle = <&phy1>;
++ 	phys = <&comphy5 2>;
++ 	sfp = <&sfp>;
++ 	buffer-manager = <&bm>;
++-- 
++2.41.0
++
+diff --git a/target/linux/mvebu/patches-6.6/990-platform-cznic-turris-omnia-mcu-Change-compatible-to.patch b/target/linux/mvebu/patches-6.6/990-platform-cznic-turris-omnia-mcu-Change-compatible-to.patch
+new file mode 100644
+index 0000000000..64ed0dc4db
+--- /dev/null
++++ b/target/linux/mvebu/patches-6.6/990-platform-cznic-turris-omnia-mcu-Change-compatible-to.patch
+@@ -0,0 +1,35 @@
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Tue, 5 Mar 2024 10:42:07 +0100
++Subject: platform: cznic: turris-omnia-mcu: Change compatible to
++ cznic,turris-omnia-ctrl
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++This is a temporary solution so that U-Boot does not inject reset-gpios
++into PCIe nodes, because it breaks some WiFi cards.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++
++--- a/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dtsi
+++++ b/arch/arm/boot/dts/marvell/armada-385-turris-omnia.dtsi
++@@ -201,7 +201,7 @@
++ 			reg = <0>;
++ 
++ 			mcu: system-controller@2a {
++-				compatible = "cznic,turris-omnia-mcu";
+++				compatible = "cznic,turris-omnia-ctrl";
++ 				reg = <0x2a>;
++ 
++ 				pinctrl-names = "default";
++--- a/drivers/platform/cznic/turris-omnia-mcu-base.c
+++++ b/drivers/platform/cznic/turris-omnia-mcu-base.c
++@@ -373,7 +373,7 @@ static int omnia_mcu_probe(struct i2c_cl
++ }
++ 
++ static const struct of_device_id of_omnia_mcu_match[] = {
++-	{ .compatible = "cznic,turris-omnia-mcu" },
+++	{ .compatible = "cznic,turris-omnia-ctrl" },
++ 	{}
++ };
++ 
+-- 
+2.39.5
+
