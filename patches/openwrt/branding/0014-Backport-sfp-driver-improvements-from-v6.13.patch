@@ -4,7 +4,6 @@ Date: Wed, 19 Mar 2025 16:23:17 +0000
 Subject: [PATCH] Backport sfp driver improvements from v6.13
 
 ---
- ...ment-ignoring-the-hardware-TX_FAULT-.patch |  86 +++++++++++
  ...net-sfp-improve-Nokia-GPON-sfp-fixup.patch |  57 ++++++++
  ...fill-in-missing-MODULE_DESCRIPTION-s.patch |  25 ++++
  ...rework-the-RollBall-PHY-waiting-code.patch | 134 ++++++++++++++++++
@@ -14,113 +13,19 @@ Subject: [PATCH] Backport sfp driver improvements from v6.13
  ...quirk-for-Fibrestore-2.5G-copper-SFP.patch |  78 ++++++++++
  .../790-SFP-GE-T-ignore-TX_FAULT.patch        |  63 --------
  9 files changed, 532 insertions(+), 63 deletions(-)
- create mode 100644 target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch
- create mode 100644 target/linux/generic/backport-6.6/0004-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
- create mode 100644 target/linux/generic/backport-6.6/0005-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
- create mode 100644 target/linux/generic/backport-6.6/0006-net-sfp-rework-the-RollBall-PHY-waiting-code.patch
- create mode 100644 target/linux/generic/backport-6.6/0008-net-sfp-fix-PHY-discovery-for-FS-SFP-10G-T-module.patch
- create mode 100644 target/linux/generic/backport-6.6/0009-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
- create mode 100644 target/linux/generic/backport-6.6/0010-net-sfp-update-comment-for-FS-SFP-10G-T-quirk.patch
- create mode 100644 target/linux/generic/backport-6.6/0011-net-sfp-enhance-quirk-for-Fibrestore-2.5G-copper-SFP.patch
- delete mode 100644 target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
+ create mode 100644 target/linux/generic/backport-6.6/731-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
+ create mode 100644 target/linux/generic/backport-6.6/732-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
+ create mode 100644 target/linux/generic/backport-6.6/733-net-sfp-rework-the-RollBall-PHY-waiting-code.patch
+ create mode 100644 target/linux/generic/backport-6.6/734-net-sfp-fix-PHY-discovery-for-FS-SFP-10G-T-module.patch
+ create mode 100644 target/linux/generic/backport-6.6/735-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
+ create mode 100644 target/linux/generic/backport-6.6/736-net-sfp-update-comment-for-FS-SFP-10G-T-quirk.patch
+ create mode 100644 target/linux/generic/backport-6.6/737-net-sfp-enhance-quirk-for-Fibrestore-2.5G-copper-SFP.patch
 
-diff --git a/target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch b/target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch
-new file mode 100644
-index 0000000000..f574e4befa
---- /dev/null
-+++ b/target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch
-@@ -0,0 +1,86 @@
-+From e184e8609f8c1cd9fef703f667245b6ebd89c2ed Mon Sep 17 00:00:00 2001
-+From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
-+Date: Tue, 3 Oct 2023 14:34:24 +0100
-+Subject: [PATCH 03/15] net: sfp: re-implement ignoring the hardware TX_FAULT
-+ signal
-+
-+Re-implement how we ignore the hardware TX_FAULT signal. Rather than
-+having a separate boolean for this, use a bitmask of the hardware
-+signals that we wish to ignore. This gives more flexibility in the
-+future to ignore other signals such as RX_LOS.
-+
-+Signed-off-by: Russell King (Oracle) <rmk+kernel@armlinux.org.uk>
-+Tested-by: Christian Marangi <ansuelsmth@gmail.com>
-+Link: https://lore.kernel.org/r/E1qnfXc-008UDY-91@rmk-PC.armlinux.org.uk
-+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
-+---
-+ drivers/net/phy/sfp.c | 16 ++++++++--------
-+ 1 file changed, 8 insertions(+), 8 deletions(-)
-+
-+--- a/drivers/net/phy/sfp.c
-++++ b/drivers/net/phy/sfp.c
-+@@ -257,6 +257,7 @@ struct sfp {
-+ 	unsigned int state_hw_drive;
-+ 	unsigned int state_hw_mask;
-+ 	unsigned int state_soft_mask;
-++	unsigned int state_ignore_mask;
-+ 	unsigned int state;
-+ 
-+ 	struct delayed_work poll;
-+@@ -280,7 +281,6 @@ struct sfp {
-+ 	unsigned int rs_state_mask;
-+ 
-+ 	bool have_a2;
-+-	bool tx_fault_ignore;
-+ 
-+ 	const struct sfp_quirk *quirk;
-+ 
-+@@ -347,7 +347,7 @@ static void sfp_fixup_long_startup(struc
-+ 
-+ static void sfp_fixup_ignore_tx_fault(struct sfp *sfp)
-+ {
-+-	sfp->tx_fault_ignore = true;
-++	sfp->state_ignore_mask |= SFP_F_TX_FAULT;
-+ }
-+ 
-+ // For 10GBASE-T short-reach modules
-+@@ -796,7 +796,8 @@ static void sfp_soft_start_poll(struct s
-+ 
-+ 	mutex_lock(&sfp->st_mutex);
-+ 	// Poll the soft state for hardware pins we want to ignore
-+-	sfp->state_soft_mask = ~sfp->state_hw_mask & mask;
-++	sfp->state_soft_mask = ~sfp->state_hw_mask & ~sfp->state_ignore_mask &
-++			       mask;
-+ 
-+ 	if (sfp->state_soft_mask & (SFP_F_LOS | SFP_F_TX_FAULT) &&
-+ 	    !sfp->need_poll)
-+@@ -2321,7 +2322,7 @@ static int sfp_sm_mod_probe(struct sfp *
-+ 	sfp->module_t_start_up = T_START_UP;
-+ 	sfp->module_t_wait = T_WAIT;
-+ 
-+-	sfp->tx_fault_ignore = false;
-++	sfp->state_ignore_mask = 0;
-+ 
-+ 	if (sfp->id.base.extended_cc == SFF8024_ECC_10GBASE_T_SFI ||
-+ 	    sfp->id.base.extended_cc == SFF8024_ECC_10GBASE_T_SR ||
-+@@ -2344,6 +2345,8 @@ static int sfp_sm_mod_probe(struct sfp *
-+ 
-+ 	if (sfp->quirk && sfp->quirk->fixup)
-+ 		sfp->quirk->fixup(sfp);
-++
-++	sfp->state_hw_mask &= ~sfp->state_ignore_mask;
-+ 	mutex_unlock(&sfp->st_mutex);
-+ 
-+ 	return 0;
-+@@ -2844,10 +2847,7 @@ static void sfp_check_state(struct sfp *
-+ 	mutex_lock(&sfp->st_mutex);
-+ 	state = sfp_get_state(sfp);
-+ 	changed = state ^ sfp->state;
-+-	if (sfp->tx_fault_ignore)
-+-		changed &= SFP_F_PRESENT | SFP_F_LOS;
-+-	else
-+-		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
-++	changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
-+ 
-+ 	for (i = 0; i < GPIO_MAX; i++)
-+ 		if (changed & BIT(i))
-diff --git a/target/linux/generic/backport-6.6/0004-net-sfp-improve-Nokia-GPON-sfp-fixup.patch b/target/linux/generic/backport-6.6/0004-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
+diff --git a/target/linux/generic/backport-6.6/731-net-sfp-improve-Nokia-GPON-sfp-fixup.patch b/target/linux/generic/backport-6.6/731-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
 new file mode 100644
 index 0000000000..991f5f38ec
 --- /dev/null
-+++ b/target/linux/generic/backport-6.6/0004-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
++++ b/target/linux/generic/backport-6.6/731-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
 @@ -0,0 +1,57 @@
 +From 5ffe330e40bdfad9c49a615c54d2d89343b2f08a Mon Sep 17 00:00:00 2001
 +From: "Russell King (Oracle)" <rmk+kernel@armlinux.org.uk>
@@ -179,11 +84,11 @@ index 0000000000..991f5f38ec
 + 
 + 	// Fiberstore SFP-10G-T doesn't identify as copper, and uses the
 + 	// Rollball protocol to talk to the PHY.
-diff --git a/target/linux/generic/backport-6.6/0005-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch b/target/linux/generic/backport-6.6/0005-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
+diff --git a/target/linux/generic/backport-6.6/732-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch b/target/linux/generic/backport-6.6/732-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
 new file mode 100644
 index 0000000000..fd43e1c604
 --- /dev/null
-+++ b/target/linux/generic/backport-6.6/0005-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
++++ b/target/linux/generic/backport-6.6/732-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
 @@ -0,0 +1,25 @@
 +From dd9d75fcf0f427ddcde4bde736908684ee05c353 Mon Sep 17 00:00:00 2001
 +From: Andrew Lunn <andrew@lunn.ch>
@@ -210,11 +115,11 @@ index 0000000000..fd43e1c604
 + MODULE_AUTHOR("Russell King");
 + MODULE_LICENSE("GPL v2");
 ++MODULE_DESCRIPTION("SFP cage support");
-diff --git a/target/linux/generic/backport-6.6/0009-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch b/target/linux/generic/backport-6.6/0009-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
+diff --git a/target/linux/generic/backport-6.6/733-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch b/target/linux/generic/backport-6.6/733-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
 new file mode 100644
 index 0000000000..8466ac09c4
 --- /dev/null
-+++ b/target/linux/generic/backport-6.6/0009-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
++++ b/target/linux/generic/backport-6.6/733-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
 @@ -0,0 +1,31 @@
 +From 1c77c721916ae108c2c5865986735bfe92000908 Mon Sep 17 00:00:00 2001
 +From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
@@ -247,75 +152,6 @@ index 0000000000..8466ac09c4
 + 	SFP_QUIRK_F("Turris", "RTSFP-10", sfp_fixup_rollball),
 + 	SFP_QUIRK_F("Turris", "RTSFP-10G", sfp_fixup_rollball),
 + };
-diff --git a/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch b/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
-deleted file mode 100644
-index 1d6bc6ee07..0000000000
---- a/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
-+++ /dev/null
-@@ -1,63 +0,0 @@
--From 7cc39a6bedbd85f3ff7e16845f310e4ce8d9833f Mon Sep 17 00:00:00 2001
--From: Daniel Golle <daniel@makrotopia.org>
--Date: Tue, 6 Sep 2022 00:31:19 +0100
--Subject: [PATCH] net: sfp: add quirk for ATS SFP-GE-T 1000Base-TX module
--To: netdev@vger.kernel.org,
--    linux-kernel@vger.kernel.org,
--    Russell King <linux@armlinux.org.uk>,
--    Andrew Lunn <andrew@lunn.ch>,
--    Heiner Kallweit <hkallweit1@gmail.com>
--Cc: David S. Miller <davem@davemloft.net>,
--    Eric Dumazet <edumazet@google.com>,
--    Jakub Kicinski <kuba@kernel.org>,
--    Paolo Abeni <pabeni@redhat.com>,
--    Josef Schlehofer <pepe.schlehofer@gmail.com>
--
--This copper module comes with broken TX_FAULT indicator which must be
--ignored for it to work. Implement ignoring TX_FAULT state bit also
--during reset/insertion and mute the warning telling the user that the
--module indicates TX_FAULT.
--
--Co-authored-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
--Signed-off-by: Daniel Golle <daniel@makrotopia.org>
-----
-- drivers/net/phy/sfp.c | 14 +++++++++++---
-- 1 file changed, 11 insertions(+), 3 deletions(-)
--
----- a/drivers/net/phy/sfp.c
--+++ b/drivers/net/phy/sfp.c
--@@ -485,6 +485,9 @@ static const struct sfp_quirk sfp_quirks
-- 	SFP_QUIRK("HUAWEI", "MA5671A", sfp_quirk_2500basex,
-- 		  sfp_fixup_ignore_tx_fault),
-- 
--+	// OEM SFP-GE-T is 1000Base-T module
--+	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
--+
-- 	// Lantech 8330-262D-E can operate at 2500base-X, but incorrectly report
-- 	// 2500MBd NRZ in their EEPROM
-- 	SFP_QUIRK_M("Lantech", "8330-262D-E", sfp_quirk_2500basex),
--@@ -2606,7 +2609,8 @@ static void sfp_sm_main(struct sfp *sfp,
-- 			 * or t_start_up, so assume there is a fault.
-- 			 */
-- 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
---				     sfp->sm_fault_retries == N_FAULT_INIT);
--+				     !sfp->tx_fault_ignore &&
--+				     (sfp->sm_fault_retries == N_FAULT_INIT));
-- 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
-- 	init_done:
-- 			/* Create mdiobus and start trying for PHY */
--@@ -2864,10 +2868,12 @@ static void sfp_check_state(struct sfp *
-- 	mutex_lock(&sfp->st_mutex);
-- 	state = sfp_get_state(sfp);
-- 	changed = state ^ sfp->state;
---	if (sfp->tx_fault_ignore)
--+	if (sfp->tx_fault_ignore) {
-- 		changed &= SFP_F_PRESENT | SFP_F_LOS;
---	else
--+		state &= ~SFP_F_TX_FAULT;
--+	} else {
-- 		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
--+	}
-- 
-- 	for (i = 0; i < GPIO_MAX; i++)
-- 		if (changed & BIT(i))
 -- 
 2.25.1
 
