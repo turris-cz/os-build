@@ -21,7 +21,7 @@ set -eu
 
 # Constants
 REPO="https://repo.turris.cz"
-BOARDS=('mox' 'omnia' 'turris1x') # Note that first board in this is considered as primary (authoritative) one
+BOARDS=('omnia-ng' 'mox' 'omnia' 'turris1x') # Note that first board in this is considered as primary (authoritative) one
 DEFAULT_VERIFY_BRANCH="hbk"
 DEFAULT_RELEASE_BRANCH="hbs"
 
