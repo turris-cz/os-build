@@ -211,6 +211,10 @@ available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	report "Patching OpenWRT repository"
 	patch_repository "openwrt"
+	if [ -f "$src_dir/src/clean.list.openwrt" ]; then
+		_git rm -r --pathspec-from-file="$src_dir/src/clean.list.openwrt"
+		_git commit -m 'Removing excess files'
+	fi
 	if [ -d "$src_dir/src/openwrt" ]; then
 		cp -r "$src_dir"/src/openwrt/* .
 		find "$src_dir"/src/openwrt -type f -printf "%P\\0" | xargs --null git add
@@ -244,6 +248,7 @@ store_hash() {
 
 available_commands+=( ["repatch_feeds"]="Cleanup feeds, update them and patch them" )
 repatch_feeds() {
+	echo patching feeds
 	set_local_feeds
 	report "Getting feeds"
 	_perl ./scripts/feeds clean -a
