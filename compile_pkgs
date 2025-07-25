@@ -211,15 +211,18 @@ available_commands+=( ["patch_openwrt"]="Patch the main OpenWRT repository" )
 patch_openwrt() {
 	report "Patching OpenWRT repository"
 	patch_repository "openwrt"
-	if [ -f "$src_dir/src/clean.list.openwrt" ]; then
-		_git rm -r --pathspec-from-file="$src_dir/src/clean.list.openwrt"
-		_git commit -m 'Removing excess files'
-	fi
-	if [ -d "$src_dir/src/openwrt" ]; then
-		cp -r "$src_dir"/src/openwrt/* .
-		find "$src_dir"/src/openwrt -type f -printf "%P\\0" | xargs --null git add
-		_git commit -m 'Add additional files'
-	fi
+	patch_repository "${TARGET_BOARD}/openwrt"
+	for overlay in "" "${TARGET_BOARD}"; do
+		if [ -f "$src_dir/src/${overlay}/clean.list.openwrt" ]; then
+			_git rm -r --pathspec-from-file="$src_dir/src/${overlay}/clean.list.openwrt"
+			_git commit -m 'Removing excess files'
+		fi
+		if [ -d "$src_dir/src/${overlay}/openwrt" ]; then
+			cp -r "$src_dir"/src/${overlay}/openwrt/* .
+			find "$src_dir"/src/${overlay}/openwrt -type f -printf "%P\\0" | xargs --null git add
+			_git commit -m 'Add additional files'
+		fi
+	done
 }
 
 _git_remote_hash() {
