@@ -1,0 +1,1125 @@
+From 2fd350a7721d8660e8a5b1d17567ecbcee247f57 Mon Sep 17 00:00:00 2001
+From: Aishwarya R <aisr@qti.qualcomm.com>
+Date: Tue, 27 May 2025 17:36:10 +0530
+Subject: [PATCH 4/4] UPSTREAM:DP:wifi:mac80211: Disable TID-level stats by
+ default to reduce KPI overhead
+
+TID-level statistics in mac80211 provide detailed per-TID packet and drop
+counters, which are useful for debugging and performance analysis. However,
+collecting these stats impacts KPI.
+
+Disabled TID level stats by default and can be enabled through below debugfs
+interface
+
+echo 0 > kernel/debug/ath12k/qcn9274\ hw2.0_0000:01:00.0/tid_stats_disable
+
+Patch-dependency: 945-wifi-mac80211-Enhance-TX-stats-reporting-per-TID-spe.patch
+Signed-off-by: Aishwarya R <aisr@qti.qualcomm.com>
+---
+ net/mac80211/debugfs_netdev.c |   2 +-
+ net/mac80211/ieee80211_i.h    |   8 +-
+ net/mac80211/rx.c             | 124 +++++++++++++++++++---------
+ net/mac80211/tx.c             | 147 ++++++++++++++++++++++++----------
+ net/mac80211/wep.c            |   5 +-
+ net/mac80211/wpa.c            |   8 +-
+ 6 files changed, 208 insertions(+), 86 deletions(-)
+
+diff --git a/net/mac80211/debugfs_netdev.c b/net/mac80211/debugfs_netdev.c
+index 4fbb675..2d9cfbb 100644
+--- a/net/mac80211/debugfs_netdev.c
++++ b/net/mac80211/debugfs_netdev.c
+@@ -22,7 +22,7 @@
+ #include "debugfs_netdev.h"
+ #include "driver-ops.h"
+ 
+-const char *rx_drop_reason_strings[RX_DROP_REASON_MAX + TX_DROP_REASON_MAX] = {
++const char *rx_drop_reason_strings[RX_DROP_REASON_MAX] = {
+ 	[RX_DROP_MIC_FAIL] = "mic_fail",
+ 	[RX_DROP_REPLAY] = "replay",
+ 	[RX_DROP_BAD_MMIE] = "bad_mmie",
+diff --git a/net/mac80211/ieee80211_i.h b/net/mac80211/ieee80211_i.h
+index 0cbdb39..6a5c6d1 100644
+--- a/net/mac80211/ieee80211_i.h
++++ b/net/mac80211/ieee80211_i.h
+@@ -2502,9 +2502,11 @@ static inline void ieee80211_tx_drop_stats(struct ieee80211_sub_if_data *sdata,
+ {
+ 	struct pcpu_txrx_stats *txrx_stats = this_cpu_ptr(sdata->txrx_stats);
+ 
+-	u64_stats_update_begin(&txrx_stats->syncp);
+-	txrx_stats->tid_stats[tid].tx_drop_stats[reason]++;
+-	u64_stats_update_end(&txrx_stats->syncp);
++	if (txrx_stats) {
++		u64_stats_update_begin(&txrx_stats->syncp);
++		txrx_stats->tid_stats[tid].tx_drop_stats[reason]++;
++		u64_stats_update_end(&txrx_stats->syncp);
++	}
+ }
+ 
+ void ieee80211_dynamic_ps_enable_work(struct work_struct *work);
+diff --git a/net/mac80211/rx.c b/net/mac80211/rx.c
+index e215449..8bd7c88 100644
+--- a/net/mac80211/rx.c
++++ b/net/mac80211/rx.c
+@@ -1903,6 +1903,7 @@ ieee80211_rx_h_sta_process(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
+ 	int i;
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (!sta || !link_sta)
+ 		return RX_CONTINUE;
+@@ -2016,7 +2017,8 @@ ieee80211_rx_h_sta_process(struct ieee80211_rx_data *rx)
+ 					rx->sdata->dev, sta->sta.addr,
+ 					GFP_ATOMIC,
+ 					rx->link_id);
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_UNEXPECTED_4ADDR_FRAME);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_UNEXPECTED_4ADDR_FRAME);
+ 			return RX_DROP_M_UNEXPECTED_4ADDR_FRAME;
+ 		}
+ 		/*
+@@ -2077,6 +2079,7 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_key *ptk_idx = NULL;
+ 	int mmie_keyidx = -1;
+ 	__le16 fc;
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (ieee80211_is_ext(hdr->frame_control))
+ 		return RX_CONTINUE;
+@@ -2122,7 +2125,8 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 			keyid = ieee80211_get_keyid(rx->skb);
+ 
+ 			if (unlikely(keyid < 0)) {
+-				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NO_KEY_ID);
++				if (!tid_stats_disable)
++					ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NO_KEY_ID);
+ 				return RX_DROP_U_NO_KEY_ID;
+ 			}
+ 
+@@ -2154,7 +2158,8 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 				cfg80211_rx_unprot_mlme_mgmt(rx->sdata->dev,
+ 							     skb->data,
+ 							     skb->len);
+-			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_BCN_KEYIDX);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_BCN_KEYIDX);
+ 			return RX_DROP_M_BAD_BCN_KEYIDX;
+ 		}
+ 
+@@ -2169,7 +2174,8 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 
+ 		if (mmie_keyidx < NUM_DEFAULT_KEYS ||
+ 		    mmie_keyidx >= NUM_DEFAULT_KEYS + NUM_DEFAULT_MGMT_KEYS) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_MGMT_KEYIDX);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_MGMT_KEYIDX);
+ 			return RX_DROP_M_BAD_MGMT_KEYIDX; /* unexpected BIP keyidx */
+ 		}
+ 		if (rx->link_sta) {
+@@ -2232,7 +2238,8 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 		keyidx = ieee80211_get_keyid(rx->skb);
+ 
+ 		if (unlikely(keyidx < 0)) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NO_KEY_ID);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NO_KEY_ID);
+ 			return RX_DROP_U_NO_KEY_ID;
+ 		}
+ 
+@@ -2301,7 +2308,8 @@ ieee80211_rx_h_decrypt(struct ieee80211_rx_data *rx)
+ 		break;
+ 	default:
+ 		result = RX_DROP_U_BAD_CIPHER;
+-		ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_CIPHER);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_CIPHER);
+ 	}
+ 
+ 	/* the hdr variable is invalid after the decrypt handlers */
+@@ -2424,6 +2432,7 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_fragment_entry *entry;
+ 	struct sk_buff *skb;
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	hdr = (struct ieee80211_hdr *)rx->skb->data;
+ 	fc = hdr->frame_control;
+@@ -2446,7 +2455,8 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 	I802_DEBUG_INC(rx->local->rx_handlers_fragments);
+ 
+ 	if (skb_linearize(rx->skb)) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_OOM);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_OOM);
+ 		return RX_DROP_U_OOM;
+ 	}
+ 
+@@ -2511,13 +2521,15 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 		u8 pn[IEEE80211_CCMP_PN_LEN], *rpn;
+ 
+ 		if (!requires_sequential_pn(rx, fc)) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NONSEQ_PN);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_NONSEQ_PN);
+ 			return RX_DROP_U_NONSEQ_PN;
+ 		}
+ 
+ 		/* Prevent mixed key and fragment cache attacks */
+ 		if (entry->key_color != rx->key->color) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_BAD_KEY_COLOR);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_BAD_KEY_COLOR);
+ 			return RX_DROP_U_BAD_KEY_COLOR;
+ 		}
+ 
+@@ -2530,7 +2542,8 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 
+ 		rpn = rx->ccm_gcm.pn;
+ 		if (memcmp(pn, rpn, IEEE80211_CCMP_PN_LEN)) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_REPLAY);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_REPLAY);
+ 			return RX_DROP_U_REPLAY;
+ 		}
+ 		memcpy(entry->last_pn, pn, IEEE80211_CCMP_PN_LEN);
+@@ -2543,12 +2556,14 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 		 * if for TKIP Michael MIC should protect us, and WEP is a
+ 		 * lost cause anyway.
+ 		 */
+-		ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_EXPECT_DEFRAG_PROT);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_EXPECT_DEFRAG_PROT);
+ 		return RX_DROP_U_EXPECT_DEFRAG_PROT;
+ 	} else if (entry->is_protected && rx->key &&
+ 		   entry->key_color != rx->key->color &&
+ 		   (status->flag & RX_FLAG_DECRYPTED)) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_BAD_KEY_COLOR);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_BAD_KEY_COLOR);
+ 		return RX_DROP_U_BAD_KEY_COLOR;
+ 	}
+ 
+@@ -2568,7 +2583,8 @@ ieee80211_rx_h_defragment(struct ieee80211_rx_data *rx)
+ 					      GFP_ATOMIC))) {
+ 			I802_DEBUG_INC(rx->local->rx_handlers_drop_defrag);
+ 			__skb_queue_purge(&entry->skb_list);
+-			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_OOM);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_OOM);
+ 			return RX_DROP_U_OOM;
+ 		}
+ 	}
+@@ -3112,6 +3128,7 @@ ieee80211_rx_mesh_data(struct ieee80211_sub_if_data *sdata, struct sta_info *sta
+ 	int tailroom = 0;
+ 	int hdrlen, mesh_hdrlen;
+ 	u8 *qos;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (!ieee80211_vif_is_mesh(&sdata->vif))
+ 		return RX_CONTINUE;
+@@ -3216,12 +3233,14 @@ ieee80211_rx_mesh_data(struct ieee80211_sub_if_data *sdata, struct sta_info *sta
+ 		skb = NULL;
+ 
+ 		if (skb_cow_head(fwd_skb, hdrlen - sizeof(struct ethhdr))) {
+-			ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_OOM);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_OOM);
+ 			return RX_DROP_U_OOM;
+ 		}
+ 
+ 		if (skb_linearize(fwd_skb)) {
+-			ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_OOM);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_OOM);
+ 			return RX_DROP_U_OOM;
+ 		}
+ 	}
+@@ -3291,6 +3310,7 @@ __ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx, u8 data_offset)
+ 	ieee80211_rx_result res;
+ 	struct ethhdr ethhdr;
+ 	const u8 *check_da = ethhdr.h_dest, *check_sa = ethhdr.h_source;
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(ieee80211_has_a4(hdr->frame_control))) {
+ 		check_da = NULL;
+@@ -3320,7 +3340,8 @@ __ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx, u8 data_offset)
+ 					  rx->sdata->vif.addr,
+ 					  rx->sdata->vif.type,
+ 					  data_offset, true)) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU);
+ 		return RX_DROP_U_BAD_AMSDU;
+ 	}
+ 
+@@ -3364,7 +3385,8 @@ __ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx, u8 data_offset)
+ 		}
+ 
+ 		if (!ieee80211_frame_allowed(rx, fc)) {
+-			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_FRAME_ERR);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_FRAME_ERR);
+ 			goto free;
+ 		}
+ 
+@@ -3385,6 +3407,7 @@ ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
+ 	__le16 fc = hdr->frame_control;
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (!(status->rx_flags & IEEE80211_RX_AMSDU))
+ 		return RX_CONTINUE;
+@@ -3408,13 +3431,15 @@ ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx)
+ 		case NL80211_IFTYPE_MESH_POINT:
+ 			break;
+ 		default:
+-			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_4ADDR);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_4ADDR);
+ 			return RX_DROP_U_BAD_4ADDR;
+ 		}
+ 	}
+ 
+ 	if (is_multicast_ether_addr(hdr->addr1) || !rx->sta) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU);
+ 		return RX_DROP_U_BAD_AMSDU;
+ 	}
+ 
+@@ -3429,7 +3454,8 @@ ieee80211_rx_h_amsdu(struct ieee80211_rx_data *rx)
+ 		case WLAN_CIPHER_SUITE_WEP40:
+ 		case WLAN_CIPHER_SUITE_WEP104:
+ 		case WLAN_CIPHER_SUITE_TKIP:
+-			ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU_CIPHER);
++			if (!tid_stats_disable)
++				ieee80211_rx_drop_stats_reason(rx->sdata, skb->len, status->tid, RX_DROP_BAD_AMSDU_CIPHER);
+ 			return RX_DROP_U_BAD_AMSDU_CIPHER;
+ 		default:
+ 			break;
+@@ -3450,6 +3476,7 @@ ieee80211_rx_h_data(struct ieee80211_rx_data *rx)
+ 	__le16 fc = hdr->frame_control;
+ 	ieee80211_rx_result res;
+ 	bool port_control;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 	int err;
+ 
+ 	if (unlikely(!ieee80211_is_data(hdr->frame_control)))
+@@ -3460,7 +3487,8 @@ ieee80211_rx_h_data(struct ieee80211_rx_data *rx)
+ 
+ 	err = __ieee80211_data_to_8023(rx, &port_control);
+ 	if (unlikely(err)) {
+-		ieee80211_rx_drop_stats_reason(sdata, rx->skb->len, status->tid, RX_DROP_INVALID_8023);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sdata, rx->skb->len, status->tid, RX_DROP_INVALID_8023);
+ 		return RX_DROP_U_INVALID_8023;
+ 	}
+ 
+@@ -3505,7 +3533,8 @@ ieee80211_rx_h_data(struct ieee80211_rx_data *rx)
+ 		    (tf->action_code == WLAN_TDLS_CHANNEL_SWITCH_REQUEST ||
+ 		     tf->action_code == WLAN_TDLS_CHANNEL_SWITCH_RESPONSE)) {
+ 			rx->skb->protocol = cpu_to_be16(ETH_P_TDLS);
+-			ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
++			if (!tid_stats_disable)
++				ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
+ 			__ieee80211_queue_skb_to_iface(sdata, rx->link_id,
+ 						       rx->sta, rx->skb);
+ 			return RX_QUEUED;
+@@ -3700,6 +3729,7 @@ ieee80211_rx_h_mgmt_check(struct ieee80211_rx_data *rx)
+ {
+ 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *) rx->skb->data;
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (ieee80211_is_s1g_beacon(mgmt->frame_control))
+ 		return RX_CONTINUE;
+@@ -3718,7 +3748,8 @@ ieee80211_rx_h_mgmt_check(struct ieee80211_rx_data *rx)
+ 	/* drop too small action frames */
+ 	if (ieee80211_is_action(mgmt->frame_control) &&
+ 	    rx->skb->len < IEEE80211_MIN_ACTION_SIZE) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_RUNT_ACTION);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_RUNT_ACTION);
+ 		return RX_DROP_U_RUNT_ACTION;
+ 	}
+ 
+@@ -3742,7 +3773,8 @@ ieee80211_rx_h_mgmt_check(struct ieee80211_rx_data *rx)
+ 	}
+ 
+ 	if (ieee80211_drop_unencrypted_mgmt(rx)) {
+-		ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_UNPROT_ACTION);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(rx->sdata, rx->skb->len, status->tid, RX_DROP_UNPROT_ACTION);
+ 
+ 		return RX_DROP_U_UNPROT_ACTION;
+ 	}
+@@ -3811,6 +3843,7 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
+ 	int len = rx->skb->len;
+ 	int link_id;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (!ieee80211_is_action(mgmt->frame_control))
+ 		return RX_CONTINUE;
+@@ -3818,7 +3851,8 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
+ 	if (!rx->sta && mgmt->u.action.category != WLAN_CATEGORY_PUBLIC &&
+ 	    mgmt->u.action.category != WLAN_CATEGORY_SELF_PROTECTED &&
+ 	    mgmt->u.action.category != WLAN_CATEGORY_SPECTRUM_MGMT) {
+-		ieee80211_rx_drop_stats_reason(sdata, len, status->tid, RX_DROP_ACTION_UNKNOWN_SRC);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sdata, len, status->tid, RX_DROP_ACTION_UNKNOWN_SRC);
+ 		return RX_DROP_U_ACTION_UNKNOWN_SRC;
+ 	}
+ 
+@@ -4116,7 +4150,8 @@ ieee80211_rx_h_action(struct ieee80211_rx_data *rx)
+ 
+  queue:
+ 	ieee80211_queue_skb_to_iface(sdata, rx->link_id, rx->sta, rx->skb);
+-	ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
++	if (!tid_stats_disable)
++		ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
+ 	return RX_QUEUED;
+ }
+ 
+@@ -4222,6 +4257,7 @@ ieee80211_rx_h_action_return(struct ieee80211_rx_data *rx)
+ 	struct sk_buff *nskb;
+ 	struct ieee80211_sub_if_data *sdata = rx->sdata;
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (!ieee80211_is_action(mgmt->frame_control))
+ 		return RX_CONTINUE;
+@@ -4246,8 +4282,9 @@ ieee80211_rx_h_action_return(struct ieee80211_rx_data *rx)
+ 
+ 	/* do not return rejected action frames */
+ 	if (mgmt->u.action.category & 0x80) {
+-		ieee80211_rx_drop_stats_reason(sdata, rx->skb->len, status->tid,
+-					       RX_DROP_REJECTED_ACTION_RESPONSE);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sdata, rx->skb->len, status->tid,
++						       RX_DROP_REJECTED_ACTION_RESPONSE);
+ 		return RX_DROP_U_REJECTED_ACTION_RESPONSE;
+ 	}
+ 
+@@ -4286,6 +4323,7 @@ ieee80211_rx_h_ext(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_sub_if_data *sdata = rx->sdata;
+ 	struct ieee80211_hdr *hdr = (void *)rx->skb->data;
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	if (!ieee80211_is_ext(hdr->frame_control))
+ 		return RX_CONTINUE;
+@@ -4293,7 +4331,8 @@ ieee80211_rx_h_ext(struct ieee80211_rx_data *rx)
+ 	if (sdata->vif.type != NL80211_IFTYPE_STATION)
+ 		return RX_DROP_MONITOR;
+ 
+-	ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
++	if (!tid_stats_disable)
++		ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
+ 	/* for now only beacons are ext, so queue them */
+ 	ieee80211_queue_skb_to_iface(sdata, rx->link_id, rx->sta, rx->skb);
+ 
+@@ -4307,6 +4346,7 @@ ieee80211_rx_h_mgmt(struct ieee80211_rx_data *rx)
+ 	struct ieee80211_mgmt *mgmt = (void *)rx->skb->data;
+ 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(rx->skb);
+ 	__le16 stype;
++	bool tid_stats_disable = rx->local->hw.tid_stats_disable;
+ 
+ 	stype = mgmt->frame_control & cpu_to_le16(IEEE80211_FCTL_STYPE);
+ 
+@@ -4353,7 +4393,8 @@ ieee80211_rx_h_mgmt(struct ieee80211_rx_data *rx)
+ 		return RX_DROP_MONITOR;
+ 	}
+ 
+-	ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
++	if (!tid_stats_disable)
++		ieee80211_rx_stats_reason(sdata, rx->skb->len, status->tid, RX_QUEUED_PKTS);
+ 	ieee80211_queue_skb_to_iface(sdata, rx->link_id, rx->sta, rx->skb);
+ 
+ 	return RX_QUEUED;
+@@ -5443,7 +5484,8 @@ static bool ieee80211_prepare_and_rx_handle(struct ieee80211_rx_data *rx,
+ 	}
+ 
+ 	if (!ieee80211_accept_frame(rx)) {
+-		ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_INVALID_SKB);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sdata, skb->len, status->tid, RX_DROP_INVALID_SKB);
+ 		return false;
+ 	}
+ 
+@@ -5504,6 +5546,7 @@ static void __ieee80211_rx_handle_8023(struct ieee80211_hw *hw,
+ 	struct ieee80211_rx_data rx;
+ 	struct sta_info *sta;
+ 	int link_id = -1;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	memset(&rx, 0, sizeof(rx));
+ 	rx.skb = skb;
+@@ -5534,13 +5577,15 @@ static void __ieee80211_rx_handle_8023(struct ieee80211_hw *hw,
+ 	 */
+ 	sta = container_of(pubsta, struct sta_info, sta);
+ 	if (!ieee80211_rx_data_set_sta(&rx, sta, link_id, false)) {
+-		ieee80211_rx_drop_stats_reason(sta->sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sta->sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
+ 		goto drop;
+ 	}
+ 
+ 	fast_rx = rcu_dereference(rx.sta->fast_rx);
+ 	if (!fast_rx) {
+-		ieee80211_rx_drop_stats_reason(sta->sdata, skb->len, status->tid, RX_DROP_NO_FAST_RX);
++		if (!tid_stats_disable)
++			ieee80211_rx_drop_stats_reason(sta->sdata, skb->len, status->tid, RX_DROP_NO_FAST_RX);
+ 		goto drop;
+ 	}
+ 
+@@ -5619,6 +5664,7 @@ static void __ieee80211_rx_handle_packet(struct ieee80211_hw *hw,
+ 	int err = 0, prev_linkid;
+ 	bool prev_flag;
+ 	bool is_mgmt = false;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	hdr = (struct ieee80211_hdr *)skb->data;
+ 	fc = ((struct ieee80211_hdr *)skb->data)->frame_control;
+@@ -5689,7 +5735,8 @@ static void __ieee80211_rx_handle_packet(struct ieee80211_hw *hw,
+ 				link_sta = link_sta_info_get_bss(rx.sdata,
+ 								 hdr->addr2);
+ 				if (!link_sta) {
+-					ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_LINK_STA);
++					if (!tid_stats_disable)
++						ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_LINK_STA);
+ 					goto out;
+ 				}
+ 
+@@ -5711,7 +5758,8 @@ static void __ieee80211_rx_handle_packet(struct ieee80211_hw *hw,
+ 
+ 			rx.sdata = prev_sta->sdata;
+ 			if (!ieee80211_rx_data_set_sta(&rx, prev_sta, link_id, only_monitor)) {
+-				ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
++				if (!tid_stats_disable)
++					ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
+ 				goto out;
+ 			}
+ 
+@@ -5726,12 +5774,14 @@ static void __ieee80211_rx_handle_packet(struct ieee80211_hw *hw,
+ 		if (prev_sta) {
+ 			rx.sdata = prev_sta->sdata;
+ 			if (!ieee80211_rx_data_set_sta(&rx, prev_sta, link_id, only_monitor)) {
+-				ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
++				if (!tid_stats_disable)
++					ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_SET_STA);
+ 				goto out;
+ 			}
+ 
+ 			if (!status->link_valid && prev_sta->sta.mlo) {
+-				ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_LINK_STA);
++				if (!tid_stats_disable)
++					ieee80211_rx_drop_stats_reason(rx.sdata, skb->len, status->tid, RX_DROP_NO_LINK_STA);
+ 				goto out;
+ 			}
+ 
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index ff02943..e6f7afb 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -355,8 +355,10 @@ ieee80211_tx_h_check_assoc(struct ieee80211_tx_data *tx)
+ {
+ 
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)tx->skb->data;
++	struct ieee80211_local *local = tx->local;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx->skb);
+ 	bool assoc = false;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(info->flags & IEEE80211_TX_CTL_INJECTED))
+ 		return TX_CONTINUE;
+@@ -376,7 +378,8 @@ ieee80211_tx_h_check_assoc(struct ieee80211_tx_data *tx)
+ 		 *
+ 		 * http://article.gmane.org/gmane.linux.kernel.wireless.general/30089
+ 		 */
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SDATA_STATE);
+ 		return TX_DROP;
+ 	}
+ 
+@@ -398,7 +401,8 @@ ieee80211_tx_h_check_assoc(struct ieee80211_tx_data *tx)
+ 				   hdr->addr1);
+ #endif
+ 			I802_DEBUG_INC(tx->local->tx_handlers_drop_not_assoc);
+-			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_NOT_ASSOC_STA);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_NOT_ASSOC_STA);
+ 			return TX_DROP;
+ 		}
+ 	} else if (unlikely(ieee80211_is_data(hdr->frame_control) &&
+@@ -407,7 +411,8 @@ ieee80211_tx_h_check_assoc(struct ieee80211_tx_data *tx)
+ 		 * No associated STAs - no need to send multicast
+ 		 * frames.
+ 		 */
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_UNAUTHORIZED_STA);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_UNAUTHORIZED_STA);
+ 		return TX_DROP;
+ 	}
+ 
+@@ -424,6 +429,7 @@ static void purge_old_ps_buffers(struct ieee80211_local *local)
+ 	struct sk_buff *skb;
+ 	struct ieee80211_sub_if_data *sdata;
+ 	struct sta_info *sta;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	list_for_each_entry_rcu(sdata, &local->interfaces, list) {
+ 		struct ps_data *ps;
+@@ -438,7 +444,8 @@ static void purge_old_ps_buffers(struct ieee80211_local *local)
+ 		skb = skb_dequeue(&ps->bc_buf);
+ 		if (skb) {
+ 			purged++;
+-			ieee80211_tx_drop_stats(sdata, 0, TX_DROP_QUEUE_PURGE);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sdata, 0, TX_DROP_QUEUE_PURGE);
+ 			ieee80211_free_txskb(&local->hw, skb);
+ 		}
+ 		total += skb_queue_len(&ps->bc_buf);
+@@ -456,7 +463,8 @@ static void purge_old_ps_buffers(struct ieee80211_local *local)
+ 			total += skb_queue_len(&sta->ps_tx_buf[ac]);
+ 			if (skb) {
+ 				purged++;
+-				ieee80211_tx_drop_stats(sdata, 0, TX_DROP_QUEUE_PURGE);
++				if (!tid_stats_disable)
++					ieee80211_tx_drop_stats(sdata, 0, TX_DROP_QUEUE_PURGE);
+ 				ieee80211_free_txskb(&local->hw, skb);
+ 				break;
+ 			}
+@@ -473,6 +481,8 @@ ieee80211_tx_h_multicast_ps_buf(struct ieee80211_tx_data *tx)
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx->skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)tx->skb->data;
+ 	struct ps_data *ps;
++	struct ieee80211_local *local = tx->local;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	/*
+ 	 * broadcast/multicast frame
+@@ -523,7 +533,8 @@ ieee80211_tx_h_multicast_ps_buf(struct ieee80211_tx_data *tx)
+ 	if (skb_queue_len(&ps->bc_buf) >= AP_MAX_BC_BUFFER) {
+ 		ps_dbg(tx->sdata,
+ 		       "BC TX buffer full - dropping the oldest frame\n");
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_STA_MAX_BUFFER);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_STA_MAX_BUFFER);
+ 		ieee80211_free_txskb(&tx->local->hw, skb_dequeue(&ps->bc_buf));
+ 	} else
+ 		tx->local->total_ps_buffered++;
+@@ -555,6 +566,7 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx->skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)tx->skb->data;
+ 	struct ieee80211_local *local = tx->local;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(!sta))
+ 		return TX_CONTINUE;
+@@ -595,7 +607,8 @@ ieee80211_tx_h_unicast_ps_buf(struct ieee80211_tx_data *tx)
+ 			ps_dbg(tx->sdata,
+ 			       "STA %pM TX buffer for AC %d full - dropping oldest frame\n",
+ 			       sta->sta.addr, ac);
+-			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_STA_MAX_BUFFER);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_STA_MAX_BUFFER);
+ 			ieee80211_free_txskb(&local->hw, old);
+ 		} else
+ 			tx->local->total_ps_buffered++;
+@@ -690,6 +703,8 @@ ieee80211_tx_h_select_key(struct ieee80211_tx_data *tx)
+ 	struct ieee80211_key *key;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(tx->skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)tx->skb->data;
++	struct ieee80211_local *local = tx->local;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(info->flags & IEEE80211_TX_INTFL_DONT_ENCRYPT)) {
+ 		tx->key = NULL;
+@@ -745,7 +760,8 @@ ieee80211_tx_h_select_key(struct ieee80211_tx_data *tx)
+ 		if (unlikely(tx->key && tx->key->flags & KEY_FLAG_TAINTED &&
+ 			     !ieee80211_is_deauth(hdr->frame_control)) &&
+ 			     tx->skb->protocol != tx->sdata->control_port_protocol) {
+-			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_KEY_FAIL);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_KEY_FAIL);
+ 			return TX_DROP;
+ 		}
+ 
+@@ -754,7 +770,8 @@ ieee80211_tx_h_select_key(struct ieee80211_tx_data *tx)
+ 			info->control.hw_key = &tx->key->conf;
+ 	} else if (ieee80211_is_data_present(hdr->frame_control) && tx->sta &&
+ 		   test_sta_flag(tx->sta, WLAN_STA_USES_ENCRYPTION)) {
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_MISC);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_MISC);
+ 		return TX_DROP;
+ 	}
+ 
+@@ -980,6 +997,7 @@ static int ieee80211_fragment(struct ieee80211_tx_data *tx,
+ 	int per_fragm = frag_threshold - hdrlen - FCS_LEN;
+ 	int pos = hdrlen + per_fragm;
+ 	int rem = skb->len - hdrlen - per_fragm;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (WARN_ON(rem < 0))
+ 		return -EINVAL;
+@@ -997,7 +1015,8 @@ static int ieee80211_fragment(struct ieee80211_tx_data *tx,
+ 				    IEEE80211_ENCRYPT_HEADROOM +
+ 				    IEEE80211_ENCRYPT_TAILROOM);
+ 		if (!tmp) {
+-			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_ALLOC_FAIL);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_ALLOC_FAIL);
+ 			return -ENOMEM;
+ 		}
+ 
+@@ -1302,6 +1321,7 @@ ieee80211_tx_prepare(struct ieee80211_sub_if_data *sdata,
+ 		     struct sta_info *sta, struct sk_buff *skb)
+ {
+ 	struct ieee80211_local *local = sdata->local;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 	struct ieee80211_hdr *hdr;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	bool aggr_check = false;
+@@ -1330,7 +1350,8 @@ ieee80211_tx_prepare(struct ieee80211_sub_if_data *sdata,
+ 		if (sdata->vif.type == NL80211_IFTYPE_AP_VLAN) {
+ 			tx->sta = rcu_dereference(sdata->u.vlan.sta);
+ 			if (!tx->sta && sdata->wdev.use_4addr) {
+-				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_MISC);
++				if (!tid_stats_disable)
++					ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_MISC);
+ 				return TX_DROP;
+ 			}
+ 		} else if (tx->sdata->control_port_protocol == tx->skb->protocol) {
+@@ -1813,7 +1834,8 @@ static bool ieee80211_tx_frags(struct ieee80211_local *local,
+ #ifdef CPTCFG_MAC80211_VERBOSE_DEBUG
+ 		if (WARN_ON_ONCE(q >= local->hw.queues)) {
+ 			__skb_unlink(skb, skbs);
+-			ieee80211_tx_drop_stats(sta->sdata, info->tid,  TX_DROP_SKB_QUEUE_FULL);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sta->sdata, info->tid,  TX_DROP_SKB_QUEUE_FULL);
+ 			ieee80211_free_txskb(&local->hw, skb);
+ 			continue;
+ 		}
+@@ -2101,9 +2123,11 @@ static bool ieee80211_tx(struct ieee80211_sub_if_data *sdata,
+ 	ieee80211_tx_result res_prepare;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	bool result = true;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(skb->len < 10)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		dev_kfree_skb(skb);
+ 		return true;
+ 	}
+@@ -2188,6 +2212,7 @@ void ieee80211_xmit(struct ieee80211_sub_if_data *sdata,
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *) skb->data;
+ 	int headroom;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 	enum ieee80211_encrypt encrypt;
+ 
+ 	if (info->flags & IEEE80211_TX_INTFL_DONT_ENCRYPT)
+@@ -2204,7 +2229,8 @@ void ieee80211_xmit(struct ieee80211_sub_if_data *sdata,
+ 	headroom = max_t(int, 0, headroom);
+ 
+ 	if (ieee80211_skb_resize(sdata, skb, headroom, encrypt)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_RESIZE_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_RESIZE_FAIL);
+ 		ieee80211_free_txskb(&local->hw, skb);
+ 		return;
+ 	}
+@@ -2477,13 +2503,15 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	}
+ 
+ 	if (unlikely(!ieee80211_sdata_running(sdata))) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
+ 		goto fail;
+ 	}
+ 
+ 	/* Sanity-check the length of the radiotap header */
+ 	if (!ieee80211_validate_radiotap_len(skb)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		goto fail;
+ 	}
+ 
+@@ -2505,7 +2533,8 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	skb_set_transport_header(skb, len_rthdr);
+ 
+ 	if (skb->len < len_rthdr + 2) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		goto fail;
+ 	}
+ 
+@@ -2513,7 +2542,8 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	hdrlen = ieee80211_hdrlen(hdr->frame_control);
+ 
+ 	if (skb->len < len_rthdr + hdrlen) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		goto fail;
+ 	}
+ 
+@@ -2567,7 +2597,8 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	else if (!local->use_chanctx)
+ 		chandef = &local->_oper_chandef;
+ 	else {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
+ 		goto fail_rcu;
+ 	}
+ 
+@@ -2589,7 +2620,8 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	 */
+ 	if (!cfg80211_reg_can_beacon(local->hw.wiphy, chandef,
+ 				     sdata->vif.type)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_MISC);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_MISC);
+ 		goto fail_rcu;
+ 	}
+ 
+@@ -2610,7 +2642,8 @@ netdev_tx_t ieee80211_monitor_start_xmit(struct sk_buff *skb,
+ 	 * retransmissions.
+ 	 */
+ 	if (!ieee80211_parse_tx_radiotap(skb, dev)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		goto fail_rcu;
+ 	}
+ 
+@@ -2785,6 +2818,7 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
+ 	struct ieee80211_chanctx_conf *chanctx_conf = NULL;
+ 	enum nl80211_band band;
+ 	int ret;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 	u8 link_id = u32_get_bits(ctrl_flags, IEEE80211_TX_CTRL_MLO_LINK);
+ 
+ 	if (IS_ERR(sta))
+@@ -2865,7 +2899,8 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
+ 			conf = rcu_dereference(sdata->vif.link_conf[link_id]);
+ 			if (unlikely(!conf)) {
+ 				ret = -ENOLINK;
+-				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_LINK_CONF);
++				if (!tid_stats_disable)
++					ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_LINK_CONF);
+ 				goto free;
+ 			}
+ 
+@@ -3012,13 +3047,15 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
+ 		break;
+ 	default:
+ 		ret = -EINVAL;
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_UNKNOWN_VIF_TYPE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_UNKNOWN_VIF_TYPE);
+ 		goto free;
+ 	}
+ 
+ 	if (!chanctx_conf) {
+ 		if (!ieee80211_vif_is_mld(&sdata->vif)) {
+-			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
+ 			ret = -ENOTCONN;
+ 			goto free;
+ 		}
+@@ -3061,7 +3098,8 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
+ 
+ 		I802_DEBUG_INC(local->tx_handlers_drop_unauth_port);
+ 
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_UNAUTH_PORT);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_UNAUTH_PORT);
+ 		ret = -EPERM;
+ 		goto free;
+ 	}
+@@ -3121,7 +3159,8 @@ static struct sk_buff *ieee80211_build_hdr(struct ieee80211_sub_if_data *sdata,
+ 		head_need += local->tx_headroom;
+ 		head_need = max_t(int, 0, head_need);
+ 		if (ieee80211_skb_resize(sdata, skb, head_need, ENCRYPT_DATA)) {
+-			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_RESIZE_FAIL);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SKB_RESIZE_FAIL);
+ 			ieee80211_free_txskb(&local->hw, skb);
+ 			skb = NULL;
+ 			return ERR_PTR(-ENOMEM);
+@@ -3180,7 +3219,8 @@ nss_mesh:
+ 					     sdata->name, hdr.addr1,
+ 					     pre_conf_link_id, link_id);
+ #endif
+-			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_LINK_ID);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_LINK_ID);
+ 			ret = -EINVAL;
+ 			goto free;
+ 		}
+@@ -3744,13 +3784,16 @@ ieee80211_xmit_fast_finish(struct ieee80211_sub_if_data *sdata,
+ 			   struct ieee80211_tx_data *tx)
+ {
+ 	struct sk_buff *skb = tx->skb;
++	struct ieee80211_local *local = tx->local;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	struct ieee80211_hdr *hdr = (void *)skb->data;
+ 	u8 tid = IEEE80211_NUM_TIDS;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (!ieee80211_hw_check(&tx->local->hw, HAS_RATE_CONTROL) &&
+ 	    ieee80211_tx_h_rate_ctrl(tx) != TX_CONTINUE) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_HW_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_HW_CHECK_FAIL);
+ 		return TX_DROP;
+ 	}
+ 
+@@ -3875,6 +3918,7 @@ void __ieee80211_xmit_fast(struct ieee80211_sub_if_data *sdata,
+ 	bool skip_tx_queue = (local->hw.perf_mode &&
+ 			      !ieee80211_vif_is_mesh(&sdata->vif));
+ 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TAG1D_MASK;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	skb = skb_share_check(skb, GFP_ATOMIC);
+ 	if (unlikely(!skb))
+@@ -3892,7 +3936,8 @@ void __ieee80211_xmit_fast(struct ieee80211_sub_if_data *sdata,
+ 					  max_t(int, extra_head + hw_headroom -
+ 						     skb_headroom(skb), 0),
+ 					  ENCRYPT_NO))) {
+-		ieee80211_tx_drop_stats(sdata, tid, TX_DROP_SKB_RESIZE_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, tid, TX_DROP_SKB_RESIZE_FAIL);
+ 		goto free;
+ 	}
+ 
+@@ -3970,6 +4015,7 @@ static bool ieee80211_xmit_fast(struct ieee80211_sub_if_data *sdata,
+ 	struct tid_ampdu_tx *tid_tx = NULL;
+ 	struct sk_buff *next;
+ 	struct ethhdr eth;
++	bool tid_stats_disable = sdata->local->hw.tid_stats_disable;
+ 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TAG1D_MASK;
+ 
+ 	/* control port protocol needs a lot of special handling */
+@@ -3999,7 +4045,8 @@ static bool ieee80211_xmit_fast(struct ieee80211_sub_if_data *sdata,
+ 	/* after this point (skb is modified) we cannot return false */
+ 	skb = ieee80211_tx_skb_fixup(skb, ieee80211_sdata_netdev_features(sdata), sdata->dev);
+ 	if (!skb) {
+-		ieee80211_tx_drop_stats(sdata, tid, TX_DROP_TX_SKB_FIXUP_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, tid, TX_DROP_TX_SKB_FIXUP_FAIL);
+ 		return true;
+ 	}
+ 
+@@ -4030,6 +4077,7 @@ struct sk_buff *ieee80211_tx_dequeue(struct ieee80211_hw *hw,
+ 	bool q_stopped;
+ 	spinlock_t *pcpu_queue_stop_reason_lock;
+ 	unsigned long *queue_stop_reasons;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	WARN_ON_ONCE(softirq_count() == 0);
+ 
+@@ -4097,7 +4145,8 @@ begin:
+ 			      !ieee80211_is_our_addr(tx.sdata, hdr->addr2,
+ 						     NULL)))) {
+ 			I802_DEBUG_INC(local->tx_handlers_drop_unauth_port);
+-			ieee80211_tx_drop_stats(tx.sdata, info->tid, TX_DROP_UNAUTH_PORT);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx.sdata, info->tid, TX_DROP_UNAUTH_PORT);
+ 			ieee80211_free_txskb(&local->hw, skb);
+ 			goto begin;
+ 		}
+@@ -4496,9 +4545,11 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
+ 	struct ieee80211_key *key = NULL;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	struct ieee80211_sub_if_data *ap_sdata;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	if (unlikely(!ieee80211_sdata_running(sdata) || skb->len < ETH_HLEN)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
+ 		ieee80211_free_txskb(&local->hw, skb);
+ 		return;
+ 	}
+@@ -4513,7 +4564,8 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
+ 		goto out;
+ 
+ 	if (ieee80211_lookup_ra_sta(sdata, skb, &sta)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
+ 		goto out_free;
+ 	}
+ 
+@@ -4561,7 +4613,8 @@ void __ieee80211_subif_start_xmit(struct sk_buff *skb,
+ 	 */
+ 	skb = ieee80211_tx_skb_fixup(skb, 0, dev);
+ 	if (!skb) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_TX_SKB_FIXUP_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_TX_SKB_FIXUP_FAIL);
+ 		len = 0;
+ 		goto out;
+ 	}
+@@ -4802,7 +4855,8 @@ netdev_tx_t ieee80211_subif_start_xmit(struct sk_buff *skb,
+ 		goto normal;
+ 
+ 	if (unlikely(!ieee80211_sdata_running(sdata))) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
+ 		ieee80211_free_txskb(&sdata->local->hw, skb);
+ 		return NETDEV_TX_OK;
+ 	}
+@@ -4939,13 +4993,15 @@ static void ieee80211_8023_xmit(struct ieee80211_sub_if_data *sdata,
+ 
+ 	if (multicast && sdata->vif.type == NL80211_IFTYPE_AP_VLAN &&
+ 	    !atomic_read(&sdata->u.vlan.num_mcast_sta)) {
+-		ieee80211_tx_drop_stats(sdata, tid, TX_DROP_RA_STA_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, tid, TX_DROP_RA_STA_FAIL);
+ 		goto out_free;
+ 	}
+ 
+ 	if (unlikely(test_bit(SCAN_SW_SCANNING, &local->scanning)) &&
+ 	    test_bit(SDATA_STATE_OFFCHANNEL, &sdata->state)) {
+-		ieee80211_tx_drop_stats(sdata, tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, tid, TX_DROP_SDATA_STATE);
+ 		goto out_free;
+ 	}
+ 
+@@ -4974,7 +5030,8 @@ static void ieee80211_8023_xmit(struct ieee80211_sub_if_data *sdata,
+ 
+ 	skb = ieee80211_tx_skb_fixup(skb, ieee80211_sdata_netdev_features(sdata), dev);
+ 	if (!skb) {
+-		ieee80211_tx_drop_stats(sdata, tid, TX_DROP_TX_SKB_FIXUP_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, tid, TX_DROP_TX_SKB_FIXUP_FAIL);
+ 		return;
+ 	}
+ 
+@@ -5181,7 +5238,8 @@ netdev_tx_t __ieee80211_subif_start_xmit_8023(struct sk_buff *skb,
+        ieee80211_xmit_nss_fixup(skb, dev);
+ #endif
+ 	if (unlikely(!ieee80211_sdata_running(sdata) || skb->len < ETH_HLEN)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_SDATA_STATE);
+ 		kfree_skb(skb);
+ 		return NETDEV_TX_OK;
+ 	}
+@@ -5189,7 +5247,8 @@ netdev_tx_t __ieee80211_subif_start_xmit_8023(struct sk_buff *skb,
+ 	rcu_read_lock();
+ 
+ 	if (ieee80211_lookup_ra_sta(sdata, skb, &sta)) {
+-		ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
+ 		kfree_skb(skb);
+ 		goto out;
+ 	}
+@@ -5303,8 +5362,10 @@ static bool ieee80211_tx_pending_skb(struct ieee80211_local *local,
+ 	struct ieee80211_hdr *hdr;
+ 	bool result;
+ 	struct ieee80211_chanctx_conf *chanctx_conf;
++	bool tid_stats_disable;
+ 
+ 	sdata = vif_to_sdata(info->control.vif);
++	tid_stats_disable = sdata->local->hw.tid_stats_disable;
+ 
+ 	if (info->control.flags & IEEE80211_TX_INTCFL_NEED_TXPROCESSING) {
+ 		/* update band only for non-MLD */
+@@ -5312,7 +5373,8 @@ static bool ieee80211_tx_pending_skb(struct ieee80211_local *local,
+ 			chanctx_conf =
+ 				rcu_dereference(sdata->vif.bss_conf.chanctx_conf);
+ 			if (unlikely(!chanctx_conf)) {
+-				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
++				if (!tid_stats_disable)
++					ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_BAD_CHANCTX_CONF);
+ 				dev_kfree_skb(skb);
+ 				return true;
+ 			}
+@@ -5321,7 +5383,8 @@ static bool ieee80211_tx_pending_skb(struct ieee80211_local *local,
+ 		result = ieee80211_tx(sdata, NULL, skb, true);
+ 	} else if (info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP) {
+ 		if (ieee80211_lookup_ra_sta(sdata, skb, &sta)) {
+-			ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(sdata, info->tid, TX_DROP_RA_STA_FAIL);
+ 			dev_kfree_skb(skb);
+ 			return true;
+ 		}
+diff --git a/net/mac80211/wep.c b/net/mac80211/wep.c
+index e5d9c42..69d7777 100644
+--- a/net/mac80211/wep.c
++++ b/net/mac80211/wep.c
+@@ -293,13 +293,16 @@ ieee80211_tx_result
+ ieee80211_crypto_wep_encrypt(struct ieee80211_tx_data *tx)
+ {
+ 	struct sk_buff *skb;
++	struct ieee80211_local *local = tx->local;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	ieee80211_tx_set_protected(tx);
+ 
+ 	skb_queue_walk(&tx->skbs, skb) {
+ 		if (wep_encrypt_skb(tx, skb) < 0) {
+ 			I802_DEBUG_INC(tx->local->tx_handlers_drop_wep);
+-			ieee80211_tx_drop_stats(tx->sdata, 0, TX_DROP_WEP);
++			if (!tid_stats_disable)
++				ieee80211_tx_drop_stats(tx->sdata, 0, TX_DROP_WEP);
+ 			return TX_DROP;
+ 		}
+ 	}
+diff --git a/net/mac80211/wpa.c b/net/mac80211/wpa.c
+index 4abde7f..df01cc9 100644
+--- a/net/mac80211/wpa.c
++++ b/net/mac80211/wpa.c
+@@ -34,8 +34,10 @@ ieee80211_tx_h_michael_mic_add(struct ieee80211_tx_data *tx)
+ 	unsigned int hdrlen;
+ 	struct ieee80211_hdr *hdr;
+ 	struct sk_buff *skb = tx->skb;
++	struct ieee80211_local *local = tx->local;
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	int tail;
++	bool tid_stats_disable = local->hw.tid_stats_disable;
+ 
+ 	hdr = (struct ieee80211_hdr *)skb->data;
+ 	if (!tx->key || tx->key->conf.cipher != WLAN_CIPHER_SUITE_TKIP ||
+@@ -44,7 +46,8 @@ ieee80211_tx_h_michael_mic_add(struct ieee80211_tx_data *tx)
+ 
+ 	hdrlen = ieee80211_hdrlen(hdr->frame_control);
+ 	if (skb->len < hdrlen) {
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		return TX_DROP;
+ 	}
+ 
+@@ -74,7 +77,8 @@ ieee80211_tx_h_michael_mic_add(struct ieee80211_tx_data *tx)
+ 		 "mmic: not enough head/tail (%d/%d,%d/%d)\n",
+ 		 skb_headroom(skb), IEEE80211_TKIP_IV_LEN,
+ 		 skb_tailroom(skb), tail)) {
+-		ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
++		if (!tid_stats_disable)
++			ieee80211_tx_drop_stats(tx->sdata, info->tid, TX_DROP_SKB_SANITY_CHECK_FAIL);
+ 		return TX_DROP;
+ 	}
+ 
+-- 
+2.34.1
+

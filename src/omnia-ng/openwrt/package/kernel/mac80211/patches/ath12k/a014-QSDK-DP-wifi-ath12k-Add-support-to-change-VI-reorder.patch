@@ -1,0 +1,74 @@
+From 27227cbadc6cdcdc664e80473777c7fc2856db99 Mon Sep 17 00:00:00 2001
+From: Girish Kumar M P <gmp@qti.qualcomm.com>
+Date: Mon, 26 May 2025 14:48:18 +0530
+Subject: [PATCH] QSDK:DP:wifi:ath12k Add support to change VI reorder timeout
+
+Add support to change the VI reorder timeout in ath12k driver.
+
+To change the timeout value, set reorder_VI_timeout value in ms in
+module param file.
+
+example:
+
+root@OpenWrt:/# vi etc/modules.d/ath12k
+ath12k dyndbg=+p reorder_VI_timeout=200
+
+Signed-off-by: Girish Kumar M P <gmp@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.c   | 4 ++++
+ drivers/net/wireless/ath/ath12k/core.h   | 1 +
+ drivers/net/wireless/ath/ath12k/hal_rx.c | 9 ++++++++-
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -153,6 +153,10 @@ bool ath12k_carrier_vow_optimization;
+ module_param_named(carrier_vow_optimization, ath12k_carrier_vow_optimization, bool, 0644);
+ MODULE_PARM_DESC(carrier_vow_optimization, "Enable/Disable VoW optimization for carier usecases");
+ 
++unsigned int ath12k_reorder_VI_timeout;
++module_param_named(reorder_VI_timeout, ath12k_reorder_VI_timeout, uint, 0644);
++MODULE_PARM_DESC(reorder_VI_timeout, "Reorder VI timeout (ms)");
++
+ static DEFINE_MUTEX(ath12k_hw_lock);
+ static struct list_head ath12k_hw_groups = LIST_HEAD_INIT(ath12k_hw_groups);
+ 
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -67,6 +67,7 @@ extern bool ath12k_fse_3_tuple_enabled;
+ extern bool ath12k_mlo_3_link_tx;
+ extern bool ath12k_def_flow_override;
+ extern bool ath12k_carrier_vow_optimization;
++extern unsigned int ath12k_reorder_VI_timeout;
+ #ifndef CPTCFG_ATH12K_MEM_PROFILE_512M
+ extern unsigned int ath12k_max_clients;
+ #endif
+--- a/drivers/net/wireless/ath/ath12k/hal_rx.c
++++ b/drivers/net/wireless/ath/ath12k/hal_rx.c
+@@ -900,6 +900,7 @@ void ath12k_hal_reo_hw_setup(struct ath1
+ {
+ 	u32 reo_base = HAL_SEQ_WCSS_UMAC_REO_REG;
+ 	u32 val;
++	u32 VI_reorder_timeout;
+ 
+ 	val = ath12k_hif_read32(ab, reo_base + HAL_REO1_GEN_ENABLE);
+ 
+@@ -921,8 +922,17 @@ void ath12k_hal_reo_hw_setup(struct ath1
+ 			   HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_USEC);
+ 	ath12k_hif_write32(ab, reo_base + HAL_REO1_AGING_THRESH_IX_1(ab),
+ 			   HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_USEC);
++
++	if (ath12k_reorder_VI_timeout &&
++	    ath12k_reorder_VI_timeout >= 100 &&
++	    ath12k_reorder_VI_timeout <= 400) {
++		VI_reorder_timeout = ath12k_reorder_VI_timeout * 1000;
++	} else {
++		VI_reorder_timeout = HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_USEC;
++	}
++
+ 	ath12k_hif_write32(ab, reo_base + HAL_REO1_AGING_THRESH_IX_2(ab),
+-			   HAL_DEFAULT_BE_BK_VI_REO_TIMEOUT_USEC);
++			   VI_reorder_timeout);
+ 	ath12k_hif_write32(ab, reo_base + HAL_REO1_AGING_THRESH_IX_3(ab),
+ 			   HAL_DEFAULT_VO_REO_TIMEOUT_USEC);
+ 

@@ -1,0 +1,95 @@
+From 7e67a0a289fcd67b4d8364af9344a067c2ff682c Mon Sep 17 00:00:00 2001
+From: Ramasamy Kaliappan <quic_rkaliapp@quicinc.com>
+Date: Sun, 16 Mar 2025 15:13:26 +0530
+Subject: [PATCH 1/2] QSDK:PROTOCOL: mac80211:fix dead lock in color change bss
+ notify
+
+In the current mac80211 design, when a BSS color change request is
+received for a TX VAP, it updates all non-TX VAPs in the same MBSSID
+group.
+
+A deadlock occurs when the BSS color change finalize worker is
+scheduled for the TX VAP, and at the same time, a stop AP command is
+received for a non-TX VAP in the same MBSSID group.
+
+Let's assume wlan0 is the TX VAP and wlan1 is the non-TX VAP in the same
+MBSSID group. When the color change finalize worker is scheduled for wlan0,
+it acquires the wlan0 sdata lock and the local mtx lock (radio-specific),
+and notifies the driver of the color change.
+
+While looping to update the color change for the non-TX VAP,
+if a stop AP command is received for wlan1, it acquires the wlan1 sdata
+lock and waits for the local mtx lock, which is already acquired by
+the color change finalize worker. When updating the color change for
+wlan1, it waits for the wlan1 sdata lock, which is already taken by
+the stop AP command, resulting in a deadlock.
+
+Signed-off-by: Ramasamy Kaliappan <quic_rkaliapp@quicinc.com>
+---
+ net/mac80211/cfg.c | 33 +++++++++++++++------------------
+ 1 file changed, 15 insertions(+), 18 deletions(-)
+
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index 5fd9167..7a79ec1 100644
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -5527,27 +5527,23 @@ ieee80211_color_change_bss_config_notify(struct ieee80211_link_data *link,
+ 	link->conf->he_bss_color.color = color;
+ 	link->conf->he_bss_color.enabled = enable;
+ 
+-	changed |= BSS_CHANGED_HE_BSS_COLOR;
+-
+-	ieee80211_link_info_change_notify(sdata, link, changed);
+-
+-	if (!link->conf->nontransmitted && link->conf->mbssid_tx_vif) {
++        /*  TX BSS color updated for Non-TX BSSes */
++	if (!link->conf->nontransmitted && link->conf->mbssid_tx_vif) {
+ 		unsigned int link_id_iter;
+ 		unsigned long valid_links;
+-		struct ieee80211_sub_if_data *child;
++		struct ieee80211_sub_if_data *iter;
+ 		struct ieee80211_link_data *link_iter;
+ 
+-		mutex_lock(&sdata->local->iflist_mtx);
+-		list_for_each_entry(child, &sdata->local->interfaces, list) {
+-			if (child == sdata)
++		rcu_read_lock();
++		list_for_each_entry_rcu(iter, &sdata->local->interfaces, list) {
++			if (!ieee80211_sdata_running(iter) || iter == sdata)
+ 				continue;
+-			sdata_lock(child);
+-			/* check deflink by default */
+-			valid_links = child->vif.valid_links | BIT(0);
++
++			/* check link 0 by default for Non-ML non-tx vif's deflinks */
++			valid_links = iter->vif.valid_links | BIT(0);
+ 			for_each_set_bit(link_id_iter, &valid_links,
+ 					 IEEE80211_MLD_MAX_NUM_LINKS) {
+-				link_iter = sdata_dereference(child->link[link_id_iter],
+-							      child);
++				link_iter = rcu_dereference(iter->link[link_id_iter]);
+ 				if (!link_iter)
+ 					continue;
+ 				/* Check if any of link of iterator sdata belongs
+@@ -5559,13 +5555,14 @@ ieee80211_color_change_bss_config_notify(struct ieee80211_link_data *link,
+ 
+ 				link_iter->conf->he_bss_color.color = color;
+ 				link_iter->conf->he_bss_color.enabled = enable;
+-				ieee80211_link_info_change_notify(child, link_iter,
+-								  BSS_CHANGED_HE_BSS_COLOR);
++
+ 			}
+-			sdata_unlock(child);
+ 		}
+-		mutex_unlock(&sdata->local->iflist_mtx);
++		rcu_read_unlock();
+ 	}
++
++	changed |= BSS_CHANGED_HE_BSS_COLOR;
++	ieee80211_link_info_change_notify(sdata, link, changed);
+ }
+ 
+ static int ieee80211_color_change_finalize(struct ieee80211_link_data *link)
+-- 
+2.34.1
+

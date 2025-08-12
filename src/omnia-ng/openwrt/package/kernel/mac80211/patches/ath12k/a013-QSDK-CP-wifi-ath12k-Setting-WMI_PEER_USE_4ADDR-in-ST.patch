@@ -1,0 +1,69 @@
+From 97fae1ff8545d36b4e121d02c9cd55ce3a83fc84 Mon Sep 17 00:00:00 2001
+From: Harish Rachakonda <rachakon@qti.qualcomm.com>
+Date: Fri, 9 May 2025 23:43:13 +0530
+Subject: [PATCH] QSDK:CP:wifi:ath12k: Setting WMI_PEER_USE_4ADDR in STA mode
+
+Currently, When STA is operating in 4addr mode,WMI_VDEV_PARAM_WDS
+vdev param is set during vdev create time and not sending
+WMI_PEER_USE_4ADDR in STA mode for bss peer.
+
+In multi_ap case, driver is not aware of 4addr mode during vdev
+creation and vdev param is not set and packets will be dropped.
+In WDS case, driver aware of 4addr mode during vdev create time and
+vdev param will send to firwmare.
+Set the WMI_PEER_USE_4ADDR to fix this issue in multi_ap case and avoid
+this WMI_PEER_USE_4ADDR cmd if vdev param is sent during the WDS case.
+
+Fixes-patch: 982-QSDK-CP-wifi-ath12k-Set-WDS-vdev-param-in-s.patch
+(QSDK:CP:wifi:ath12k: Set WDS vdev param in station mode)
+Patch-dependency: 982-QSDK-CP-wifi-ath12k-Set-WDS-vdev-param-in-s.patch
+Patch-work: None
+
+Signed-off-by: Harish Rachakonda <rachakon@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.h | 1 +
+ drivers/net/wireless/ath/ath12k/mac.c  | 7 +++++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.h b/drivers/net/wireless/ath/ath12k/core.h
+index cd2f257..24a3123 100644
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -583,6 +583,7 @@ struct ath12k_vif {
+ 	struct ath12k_hw *ah;
+ 	bool rsnie_present;
+ 	bool wpaie_present;
++	bool set_wds_vdev_param;
+ 	u8 tx_encap_type;
+ 	union {
+ 		struct {
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index 3f5bc5c..d92e4d4 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -10202,7 +10202,7 @@ static void ath12k_mac_op_sta_set_4addr(struct ieee80211_hw *hw,
+ 	if (enabled && !ahsta->use_4addr_set) {
+ 		ahsta->ppe_vp_num = ahvif->ppe_vp_num;
+ 		ahsta->vlan_iface = ahvif->vlan_iface;
+-		if (vif->type != NL80211_IFTYPE_STATION)
++		if (!ahvif->set_wds_vdev_param)
+ 			ieee80211_queue_work(ah->hw, &ahsta->set_4addr_wk);
+ 		ahsta->use_4addr_set = true;
+ 	}
+@@ -13552,9 +13552,12 @@ int ath12k_mac_vdev_create(struct ath12k *ar, struct ath12k_link_vif *arvif,
+ 	ath12k_debugfs_add_interface(arvif);
+ 
+ 	if (vif->type == NL80211_IFTYPE_STATION &&
+-	    (wdev && wdev->use_4addr))
++	    (wdev && wdev->use_4addr)) {
+ 		ath12k_wmi_vdev_set_param_cmd(arvif->ar, arvif->vdev_id,
+ 					      WMI_VDEV_PARAM_WDS, 1);
++		if (!ret)
++			ahvif->set_wds_vdev_param = true;
++	}
+ 
+ 	return ret;
+ 
+-- 
+2.34.1
+

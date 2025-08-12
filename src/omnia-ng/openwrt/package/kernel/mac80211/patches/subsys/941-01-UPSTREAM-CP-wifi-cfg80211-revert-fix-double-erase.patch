@@ -1,0 +1,83 @@
+From 44f1e8d36af47c6efdd8c317afd665ce67981372 Mon Sep 17 00:00:00 2001
+From: Sowmiya Sree Elavalagan <quic_ssreeela@quicinc.com>
+Date: Thu, 3 Apr 2025 12:53:30 +0530
+Subject: [PATCH] UPSTREAM:CP:wifi:cfg80211:Revert:fix bss rbn double erase
+ issue
+
+Revert the fix for BSS RB tree double erase as it is not valid
+and does not actually fix the issue. 
+
+Signed-off-by: Sowmiya Sree Elavalagan <quic_ssreeela@quicinc.com>
+---
+ net/wireless/core.h |  1 -
+ net/wireless/scan.c | 14 +++-----------
+ 2 files changed, 3 insertions(+), 12 deletions(-)
+
+diff --git a/net/wireless/core.h b/net/wireless/core.h
+index 99cada1..f5bba2c 100644
+--- a/net/wireless/core.h
++++ b/net/wireless/core.h
+@@ -168,7 +168,6 @@ struct cfg80211_internal_bss {
+ 	unsigned long ts;
+ 	unsigned long refcount;
+ 	atomic_t hold;
+-	bool in_rbtree;
+ 
+ 	/* time at the start of the reception of the first octet of the
+ 	 * timestamp field of the last beacon/probe received for this BSS.
+diff --git a/net/wireless/scan.c b/net/wireless/scan.c
+index 294ebca..3e4232f 100644
+--- a/net/wireless/scan.c
++++ b/net/wireless/scan.c
+@@ -202,11 +202,7 @@ static bool __cfg80211_unlink_bss(struct cfg80211_registered_device *rdev,
+ 
+ 	list_del_init(&bss->list);
+ 	list_del_init(&bss->pub.nontrans_list);
+-	if (bss->in_rbtree) {
+-		rb_erase(&bss->rbn, &rdev->bss_tree);
+-		bss->in_rbtree = false;
+-	}
+-
++	rb_erase(&bss->rbn, &rdev->bss_tree);
+ 	rdev->bss_entries--;
+ 	WARN_ONCE((rdev->bss_entries == 0) ^ list_empty(&rdev->bss_list),
+ 		  "rdev bss entries[%d]/list[empty:%d] corruption\n",
+@@ -1567,7 +1563,6 @@ static void rb_insert_bss(struct cfg80211_registered_device *rdev,
+ 
+ 		if (WARN_ON(!cmp)) {
+ 			/* will sort of leak this BSS */
+-			bss->in_rbtree = false;
+ 			return;
+ 		}
+ 
+@@ -1577,7 +1572,6 @@ static void rb_insert_bss(struct cfg80211_registered_device *rdev,
+ 			p = &(*p)->rb_right;
+ 	}
+ 
+-	bss->in_rbtree = true;
+ 	rb_link_node(&bss->rbn, parent, p);
+ 	rb_insert_color(&bss->rbn, &rdev->bss_tree);
+ }
+@@ -3101,8 +3095,7 @@ void cfg80211_update_assoc_bss_entry(struct wireless_dev *wdev,
+ 			rdev->bss_generation++;
+ 	}
+ 
+-	if (cbss->in_rbtree)
+-		rb_erase(&cbss->rbn, &rdev->bss_tree);
++	rb_erase(&cbss->rbn, &rdev->bss_tree);
+ 	rb_insert_bss(rdev, cbss);
+ 	rdev->bss_generation++;
+ 
+@@ -3111,8 +3104,7 @@ void cfg80211_update_assoc_bss_entry(struct wireless_dev *wdev,
+ 				 nontrans_list) {
+ 		bss = bss_from_pub(nontrans_bss);
+ 		bss->pub.channel = chan;
+-		if (bss->in_rbtree)
+-			rb_erase(&bss->rbn, &rdev->bss_tree);
++		rb_erase(&bss->rbn, &rdev->bss_tree);
+ 		rb_insert_bss(rdev, bss);
+ 		rdev->bss_generation++;
+ 	}
+-- 
+2.34.1
+

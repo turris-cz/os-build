@@ -1,0 +1,103 @@
+From d37b7c3bc9d983104d6ce876da8de03a346fa3f7 Mon Sep 17 00:00:00 2001
+From: Logapriya P <logapriy@qti.qualcomm.com>
+Date: Mon, 5 May 2025 09:39:15 +0530
+Subject: [PATCH] UPSTREAM:DP:wifi:ath12k: Add support for
+ Carrier_vow_optimization
+
+Added support for Carrier_vow_optimization option in ath12k
+
+Signed-off-by: Logapriya P <logapriy@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.c |  4 ++++
+ drivers/net/wireless/ath/ath12k/core.h |  1 +
+ drivers/net/wireless/ath/ath12k/wmi.c  | 12 ++++++++++++
+ drivers/net/wireless/ath/ath12k/wmi.h  |  2 ++
+ 4 files changed, 19 insertions(+)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.c b/drivers/net/wireless/ath/ath12k/core.c
+index e6f5584..79660ca 100644
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -149,6 +149,10 @@ bool ath12k_def_flow_override;
+ module_param_named(def_flow_override, ath12k_def_flow_override, bool, 0644);
+ MODULE_PARM_DESC(def_flow_override, "Def flow override support (0 - disable, 1 - enable)");
+ 
++bool ath12k_carrier_vow_optimization;
++module_param_named(carrier_vow_optimization, ath12k_carrier_vow_optimization, bool, 0644);
++MODULE_PARM_DESC(carrier_vow_optimization, "Enable/Disable VoW optimization for carier usecases");
++
+ static DEFINE_MUTEX(ath12k_hw_lock);
+ static struct list_head ath12k_hw_groups = LIST_HEAD_INIT(ath12k_hw_groups);
+ 
+diff --git a/drivers/net/wireless/ath/ath12k/core.h b/drivers/net/wireless/ath/ath12k/core.h
+index e89454e..cd2f257 100644
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -66,6 +66,7 @@ extern bool ath12k_rx_nwifi_err_dump;
+ extern bool ath12k_fse_3_tuple_enabled;
+ extern bool ath12k_mlo_3_link_tx;
+ extern bool ath12k_def_flow_override;
++extern bool ath12k_carrier_vow_optimization;
+ #ifndef CPTCFG_ATH12K_MEM_PROFILE_512M
+ extern unsigned int ath12k_max_clients;
+ #endif
+diff --git a/drivers/net/wireless/ath/ath12k/wmi.c b/drivers/net/wireless/ath/ath12k/wmi.c
+index d9a594d..1c904b7 100644
+--- a/drivers/net/wireless/ath/ath12k/wmi.c
++++ b/drivers/net/wireless/ath/ath12k/wmi.c
+@@ -332,6 +332,11 @@ void ath12k_wmi_init_qcn9274(struct ath12k_base *ab,
+ 	config->twt_ap_sta_count = 1000;
+ 	config->ema_max_vap_cnt = ab->num_radios * TARGET_MAX_MBSSID_GROUPS;
+ 	config->ema_max_profile_period = TARGET_EMA_MAX_PROFILE_PERIOD;
++	if (ath12k_carrier_vow_optimization)
++		config->carrier_vow_optimization = true;
++	else
++		config->carrier_vow_optimization = false;
++
+ 	config->beacon_tx_offload_max_vdev += config->ema_max_vap_cnt;
+ 
+ 	if (test_bit(WMI_TLV_SERVICE_SAWF_LEVEL0, ab->wmi_ab.svc_map))
+@@ -401,6 +406,11 @@ void ath12k_wmi_init_ipq5332(struct ath12k_base *ab,
+ 	config->twt_ap_sta_count = 1000;
+ 	config->ema_max_vap_cnt = ab->num_radios * TARGET_MAX_MBSSID_GROUPS;
+ 	config->ema_max_profile_period = TARGET_EMA_MAX_PROFILE_PERIOD;
++	if (ath12k_carrier_vow_optimization)
++		config->carrier_vow_optimization = true;
++	else
++		config->carrier_vow_optimization = false;
++
+ 	config->beacon_tx_offload_max_vdev += config->ema_max_vap_cnt;
+ 
+ 	if (test_bit(WMI_TLV_SERVICE_PEER_METADATA_V1A_V1B_SUPPORT, ab->wmi_ab.svc_map))
+@@ -6415,6 +6425,8 @@ ath12k_wmi_copy_resource_config(struct ath12k_wmi_resource_config_params *wmi_cf
+ 	wmi_cfg->max_bssid_rx_filters = cpu_to_le32(tg_cfg->max_bssid_rx_filters);
+ 	wmi_cfg->use_pdev_id = cpu_to_le32(tg_cfg->use_pdev_id);
+ 	wmi_cfg->flag1 = cpu_to_le32(tg_cfg->atf_config) | WMI_RSRC_CFG_FLAG1_BSS_CHANNEL_INFO_64;
++	wmi_cfg->flag1 |= (tg_cfg->carrier_vow_optimization) ?
++			  (WMI_RSRC_CFG_FLAG1_VIDEO_OVER_WIFI_ENABLE) : (0);
+ 	wmi_cfg->peer_map_unmap_version = cpu_to_le32(tg_cfg->peer_map_unmap_version);
+ 	wmi_cfg->sched_params = cpu_to_le32(tg_cfg->sched_params);
+ 	wmi_cfg->twt_ap_pdev_count = cpu_to_le32(tg_cfg->twt_ap_pdev_count);
+diff --git a/drivers/net/wireless/ath/ath12k/wmi.h b/drivers/net/wireless/ath/ath12k/wmi.h
+index 94bd651..0b09e88 100644
+--- a/drivers/net/wireless/ath/ath12k/wmi.h
++++ b/drivers/net/wireless/ath/ath12k/wmi.h
+@@ -2837,6 +2837,7 @@ struct ath12k_wmi_resource_config_arg {
+ 	u32 afc_disable_req_id_check;
+ 	u32 ema_max_vap_cnt;
+ 	u32 ema_max_profile_period;
++	bool carrier_vow_optimization;
+ 	u8  dp_peer_meta_data_ver;
+ 	bool sawf;
+ 	bool is_full_bw_nol_feature_supported;
+@@ -2940,6 +2941,7 @@ struct wmi_init_cmd {
+ #define WMI_RSRC_CFG_FLAGS2_WDS_NULL_FRAME_SUPPORT		BIT(22)
+ #define WMI_RSRC_CFG_FLAG1_THREE_WAY_COEX_CONFIG_OVERRIDE_SUPPORT BIT(25)
+ #define WMI_RSRC_CFG_FLAG1_BSS_CHANNEL_INFO_64	BIT(5)
++#define WMI_RSRC_CFG_FLAG1_VIDEO_OVER_WIFI_ENABLE        BIT(23)
+ #define WMI_RSRC_CFG_FLAGS2_SAWF_CONFIG_ENABLE_SET	  BIT(13)
+ #define WMI_RSRC_CFG_HOST_SUPPORT_LP_SP_MODE_BIT              7
+ #define WMI_RSRC_CFG_HOST_AFC_DIS_TIMER_CHECK_BIT             8
+-- 
+2.34.1
+

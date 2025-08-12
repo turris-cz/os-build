@@ -1,0 +1,448 @@
+From bf83fee36799fedd81252e41d34a2319155f3395 Mon Sep 17 00:00:00 2001
+From: Nagarajan Maran <nmaran@qti.qualcomm.com>
+Date: Wed, 7 May 2025 15:46:43 +0530
+Subject: [PATCH] QSDK:CP: wifi: Fix compilation issues with SAWF config
+ disbaled
+
+Fix is done in the following areas
+        1) Telemetry functionality in ath12k driver is used by other
+           features too. So decouple the build dependencies of
+           "telemetry.c" and "telemetry_agent_if.c" with
+           SAWF(ATH12K_SAWF) in ath12k driver.
+        2) Due to this decoupling, build config checks are needed at
+           some areas of codes. Fix these compilation issues with the
+           build config(CPTCFG_ATH12K_SAWF) included at needed places.
+        3) Some of the vendor subcommand
+           "QCA_NL80211_VENDOR_SUBCMD_SET_WIFI_CONFIGURATION" handling,
+           is kept under the SAWF build flag. Fix these compilation
+           issues by properly removing these handling out of SAWF
+           build flags.
+
+Fixes-patch:
+        782-wifi-ath12k-Move-SAWF-and-Telemetry-under-conditiona.patch
+        784-06-ath12k-sawf-Add-telemetry-agent-interface-and-config.patch
+        860-a-wifi-ath12k-Add-vendor-cmd-handler-for-DS-for-creati.patch
+	981-QSDK-CP-WIFI-Add-NL-support-for-HTT-MGMT-FW-stats.patch
+	982-QSDK-wifi-ath12k-Enable-Metadata-Wifi-classifier-sup.patch
+        983-QSDK-CP-wifi-ath12k-Populate-RSSI-SNR-sla-mask-in-AT.patch
+
+Patch-dependency:
+        782-wifi-ath12k-Move-SAWF-and-Telemetry-under-conditiona.patch
+        784-06-ath12k-sawf-Add-telemetry-agent-interface-and-config.patch
+        860-a-wifi-ath12k-Add-vendor-cmd-handler-for-DS-for-creati.patch
+	981-QSDK-CP-WIFI-Add-NL-support-for-HTT-MGMT-FW-stats.patch
+	982-QSDK-wifi-ath12k-Enable-Metadata-Wifi-classifier-sup.patch
+        983-QSDK-CP-wifi-ath12k-Populate-RSSI-SNR-sla-mask-in-AT.patch
+
+Signed-off-by: Nagarajan Maran <nmaran@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/Makefile            |  6 ++++--
+ drivers/net/wireless/ath/ath12k/accel_cfg.c         |  5 ++++-
+ drivers/net/wireless/ath/ath12k/dp_tx.c             |  8 +++++++-
+ drivers/net/wireless/ath/ath12k/sawf.c              |  4 ++++
+ drivers/net/wireless/ath/ath12k/telemetry.c         |  6 ++++++
+ drivers/net/wireless/ath/ath12k/telemetry.h         | 13 -------------
+ .../net/wireless/ath/ath12k/telemetry_agent_if.c    |  9 ++++++++-
+ drivers/net/wireless/ath/ath12k/vendor.c            |  6 +++++-
+ drivers/net/wireless/ath/ath12k/vendor.h            | 10 +++++-----
+ 9 files changed, 43 insertions(+), 24 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/Makefile
++++ b/drivers/net/wireless/ath/ath12k/Makefile
+@@ -25,7 +25,9 @@ ath12k-y += core.o \
+ 	    umac_reset.o \
+ 	    fse.o \
+ 	    accel_cfg.o \
+-	    vendor_services.o
++	    vendor_services.o \
++	    telemetry.o \
++	    telemetry_agent_if.o
+ 
+ ath12k-$(CPTCFG_ATH12K_DEBUGFS) += debugfs.o debugfs_htt_stats.o debugfs_sta.o
+ ath12k-$(CPTCFG_NL80211_TESTMODE) += testmode.o
+@@ -36,7 +38,7 @@ ath12k-$(CPTCFG_WANT_DEV_COREDUMP) += co
+ ath12k-$(CPTCFG_ATH12K_PKTLOG) += pktlog.o
+ ath12k-$(CPTCFG_ATH12K_AHB) += ahb.o
+ ath12k-$(CPTCFG_ATH12K_PPE_DS_SUPPORT) += ppe.o
+-ath12k-$(CPTCFG_ATH12K_SAWF) += sawf.o telemetry.o telemetry_agent_if.o
++ath12k-$(CPTCFG_ATH12K_SAWF) += sawf.o
+ ath12k-$(CPTCFG_ATH12K_CFR) += cfr.o
+ ath12k-$(CPTCFG_ATH12K_POWER_BOOST) += power_boost.o
+ ath12k-$(CPTCFG_ATH12K_TEST_FW_FOR_11S_MLO) += test_mlo_mesh.o
+--- a/drivers/net/wireless/ath/ath12k/accel_cfg.c
++++ b/drivers/net/wireless/ath/ath12k/accel_cfg.c
+@@ -231,7 +231,9 @@ u32 ath12k_get_metadata_info(struct ath_
+ 	struct net_device *dest_dev = NULL;
+ 	struct  wireless_dev *wdev = NULL;
+ 	u32 metadata = 0;
++#ifdef CPTCFG_ATH12K_SAWF
+ 	u16 msduq_peer = SAWF_PEER_MSDUQ_INVALID;
++#endif
+ 	u8 *dest_mac = NULL;
+ 	u8 link_id = ATH12k_MLO_LINK_ID_INVALID;
+ 	u8 node_id = ATH12k_DS_NODE_ID_INVALID;
+@@ -263,6 +265,7 @@ u32 ath12k_get_metadata_info(struct ath_
+ 	if (link_id != ATH12k_MLO_LINK_ID_INVALID)
+ 		metadata |= ath_encode_mlo_metadata(link_id);
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (md_param->is_sawf_param_valid) {
+ 		msduq_peer = ath12k_sawf_get_msduq_peer(wdev, dest_mac,
+ 							&md_param->sawf_param);
+@@ -271,7 +274,7 @@ u32 ath12k_get_metadata_info(struct ath_
+ 		if (msduq_peer != SAWF_PEER_MSDUQ_INVALID)
+ 			metadata |= ath_encode_sawf_metadata(msduq_peer);
+ 	}
+-
++#endif
+ 	return metadata;
+ }
+ 
+--- a/drivers/net/wireless/ath/ath12k/dp_tx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_tx.c
+@@ -879,13 +879,15 @@ ath12k_dp_tx_htt_tx_complete_buf(struct
+ 	struct ath12k *ar;
+ 	struct ieee80211_vif *vif;
+ 	struct ath12k_vif *ahvif;
++#ifdef CPTCFG_ATH12K_SAWF
+ 	struct ath12k_peer *peer;
+ 	struct hal_tx_status ts_status = { 0 };
++	ktime_t timestamp = 0;
++#endif
+ 	struct sk_buff *skb_ext_desc;
+ 	struct htt_tx_wbm_completion *status_desc;
+ 	struct ath12k_link_vif *arvif;
+ 	int ack_rssi;
+-	ktime_t timestamp = 0;
+ 	u8 flags = 0;
+ 	u8 link_id;
+ 
+@@ -945,6 +947,7 @@ ath12k_dp_tx_htt_tx_complete_buf(struct
+ 		}
+ 	}
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (unlikely(ath12k_debugfs_is_sawf_stats_enabled(ar))) {
+ 		timestamp = tx_desc->timestamp;
+ 		spin_lock_bh(&ab->base_lock);
+@@ -958,6 +961,7 @@ ath12k_dp_tx_htt_tx_complete_buf(struct
+ 			ath12k_sawf_stats_update(ar, msdu, &ts_status, peer, timestamp);
+ 		spin_unlock_bh(&ab->base_lock);
+ 	}
++#endif
+ 
+ 	if ((!flags & ATH12K_SKB_HW_80211_ENCAP))
+ 		ieee80211_tx_status_8023(ar->ah->hw, vif, msdu);
+@@ -1349,6 +1353,7 @@ unlock:
+ 			arsta->wbm_tx_stats->wbm_tx_comp_stats[wbm_status]++;
+ 	}
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (unlikely(ath12k_debugfs_is_sawf_stats_enabled(ar))) {
+ 		struct ath12k_peer *pri_peer = NULL;
+ 
+@@ -1363,6 +1368,7 @@ unlock:
+ 			spin_unlock_bh(&ab->base_lock);
+ 		}
+ 	}
++#endif
+ 
+ 	rcu_read_unlock();
+ 
+--- a/drivers/net/wireless/ath/ath12k/telemetry.c
++++ b/drivers/net/wireless/ath/ath12k/telemetry.c
+@@ -19,8 +19,10 @@ static struct ath12k_telemetry_ctx *tele
+ 
+ void ath12k_telemetry_init(struct ath12k_base *ab)
+ {
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (!ath12k_sawf_enable)
+ 		return;
++#endif
+ 
+ 	if (telemetry_ctx)
+ 		return;
+@@ -30,22 +32,27 @@ void ath12k_telemetry_init(struct ath12k
+ 		ath12k_err(NULL, "telemetry context failed to initialize\n");
+ 		return;
+ 	}
++#ifdef CPTCFG_ATH12K_SAWF
+ 	spin_lock_init(&telemetry_ctx->breach_ind_lock);
+ 	telemetry_ctx->workqueue = create_singlethread_workqueue("breach_ind_wq");
+ 	INIT_WORK(&telemetry_ctx->indicate_breach, ath12k_send_breach_indication);
+ 	INIT_LIST_HEAD(&telemetry_ctx->list);
++#endif
+ 	ath12k_info(NULL, "telemetry context initialized\n");
+ 	return;
+ }
+ 
+ void ath12k_telemetry_deinit(struct ath12k_base *ab)
+ {
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (!ath12k_sawf_enable)
+ 		return;
++#endif
+ 
+ 	if (!telemetry_ctx)
+ 		return;
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (test_bit(ATH12K_FLAG_CRASH_FLUSH, &ab->dev_flags)) {
+ 		cancel_work_sync(&telemetry_ctx->indicate_breach);
+ 		return;
+@@ -53,7 +60,7 @@ void ath12k_telemetry_deinit(struct ath1
+ 
+ 	cancel_work_sync(&telemetry_ctx->indicate_breach);
+ 	destroy_workqueue(telemetry_ctx->workqueue);
+-
++#endif
+ 	kfree(telemetry_ctx);
+ 	telemetry_ctx = NULL;
+ 	ath12k_info(NULL, "telemetry context freed\n");
+@@ -69,6 +76,7 @@ struct ath12k_telemetry_ctx *get_telemet
+ 	return telemetry_ctx;
+ }
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ int ath12k_telemetry_sawf_sla_samples_config(struct ath12k_sla_samples_cfg param)
+ {
+ 	struct ath12k_sla_samples_cfg* telemetry_param;
+@@ -241,3 +249,4 @@ bool ath12k_telemetry_get_sla_num_pkts(u
+ 	*pkt_num = telemetry_ctx->sla_samples_params.sla_num_pkt;
+ 	return true;
+ }
++#endif /* CPTCFG_ATH12K_SAWF */
+--- a/drivers/net/wireless/ath/ath12k/telemetry.h
++++ b/drivers/net/wireless/ath/ath12k/telemetry.h
+@@ -6,8 +6,6 @@
+ #ifndef ATH12K_TELEMETRY_H
+ #define ATH12K_TELEMETRY_H
+ 
+-#ifdef CPTCFG_ATH12K_SAWF
+-
+ /**
+  * struct ath12k_sla_samples_cfg- telemetry sawf sla samples configuration
+  * @moving_avg_pkt: Number of packets per window to calculate moving average
+@@ -108,15 +106,4 @@ int ath12k_telemetry_sawf_sla_detection_
+ bool ath12k_telemetry_get_sla_num_pkts(u32 *pkt_num);
+ bool ath12k_telemetry_get_sla_mov_avg_num_pkt(u32 *mov_avg);
+ void ath12k_send_breach_indication(struct work_struct *work);
+-#else /* CPTCFG_ATH12K_SAWF */
+-
+-static inline void ath12k_telemetry_init(struct ath12k_base *ab) {
+-	return;
+-}
+-
+-static inline void ath12k_telemetry_deinit(struct ath12k_base *ab) {
+-	return;
+-}
+-
+-#endif /* CPTCFG_ATH12K_SAWF */
+ #endif /* ATH12K_TELEMETRY_H */
+--- a/drivers/net/wireless/ath/ath12k/telemetry_agent_if.c
++++ b/drivers/net/wireless/ath/ath12k/telemetry_agent_if.c
+@@ -51,10 +51,12 @@ int register_telemetry_agent_ops(struct
+ 	g_agent_ops->agent_get_emesh_peer_stats = NULL;
+ 
+ 	/* SAWF ops */
++#ifdef CPTCFG_ATH12K_SAWF
+ 	g_agent_ops->sawf_get_tput_stats = ath12k_sawf_get_tput_stats;
+ 	g_agent_ops->sawf_get_mpdu_stats = ath12k_sawf_get_mpdu_stats;
+ 	g_agent_ops->sawf_get_drop_stats = ath12k_sawf_get_drop_stats;
+ 	g_agent_ops->sawf_notify_breach = ath12k_sawf_notify_breach;
++#endif
+ 
+ 	g_agent_ops->agent_notify_host_event = ath12k_telemetry_notify_rm;
+ 	ath12k_info(NULL, "registered telemetry agent ops: %p", g_agent_ops);
+@@ -282,8 +284,12 @@ int ath12k_get_peer_stats(void *obj, str
+ 	}
+ 
+ 	stats->rssi = ath12k_calculate_link_rssi(peer);
++
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (peer->primary_link)
+ 		ath12k_get_peer_sla_config(peer, &stats->sla_mask);
++#endif
++
+ 	rcu_read_unlock();
+ 	for (ac = 0; ac < ATH12K_DP_WLAN_MAX_AC; ac++) {
+ 		stats->airtime_consumption[ac] =
+@@ -321,6 +327,7 @@ int ath12k_get_psoc_info(void *obj, stru
+ 	return 0;
+ }
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ void *ath12k_telemetry_peer_ctx_alloc(void *peer, void *sawf_stats,
+ 				      u8 *mac_addr,
+ 				      u8 svc_id, u8 hostq_id)
+@@ -567,7 +574,7 @@ void ath12k_sawf_notify_breach(u8 *mac_a
+ {
+ 	ath12k_telemetry_breach_indication(mac_addr, svc_id, param, set_clear, tid);
+ }
+-
++#endif
+ int ath12k_telemetry_notify_vendor_app_event(u8 init, u8 id, u64 service_data)
+ {
+ 	enum agent_notification_event event = init;
+--- a/drivers/net/wireless/ath/ath12k/vendor.c
++++ b/drivers/net/wireless/ath/ath12k/vendor.c
+@@ -122,6 +122,8 @@ ath12k_vendor_sawf_streaming[QCA_WLAN_VE
+ 	[QCA_WLAN_VENDOR_ATTR_SDWF_MLO_LINK_ID] = {.type = NLA_U32},
+ };
+ 
++#endif
++
+ static const struct nla_policy
+ ath12k_telemetric_req_policy[QCA_WLAN_VENDOR_ATTR_TELEMETRIC_MAX + 1] = {
+ 	[QCA_WLAN_VENDOR_ATTR_TELEMETRIC_LEVEL] = {.type = NLA_U8},
+@@ -139,6 +141,7 @@ ath12k_telemetric_req_policy[QCA_WLAN_VE
+ 						.len = WIFISTATS_DATA_MAX_SIZE},
+ };
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ static const struct nla_policy
+ ath12k_telemetric_sla_policy[QCA_WLAN_VENDOR_ATTR_SDWF_SLA_BREACH_PARAM_MAX + 1] = {
+ 	[QCA_WLAN_VENDOR_ATTR_SDWF_SLA_BREACH_PARAM_PEER_MAC] = {.type = NLA_BINARY,
+@@ -150,7 +153,6 @@ ath12k_telemetric_sla_policy[QCA_WLAN_VE
+ 								     .len = ETH_ALEN},
+ 	[QCA_WLAN_VENDOR_ATTR_SDWF_SLA_BREACH_PARAM_AC] = {.type = NLA_U8},
+ };
+-
+ #endif
+ 
+ static const struct nla_policy
+@@ -1272,6 +1274,8 @@ static int telemetry_build_nd_send_reply
+ 	return ret;
+ }
+ 
++#endif /* CPTCFG_ATH12K_SAWF */
++
+ static int ath12k_vendor_configure_htt_stats(struct wiphy *wiphy,
+ 					     struct wireless_dev *wdev,
+ 					     struct stats_config *cfg)
+@@ -1635,12 +1639,14 @@ static int ath12k_vendor_telemetry_getst
+ {
+ 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_TELEMETRIC_MAX + 1];
+ 	struct stats_config cfg;
++#ifdef CPTCFG_ATH12K_SAWF
+ 	struct unified_stats *stats;
+ 	struct telemetry_sawfdelay_stats *delay_stats = NULL;
+ 	struct telemetry_sawftx_stats *tx_stats = NULL;
+ 	struct ath12k_base *ab = NULL;
+-	int ret = 0, i;
+ 	u16 peer_id = 0xFFFF;
++#endif
++	int ret = 0;
+ 	u8 mac_addr[ETH_ALEN] = { 0 };
+ 
+ 	ret = nla_parse(tb, QCA_WLAN_VENDOR_ATTR_TELEMETRIC_MAX, data, data_len,
+@@ -1749,6 +1755,7 @@ static int ath12k_vendor_telemetry_getst
+ 		return 0;
+ 	}
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ 	if (!ath12k_sawf_enable)
+ 		return -EOPNOTSUPP;
+ 
+@@ -1787,13 +1794,13 @@ static int ath12k_vendor_telemetry_getst
+ 	ret = telemetry_build_nd_send_reply_msg(wiphy, &cfg, mac_addr, stats);
+ 
+ end_stats:
+-	for (i = 0; i < STATS_FEAT_MAX; i++) {
++	for (int i = 0; i < STATS_FEAT_MAX; i++) {
+ 		if (stats->feat[i])
+ 			kfree(stats->feat[i]);
+ 		stats->feat[i] = NULL;
+ 	}
+ 	kfree(stats);
+-
++#endif
+ 	return ret;
+ }
+ 
+@@ -2015,6 +2022,8 @@ err:
+ 	return ret;
+ }
+ 
++#ifdef CPTCFG_ATH12K_SAWF
++
+ static int ath12k_vendor_telemetry_sla_reset_stats(struct nlattr *clr_stats)
+ {
+ 	struct nlattr *tb[QCA_WLAN_VENDOR_ATTR_SDWF_SLA_BREACH_PARAM_MAX + 1];
+@@ -4279,6 +4288,7 @@ static struct wiphy_vendor_command ath12
+ 		.maxattr = QCA_WLAN_VENDOR_ATTR_SDWF_DEV_MAX,
+ 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
+ 	},
++#endif /* CPTCFG_ATH12K_SAWF */
+ 	{
+ 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
+ 		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_TELEMETRIC_DATA,
+@@ -4295,7 +4305,6 @@ static struct wiphy_vendor_command ath12
+ 		.maxattr = QCA_WLAN_VENDOR_ATTR_CONFIG_MAX,
+ 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
+ 	},
+-#endif /* CPTCFG_ATH12K_SAWF */
+ 	{
+ 		.info.vendor_id = QCA_NL80211_VENDOR_ID,
+ 		.info.subcmd = QCA_NL80211_VENDOR_SUBCMD_SCS_RULE_CONFIG,
+--- a/drivers/net/wireless/ath/ath12k/vendor.h
++++ b/drivers/net/wireless/ath/ath12k/vendor.h
+@@ -328,6 +328,8 @@ enum qca_wlan_vendor_sdwf_sla_breach_typ
+ 	QCA_WLAN_VENDOR_SDWF_SLA_BREACH_PARAM_TYPE_MAX,
+ };
+ 
++#endif /* CPTCFG_ATH12K_SAWF */
++
+ /**
+  * enum qca_wlan_vendor_attr_telemetric: Defines attributes to be used in
+  * request message of QCA_NL80211_VENDOR_SUBCMD_TELEMETRIC_DATA vendor command.
+@@ -429,6 +431,7 @@ enum qca_wlan_vendor_attr_stats {
+ 	QCA_WLAN_VENDOR_ATTR_STATS_MAX,
+ };
+ 
++#ifdef CPTCFG_ATH12K_SAWF
+ struct telemetry_sawf_tx_stat {
+ 	struct dp_pkt_info tx_success;
+ 	struct dp_pkt_info tx_ingress;
+@@ -471,6 +474,8 @@ struct telemetry_sawfdelay_stats {
+ 	u8 msduq;
+ };
+ 
++#endif /* CPTCFG_ATH12K_SAWF */
++
+ /**
+  * enum qca_wlan_vendor_attr_feat: Defines nested attributes to be used in
+  * response of QCA_NL80211_VENDOR_SUBCMD_TELEMETRIC_DATA vendor command.
+@@ -683,6 +688,8 @@ struct stats_config {
+ #define STATS_FEAT_FLG_MGMT         0x20000000
+ #define STATS_FEAT_FLG_FWSTATS      0x40000000
+ 
++#ifdef CPTCFG_ATH12K_SAWF
++
+ #define STATS_FEAT_FLG_SAWFDELAY 0x00400000
+ #define STATS_FEAT_FLG_SAWFTX 0x00800000
+ /**
+@@ -696,6 +703,11 @@ struct unified_stats {
+ 	u_int32_t size[STATS_FEAT_MAX];
+ };
+ 
++void ath12k_vendor_telemetry_notify_breach(struct ieee80211_vif *vif, u8 *mac_addr,
++					   u8 svc_id, u8 param, bool set_clear,
++					   u8 tid, u8 *mld_addr);
++#endif /* CPTCFG_ATH12K_SAWF */
++
+ enum qca_wlan_vendor_attr_config {
+ 	QCA_WLAN_VENDOR_ATTR_CONFIG_INVALID = 0,
+ 	/* Unsigned 32-bit attribute for generic commands */
+@@ -740,11 +752,6 @@ enum qca_wlan_vendor_attr_config {
+ 		QCA_WLAN_VENDOR_ATTR_CONFIG_AFTER_LAST - 1
+ };
+ 
+-void ath12k_vendor_telemetry_notify_breach(struct ieee80211_vif *vif, u8 *mac_addr,
+-					   u8 svc_id, u8 param, bool set_clear,
+-					   u8 tid, u8 *mld_addr);
+-#endif /* CPTCFG_ATH12K_SAWF */
+-
+ int ath12k_vendor_register(struct ath12k_hw *ah);
+ 
+ enum qca_wlan_vendor_attr_scs_rule_config {

@@ -1,0 +1,649 @@
+From d5183a0e763919df5a4577f3dfa5455e722e7bc8 Mon Sep 17 00:00:00 2001
+From: Aloka Dixit <aloka.dixit@oss.qualcomm.com>
+Date: Mon, 31 Mar 2025 09:45:01 -0700
+Subject: [PATCH] UPSTREAM:CP:wifi:ath12k: fix deadlock in ErP PCIe
+ handling
+
+Vendor commands coming from cfg80211 already hold wiphy lock.
+Function ath12k_erp_enter() then acquires erp_sm.lock and
+queues work to remove PCIe slots. The handler function for
+work first acquires erp_sm.lock and the PCIe removal kernel
+function ends up acquiring wiphy lock internally. Sometimes
+this results in a deadlock depending on when these two threads
+start execution.
+
+Process PCIe removal and rescan in a single threaded workqueue
+using global work structure instance erp_pcie_config.
+This synchronizes entry and exit operations. Remove PCIe related
+information from ath12k_erp_state_machine to keep the
+lock requirements for critical section at minimum in workqueue
+handler function which now acquires erp_sm.lock only to retrieve
+and update enter_cnt and exit_cnt. These counts are used by next
+vendor command from userspace to decide if previous entry/exit
+are in progress.
+
+Update ath12k_erp_config_pcie_speed_width() to use updated data
+structures. Call ath12k_pci_get_link_status() before queuing
+work to store speed and width in erp_pcie_config as vendor
+command already acquires erp_sm.lock. This avoids acquiring the
+lock inside 'for' loop in workqueue handler function.
+
+Use 'ah' to retrieve 'ar'.
+
+fixes-patch: 877-02-wifi-ath12k-add-wake-up-trigger-for-ErP.patch
+fixes-patch: 877-03-wifi-ath12k-support-for-PCIe-link-removal-for-ErP.patch
+fixes-patch: 877-04-wifi-ath12k-support-for-PCIe-link-changes-for-ErP.patch
+
+Signed-off-by: Aloka Dixit <aloka.dixit@oss.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/vendor.c | 411 ++++++++++++-----------
+ 1 file changed, 217 insertions(+), 194 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/vendor.c
++++ b/drivers/net/wireless/ath/ath12k/vendor.c
+@@ -235,13 +235,6 @@ enum ath12k_erp_states {
+ 	ATH12K_ERP_ENTER_COMPLETE,
+ };
+ 
+-struct ath12k_erp_pci_root {
+-	struct pci_dev *dev;
+-	struct pci_bus *bus;
+-	u16 speed;
+-	u16 width;
+-};
+-
+ enum ath12k_erp_pcie_rescan {
+ 	ATH12K_ERP_PCIE_RESCAN_INVALID,
+ 	ATH12K_ERP_PCIE_RESCAN_STARTED,
+@@ -249,19 +242,30 @@ enum ath12k_erp_pcie_rescan {
+ };
+ 
+ struct ath12k_erp_pci_dev {
+-	bool active;
+ 	int num_pdev;
+ 	int num_pdev_remove_req;
+ 	struct pci_dev *dev;
+-	struct ath12k_erp_pci_root root;
++	struct pci_dev *root;
++	struct pci_bus *bus;
++	u16 speed;
++	u16 width;
+ };
+ 
+ struct ath12k_erp_active_ar {
+ 	struct ath12k *ar;
+ 	enum ath12k_routing_pkt_type trigger;
+-	struct ath12k_erp_pci_root root;
+ };
+ 
++struct ath12k_erp_pcie_config {
++	struct work_struct work;
++	struct ath12k_erp_pci_dev pci[MAX_RADIOS];
++	u8 enter_cnt;
++	u8 exit_cnt;
++};
++
++struct ath12k_erp_pcie_config erp_pcie_config = { 0 };
++struct workqueue_struct *erp_pcie_config_workqueue = NULL;
++
+ struct ath12k_erp_state_machine {
+ 	bool initialized;
+ 	/* Protects the structure members */
+@@ -269,11 +273,6 @@ struct ath12k_erp_state_machine {
+ 	enum ath12k_erp_states state;
+ 	struct ath12k_erp_active_ar active_ar;
+ 	struct dentry *erp_dir;
+-	struct workqueue_struct *workqueue;
+-	struct work_struct remove_pcie_work;
+-	u8 rescan_pci_dev_cnt;
+-	struct ath12k_erp_pci_dev rescan_pci_dev[MAX_RADIOS];
+-
+ };
+ 
+ static struct ath12k_erp_state_machine erp_sm = {};
+@@ -2332,8 +2331,6 @@ static void ath12k_erp_reset_state(void)
+ {
+ 	erp_sm.state = ATH12K_ERP_OFF;
+ 	memset(&erp_sm.active_ar, 0, sizeof(erp_sm.active_ar));
+-	memset(erp_sm.rescan_pci_dev, 0, sizeof(erp_sm.rescan_pci_dev));
+-	erp_sm.rescan_pci_dev_cnt = 0;
+ }
+ 
+ static u32 ath12k_erp_convert_trigger_bitmap(u32 bitmap)
+@@ -2421,6 +2418,8 @@ static int ath12k_erp_set_pkt_filter(str
+ {
+ 	struct ath12k_wmi_pkt_route_param param = {};
+ 
++	lockdep_assert_held(&erp_sm.lock);
++
+ 	if (!bitmap)
+ 		return 0;
+ 
+@@ -2455,61 +2454,121 @@ static int ath12k_erp_set_pkt_filter(str
+ 	return 0;
+ }
+ 
+-static void ath12k_erp_config_pcie_speed_width(struct ath12k *ar,
+-					       struct pci_dev *root,
+-					       struct ath12k_erp_pci_root *erp_pci_root,
++static void ath12k_erp_config_pcie_speed_width(struct pci_dev *root,
++					       struct ath12k_erp_pci_dev *pci,
+ 					       bool enter)
+ {
+-	struct ath12k_base *ab = ar ? ar->ab : NULL;
+-	u16 speed, width;
+-
+-	if (!root || !erp_pci_root)
++	if (!root || !pci)
+ 		return;
+ 
+-	if (ath12k_pci_get_link_status(root, &speed, &width) < 0) {
+-		ath12k_warn(ab, "failed to get PCIe link status\n");
+-		return;
+-	}
+-
+ 	if (enter) {
+-		erp_pci_root->dev = root;
+-		if (speed != 1 && pcie_set_link_speed(root, 1))
+-			ath12k_warn(ab, "failed to reduce PCIe speed\n");
+-		erp_pci_root->speed = speed;
+-
+-		if (width != 1 && pcie_set_link_width(root, 1))
+-			ath12k_warn(ab, "failed to reduce PCIe width\n");
+-		erp_pci_root->width = width;
++		if (pci->speed != 1 && pcie_set_link_speed(root, 1))
++			ath12k_warn(NULL, "failed to reduce PCIe speed\n");
++
++		if (pci->width != 1 && pcie_set_link_width(root, 1))
++			ath12k_warn(NULL, "failed to reduce PCIe width\n");
+ 	} else {
+-		if (!erp_pci_root->dev)
++		if (pci->speed != 1 && pcie_set_link_speed(root, pci->speed)) {
++			ath12k_warn(NULL, "failed to reset PCIe speed\n");
+ 			return;
+-
+-		if (speed != erp_pci_root->speed &&
+-		    pcie_set_link_speed(root, erp_pci_root->speed)) {
+-			ath12k_warn(ab, "failed to reset PCIe speed\n");
++		}
++		if (pci->speed != 1 && pcie_set_link_width(root, pci->width)) {
++			ath12k_warn(NULL, "failed to reset PCIe width\n");
+ 			return;
+ 		}
++	}
++}
+ 
+-		if (width != erp_pci_root->width &&
+-		    pcie_set_link_width(root, erp_pci_root->width)) {
+-			ath12k_warn(ab, "failed to reset PCIe width\n");
+-			return;
++static void ath12k_erp_enter_pcie_work(struct ath12k_erp_pcie_config *config,
++				       u8 enter_cnt)
++{
++	struct ath12k_erp_pci_dev *pci;
++	u8 i;
++
++	for (i = 0; i < enter_cnt; i++) {
++		pci = &config->pci[i];
++
++		ath12k_erp_config_pcie_speed_width(pci->root, pci, true);
++
++		if (pci->num_pdev_remove_req == pci->num_pdev) {
++			pci_stop_and_remove_bus_device_locked(pci->root);
+ 		}
++	}
++
++	mutex_lock(&erp_sm.lock);
++	config->enter_cnt = 0;
++	mutex_unlock(&erp_sm.lock);
++}
++
++static void ath12k_erp_exit_pcie_work(struct ath12k_erp_pcie_config *config,
++				      u8 exit_cnt)
++{
++	struct ath12k_erp_pci_dev *pci;
++	u8 i;
++
++	for (i = 0; i < exit_cnt; i++) {
++		pci = &config->pci[i];
+ 
+-		erp_pci_root->dev = NULL;
++		if (pci->num_pdev_remove_req == pci->num_pdev) {
++			struct pci_dev *dev;
++
++			pci_lock_rescan_remove();
++			pci_rescan_bus(pci->bus);
++			pci_unlock_rescan_remove();
++
++			list_for_each_entry(dev, &pci->bus->devices, bus_list) {
++				pci->root = pcie_find_root_port(dev);
++				if (!pci->root) {
++					ath12k_warn(NULL, "failed to find PCIe root dev\n");
++					continue;
++				}
++
++				ath12k_erp_config_pcie_speed_width(pci->root, pci, false);
++			}
++		} else {
++			ath12k_erp_config_pcie_speed_width(pci->root, pci, false);
++		}
+ 	}
++
++	mutex_lock(&erp_sm.lock);
++	config->exit_cnt = 0;
++	mutex_unlock(&erp_sm.lock);
++}
++
++static void ath12k_erp_pcie_work(struct work_struct *work)
++{
++	struct ath12k_erp_pcie_config *config =
++					container_of(work,
++						     struct ath12k_erp_pcie_config,
++						     work);
++	u8 enter_cnt, exit_cnt;
++
++	mutex_lock(&erp_sm.lock);
++	enter_cnt = config->enter_cnt;
++	exit_cnt = config->exit_cnt;
++	mutex_unlock(&erp_sm.lock);
++
++	if (enter_cnt)
++		ath12k_erp_enter_pcie_work(config, enter_cnt);
++	else if (exit_cnt)
++		ath12k_erp_exit_pcie_work(config, exit_cnt);
+ }
+ 
+ static int ath12k_erp_config_active_ar(struct wiphy *wiphy, struct nlattr **attrs)
+ {
+-	struct pci_dev *pci_dev, *root;
+-	struct net_device *netdev;
+-	struct wireless_dev *wdev;
+-	u32 trigger, if_index;
+-	struct ieee80211_vif *vif;
+-	struct ath12k_vif *ahvif;
++	struct ath12k_erp_pci_dev *pci;
++	struct pci_dev *pci_dev;
++	u32 trigger;
++	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
++	struct ath12k_hw *ah = hw->priv;
+ 	struct ath12k *ar;
+ 
++	lockdep_assert_held(&erp_sm.lock);
++
++	mutex_lock(&ah->conf_mutex);
++	ar = ah->radio;
++	mutex_unlock(&ah->conf_mutex);
++
+ 	ath12k_dbg(NULL, ATH12K_DBG_RM, "configuring ErP active interface\n");
+ 
+ 	if (!attrs[QCA_WLAN_VENDOR_ATTR_ERP_CONFIG_IFINDEX]) {
+@@ -2517,36 +2576,6 @@ static int ath12k_erp_config_active_ar(s
+ 		return -EINVAL;
+ 	}
+ 
+-	if_index = nla_get_u32(attrs[QCA_WLAN_VENDOR_ATTR_ERP_CONFIG_IFINDEX]);
+-	netdev = dev_get_by_index(wiphy_net(wiphy), if_index);
+-	if (!netdev) {
+-		ath12k_err(NULL,
+-			   "could not find netdev for wake up interface\n");
+-		dev_put(netdev);
+-		return -EINVAL;
+-	}
+-
+-	wdev = netdev->ieee80211_ptr;
+-	dev_put(netdev);
+-	if (!wdev) {
+-		ath12k_err(NULL, "could not find wdev for wake up interface\n");
+-		return -EINVAL;
+-	}
+-
+-	vif = wdev_to_ieee80211_vif(wdev);
+-	if (!vif) {
+-		ath12k_dbg(NULL, ATH12K_DBG_RM, "vif absent, ignoring packet bitmap");
+-		return -EINVAL;
+-	}
+-
+-	ahvif = ath12k_vif_to_ahvif(vif);
+-	if (!ahvif) {
+-		ath12k_dbg(NULL, ATH12K_DBG_RM, "ahvif absent, ignoring packet bitmap");
+-		return -EINVAL;
+-	}
+-
+-	ar = ahvif->deflink.ar; /* current support is only for SLO */
+-
+ 	if (attrs[QCA_WLAN_VENDOR_ATTR_ERP_CONFIG_TRIGGER]) {
+ 		trigger = nla_get_u32(attrs[QCA_WLAN_VENDOR_ATTR_ERP_CONFIG_TRIGGER]);
+ 		if (ath12k_erp_set_pkt_filter(ar, trigger, ATH12K_WMI_PKTROUTE_ADD))
+@@ -2566,53 +2595,39 @@ static int ath12k_erp_config_active_ar(s
+ 		return 0;
+ 	}
+ 
+-	root = pcie_find_root_port(pci_dev);
+-	if (!root) {
+-		ath12k_warn(ar->ab, "failed to find PCIe root dev\n");
++	if (erp_pcie_config.enter_cnt >= MAX_RADIOS) {
++		ath12k_warn(NULL, "configuration done for maximum allowed number of PCIes\n");
+ 		return 0;
+ 	}
+ 
+-	ath12k_erp_config_pcie_speed_width(ar, root, &erp_sm.active_ar.root, true);
+-
+-	erp_sm.active_ar.ar = ar;
+-	return 0;
+-}
++	pci = &erp_pcie_config.pci[erp_pcie_config.enter_cnt];
+ 
+-static void ath12k_erp_remove_pcie_work(struct work_struct *work)
+-{
+-	struct ath12k_erp_pci_dev *erp_pci_dev;
+-	struct pci_dev *root;
+-	int i;
+-
+-	ath12k_dbg(NULL, ATH12K_DBG_RM, "removing PCIe slots\n");
+-
+-	mutex_lock(&erp_sm.lock);
+-	for (i = 0; i < erp_sm.rescan_pci_dev_cnt; i++) {
+-		erp_pci_dev = &erp_sm.rescan_pci_dev[i];
+-
+-		if (!erp_pci_dev->active)
+-			continue;
+-
+-		if (erp_pci_dev->num_pdev > erp_pci_dev->num_pdev_remove_req)
+-			continue; /* cannot remove slot until all pdevs are inactive */
++	pci->root = pcie_find_root_port(pci_dev);
++	if (!pci->root) {
++		ath12k_warn(ar->ab, "failed to find PCIe root dev\n");
++		return 0;
++	}
+ 
+-		root = pcie_find_root_port(erp_pci_dev->dev);
+-		if (!root) {
+-			ath12k_warn(NULL, "failed to find PCIe root dev\n");
+-			continue;
+-		}
++	if (ath12k_pci_get_link_status(pci->root, &pci->speed, &pci->width) < 0) {
++		ath12k_warn(NULL, "failed to get PCIe link status\n");
++		pci->root = NULL;
++		return 0;
++	}
+ 
+-		ath12k_erp_config_pcie_speed_width(NULL, root, &erp_pci_dev->root, true);
++	pci->dev = pci_dev;
++	pci->bus = pci->root->bus;
++	pci->num_pdev = ar->ab->num_radios;
++	pci->num_pdev_remove_req = 0;
++	erp_pcie_config.enter_cnt++;
++	erp_pcie_config.exit_cnt++;
+ 
+-		erp_pci_dev->root.bus = root->bus;
+-		pci_stop_and_remove_bus_device_locked(root);
+-		erp_pci_dev->active = false;
+-	}
+-	mutex_unlock(&erp_sm.lock);
++	erp_sm.active_ar.ar = ar;
++	return 0;
+ }
+ 
+ static int ath12k_erp_remove_pcie(struct wiphy *wiphy)
+ {
++	struct ath12k_erp_pci_dev *pci;
+ 	struct pci_dev *pci_dev;
+ 	struct ath12k_base *ab;
+ 	u8 i;
+@@ -2627,20 +2642,39 @@ static int ath12k_erp_remove_pcie(struct
+ 		return 0;
+ 	}
+ 
+-	for (i = 0; i < erp_sm.rescan_pci_dev_cnt; i++) {
+-		if (erp_sm.rescan_pci_dev[i].dev == pci_dev) {
+-			erp_sm.rescan_pci_dev[i].num_pdev_remove_req++;
+-			queue_work(erp_sm.workqueue, &erp_sm.remove_pcie_work);
++	for (i = 0; i < erp_pcie_config.enter_cnt; i++) {
++		if (erp_pcie_config.pci[i].dev == pci_dev) {
++			erp_pcie_config.pci[i].num_pdev_remove_req++;
+ 			return 0;
+ 		}
+ 	}
+ 
+-	erp_sm.rescan_pci_dev[erp_sm.rescan_pci_dev_cnt].dev = pci_dev;
+-	erp_sm.rescan_pci_dev[erp_sm.rescan_pci_dev_cnt].num_pdev = ab->num_radios;
+-	erp_sm.rescan_pci_dev[erp_sm.rescan_pci_dev_cnt].num_pdev_remove_req = 1;
+-	erp_sm.rescan_pci_dev[erp_sm.rescan_pci_dev_cnt].active = true;
+-	erp_sm.rescan_pci_dev_cnt++;
+-	queue_work(erp_sm.workqueue, &erp_sm.remove_pcie_work);
++	if (i >= MAX_RADIOS) {
++		ath12k_warn(NULL, "configuration done for maximum allowed number of PCIes\n");
++		return 0;
++	}
++
++	pci = &erp_pcie_config.pci[i];
++
++	pci->root = pcie_find_root_port(pci_dev);
++	if (!pci->root) {
++		ath12k_warn(NULL, "failed to find PCIe root dev\n");
++		return 0;
++	}
++
++	if (ath12k_pci_get_link_status(pci->root, &pci->speed, &pci->width) < 0) {
++		ath12k_warn(NULL, "failed to get PCIe link status\n");
++		pci->root = NULL;
++		return 0;
++	}
++
++	pci->dev = pci_dev;
++	pci->bus = pci->root->bus;
++	pci->num_pdev = ab->num_radios;
++	pci->num_pdev_remove_req = 1;
++	erp_pcie_config.enter_cnt++;
++	erp_pcie_config.exit_cnt++;
++
+ 	return 0;
+ }
+ 
+@@ -2690,6 +2724,19 @@ static int ath12k_erp_enter(struct wiphy
+ 			ath12k_err(NULL, "driver is already in ErP mode\n");
+ 			goto out;
+ 		}
++
++		if (erp_pcie_config.enter_cnt) {
++			ath12k_err(NULL,
++				   "PCIe configuration for previous entry has not completed yet\n");
++			goto out;
++		}
++
++		if (erp_pcie_config.exit_cnt) {
++			ath12k_err(NULL,
++				   "PCIe configuration for previous exit has not completed yet\n");
++			goto out;
++		}
++
+ 		erp_sm.state = ATH12K_ERP_ENTER_STARTED;
+ 	} else if (erp_sm.state != ATH12K_ERP_ENTER_STARTED) {
+ 		ath12k_err(NULL,
+@@ -2704,8 +2751,13 @@ static int ath12k_erp_enter(struct wiphy
+ 			goto out;
+ 	}
+ 
+-	if (nla_get_flag(attrs[QCA_WLAN_VENDOR_ATTR_ERP_ENTER_COMPLETE]))
++	if (nla_get_flag(attrs[QCA_WLAN_VENDOR_ATTR_ERP_ENTER_COMPLETE])) {
+ 		erp_sm.state = ATH12K_ERP_ENTER_COMPLETE;
++		mutex_unlock(&erp_sm.lock);
++
++		queue_work(erp_pcie_config_workqueue, &erp_pcie_config.work);
++		return 0;
++	}
+ 
+ 	mutex_unlock(&erp_sm.lock);
+ 	return 0;
+@@ -2749,62 +2801,41 @@ static void ath12k_vendor_send_erp_trigg
+ int ath12k_erp_exit(struct wiphy *wiphy, bool send_reply)
+ {
+ 	struct ath12k_erp_active_ar *active_ar;
+-	struct ath12k_erp_pci_dev *erp_pci_dev;
+-	struct pci_dev *pci_dev, *root;
+-	int ret, i;
++	int ret;
++
++	mutex_lock(&erp_sm.lock);
+ 
+-	lockdep_assert_held(&erp_sm.lock);
+ 	if (erp_sm.state != ATH12K_ERP_ENTER_COMPLETE) {
+ 		ath12k_err(NULL, "driver is not in ErP mode\n");
++		mutex_unlock(&erp_sm.lock);
++		return -EINVAL;
++	}
++
++	if (erp_pcie_config.enter_cnt) {
++		ath12k_err(NULL,
++			   "cannot start ErP exit as PCIe configuration for entry has not completed yet\n");
++		mutex_unlock(&erp_sm.lock);
+ 		return -EINVAL;
+ 	}
+ 
++	ath12k_dbg(NULL, ATH12K_DBG_RM, "ErP exit started\n");
++
+ 	active_ar = &erp_sm.active_ar;
+ 	if (active_ar->ar) {
+ 		ret = ath12k_erp_set_pkt_filter(active_ar->ar,
+ 						active_ar->trigger,
+ 						ATH12K_WMI_PKTROUTE_DEL);
+ 		if (ret) {
+-			ath12k_err(NULL, "failed to reset pkt bitmap %d", ret);
++			ath12k_err(active_ar->ar->ab, "failed to reset pkt bitmap %d", ret);
++			mutex_unlock(&erp_sm.lock);
+ 			return ret;
+ 		}
+-
+-		if (active_ar->ar->ab->hif.bus == ATH12K_BUS_PCI) {
+-			ath12k_erp_config_pcie_speed_width(active_ar->ar,
+-							   active_ar->root.dev,
+-							   &active_ar->root,
+-							   false);
+-		}
+-	}
+-
+-	for (i = 0; i < erp_sm.rescan_pci_dev_cnt; i++) {
+-		erp_pci_dev = &erp_sm.rescan_pci_dev[i];
+-
+-		if (erp_pci_dev->active)
+-			continue;
+-
+-		if (!erp_pci_dev->root.dev || !erp_pci_dev->root.bus)
+-			continue;
+-
+-		pci_lock_rescan_remove();
+-		pci_rescan_bus(erp_pci_dev->root.bus);
+-		erp_pci_dev->active = true;
+-		pci_unlock_rescan_remove();
+-
+-		list_for_each_entry(pci_dev, &erp_pci_dev->root.bus->devices, bus_list) {
+-			root = pcie_find_root_port(pci_dev);
+-			if (!root) {
+-				ath12k_warn(NULL, "failed to find PCIe root dev\n");
+-				return 0;
+-			}
+-
+-			ath12k_erp_config_pcie_speed_width(NULL, root,
+-							   &erp_pci_dev->root,
+-							   false);
+-		}
+ 	}
+ 
+ 	ath12k_erp_reset_state();
++	mutex_unlock(&erp_sm.lock);
++
++	queue_work(erp_pcie_config_workqueue, &erp_pcie_config.work);
+ 
+ 	if (send_reply)
+ 		ath12k_vendor_send_erp_trigger(wiphy);
+@@ -2834,9 +2865,7 @@ static int ath12k_vendor_parse_rm_erp(st
+ 	    tb[QCA_WLAN_VENDOR_ATTR_ERP_CONFIG])
+ 		ret = ath12k_erp_enter(wiphy, wdev, tb);
+ 	else if (nla_get_flag(tb[QCA_WLAN_VENDOR_ATTR_ERP_EXIT])) {
+-		mutex_lock(&erp_sm.lock);
+ 		ret = ath12k_erp_exit(wiphy, false);
+-		mutex_unlock(&erp_sm.lock);
+ 	}
+ 
+ 	return ret;
+@@ -2959,9 +2988,7 @@ void ath12k_erp_handle_trigger(struct wo
+ 	if (!ar->erp_trigger_set)
+ 		return;
+ 
+-	mutex_lock(&erp_sm.lock);
+ 	(void)ath12k_erp_exit(ar->ah->hw->wiphy, true);
+-	mutex_unlock(&erp_sm.lock);
+ }
+ 
+ static ssize_t ath12k_write_erp_rescan_pcie(struct file *file,
+@@ -2969,35 +2996,24 @@ static ssize_t ath12k_write_erp_rescan_p
+ 					    size_t count, loff_t *ppos)
+ {
+ 	u32 state;
+-	int ret = -EINVAL;
++	int ret;
+ 
+ 	if (!erp_sm.initialized) {
+ 		ath12k_err(NULL, "Erp is not initialized\n");
+ 		return -EOPNOTSUPP;
+ 	}
+ 
+-	mutex_lock(&erp_sm.lock);
+-	if (erp_sm.state != ATH12K_ERP_ENTER_COMPLETE) {
+-		ath12k_err(NULL, "driver is not in ErP mode\n");
+-		goto out;
+-	}
+-
+ 	ret = kstrtou32_from_user(ubuf, count, 0, &state);
+ 	if (ret)
+-		goto out;
++		return 0;
+ 
+ 	if (state != ATH12K_ERP_PCIE_RESCAN_STARTED)
+-		goto out;
++		return 0;
+ 
+ 	if (ath12k_erp_exit(NULL, false))
+-		goto out;
++		return 0;
+ 
+-	mutex_unlock(&erp_sm.lock);
+ 	return count;
+-
+-out:
+-	mutex_unlock(&erp_sm.lock);
+-	return ret;
+ }
+ 
+ static ssize_t ath12k_read_erp_rescan_pcie(struct file *file,
+@@ -3041,13 +3057,13 @@ int ath12k_erp_init(void)
+ 		debugfs_create_file("rescan_pcie", 0200, erp_sm.erp_dir,
+ 				    NULL, &ath12k_fops_erp_rescan_pcie);
+ 
+-	erp_sm.workqueue = create_singlethread_workqueue("ath12k_erp_wq");
+-	if (!erp_sm.workqueue) {
++	erp_pcie_config_workqueue = create_singlethread_workqueue("ath12k_erp_wq");
++	if (!erp_pcie_config_workqueue) {
+ 		ath12k_err(NULL, "failed to initialize ErP work queue\n");
+ 		return -EINVAL;
+ 	}
+ 
+-	INIT_WORK(&erp_sm.remove_pcie_work, ath12k_erp_remove_pcie_work);
++	INIT_WORK(&erp_pcie_config.work, ath12k_erp_pcie_work);
+ 
+ 	erp_sm.initialized = true;
+ 	return 0;
+@@ -3061,9 +3077,10 @@ void ath12k_erp_deinit(void)
+ 	mutex_lock(&erp_sm.lock);
+ 
+ 	erp_sm.erp_dir = NULL;
+-	cancel_work_sync(&erp_sm.remove_pcie_work);
+-	flush_workqueue(erp_sm.workqueue);
+-	destroy_workqueue(erp_sm.workqueue);
++	cancel_work_sync(&erp_pcie_config.work);
++	flush_workqueue(erp_pcie_config_workqueue);
++	destroy_workqueue(erp_pcie_config_workqueue);
++	erp_pcie_config_workqueue = NULL;
+ 
+ 	ath12k_erp_reset_state();
+ 	erp_sm.initialized = false;

@@ -1,0 +1,57 @@
+From ec8ac9f7636b5468cdfdca2ea9435c5732649067 Mon Sep 17 00:00:00 2001
+From: Gautham Kumar Senthilkumaran <quic_gauthamk@quicinc.com>
+Date: Thu, 3 Apr 2025 11:01:15 +0530
+Subject: [PATCH] UPSTREAM:CP wifi:ath12k: Fix the unassign vif during the
+ deauth
+
+Here repeater is receiving the deauth from the hostapd since the root AP is
+going down. In that instance repeater will go for simulated assert using CLI
+command which will avoid the unassign vif for the asserted SoC. So, asserted
+SoC will have stale entry of arvif which needs to be removed during the
+deauth case.
+
+Fix is to stop the vdev and remove the interface of the asserted SoC before
+going for recovery. This will help in deleting all stale entry of the arvifs
+before going for recovery.
+
+Patch-dependency: 811-wifi-ath12k-change-to-stop-peer-delete-the-primary-l.patch
+		  767-ath12k-Check-if-ar-is-down-before-handling-mac-opera.patch
+Patch-work: None
+
+Signed-off-by: Gautham Kumar Senthilkumaran <quic_gauthamk@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/mac.c  | 2 +-
+ drivers/net/wireless/ath/ath12k/peer.c | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index 45265ff..0652596 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -17017,7 +17017,7 @@ ath12k_mac_unassign_vif_chanctx_handle(struct ieee80211_hw *hw,
+ 	ath12k_vendor_link_state_update(ar->pdev_idx, ab, arvif,
+ 				    ATH12K_VENDOR_LINK_STATE_UNASSIGNED);
+ 	if (unlikely(test_bit(ATH12K_FLAG_CRASH_FLUSH, &ar->ab->dev_flags)))
+-		goto out;
++		goto stop_primary;
+ 
+ 	if (ctx)
+ 		ath12k_dbg(ab, ATH12K_DBG_SET(MAC, L2),
+diff --git a/drivers/net/wireless/ath/ath12k/peer.c b/drivers/net/wireless/ath/ath12k/peer.c
+index 6c55355..8102057 100644
+--- a/drivers/net/wireless/ath/ath12k/peer.c
++++ b/drivers/net/wireless/ath/ath12k/peer.c
+@@ -828,6 +828,10 @@ static int __ath12k_peer_delete(struct ath12k *ar, u32 vdev_id, const u8 *addr)
+ 	if (ath12k_11s_mlo_testing_skip_peer_delete_wait(arvif->ahvif, ar, addr))
+ 		return 0;
+ 
++	if (test_bit(ATH12K_FLAG_RECOVERY, &ar->ab->dev_flags)) {
++		return -ESHUTDOWN;
++	}
++
+ 	ret = ath12k_wait_for_peer_delete_done(ar, vdev_id, addr);
+ 	if (ret)
+ 		return ret;
+-- 
+2.34.1
+

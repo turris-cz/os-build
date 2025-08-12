@@ -1,0 +1,47 @@
+From 04e66adcd3bf8fa00971147c0c07279aa827aab2 Mon Sep 17 00:00:00 2001
+From: Roopni Devanathan <quic_rdevanat@quicinc.com>
+Date: Fri, 5 Jul 2024 22:02:35 +0530
+Subject: [PATCH] wifi: ath12k: Enable HW flag to enable/disable BSS coloring
+
+UCI config file has the option 'enable_color' option which enables or
+disables BSS coloring. But currently, setting 'enable_color' to 0 does not
+disable BSS coloring because even if the firmware does not detect
+collision, mac80211 is detecting it. So value assigned to 'enable_color'
+option did not play a role.
+
+Fixed the issue by setting the hardware flag 'DETECTS_COLOR_COLLISION'.
+This flag will advertise mac80211 that the underlying firmware is
+capable of detecting color collision detection. Now since collision
+detection is handled by firmware, mac80211 will not detect and UCI
+config file options will be taken into account.
+
+Patch-dependency: [650-ath12k-Add-support-for-bss-color-enablement.patch]
+Patch-work: [None]
+
+Signed-off-by: Roopni Devanathan <quic_rdevanat@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/mac.c | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index 9c55312..34cb5a8 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -17466,9 +17466,11 @@ static int ath12k_mac_hw_register(struct ath12k_hw *ah)
+ 	wiphy_ext_feature_set(hw->wiphy, NL80211_EXT_FEATURE_ACK_SIGNAL_SUPPORT);
+ 	wiphy_ext_feature_set(hw->wiphy, NL80211_EXT_FEATURE_BEACON_PROTECTION);
+ 
+-	if (test_bit(WMI_TLV_SERVICE_BSS_COLOR_OFFLOAD, ab->wmi_ab.svc_map))
+-                wiphy_ext_feature_set(hw->wiphy,
+-                                      NL80211_EXT_FEATURE_BSS_COLOR);
++	if (test_bit(WMI_TLV_SERVICE_BSS_COLOR_OFFLOAD, ab->wmi_ab.svc_map)) {
++		wiphy_ext_feature_set(hw->wiphy,
++				      NL80211_EXT_FEATURE_BSS_COLOR);
++		ieee80211_hw_set(hw, DETECTS_COLOR_COLLISION);
++	}
+ 
+ 	hw->wiphy->cipher_suites = cipher_suites;
+ 	hw->wiphy->n_cipher_suites = ARRAY_SIZE(cipher_suites);
+-- 
+2.34.1
+

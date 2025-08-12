@@ -1,0 +1,124 @@
+From 6f6ae44bab990dda04cc3314d767d87f10817989 Mon Sep 17 00:00:00 2001
+From: Sowmiya Sree Elavalagan <quic_ssreeela@quicinc.com>
+Date: Thu, 20 Mar 2025 15:00:45 +0530
+Subject: [PATCH] UPSTREAM:wifi:CP:ath12k: Clear dangling entry in RB tree on
+ BSS free
+
+In the cfg80211 subsystem, all scan results of a BSS are stored in an RB tree to
+facilitate easier search operations. Each BSS entry's reference count is
+incremented during various association parameter updates and decremented
+after usage. When the reference count reaches zero, the BSS is deleted.
+
+However, a corner case was identified where a BSS entry could be freed before its
+entry is cleared from the RB tree. This premature deletion leads to a crash due to
+a dangling pointer dereference when rb_erase is called.
+
+To address this issue, the BSS entry is now erased from the RB tree before it is
+freed. This ensures that no attempts are made to access the BSS after it has been
+freed, thereby preventing crashes.
+
+Co-developed-by : Saravanakumar Duraisamy <quic_saradura@quicinc.com>
+Signed-off-by: Saravanakumar Duraisamy <quic_saradura@quicinc.com>
+Signed-off-by: Sowmiya Sree Elavalagan <quic_ssreeela@quicinc.com>
+---
+ net/wireless/core.h |  1 +
+ net/wireless/scan.c | 18 ++++++++++++++++--
+ 2 files changed, 17 insertions(+), 2 deletions(-)
+
+--- a/net/wireless/core.h
++++ b/net/wireless/core.h
+@@ -168,6 +168,7 @@ struct cfg80211_internal_bss {
+ 	unsigned long ts;
+ 	unsigned long refcount;
+ 	atomic_t hold;
++	bool rb_bss;
+ 
+ 	/* time at the start of the reception of the first octet of the
+ 	 * timestamp field of the last beacon/probe received for this BSS.
+--- a/net/wireless/scan.c
++++ b/net/wireless/scan.c
+@@ -163,8 +163,14 @@ static inline void bss_ref_put(struct cf
+ 
+ 		hbss = bss_from_pub(bss->pub.hidden_beacon_bss);
+ 		hbss->refcount--;
+-		if (hbss->refcount == 0)
++		if (hbss->refcount == 0) {
++			if (hbss->rb_bss == true) {
++				rb_erase(&hbss->rbn, &rdev->bss_tree);
++				hbss->rb_bss = false;
++			}
++
+ 			bss_free(hbss);
++		}
+ 	}
+ 
+ 	if (bss->pub.transmitted_bss) {
+@@ -172,13 +178,29 @@ static inline void bss_ref_put(struct cf
+ 
+ 		tbss = bss_from_pub(bss->pub.transmitted_bss);
+ 		tbss->refcount--;
+-		if (tbss->refcount == 0)
++		if (tbss->refcount == 0) {
++			/* Since the BSS is getting freed remove it's
++ 			 * reference in RB tree
++ 			 */
++			if (tbss->rb_bss == true) {
++				rb_erase(&tbss->rbn, &rdev->bss_tree);
++				tbss->rb_bss = false;
++			}
++
+ 			bss_free(tbss);
++		}
+ 	}
+ 
+ 	bss->refcount--;
+-	if (bss->refcount == 0)
++	if (bss->refcount == 0) {
++		/* Since the BSS is getting freed remove it's reference in RB tree */
++		if (bss->rb_bss == true) {
++			rb_erase(&bss->rbn, &rdev->bss_tree);
++			bss->rb_bss = false;
++		}
++
+ 		bss_free(bss);
++	}
+ }
+ 
+ static bool __cfg80211_unlink_bss(struct cfg80211_registered_device *rdev,
+@@ -202,7 +224,9 @@ static bool __cfg80211_unlink_bss(struct
+ 
+ 	list_del_init(&bss->list);
+ 	list_del_init(&bss->pub.nontrans_list);
+-	rb_erase(&bss->rbn, &rdev->bss_tree);
++	if (bss->rb_bss == true)
++		rb_erase(&bss->rbn, &rdev->bss_tree);
++	bss->rb_bss = false;
+ 	rdev->bss_entries--;
+ 	WARN_ONCE((rdev->bss_entries == 0) ^ list_empty(&rdev->bss_list),
+ 		  "rdev bss entries[%d]/list[empty:%d] corruption\n",
+@@ -1563,6 +1587,7 @@ static bool rb_insert_bss(struct cfg8021
+ 
+ 		if (WARN_ON(!cmp)) {
+ 			/* will sort of leak this BSS */
++			bss->rb_bss = false;
+ 			return false;
+ 		}
+ 
+@@ -1574,6 +1599,7 @@ static bool rb_insert_bss(struct cfg8021
+ 
+ 	rb_link_node(&bss->rbn, parent, p);
+ 	rb_insert_color(&bss->rbn, &rdev->bss_tree);
++	bss->rb_bss = true;
+ 	return true;
+ }
+ 
+@@ -1617,7 +1643,8 @@ static void cfg80211_rehash_bss(struct c
+ {
+ 	lockdep_assert_held(&rdev->bss_lock);
+ 
+-	rb_erase(&bss->rbn, &rdev->bss_tree);
++	if (bss->rb_bss == true)
++		rb_erase(&bss->rbn, &rdev->bss_tree);
+ 	if (!rb_insert_bss(rdev, bss)) {
+ 		list_del(&bss->list);
+ 		if (!list_empty(&bss->hidden_list))

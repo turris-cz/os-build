@@ -1,0 +1,169 @@
+From 7f3683e3a7db78aa1b832fe4b5a2bef3a2bb3037 Mon Sep 17 00:00:00 2001
+From: Sowjanya vardhineni <quic_svardhin@quicinc.com>
+Date: Tue, 11 Mar 2025 12:52:52 +0530
+Subject: [PATCH] Added a debugfs to dump WMM stats for per vdev
+
+cat /sys/kernel/debug/ieee80211/phy00/netdev:wlan2/wmm_stats
+
+Total Tx: 347
+Total Rx: 4042
+Total Tx_fail: 0
+Total Rx_fai: 0
+Tx Count: BE: 128, BK: 57, VI: 46, VO: 116
+Tx Drop: BE: 0, BK: 0, VI: 0, VO: 0
+Rx Count: BE: 2104, BK: 662, VI: 604, VO: 672
+Rx Drop: BE: 0, BK: 0, VI: 0, VO: 0
+
+Signed-off-by: Girish Kumar M P <quic_gmp@quicinc.com>
+Signed-off-by: Sowjanya vardhineni <quic_svardhin@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/core.h    | 20 +++---
+ drivers/net/wireless/ath/ath12k/debugfs.c | 83 +++++++++++++++++++++++
+ 2 files changed, 94 insertions(+), 9 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -475,6 +475,15 @@ struct ath12k_prb_resp_tmpl_ml_info {
+ 	u32 cu_vdev_map_cat2_hi;
+ };
+ 
++struct ath12k_wmm_stats {
++	int tx_type;
++	int rx_type;
++	u64 total_wmm_tx_pkts[WME_NUM_AC];
++	u64 total_wmm_rx_pkts[WME_NUM_AC];
++	u64 total_wmm_tx_drop[WME_NUM_AC];
++	u64 total_wmm_rx_drop[WME_NUM_AC];
++};
++
+ struct ath12k_link_vif {
+ 	struct rcu_head rcu_head;
+ 	struct ath12k_base *ab;
+@@ -606,6 +615,7 @@ struct ath12k_vif {
+ 	unsigned long links_map;
+ 	u32 aid;
+ 	struct ath12k_mgmt_frame_stats mgmt_stats;
++	struct ath12k_wmm_stats wmm_stats;
+ 	u8 num_vdev_created;
+ 	u16 mcbc_gsn;
+ 	spinlock_t mcbc_gsn_lock; /* Protect mcbc_gsn */
+@@ -616,6 +626,7 @@ struct ath12k_vif {
+ 	struct dentry *debugfs_linkstats;
+ 	struct dentry *debugfs_primary_link;
+ 	struct dentry *debugfs_rfs_core_mask;
++	struct dentry *debugfs_wmm_stats_vdev;
+ #endif /* CPTCFG_ATH12K_DEBUGFS */
+ 	bool mcast_to_ucast_en;
+ 	u8 hw_link_id;
+@@ -1072,15 +1083,6 @@ struct ath12k_chan_info {
+ 	u32 num_channels;
+ };
+ 
+-struct ath12k_wmm_stats {
+-	int tx_type;
+-	int rx_type;
+-	u64 total_wmm_tx_pkts[WME_NUM_AC];
+-	u64 total_wmm_rx_pkts[WME_NUM_AC];
+-	u64 total_wmm_tx_drop[WME_NUM_AC];
+-	u64 total_wmm_rx_drop[WME_NUM_AC];
+-};
+-
+ #define ATH12K_DSCP_PRIORITY 7
+ 
+ #define ATH12K_FLUSH_TIMEOUT (5 * HZ)
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -6719,6 +6719,70 @@ static const struct file_operations ath1
+ 	.llseek = default_llseek,
+ };
+ 
++static ssize_t ath12k_read_wmm_stats_vdev(struct file *file,
++					  char __user *ubuf,
++					  size_t count, loff_t *ppos)
++{
++	struct ath12k_vif *ahvif = file->private_data;
++	struct ath12k_hw *ah = ahvif->ah;
++	int len = 0;
++	int size = 2048;
++	char *buf;
++	u64 total_wmm_sent_pkts = 0;
++	u64 total_wmm_received_pkts = 0;
++	u64 total_wmm_fail_sent = 0;
++	u64 total_wmm_fail_received = 0;
++	ssize_t retval, buf_len = PAGE_SIZE * 2;
++
++	if (!ahvif)
++		return -EINVAL;
++	ah = ahvif->ah;
++
++	buf = kzalloc(buf_len, GFP_KERNEL);
++	if (!buf)
++		return -ENOMEM;
++
++	mutex_lock(&ah->conf_mutex);
++	for (count = 0; count < WME_NUM_AC; count++) {
++		total_wmm_sent_pkts += ahvif->wmm_stats.total_wmm_tx_pkts[count];
++		total_wmm_received_pkts += ahvif->wmm_stats.total_wmm_rx_pkts[count];
++		total_wmm_fail_sent += ahvif->wmm_stats.total_wmm_tx_drop[count];
++		total_wmm_fail_received += ahvif->wmm_stats.total_wmm_rx_drop[count];
++	}
++
++	len += scnprintf(buf + len, size - len, "Total Tx: %llu\n", total_wmm_sent_pkts);
++	len += scnprintf(buf + len, size - len, "Total Rx: %llu\n", total_wmm_received_pkts);
++	len += scnprintf(buf + len, size - len, "Total Tx_fail: %llu\n", total_wmm_fail_sent);
++	len += scnprintf(buf + len, size - len, "Total Rx_fai: %llu\n", total_wmm_fail_received);
++
++	len += scnprintf(buf + len, size - len, "Tx Count: BE: %llu, BK: %llu, VI: %llu, VO: %llu \n",
++			ahvif->wmm_stats.total_wmm_tx_pkts[0], ahvif->wmm_stats.total_wmm_tx_pkts[1],
++			ahvif->wmm_stats.total_wmm_tx_pkts[2], ahvif->wmm_stats.total_wmm_tx_pkts[3]);
++	len += scnprintf(buf + len, size - len, "Tx Drop: BE: %llu, BK: %llu, VI: %llu, VO: %llu \n",
++			ahvif->wmm_stats.total_wmm_tx_drop[0], ahvif->wmm_stats.total_wmm_tx_drop[1],
++			ahvif->wmm_stats.total_wmm_tx_drop[2], ahvif->wmm_stats.total_wmm_tx_drop[3]);
++	len += scnprintf(buf + len, size - len, "Rx Count: BE: %llu, BK: %llu, VI: %llu, VO: %llu \n",
++			ahvif->wmm_stats.total_wmm_rx_pkts[0], ahvif->wmm_stats.total_wmm_rx_pkts[1],
++			ahvif->wmm_stats.total_wmm_rx_pkts[2], ahvif->wmm_stats.total_wmm_rx_pkts[3]);
++	len += scnprintf(buf + len, size - len, "Rx Drop: BE: %llu, BK: %llu, VI: %llu, VO: %llu \n",
++			ahvif->wmm_stats.total_wmm_rx_drop[0], ahvif->wmm_stats.total_wmm_rx_drop[1],
++			ahvif->wmm_stats.total_wmm_rx_drop[2], ahvif->wmm_stats.total_wmm_rx_drop[3]);
++
++	mutex_unlock(&ah->conf_mutex);
++
++	if (len > size)
++		len = size;
++
++	retval = simple_read_from_buffer(ubuf, count, ppos, buf, len);
++	kfree(buf);
++	return retval;
++}
++
++static const struct file_operations fops_wmm_stats_vdev = {
++	.read = ath12k_read_wmm_stats_vdev,
++	.open = simple_open,
++};
++
+ static ssize_t ath12k_write_power_save_gtx(struct file *file,
+ 					   const char __user *user_buf,
+ 					   size_t count, loff_t *ppos)
+@@ -6905,6 +6969,12 @@ void ath12k_debugfs_add_interface(struct
+ 		ahvif->debugfs_linkstats = NULL;
+ 	}
+ 
++	ahvif->debugfs_wmm_stats_vdev = debugfs_create_file("wmm_stats",
++							    0644,
++							    vif->debugfs_dir,
++							    ahvif,
++							    &fops_wmm_stats_vdev);
++
+ 	ahvif->debugfs_rfs_core_mask = debugfs_create_file("rfs_core_mask",
+ 							   0644,
+ 							   vif->debugfs_dir,
+@@ -6975,6 +7045,9 @@ void ath12k_debugfs_remove_interface(str
+ 	debugfs_remove(arvif->debugfs_power_save_gtx);
+ 	arvif->debugfs_power_save_gtx = NULL;
+ 
++	debugfs_remove(ahvif->debugfs_wmm_stats_vdev);
++	ahvif->debugfs_wmm_stats_vdev = NULL;
++
+ 	debugfs_remove_recursive(arvif->debugfs_twt);
+ 	arvif->debugfs_twt = NULL;
+ 

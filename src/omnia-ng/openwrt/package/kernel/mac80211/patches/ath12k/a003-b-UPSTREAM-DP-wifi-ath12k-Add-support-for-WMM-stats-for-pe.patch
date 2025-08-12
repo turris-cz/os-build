@@ -1,0 +1,297 @@
+From 039013183d050f3895f97fd322fb0fd514f1b964 Mon Sep 17 00:00:00 2001
+From: Sowjanya vardhineni <quic_svardhin@quicinc.com>
+Date: Tue, 11 Mar 2025 12:42:54 +0530
+Subject: [PATCH] To Improve Debuggability added WMM_STATS Support.
+
+Signed-off-by: Girish Kumar M P <quic_gmp@quicinc.com>
+Signed-off-by: Sowjanya vardhineni <quic_svardhin@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/dp_rx.c | 100 +++++++++++++++++++-----
+ drivers/net/wireless/ath/ath12k/dp_tx.c |  15 ++--
+ 2 files changed, 91 insertions(+), 24 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/dp_rx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_rx.c
+@@ -1775,6 +1775,8 @@ ath12k_update_per_peer_tx_stats(struct a
+ 	struct ath12k_peer *peer;
+ 	struct ieee80211_sta *sta;
+ 	struct ath12k_link_sta *arsta;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct htt_ppdu_stats_user_rate *user_rate;
+ 	struct htt_ppdu_stats *ppdu_stats = &ppdu_info->ppdu_stats;
+ 	struct ath12k_per_peer_tx_stats *peer_stats = &ar->peer_tx_stats;
+@@ -1806,16 +1808,6 @@ ath12k_update_per_peer_tx_stats(struct a
+ 		}
+ 	}
+ 
+-	if (tlv_bitmap & BIT(HTT_PPDU_STATS_TAG_USR_COMPLTN_ACK_BA_STATUS)) {
+-		succ_bytes = le32_to_cpu(usr_stats->ack_ba.success_bytes);
+-		succ_pkts = le32_get_bits(usr_stats->ack_ba.info,
+-					  HTT_PPDU_STATS_ACK_BA_INFO_NUM_MSDU_M);
+-		tid = le32_get_bits(usr_stats->ack_ba.info,
+-				    HTT_PPDU_STATS_ACK_BA_INFO_TID_NUM);
+-		ar->wmm_stats.tx_type = ath12k_tid_to_ac(tid > ATH12K_DSCP_PRIORITY ? 0: tid);
+-		ar->wmm_stats.total_wmm_tx_pkts[ar->wmm_stats.tx_type]++;
+-	}
+-
+ 	if (common->fes_duration_us)
+ 		tx_duration = le32_to_cpu(common->fes_duration_us);
+ 
+@@ -1898,6 +1890,22 @@ ath12k_update_per_peer_tx_stats(struct a
+ 		return;
+ 	}
+ 
++	if (tlv_bitmap & BIT(HTT_PPDU_STATS_TAG_USR_COMPLTN_ACK_BA_STATUS)) {
++		succ_bytes = le32_to_cpu(usr_stats->ack_ba.success_bytes);
++		succ_pkts = le32_get_bits(usr_stats->ack_ba.info,
++					  HTT_PPDU_STATS_ACK_BA_INFO_NUM_MSDU_M);
++		tid = le32_get_bits(usr_stats->ack_ba.info,
++				    HTT_PPDU_STATS_ACK_BA_INFO_TID_NUM);
++		ar->wmm_stats.tx_type = ath12k_tid_to_ac(tid > ATH12K_DSCP_PRIORITY ? 0 : tid);
++		ar->wmm_stats.total_wmm_tx_pkts[ar->wmm_stats.tx_type]++;
++		arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++		if (arvif) {
++			ahvif = arvif->ahvif;
++			ahvif->wmm_stats.tx_type  = ar->wmm_stats.tx_type;
++			ahvif->wmm_stats.total_wmm_tx_pkts[ahvif->wmm_stats.tx_type]++;
++		}
++	}
++
+ 	sta = peer->sta;
+ 	arsta = ath12k_peer_get_link_sta(ab, peer);
+ 	if (!arsta) {
+@@ -3541,6 +3549,9 @@ ath12k_dp_rx_update_peer_dependent_param
+ {
+ 	struct ath12k_dp_rx_tid *rx_tid;
+ 	enum hal_encrypt_type enctype;
++	struct ath12k_base *ab = ar->ab;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct ath12k_skb_rxcb *rxcb;
+ 	u8 tid;
+ 
+@@ -3549,6 +3560,18 @@ ath12k_dp_rx_update_peer_dependent_param
+ 	ar->wmm_stats.rx_type =
+ 		ath12k_tid_to_ac(rx_tid->tid > ATH12K_DSCP_PRIORITY ? 0 : rx_tid->tid);
+ 	ar->wmm_stats.total_wmm_rx_pkts[ar->wmm_stats.rx_type]++;
++
++	if (unlikely(!ab->stats_disable)) {
++		rcu_read_lock();
++		arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++		if (arvif) {
++			ahvif = arvif->ahvif;
++			ahvif->wmm_stats.rx_type = ar->wmm_stats.rx_type;
++			ahvif->wmm_stats.total_wmm_rx_pkts[ahvif->wmm_stats.rx_type]++;
++		}
++		rcu_read_unlock();
++	}
++
+ 	rxcb = ATH12K_SKB_RXCB(msdu);
+ 	if (rxcb->is_mcbc)
+ 		enctype = peer->sec_type_grp;
+@@ -3585,8 +3608,11 @@ static void ath12k_dp_rx_h_mpdu(struct a
+ 	bool is_decrypted = false;
+ 	struct ieee80211_hdr *hdr;
+ 	struct ath12k_peer *peer;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct ieee80211_rx_status *rx_status = rx_info->rx_status;
+ 	u32 err_bitmap;
++	int rx_type;
+ 
+ 	/* PN for multicast packets will be checked in mac80211 */
+ 	rxcb = ATH12K_SKB_RXCB(msdu);
+@@ -3655,6 +3681,17 @@ static void ath12k_dp_rx_h_mpdu(struct a
+ 		spin_unlock_bh(&ab->base_lock);
+ 	}
+ 
++	if (unlikely(!ab->stats_disable)) {
++		if (peer) {
++			arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++			if (arvif) {
++				ahvif = arvif->ahvif;
++				rx_type = ahvif->wmm_stats.rx_type;
++				ahvif->wmm_stats.total_wmm_rx_pkts[rx_type]++;
++			}
++		}
++	}
++
+ 	rcu_read_unlock();
+ 
+ 	*fast_rx = false;
+@@ -4247,6 +4284,8 @@ int ath12k_dp_rx_process(struct ath12k_b
+ 	bool done = false, fast_rx = true;
+ 	u64 desc_va;
+ 	struct ath12k_link_sta *arsta = NULL;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct ath12k_peer *peer = NULL;
+ 	struct ath12k *ar;
+ 	u8 hw_link_id, chip_id, mac_id, decap_type, intra_bss, is_mcbc, l3_hdr_pad_msb;
+@@ -4357,16 +4396,21 @@ try_again:
+ 				ath12k_tid_to_ac(rxcb->tid > ATH12K_DSCP_PRIORITY ? 0 :
+ 						 rxcb->tid);
+ 
+-			if (ath12k_debugfs_is_extd_rx_stats_enabled(ar) &&
+-			    rxcb->peer_id) {
++			if (ath12k_debugfs_is_extd_rx_stats_enabled(ar) && rxcb->peer_id) {
+ 				rcu_read_lock();
+-				peer =
+-				ath12k_peer_find_by_peer_list_index(ar,
+-								    rxcb->peer_id);
+-				if (peer && peer->sta)
+-					arsta = ath12k_peer_get_link_sta(src_ab, peer);
+-				if (arsta)
+-					atomic_inc(&arsta->drv_rx_pkts.pkts_frm_hw);
++				peer = ath12k_peer_find_by_peer_list_index(ar, rxcb->peer_id);
++				if (peer) {
++					arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++					if (arvif) {
++						ahvif = arvif->ahvif;
++						ahvif->wmm_stats.rx_type = ar->wmm_stats.rx_type;
++					}
++
++					if (peer && peer->sta)
++						arsta = ath12k_peer_get_link_sta(src_ab, peer);
++					if (arsta)
++						atomic_inc(&arsta->drv_rx_pkts.pkts_frm_hw);
++				}
+ 				rcu_read_unlock();
+ 			}
+ 		}
+@@ -4636,12 +4680,15 @@ static int ath12k_dp_rx_h_verify_tkip_mi
+ 	struct ieee80211_rx_status *rxs = IEEE80211_SKB_RXCB(msdu);
+ 	struct ieee80211_key_conf *key_conf;
+ 	struct ieee80211_hdr *hdr;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	u8 mic[IEEE80211_CCMP_MIC_LEN];
+ 	struct ath12k_dp_rx_info rx_info = {0};
+ 	int head_len, tail_len, ret;
+ 	size_t data_len;
+ 	u32 hdr_len, hal_rx_desc_sz = ar->ab->hw_params->hal_desc_sz;
+ 	u8 *key, *data;
++	int rx_type;
+ 	u8 key_idx;
+ 
+ 	if (ath12k_dp_rx_h_enctype(ab, rx_desc) != HAL_ENCRYPT_TYPE_TKIP_MIC)
+@@ -4653,7 +4700,8 @@ static int ath12k_dp_rx_h_verify_tkip_mi
+ 	hdr_len = ieee80211_hdrlen(hdr->frame_control);
+ 	head_len = hdr_len + hal_rx_desc_sz + IEEE80211_TKIP_IV_LEN;
+ 	tail_len = IEEE80211_CCMP_MIC_LEN + IEEE80211_TKIP_ICV_LEN + FCS_LEN;
+-
++	if (!peer)
++		return 0;
+ 	if (!is_multicast_ether_addr(hdr->addr1))
+ 		key_idx = peer->ucast_keyidx;
+ 	else
+@@ -4697,6 +4745,19 @@ mic_fail:
+ 	ath12k_dp_rx_h_undecap(ar, msdu, rx_desc,
+ 			       HAL_ENCRYPT_TYPE_TKIP_MIC, &rx_info, true);
+ 
++	if (unlikely(!ab->stats_disable)) {
++		rcu_read_lock();
++		if (peer) {
++			arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++			if (arvif) {
++				ahvif = arvif->ahvif;
++				rx_type = ahvif->wmm_stats.rx_type;
++		                ahvif->wmm_stats.total_wmm_rx_pkts[rx_type]++;
++			}
++		}
++	       rcu_read_unlock();
++	}
++
+ 	if (rx_info.is_drop_packet)
+ 		return -EINVAL;
+ 
+@@ -5174,10 +5235,14 @@ ath12k_dp_process_rx_err_buf(struct ath1
+ 	struct sk_buff *msdu;
+ 	struct ath12k_skb_rxcb *rxcb;
+ 	struct hal_rx_desc *rx_desc;
++	struct ath12k_vif *ahvif;
++	struct ath12k_peer *peer = NULL;
++	struct ath12k_link_vif *arvif;
+ 	u16 msdu_len;
+ 	u32 hal_rx_desc_sz = ab->hw_params->hal_desc_sz;
+ 	struct ath12k_rx_desc_info *desc_info;
+ 	u64 desc_va;
++	int rx_type;
+ 
+ 	desc_va = ((u64)le32_to_cpu(desc->buf_va_hi) << 32 |
+ 		   le32_to_cpu(desc->buf_va_lo));
+@@ -5205,6 +5270,19 @@ ath12k_dp_process_rx_err_buf(struct ath1
+ 				     DMA_FROM_DEVICE);
+ 
+ 	if (drop) {
++		if (ath12k_debugfs_is_extd_rx_stats_enabled(ar)) {
++			rcu_read_lock();
++			peer = ath12k_peer_find_by_peer_list_index(ar, rxcb->peer_id);
++			if (peer) {
++				arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++				if (arvif) {
++					ahvif = arvif->ahvif;
++					rx_type = ahvif->wmm_stats.rx_type;
++					ahvif->wmm_stats.total_wmm_rx_drop[rx_type]++;
++				}
++			}
++			rcu_read_unlock();
++		}
+ 		dev_kfree_skb_any(msdu);
+ 		return 0;
+ 	}
+@@ -5633,7 +5711,10 @@ static bool ath12k_dp_rx_h_tkip_mic_err(
+ 	u32 hal_rx_desc_sz = ar->ab->hw_params->hal_desc_sz;
+ 	bool drop = false;
+ 	struct ath12k_peer *peer;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct ath12k_link_sta *arsta = NULL;
++	int rx_type;
+ 
+ 	rxcb->is_first_msdu = ath12k_dp_rx_h_first_msdu(ab, desc);
+ 	rxcb->is_last_msdu = ath12k_dp_rx_h_last_msdu(ab, desc);
+@@ -5689,6 +5770,14 @@ exit:
+ 			arsta->arvif->link_stats.rx_dropped++;
+ 			spin_unlock_bh(&ab->base_lock);
+ 		}
++		if (!drop) {
++			arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++			if (arvif) {
++				ahvif = arvif->ahvif;
++				rx_type = ahvif->wmm_stats.rx_type;
++				ahvif->wmm_stats.total_wmm_rx_pkts[rx_type]++;
++			}
++		}
+ 		rcu_read_unlock();
+ 	}
+ 
+--- a/drivers/net/wireless/ath/ath12k/dp_tx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_tx.c
+@@ -1185,15 +1185,20 @@ static void ath12k_dp_tx_complete_msdu(s
+ 	ts.buf_rel_source = buf_rel_source;
+ 	ath12k_dp_tx_status_parse(ab, tx_status, &ts);
+ 
+-	ar->wmm_stats.tx_type = ath12k_tid_to_ac(ts.tid > ATH12K_DSCP_PRIORITY ? 0:ts.tid);
++	vif = skb_cb->vif;
++	ahvif = (void *)vif->drv_priv;
++	link_id = skb_cb->link_id;
++
++	ar->wmm_stats.tx_type = ath12k_tid_to_ac(ts.tid > ATH12K_DSCP_PRIORITY ? 0 : ts.tid);
++	ahvif->wmm_stats.tx_type = ar->wmm_stats.tx_type;
++
+ 	if (ar->wmm_stats.tx_type) {
+-		if (ts.status != HAL_WBM_TQM_REL_REASON_FRAME_ACKED)
++		if (ts.status != HAL_WBM_TQM_REL_REASON_FRAME_ACKED) {
+ 			ar->wmm_stats.total_wmm_tx_drop[ar->wmm_stats.tx_type]++;
++			ahvif->wmm_stats.total_wmm_tx_drop[ahvif->wmm_stats.tx_type]++;
++		}
+ 	}
+ 
+-	vif = skb_cb->vif;
+-	ahvif = (void *)vif->drv_priv;
+-	link_id = skb_cb->link_id;
+ 	if (ahvif->links_map & BIT(link_id)) {
+ 		rcu_read_lock();
+ 		arvif = ath12k_rcu_get_arvif_from_link_id(ahvif, link_id);

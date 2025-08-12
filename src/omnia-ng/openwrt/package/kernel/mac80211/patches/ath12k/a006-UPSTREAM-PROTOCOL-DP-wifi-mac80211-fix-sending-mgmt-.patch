@@ -1,0 +1,60 @@
+From 4320a5c2c3cfcd4dbe21e5cc664fe0aeb76b1482 Mon Sep 17 00:00:00 2001
+From: Karthikeyan Kathirvel <quic_kathirve@quicinc.com>
+Date: Wed, 2 Apr 2025 17:41:03 +0530
+Subject: [PATCH] UPSTREAM:PROTOCOL:DP: wifi: mac80211: fix sending mgmt frame
+ when sta connected to other link
+
+When mgmt frame is sent on the link which is not a valid link of
+sta, mac80211 sends it to a active link of connected sta. This happens
+during an SLO sta steers from one link of an MLD to another link.
+
+Fix by sending mgmt frames on a given link, rather fetches tx link from
+sta.
+
+Patch-dependency: None
+Fixes-patch: 927-PROTOCOL-DP-wifi-mac80211-fix-valid-link_id-when-sta.patch
+Patch-work: None
+Fixes: I8085fe4a214 ("UPSTREAM:PROTOCOL:DP: wifi: mac80211:
+        fix valid link_id when sta steers from link to link in same mld")
+
+Internal review cover title: wifi: mac80211: fix valid link_id when sta steers to other link in same MLD
+
+Signed-off-by: Karthikeyan Kathirvel <quic_kathirve@quicinc.com>
+---
+ net/mac80211/tx.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/net/mac80211/tx.c b/net/mac80211/tx.c
+index 73aa4cab83eb..9851790fba6c 100644
+--- a/net/mac80211/tx.c
++++ b/net/mac80211/tx.c
+@@ -1244,6 +1244,7 @@ ieee80211_tx_prepare(struct ieee80211_sub_if_data *sdata,
+ 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+ 	bool aggr_check = false;
+ 	int tid;
++	u8 link_id;
+ 
+ 	memset(tx, 0, sizeof(*tx));
+ 	tx->skb = skb;
+@@ -1275,6 +1276,18 @@ ieee80211_tx_prepare(struct ieee80211_sub_if_data *sdata,
+ 			tx->sta = sta_info_get_bss(sdata, hdr->addr1);
+ 			aggr_check = true;
+ 		}
++		/*
++		 * Sometimes when a STA associates to one of the links and
++		 * steers to other link, link_id on which we are doing mgmt tx
++		 * will not be matching with valid links so assign sta as NULL,
++		 * hence driver will do tx using the given link id
++		 */
++		link_id = u32_get_bits(info->control.flags, IEEE80211_TX_CTRL_MLO_LINK);
++		if (link_id != IEEE80211_LINK_UNSPECIFIED &&
++		    tx->sta && tx->sta->sta.valid_links &&
++		    !(tx->sta->sta.valid_links & BIT(link_id)) &&
++		    ieee80211_is_mgmt(hdr->frame_control))
++			tx->sta = NULL;
+ 	}
+ 
+ 	if (tx->sta && ieee80211_is_data_qos(hdr->frame_control) &&
+-- 
+2.34.1
+
