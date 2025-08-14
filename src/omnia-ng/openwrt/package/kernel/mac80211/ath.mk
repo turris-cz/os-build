@@ -315,7 +315,7 @@ define KernelPackage/ath11k
   TITLE:=Qualcomm 802.11ax wireless chipset support (common code)
   URL:=https://wireless.wiki.kernel.org/en/users/drivers/ath11k
   DEPENDS+= +kmod-ath +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT \
-  +kmod-crypto-michael-mic +ATH11K_THERMAL:kmod-hwmon-core +ATH11K_THERMAL:kmod-thermal
+  +kmod-crypto-michael-mic +kmod-hwmon-core +ATH11K_THERMAL:kmod-thermal
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath11k/ath11k.ko \
         $(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath11k/ath11k_ahb.ko \
         $(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath11k/ath11k_pci.ko
@@ -340,7 +340,7 @@ define KernelPackage/ath12k
   $(call KernelPackage/mac80211/Default)
   TITLE:=QTI 802.11be wireless cards support
   URL:=https://wireless.wiki.kernel.org/en/users/drivers/ath12k
-  DEPENDS+= +kmod-ath +@DRIVER_11N_SUPPORT +@DRIVER_11W_SUPPORT +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT
+  DEPENDS+= +kmod-ath +kmod-hwmon-core +@DRIVER_11N_SUPPORT +@DRIVER_11W_SUPPORT +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath12k/ath12k.ko
   AUTOLOAD:=$(call AutoProbe,ath12k)
 endef
@@ -353,7 +353,7 @@ endef
 define KernelPackage/ath12k/config
 	config PACKAGE_ATH12K_SAWF
 		bool "SAWF and Telemetry support in ATH12K"
-		default y
+		default n
 		help
 			This option enables support for SAWF and Telemetry
 			in ATH12K.
