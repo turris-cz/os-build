@@ -32,17 +32,17 @@ define Package/turris-omnia-ng-wifi-firmware/install
 		./files/IPQ9574-codelinaro/board-2.bin \
 		./files/caldata.bin \
 		$(1)/lib/firmware/ath11k/IPQ9574/hw1.0/
-	# $(INSTALL_DIR) $(1)/lib/firmware/ath12k/QCN92XX/hw1.0/
-	# $(INSTALL_DATA) \
-	# 	./files/qcn9224/amss.bin \
-	# 	./files/qcn9224/amss_dualmac.bin \
-	# 	./files/qcn9224/board-2.bin \
-	# 	./files/qcn9224/m3.bin \
-	# 	./files/qcn9224/qdss_trace_config.bin \
-	# 	./files/qcn9224/regdb.bin \
-	# 	$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/
-	# $(INSTALL_DATA) ./files/qcn9224/rxgainlutSKY_6G.bin \
-	# 	$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/rxgainlut.bin
+	$(INSTALL_DIR) $(1)/lib/firmware/ath12k/QCN92XX/hw1.0/
+	$(INSTALL_DATA) \
+		./files/qcn9224/amss.bin \
+		./files/qcn9224/amss_dualmac.bin \
+		./files/qcn9224/board-2.bin \
+		./files/qcn9224/m3.bin \
+		./files/qcn9224/qdss_trace_config.bin \
+		./files/qcn9224/regdb.bin \
+		$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/
+	$(INSTALL_DATA) ./files/qcn9224/rxgainlutSKY_6G.bin \
+		$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/rxgainlut.bin
 endef
 
 $(eval $(call BuildPackage,turris-omnia-ng-wifi-firmware))
