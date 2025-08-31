@@ -116,7 +116,20 @@ generate() {
 
 get_usign
 
-generate "medkit" --initial-config
+mkdir -p overlay/etc/config
+cat > overlay/etc/config/pkglists << EOF
+config pkglists 'pkglists'
+        list pkglist 'datacollect'
+
+config datacollect 'datacollect'
+        option survey '1'
+        option dynfw '1'
+        option fwlogs '1'
+        option minipot '1'
+        option haas '0'
+EOF
+
+generate "medkit" --lists 'datacollect(survey|dynfw|fwlogs|minipot)' --overlay "${PWD}/overlay" --initial-config
 generate "medkit-min" --base "base-min" --lists "" --localization ""
 
 case "$board" in
@@ -129,5 +142,7 @@ case "$board" in
 		;;
 esac
 if [ "$board" != "turris1x" ]; then
-	generate "medkit-contract-cznic" --contract "cznic" --initial-config
+	generate "medkit-contract-cznic" --lists 'datacollect(survey|dynfw|fwlogs|minipot)' --overlay "${PWD}/overlay" --contract "cznic" --initial-config
 fi
+
+rm -rf overlay
