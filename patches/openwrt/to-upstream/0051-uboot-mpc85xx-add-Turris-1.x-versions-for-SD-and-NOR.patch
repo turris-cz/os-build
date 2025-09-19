@@ -5,9 +5,9 @@ Subject: [PATCH] uboot-mpc85xx: add Turris 1.x versions for SD and NOR
 
 Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
 ---
- package/boot/uboot-mpc85xx/Makefile           | 49 +++++++++++++++++++
- .../uboot-mpc85xx/patches/force-libfdt.patch  | 32 ++++++++++++
- 2 files changed, 81 insertions(+)
+ package/boot/uboot-mpc85xx/Makefile           | 51 +++++++++++++++++++
+ .../uboot-mpc85xx/patches/force-libfdt.patch  | 48 ++++++++++++
+ 2 files changed, 99 insertions(+)
  create mode 100644 package/boot/uboot-mpc85xx/Makefile
  create mode 100644 package/boot/uboot-mpc85xx/patches/force-libfdt.patch
 
@@ -16,7 +16,7 @@ new file mode 100644
 index 0000000000..db057bfba2
 --- /dev/null
 +++ b/package/boot/uboot-mpc85xx/Makefile
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,51 @@
 +#
 +# This is free software, licensed under the GNU General Public License v2.
 +# See /LICENSE for more information.
@@ -27,9 +27,11 @@ index 0000000000..db057bfba2
 +
 +PKG_SOURCE_PROTO:=git
 +PKG_SOURCE_URL:=https://gitlab.nic.cz/turris/u-boot.git
-+PKG_MIRROR_HASH:=d8f12dd3f5c8214e2dc6111c5dba55e9e62febb9877ebe27388d4bd3d4952801
-+PKG_SOURCE_DATE:=2022-09-27
-+PKG_SOURCE_VERSION:=turris1x-v2022.04
++PKG_MIRROR_HASH:=bc6794736adbdb7e5143ed2afb23fe30c253480a5a49267f08d34bf95b042ec2
++PKG_SOURCE_DATE:=2024-05-10
++PKG_SOURCE_VERSION:=cf50dc0956a2b99dff735ca08a6b72446950ea7f
++PKG_BUILD_DEPENDS:=swig/host python-poetry-core/host
++HOST_BUILD_DEPENDS:=swig/host python-poetry-core/host
 +
 +include $(INCLUDE_DIR)/u-boot.mk
 +include $(INCLUDE_DIR)/package.mk
@@ -53,7 +55,7 @@ index 0000000000..db057bfba2
 +  BUILD_DEVICES:=cznic_turris1x
 +  BUILD_SUBTARGET:=p2020
 +  UBOOT_CONFIG:=turris_1x_nor
-+  UBOOT_IMAGE:=u-boot-with-dtb.bin
++  UBOOT_IMAGE:=u-boot-dtb.bin
 +endef
 +
 +UBOOT_TARGETS:= \
@@ -71,11 +73,13 @@ new file mode 100644
 index 0000000000..a21020baca
 --- /dev/null
 +++ b/package/boot/uboot-mpc85xx/patches/force-libfdt.patch
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,48 @@
 +Taken from https://github.com/openwrt/openwrt/commit/e760f065c6fd17005c5458e54d6cc0fb8356b4df#commitcomment-78364865
 +
-+--- a/Makefile
-++++ b/Makefile
++Index: u-boot-2022-09-27-turris1x/Makefile
++===================================================================
++--- u-boot-2022-09-27-turris1x.orig/Makefile
+++++ u-boot-2022-09-27-turris1x/Makefile
 +@@ -2051,26 +2051,7 @@ endif
 + # Check dtc and pylibfdt, if DTC is provided, else build them
 + PHONY += scripts_dtc
@@ -104,6 +108,20 @@ index 0000000000..a21020baca
 + 
 + # ---------------------------------------------------------------------------
 + quiet_cmd_cpp_lds = LDS     $@
++Index: u-boot-2022-09-27-turris1x/scripts/dtc/pylibfdt/setup.py
++===================================================================
++--- u-boot-2022-09-27-turris1x.orig/scripts/dtc/pylibfdt/setup.py
+++++ u-boot-2022-09-27-turris1x/scripts/dtc/pylibfdt/setup.py
++@@ -81,8 +81,7 @@ def GetEnvFromMakefiles():
++     basedir = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[0])))
++     swig_opts = ['-I%s' % basedir]
++     makevars = ParseMakefile(os.path.join(basedir, 'Makefile'))
++-    version = '%s.%s.%s' % (makevars['VERSION'], makevars['PATCHLEVEL'],
++-                            makevars['SUBLEVEL'])
+++    version = '1.1.1'
++     makevars = ParseMakefile(os.path.join(basedir, 'libfdt', 'Makefile.libfdt'))
++     files = makevars['LIBFDT_SRCS'].split()
++     files = [os.path.join(basedir, 'libfdt', fname) for fname in files]
 -- 
 2.34.1
 

@@ -1,13 +1,15 @@
-From 93606dd1215f7c6b599138334846023e948fd169 Mon Sep 17 00:00:00 2001
+From 9296ea1f8a97ff554833a8132b28b7b665b328cf Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
 Date: Wed, 20 Mar 2019 16:42:28 +0100
 Subject: [PATCH] u-boot tools: Add mkimage tool
 
 ---
- .../{uboot-envtools => uboot-tools}/Makefile  | 51 ++++++++++++++++---
+ .../{uboot-envtools => uboot-tools}/Makefile  | 50 ++++++++++++++++---
  .../files/apm821xx                            |  0
  .../files/ath79                               |  0
  .../files/cns3xxx                             |  0
+ .../files/fw_defaults                         |  0
+ .../files/fw_loadenv                          |  0
  .../files/fw_printsys                         |  0
  .../files/fw_setsys                           |  0
  .../files/imx_cortexa9                        |  0
@@ -27,11 +29,14 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  .../files/realtek                             |  0
  .../files/uboot-envtools.sh                   |  0
  .../patches/001-compile.patch                 |  0
- 23 files changed, 44 insertions(+), 7 deletions(-)
- rename package/boot/{uboot-envtools => uboot-tools}/Makefile (62%)
+ .../patches/002-Revert-tools-env-use-run-to-store-lockfile.patch                 |  0
+ 23 files changed, 44 insertions(+), 6 deletions(-)
+ rename package/boot/{uboot-envtools => uboot-tools}/Makefile (64%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/apm821xx (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/ath79 (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/cns3xxx (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/fw_defaults (100%)
+ rename package/boot/{uboot-envtools => uboot-tools}/files/fw_loadenv (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/fw_printsys (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/fw_setsys (100%)
  rename package/boot/{uboot-envtools => uboot-tools}/files/imx_cortexa9 (100%)
@@ -53,10 +58,10 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  rename package/boot/{uboot-envtools => uboot-tools}/patches/001-compile.patch (100%)
 
 diff --git a/package/boot/uboot-envtools/Makefile b/package/boot/uboot-tools/Makefile
-similarity index 62%
+similarity index 64%
 rename from package/boot/uboot-envtools/Makefile
 rename to package/boot/uboot-tools/Makefile
-index 1ace390c40..18639ce84d 100644
+index 9cf6f33173..ba66076a19 100644
 --- a/package/boot/uboot-envtools/Makefile
 +++ b/package/boot/uboot-tools/Makefile
 @@ -7,7 +7,7 @@
@@ -66,9 +71,9 @@ index 1ace390c40..18639ce84d 100644
 -PKG_NAME:=uboot-envtools
 +PKG_NAME:=uboot-tools
  PKG_DISTNAME:=u-boot
- PKG_VERSION:=2022.01
- PKG_RELEASE:=$(AUTORELEASE)
-@@ -44,19 +44,50 @@ define Package/uboot-envtools/description
+ PKG_VERSION:=2024.07
+ PKG_RELEASE:=1
+@@ -44,6 +44,21 @@ define Package/uboot-envtools/description
   This package includes tools to read and modify U-Boot bootloader environment.
  endef
  
@@ -88,19 +93,16 @@ index 1ace390c40..18639ce84d 100644
 +TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
 +
  define Build/Configure
- 	touch $(PKG_BUILD_DIR)/include/config.h
- 	mkdir -p $(PKG_BUILD_DIR)/include/config
- 	touch $(PKG_BUILD_DIR)/include/config/auto.conf
- 	mkdir -p $(PKG_BUILD_DIR)/include/generated
- 	touch $(PKG_BUILD_DIR)/include/generated/autoconf.h
-+	touch $(PKG_BUILD_DIR)
+ 	$(call Build/Compile/Default,tools-only_defconfig)
  endef
+@@ -54,10 +69,27 @@ endef
  
+ # We need to override the ARCH passed by buildsystem as otherwise the defconfig
+ # for tools-only wont match and the includes for sandbox will be dropped
 -MAKE_FLAGS += \
+-	ARCH="sandbox" \
 -	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
--	TARGET_LDFLAGS="$(TARGET_LDFLAGS)" \
--	no-dot-config-targets=envtools \
--	envtools
+-	TARGET_LDFLAGS="$(TARGET_LDFLAGS)"
 +define Build/Compile
 +	$(MAKE) -C $(PKG_BUILD_DIR) \
 +		CROSS_COMPILE="$(TARGET_CROSS)" \
@@ -109,10 +111,11 @@ index 1ace390c40..18639ce84d 100644
 +		no-dot-config-targets=envtools \
 +		CROSS_BUILD_TOOLS=1 \
 +		NO_SDL=1 \
-+		envtools defconfig
++		envtools tools-only_defconfig
 +	mv $(PKG_BUILD_DIR)/tools/env/fw_printenv $(PKG_BUILD_DIR)
 +	echo 'CONFIG_FIT=y' >> $(PKG_BUILD_DIR)/.config
 +	echo 'CONFIG_MULTI_DTB_FIT=n' >> $(PKG_BUILD_DIR)/.config
++	sed -i 's|^CONFIG_TOOLS_MKEFICAPSULE=y|CONFIG_TOOLS_MKEFICAPSULE=n|' $(PKG_BUILD_DIR)/.config
 +	$(MAKE) -C $(PKG_BUILD_DIR) \
 +		CROSS_COMPILE="$(TARGET_CROSS)" \
 +		TARGET_CFLAGS="$(TARGET_CFLAGS)" \
@@ -124,7 +127,7 @@ index 1ace390c40..18639ce84d 100644
  
  define Package/uboot-envtools/conffiles
  /etc/config/ubootenv
-@@ -66,7 +97,7 @@ endef
+@@ -67,7 +99,7 @@ endef
  
  define Package/uboot-envtools/install
  	$(INSTALL_DIR) $(1)/usr/sbin
@@ -133,7 +136,7 @@ index 1ace390c40..18639ce84d 100644
  	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
  	$(INSTALL_BIN) ./files/fw_printsys $(1)/usr/sbin
  	$(INSTALL_BIN) ./files/fw_setsys $(1)/usr/sbin
-@@ -83,4 +114,10 @@ define Package/uboot-envtools/install
+@@ -91,4 +123,10 @@ define Package/uboot-envtools/install
  	)
  endef
  
@@ -156,6 +159,14 @@ diff --git a/package/boot/uboot-envtools/files/cns3xxx b/package/boot/uboot-tool
 similarity index 100%
 rename from package/boot/uboot-envtools/files/cns3xxx
 rename to package/boot/uboot-tools/files/cns3xxx
+diff --git a/package/boot/uboot-envtools/files/fw_defaults b/package/boot/uboot-tools/files/fw_defaults
+similarity index 100%
+rename from package/boot/uboot-envtools/files/fw_defaults
+rename to package/boot/uboot-tools/files/fw_defaults
+diff --git a/package/boot/uboot-envtools/files/fw_loadenv b/package/boot/uboot-tools/files/fw_loadenv
+similarity index 100%
+rename from package/boot/uboot-envtools/files/fw_loadenv
+rename to package/boot/uboot-tools/files/fw_loadenv
 diff --git a/package/boot/uboot-envtools/files/fw_printsys b/package/boot/uboot-tools/files/fw_printsys
 similarity index 100%
 rename from package/boot/uboot-envtools/files/fw_printsys
@@ -232,6 +243,10 @@ diff --git a/package/boot/uboot-envtools/patches/001-compile.patch b/package/boo
 similarity index 100%
 rename from package/boot/uboot-envtools/patches/001-compile.patch
 rename to package/boot/uboot-tools/patches/001-compile.patch
+diff --git a/package/boot/uboot-envtools/patches/002-Revert-tools-env-use-run-to-store-lockfile.patch b/package/boot/uboot-tools/patches/002-Revert-tools-env-use-run-to-store-lockfile.patch
+similarity index 100%
+rename from package/boot/uboot-envtools/patches/002-Revert-tools-env-use-run-to-store-lockfile.patch
+rename to package/boot/uboot-tools/patches/002-Revert-tools-env-use-run-to-store-lockfile.patch
 -- 
-2.30.2
+2.47.0
 
