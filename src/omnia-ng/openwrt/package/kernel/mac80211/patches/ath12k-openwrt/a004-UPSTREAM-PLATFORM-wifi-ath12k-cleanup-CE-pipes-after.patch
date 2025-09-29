@@ -1,0 +1,68 @@
+From 9ca7ad59bf573c15470c2ab74578ede588dd1bee Mon Sep 17 00:00:00 2001
+From: Saravanakumar Duraisamy <quic_saradura@quicinc.com>
+Date: Thu, 13 Mar 2025 15:38:15 +0530
+Subject: [PATCH] UPSTREAM:PLATFORM:wifi:ath12k: cleanup CE pipes after
+ firmware stop
+
+CE pipe got cleanup before firmware stop. This leads to the corruption
+in CE allocated SKB as there is a possibility of firmware could
+write to the SKB after the CE pipe cleanup done in host side.
+
+Moved the CE pipe cleanup after the firmware stop.
+
+Patch-dependency:711-ath12k-fix-register-access-after-power-down-the-targ.patch
+
+Signed-off-by: Saravanakumar Duraisamy <quic_saradura@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/ahb.c  | 1 -
+ drivers/net/wireless/ath/ath12k/core.c | 2 ++
+ drivers/net/wireless/ath/ath12k/pcic.c | 1 -
+ 3 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/ahb.c b/drivers/net/wireless/ath/ath12k/ahb.c
+index 30267a9..fe61158 100644
+--- a/drivers/net/wireless/ath/ath12k/ahb.c
++++ b/drivers/net/wireless/ath/ath12k/ahb.c
+@@ -430,7 +430,6 @@ static void ath12k_ahb_stop(struct ath12k_base *ab)
+ 	ath12k_ahb_sync_ce_irqs(ab);
+ 	ath12k_ahb_kill_tasklets(ab);
+ 	del_timer_sync(&ab->rx_replenish_retry);
+-	ath12k_ce_cleanup_pipes(ab);
+ }
+ 
+ static int ath12k_ahb_power_up(struct ath12k_base *ab)
+diff --git a/drivers/net/wireless/ath/ath12k/core.c b/drivers/net/wireless/ath/ath12k/core.c
+index 29fd6e3..e385667 100644
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -3992,6 +3992,7 @@ static void ath12k_core_hw_group_stop(struct ath12k_hw_group *ag)
+ 		if (!test_bit(ATH12K_FLAG_CRASH_FLUSH, &ab->dev_flags))
+ 			ath12k_qmi_firmware_stop(ab);
+ 
++		ath12k_ce_cleanup_pipes(ab);
+ 		ath12k_hif_power_down(ab);
+ 
+ 		mutex_unlock(&ab->core_lock);
+@@ -4024,6 +4025,7 @@ void ath12k_core_deinit(struct ath12k_base *ab)
+ 		if (!test_bit(ATH12K_FLAG_CRASH_FLUSH, &ab->dev_flags))
+ 			ath12k_qmi_firmware_stop(ab);
+ 
++		ath12k_ce_cleanup_pipes(ab);
+ 		ath12k_hif_power_down(ab);
+ 		ath12k_core_soc_destroy(ab);
+ 
+diff --git a/drivers/net/wireless/ath/ath12k/pcic.c b/drivers/net/wireless/ath/ath12k/pcic.c
+index 3c3763e..280d093 100644
+--- a/drivers/net/wireless/ath/ath12k/pcic.c
++++ b/drivers/net/wireless/ath/ath12k/pcic.c
+@@ -762,7 +762,6 @@ void ath12k_pcic_stop(struct ath12k_base *ab)
+ {
+ 	ath12k_pcic_ce_irq_disable_sync(ab);
+ 	del_timer_sync(&ab->rx_replenish_retry);
+-	ath12k_ce_cleanup_pipes(ab);
+ }
+ 
+ int ath12k_pcic_start(struct ath12k_base *ab)
+-- 
+2.34.1
+

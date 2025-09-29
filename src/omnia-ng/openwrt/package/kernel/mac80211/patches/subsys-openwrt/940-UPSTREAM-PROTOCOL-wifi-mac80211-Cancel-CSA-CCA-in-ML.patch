@@ -1,0 +1,66 @@
+From 3432d326c30807a9c2ed8812742a4157b1789354 Mon Sep 17 00:00:00 2001
+From: Yuvarani V <quic_yuvarani@quicinc.com>
+Date: Tue, 18 Mar 2025 21:22:13 +0530
+Subject: [PATCH] UPSTREAM:PROTOCOL wifi: mac80211: Cancel CSA/CCA in ML
+ Reconfig work in STA
+
+Currently, when a channel switch with block tx set and
+ML reconfigure link removal is triggered on same link with
+less tbtt which results in the link to be removed first.
+This scenario leads to tx to be blocked - ping fails.
+This happens because block_tx is set during
+CSA, and the vif_queues are stopped during the channel switch.
+
+Since the link is removed before the channel switch completes,
+block_tx should be unset before removing the link.
+
+To fix this issue, wake up the queues and allow them to continue
+transmitting data before removing the link.
+Also, unset the CSA and CCA flags before removing the link.
+
+Patch-dependency: ML Reconfiguration Link Removal
+
+Patch-work: None
+
+Signed-off-by: Yuvarani V <quic_yuvarani@quicinc.com>
+---
+ net/mac80211/mlme.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+--- a/net/mac80211/mlme.c
++++ b/net/mac80211/mlme.c
+@@ -5853,6 +5853,8 @@ static void ieee80211_ml_reconf_work(str
+ 			     u.mgd.ml_reconf_work.work);
+ 	struct sta_info *sta;
+ 	struct ieee80211_local *local = sdata->local;
++	struct ieee80211_link_data *link;
++	struct ieee80211_bss_conf *link_conf;
+ 	u16 new_valid_links, new_active_links, new_dormant_links, link_id;
+ 	int ret;
+ 
+@@ -5909,6 +5911,25 @@ static void ieee80211_ml_reconf_work(str
+ 
+ 	new_dormant_links = sdata->vif.dormant_links & ~sdata->u.mgd.removed_links;
+ 
++	/* Set the active flag to false and wake up queues if blocked on
++	 * the removed link
++	 */
++	for_each_set_bit(link_id, &sdata->u.mgd.removed_links,
++			 IEEE80211_MLD_MAX_NUM_LINKS) {
++		link = sdata_dereference(sdata->link[link_id], sdata);
++		link_conf = link->conf;
++
++		mutex_lock(&local->mtx);
++		link_conf->csa_active = false;
++		link_conf->color_change_active = false;
++		if (link->csa_block_tx) {
++			ieee80211_wake_vif_queues(local, sdata,
++						  IEEE80211_QUEUE_STOP_REASON_CSA);
++			link->csa_block_tx = false;
++		}
++		mutex_unlock(&local->mtx);
++	}
++
+ 	ret = ieee80211_vif_set_links(sdata, new_valid_links,
+ 				      new_dormant_links);
+ 	if (ret)

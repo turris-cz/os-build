@@ -1,0 +1,86 @@
+From e191b5cca11eceb50a11b1e9cb9129be80f522eb Mon Sep 17 00:00:00 2001
+From: Vignesh C <quic_vignc@quicinc.com>
+Date: Tue, 18 Mar 2025 12:48:15 +0530
+Subject: [PATCH] UPSTREAM:CP ath12k:wifi Fix inconsistencies with station counters
+
+During ML station removal, there are two scenarios where the station
+counts need to be handled properly.
+        1) During ML station removal, when the link peer is subject to
+be removed later using the "peer_delete_all" functionality, the
+"num_peers" and "num_stations" counts needs to be decremented with
+negative scenarios check conditions.
+        2) During ML station removal, when the link peers are removed
+eventhough that station is set for "peer_delete_all" functionality,
+the "num_peers" counts needs to be decremented.
+
+Fix the station counts in "num_peers" and "num_stations" during
+ML station removal. Along with this add some extra parameters in the
+peer create and delete debugs which makes the issue debugging more
+efficient.
+
+Patch-dependency: 985-UPSTREAM-CP-wifi-ath12k-Add-peer-delete-all-support-.patch
+                  911-a-wifi-mac80211-Add-wdev-specific-flag-to-indicate-NET.patch
+                  691-0001-cfg80211-mac80211-add-support-for-channel-switch-wit.patch
+
+Fixes-patch: 985-UPSTREAM-CP-wifi-ath12k-Add-peer-delete-all-support-.patch
+
+Signed-off-by: Vignesh C <quic_vignc@quicinc.com>
+Co-developed-by: Nagarajan Maran <quic_nmaran@quicinc.com>
+Signed-off-by: Nagarajan Maran <quic_nmaran@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/mac.c  | 7 ++++++-
+ drivers/net/wireless/ath/ath12k/peer.c | 2 +-
+ drivers/net/wireless/ath/ath12k/wmi.c  | 2 +-
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -6072,7 +6072,12 @@ static int ath12k_mac_vdev_stop(struct a
+ 		 * stations associated to the radio and will be decremented
+ 		 * after individual peer delete.
+ 		 */
+-		ar->num_stations -= arvif->num_peers;
++		if (ar->num_stations >= arvif->num_peers)
++			ar->num_stations -= arvif->num_peers;
++
++		if (ar->num_peers > arvif->num_peers)
++			ar->num_peers -= arvif->num_peers;
++
+ 		/* All peers with this vdev should be deleted at this point
+ 		 * through peer delete all or through peer cleanup.
+ 		 */
+--- a/drivers/net/wireless/ath/ath12k/peer.c
++++ b/drivers/net/wireless/ath/ath12k/peer.c
+@@ -834,6 +834,8 @@ int ath12k_ml_link_peers_delete(struct a
+ 		if (!skip_send_peer_del) {
+ 			ahsta->peer_delete_bitmap |= BIT(arsta->link_id);
+ 			arvif->num_peers--;
++			if (peer_del_all)
++				ar->num_peers--;
+ 		}
+ 
+ 		mutex_unlock(&ar->conf_mutex);
+@@ -1112,7 +1114,8 @@ peer_created:
+ 
+ 	ar->num_peers++;
+ 
+-	ath12k_dbg(ab, ATH12K_DBG_PEER, "peer created %pM\n", arg->peer_addr);
++	ath12k_dbg(ab, ATH12K_DBG_PEER, "peer created %pM radio num peers %d radio id %d\n",
++		   arg->peer_addr, ar->num_peers, ar->pdev_idx);
+ 
+ 	spin_unlock_bh(&ab->base_lock);
+ 	mutex_unlock(&ab->tbl_mtx_lock);
+--- a/drivers/net/wireless/ath/ath12k/wmi.c
++++ b/drivers/net/wireless/ath/ath12k/wmi.c
+@@ -2073,8 +2073,9 @@ int ath12k_wmi_send_peer_delete_cmd(stru
+ 	cmd->vdev_id = cpu_to_le32(vdev_id);
+ 
+ 	ath12k_dbg(ar->ab, ATH12K_DBG_PEER,
+-		   "WMI peer delete vdev_id %d peer_addr %pM num_stations: %d radio num_peer : %d\n",
+-		   vdev_id,  peer_addr, ar->num_stations, ar->num_peers);
++		   "WMI peer delete vdev_id %d peer_addr %pM num_stations: %d radio num_peer : %d radio id : %d\n",
++		   vdev_id,  peer_addr, ar->num_stations,
++		   ar->num_peers, ar->pdev_idx);
+ 
+ 	ret = ath12k_wmi_cmd_send(wmi, skb, WMI_PEER_DELETE_CMDID);
+ 	if (ret) {

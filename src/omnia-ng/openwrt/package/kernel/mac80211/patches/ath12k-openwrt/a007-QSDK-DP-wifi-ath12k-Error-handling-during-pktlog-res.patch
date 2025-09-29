@@ -1,0 +1,171 @@
+From ccc7cfcc6040a8b999057278eac88312c21de384 Mon Sep 17 00:00:00 2001
+From: Adwait Nayak <quic_adwaitn@quicinc.com>
+Date: Fri, 4 Apr 2025 00:41:54 +0530
+Subject: [PATCH] QSDK:DP: wifi: ath12k: Error handling during pktlog reset
+
+Print flood issue is seen when pktlog disable command
+(echo"reset" > pktlog_filter) is issued more than once.
+
+Update the pktlog_filter properly in error scenarios
+to avoid this issue.
+
+Patch-dependency: None
+Fixes-patch: 999-wifi-ath12k-Enable-various-pktlog-mode-support.patch
+Patch-work: None
+Fixes: I8fb0bd8eaaa3 (QSDK:DP: wifi: ath12k:
+		Enable various pktlog mode support)
+
+Signed-off-by: Adwait Nayak <quic_adwaitn@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/debugfs.c | 88 +++++++++++------------
+ drivers/net/wireless/ath/ath12k/pktlog.h  |  7 +-
+ 2 files changed, 44 insertions(+), 51 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/debugfs.c b/drivers/net/wireless/ath/ath12k/debugfs.c
+index 24ab6b2..8949f98 100644
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -3718,11 +3718,6 @@ int ath12k_set_pktlog_txrx_filter(struct ath12k *ar,
+ 	struct htt_rx_ring_tlv_filter tlv_filter = {0};
+ 	int retv = -EINVAL;
+ 
+-	if (!filter) {
+-		ath12k_warn(ar->ab, "failed as filter is not set\n");
+-		return -EINVAL;
+-	}
+-
+ 	if (mode == ATH12K_PKTLOG_MODE_LITE ||
+ 	    (filter & ATH12K_PKTLOG_RX)) {
+ 		ath12k_debugfs_set_mon_filter(&tlv_filter, mode, rx_filter);
+@@ -3778,7 +3773,7 @@ static ssize_t ath12k_write_pktlog_filter(struct file *file,
+ 	struct htt_rx_ring_tlv_filter tlv_filter = {0};
+ 	u32 rx_filter = 0;
+ 	enum ath12k_pktlog_filter filter = ATH12K_PKTLOG_NO_FILTER;
+-	enum ath12k_pktlog_mode mode = ATH12K_PKTLOG_DISABLED;
++	enum ath12k_pktlog_mode mode = ATH12K_PKTLOG_MODE_INVALID;
+ 	u8 buf[128] = {0};
+ 	int ret = 0;
+ 	ssize_t rc;
+@@ -3796,55 +3791,51 @@ static ssize_t ath12k_write_pktlog_filter(struct file *file,
+ 	}
+ 	buf[rc] = '\0';
+ 
+-	if (strstr(buf, "lite"))
+-		mode = ATH12K_PKTLOG_MODE_LITE;
+-	if (strstr(buf, "full"))
+-		mode = ATH12K_PKTLOG_MODE_FULL;
+-	if (mode == ATH12K_PKTLOG_MODE_FULL) {
+-		if (strstr(buf, "tx"))
+-			filter |= ATH12K_PKTLOG_TX;
+-		if (strstr(buf, "rx"))
+-			filter |= ATH12K_PKTLOG_RX;
+-	}
+-
+-	if (strstr(buf, "rcf"))
+-		filter |= ATH12K_PKTLOG_RCFIND;
+-	if (strstr(buf, "rcu"))
+-		filter |= ATH12K_PKTLOG_RCUPDATE;
+-	if (strstr(buf, "hybrid"))
+-		filter |= ATH12K_PKTLOG_HYBRID;
+-	if (strstr(buf, "phy"))
+-		filter |= ATH12K_PKTLOG_PHY_LOGGING;
+-
+ 	if (strstr(buf, "reset")) {
+ 		mode = ATH12K_PKTLOG_DISABLED;
+ 		filter = ATH12K_PKTLOG_NO_FILTER;
+-	}
++	} else {
++		if (strstr(buf, "lite"))
++			mode = ATH12K_PKTLOG_MODE_LITE;
++		else if (strstr(buf, "full")) {
++			mode = ATH12K_PKTLOG_MODE_FULL;
++			if (strstr(buf, "tx"))
++				filter |= ATH12K_PKTLOG_TX;
++			if (strstr(buf, "rx"))
++				filter |= ATH12K_PKTLOG_RX;
++		}
+ 
+-	if ((filter & ATH12K_PKTLOG_RX) &&
+-	    (filter & ATH12K_PKTLOG_HYBRID)) {
+-		ret = -EINVAL;
+-		ath12k_warn(ab, "Invalid configuration. Hybrid mode is "
+-			    "applicable only when tx or lite pktlog is used");
+-		goto out;
+-	}
++		if (strstr(buf, "rcf"))
++			filter |= ATH12K_PKTLOG_RCFIND;
++		if (strstr(buf, "rcu"))
++			filter |= ATH12K_PKTLOG_RCUPDATE;
++		if (strstr(buf, "hybrid"))
++			filter |= ATH12K_PKTLOG_HYBRID;
++		if (strstr(buf, "phy"))
++			filter |= ATH12K_PKTLOG_PHY_LOGGING;
+ 
+-	/* TODO : Hybrid mode is not supported yet.
+-	 * It will be enabled in phase 2 implementation
+-	 */
+-	if (filter & ATH12K_PKTLOG_HYBRID) {
+-		ret = ath12k_pktlog_enable_hybrid_mode(ar, filter, mode);
+-		if (ret) {
+-			ath12k_warn(ab, "failed to enable pktlog in hybrid mode\n");
+-		} else {
+-			ret = count;
++
++		if ((filter & ATH12K_PKTLOG_RX) &&
++		    (filter & ATH12K_PKTLOG_HYBRID)) {
++			ret = -EINVAL;
++			ath12k_warn(ab, "Invalid config. Hybrid mode is allowed"
++				    " only when tx or lite pktlog is used");
++			goto out;
+ 		}
+-		goto out;
+-	}
+ 
+-	if (ar->debug.pktlog_mode == mode) {
+-		ath12k_err(ab, "This mode is already configured: %d\n", mode);
+-		goto out;
++		/* TODO : Hybrid mode is not supported yet.
++		 * It will be enabled in phase 2 implementation
++		 */
++		if (filter & ATH12K_PKTLOG_HYBRID) {
++			ret = ath12k_pktlog_enable_hybrid_mode(ar,
++							       filter, mode);
++			if (ret)
++				ath12k_warn(ab,
++					    "failed to enable pktlog hybrid\n");
++			else
++				ret = count;
++			goto out;
++		}
+ 	}
+ 
+ 	switch (mode) {
+@@ -3887,6 +3878,7 @@ static ssize_t ath12k_write_pktlog_filter(struct file *file,
+ 
+ 	default:
+ 		ath12k_err(ab, "Please set a valid mode\n");
++		ret = -EINVAL;
+ 		goto out;
+ 	}
+ 
+diff --git a/drivers/net/wireless/ath/ath12k/pktlog.h b/drivers/net/wireless/ath/ath12k/pktlog.h
+index d03b379..bd09c79 100644
+--- a/drivers/net/wireless/ath/ath12k/pktlog.h
++++ b/drivers/net/wireless/ath/ath12k/pktlog.h
+@@ -30,9 +30,10 @@ enum {
+ };
+ 
+ enum ath12k_pktlog_mode {
+-	ATH12K_PKTLOG_DISABLED = 0,
+-	ATH12K_PKTLOG_MODE_LITE = 1,
+-	ATH12K_PKTLOG_MODE_FULL = 2,
++	ATH12K_PKTLOG_DISABLED		= 0,
++	ATH12K_PKTLOG_MODE_LITE		= 1,
++	ATH12K_PKTLOG_MODE_FULL		= 2,
++	ATH12K_PKTLOG_MODE_INVALID	= 3,
+ };
+ 
+ struct ath12k_pktlog_hdr_arg {
+-- 
+2.34.1
+

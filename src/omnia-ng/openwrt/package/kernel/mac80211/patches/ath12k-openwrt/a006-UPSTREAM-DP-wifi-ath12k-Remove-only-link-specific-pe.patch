@@ -1,0 +1,113 @@
+From b321c40dfff721e6589708caebc6198e1e44f3a6 Mon Sep 17 00:00:00 2001
+From: Karthikeyan Periyasamy <quic_periyasa@quicinc.com>
+Date: Mon, 10 Mar 2025 20:12:22 +0530
+Subject: [PATCH] UPSTREAM:DP:wifi:ath12k: Remove only link specific pending tx
+ buffer
+
+Currently, tx completion handler access the vif from the skb control
+buffer. When the link vif get deleted, usually driver unlink the vif
+from the tx pending descriptor, so that deleted link skb not given to
+mac80211. But this unlink logic using the tx used list for accessing
+the tx pending buffer which is wrong because driver removed the used
+list functionality from the tx handling. So tx completion endup in
+acessing corrupted address which trigger kernel panic. Therefore, avoid
+the used list with actual tx descriptor in the unlink procedure in the
+link deletion. Also unlink the deleted link instead of all the link in
+that VIF. Also remove the tx used list data structure.
+
+fixes-patch: 866-wifi-ath12k-Optimize-the-Tx-data-path-by-remove-the-.patch ("wifi: ath12k: Optimize the Tx data path by remove the used list processing")
+
+Signed-off-by: Karthikeyan Periyasamy <quic_periyasa@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/dp.c  |  1 -
+ drivers/net/wireless/ath/ath12k/dp.h  |  1 -
+ drivers/net/wireless/ath/ath12k/mac.c | 33 ++++++++++++++++++---------
+ 3 files changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/dp.c b/drivers/net/wireless/ath/ath12k/dp.c
+index b570d4d402a8..4093c387b5db 100644
+--- a/drivers/net/wireless/ath/ath12k/dp.c
++++ b/drivers/net/wireless/ath/ath12k/dp.c
+@@ -2305,7 +2305,6 @@ static int ath12k_dp_cc_init(struct ath12k_base *ab)
+ 
+ 	for (i = 0; i < ATH12K_HW_MAX_QUEUES; i++) {
+ 		INIT_LIST_HEAD(&dp->tx_desc_free_list[i]);
+-		INIT_LIST_HEAD(&dp->tx_desc_used_list[i]);
+ 		spin_lock_init(&dp->tx_desc_lock[i]);
+ 	}
+ 
+diff --git a/drivers/net/wireless/ath/ath12k/dp.h b/drivers/net/wireless/ath/ath12k/dp.h
+index f39ce80fe15e..b415ee023a84 100644
+--- a/drivers/net/wireless/ath/ath12k/dp.h
++++ b/drivers/net/wireless/ath/ath12k/dp.h
+@@ -495,7 +495,6 @@ struct ath12k_dp {
+ 	spinlock_t rx_desc_lock;
+ 
+ 	struct list_head tx_desc_free_list[ATH12K_HW_MAX_QUEUES];
+-	struct list_head tx_desc_used_list[ATH12K_HW_MAX_QUEUES];
+ 	/* protects the free and used desc lists */
+ 	spinlock_t tx_desc_lock[ATH12K_HW_MAX_QUEUES];
+ 
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index 065259657862..50c5dac3b19c 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -13976,25 +13976,36 @@ exit:
+ 	return 0;
+ }
+ 
+-static void ath12k_mac_vif_unref(struct ath12k_dp *dp, struct ieee80211_vif *vif)
++static void ath12k_mac_vif_unref(struct ath12k_dp *dp,
++				 struct ieee80211_vif *vif,
++				 u8 link_id)
+ {
+ 	struct ath12k_tx_desc_info *tx_desc_info;
+ 	struct ath12k_skb_cb *skb_cb;
+ 	struct sk_buff *skb;
+-	int i;
++	u32 tx_spt_page;
++	int i, j, k;
+ 
+ 	for (i = 0; i < ATH12K_HW_MAX_QUEUES; i++) {
+ 		spin_lock_bh(&dp->tx_desc_lock[i]);
+ 
+-		list_for_each_entry(tx_desc_info, &dp->tx_desc_used_list[i],
+-				    list) {
+-			skb = tx_desc_info->skb;
+-			if (!skb)
+-				continue;
++		for (j = 0; j < ATH12K_TX_SPT_PAGES_PER_POOL; j++) {
++			tx_spt_page = j + i * ATH12K_TX_SPT_PAGES_PER_POOL;
++			tx_desc_info = dp->spt_info->txbaddr[tx_spt_page];
+ 
+-			skb_cb = ATH12K_SKB_CB(skb);
+-			if (skb_cb->vif == vif)
+-				skb_cb->vif = NULL;
++			for (k = 0; k < ATH12K_MAX_SPT_ENTRIES; k++) {
++				if (!tx_desc_info[k].in_use)
++					continue;
++
++				skb = tx_desc_info[k].skb;
++				if (!skb)
++					continue;
++
++				skb_cb = ATH12K_SKB_CB(skb);
++				if (skb_cb->vif == vif &&
++				    skb_cb->link_id == link_id)
++					skb_cb->vif = NULL;
++			}
+ 		}
+ 
+ 		spin_unlock_bh(&dp->tx_desc_lock[i]);
+@@ -14081,7 +14092,7 @@ err_vdev_del:
+ 
+ 	spin_unlock_bh(&ar->data_lock);
+ 
+-	ath12k_mac_vif_unref(&ab->dp, vif);
++	ath12k_mac_vif_unref(&ab->dp, vif, arvif->link_id);
+ 	ath12k_dp_tx_put_bank_profile(&ab->dp, arvif->bank_id);
+ 
+ 	if (arvif->splitphy_ds_bank_id != DP_INVALID_BANK_ID)
+-- 
+2.34.1
+

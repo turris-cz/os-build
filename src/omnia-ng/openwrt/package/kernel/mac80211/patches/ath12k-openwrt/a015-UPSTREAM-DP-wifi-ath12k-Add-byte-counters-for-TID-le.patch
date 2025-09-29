@@ -1,0 +1,179 @@
+From 999b66cef7a65db37d741ba90f64e6c183f059cd Mon Sep 17 00:00:00 2001
+From: Aishwarya R <aisr@qti.qualcomm.com>
+Date: Thu, 5 Jun 2025 10:11:47 +0530
+Subject: [PATCH] UPSTREAM:DP:wifi: ath12k: Add byte counters for TID level
+ stats
+
+Enhance TID stats with packet byte counters and total packet tracking
+Extended debugfs output to include byte counts for RX and TX packets.
+
+Patch-dependency: a014-UPSTREAM-DP-wifi-ath12k-Enhance-TX-and-RX-stats-repo.patch
+Signed-off-by: Aishwarya R <aisr@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.h    |  1 +
+ drivers/net/wireless/ath/ath12k/debugfs.c | 30 ++++++++++++++++++-----
+ drivers/net/wireless/ath/ath12k/dp_rx.c   | 19 ++++++++++++--
+ drivers/net/wireless/ath/ath12k/dp_tx.c   |  5 ++--
+ 4 files changed, 45 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.h b/drivers/net/wireless/ath/ath12k/core.h
+index 1a12f20..95507b7 100644
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -589,6 +589,7 @@ struct ath12k_vlan_iface {
+ };
+ 
+ enum ath12k_rx_pkt_reasons {
++	ATH_RX_TOTAL_OUT_PKTS,
+ 	ATH_RX_TOTAL_PKTS,
+ 	ATH_RX_FRAG_PKTS,
+ 	ATH_RX_REO_PKTS,
+diff --git a/drivers/net/wireless/ath/ath12k/debugfs.c b/drivers/net/wireless/ath/ath12k/debugfs.c
+index 99e5971..df1b7b3 100644
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -652,11 +652,12 @@ static ssize_t ath12k_read_vdev_tid_stats(struct file *file,
+ 	}
+ 
+ 	len = scnprintf(buf + len, size - len, "\n\t\tath12k RX STATS\t\t\n");
+-	len += scnprintf(buf + len, size - len, "TID \t packets frag_pkts  reo_pkts  wbm_err_pkts reo_frag_pkts rxdma native  raw   eth   8023  ppe_vp  hw  sfe ppeds\n");
++	len += scnprintf(buf + len, size - len, "TID \t packets bytes total_hw_pkts frag_pkts  reo_pkts  wbm_err_pkts reo_frag_pkts rxdma native  raw   eth   8023  ppe_vp  hw  sfe ppeds\n");
+ 	for (tid = 0; tid < IEEE80211_NUM_TIDS; tid++) {
+ 		len += scnprintf(buf + len, size - len, "TID%d\t", tid);
+-		len += scnprintf(buf + len, size - len, "%llu\t",
+-				 tstats->tid_stats[tid].rx_pkt_stats[0]);
++		len += scnprintf(buf + len, size - len, "%llu\t, %llu\t",
++				 tstats->tid_stats[tid].rx_pkt_stats[0],
++				 tstats->tid_stats[tid].rx_pkt_bytes[0]);
+ 		for (reason = 1; reason < ATH_RX_PKT_REASON_MAX; reason++) {
+ 			len += scnprintf(buf + len, size - len, "%d :%llu\t",
+ 					 reason,
+@@ -666,7 +667,15 @@ static ssize_t ath12k_read_vdev_tid_stats(struct file *file,
+ 	}
+ 	len += scnprintf(buf + len, size - len, "\n\t\tath12k RX DROP STATS\t\t\n");
+ 	for (tid = 0; tid < IEEE80211_NUM_TIDS; tid++) {
++		u64 total_drop = 0;
++		u64 total_drop_bytes = 0;
+ 		len += scnprintf(buf + len, size - len, "TID%d\t", tid);
++		for (reason = 0; reason < ATH_RX_DROP_REASON_MAX; reason++) {
++			total_drop += tstats->tid_stats[tid].rx_drop_stats[reason];
++			total_drop_bytes += tstats->tid_stats[tid].rx_drop_bytes[reason];
++		}
++		len += scnprintf(buf + len, size - len, "%llu\t, %llu\t",
++				 total_drop, total_drop_bytes);
+ 		for (reason = 0; reason < ATH_RX_DROP_REASON_MAX; reason++) {
+ 			len += scnprintf(buf + len, size - len, "%d:%llu\t",
+ 					 reason,
+@@ -676,11 +685,12 @@ static ssize_t ath12k_read_vdev_tid_stats(struct file *file,
+ 	}
+ 
+ 	len += scnprintf(buf + len, size - len, "\n\t\tath12k TX STATS\t\t\n");
+-	len += scnprintf(buf + len, size - len, "TID \t packets sfe_pkts multicast  eapol  null_pkts  unicast null_complete fast_unicast wbm_rel fw_status  ppeds\n");
++	len += scnprintf(buf + len, size - len, "TID \t packets bytes sfe_pkts multicast  eapol  null_pkts  unicast null_complete fast_unicast wbm_rel fw_status  ppeds\n");
+ 	for (tid = 0; tid < IEEE80211_NUM_TIDS; tid++) {
+ 		len += scnprintf(buf + len, size - len, "TID%d\t", tid);
+-		len += scnprintf(buf + len, size - len, "%llu\t",
+-				 tstats->tid_stats[tid].tx_pkt_stats[0]);
++		len += scnprintf(buf + len, size - len, "%llu\t, %llu\t",
++				 tstats->tid_stats[tid].tx_pkt_stats[0],
++				 tstats->tid_stats[tid].tx_pkt_bytes[0]);
+ 		for (reason = 1; reason < ATH_TX_PKT_REASON_MAX; reason++) {
+ 			len += scnprintf(buf + len, size - len, "%d :%llu\t",
+ 					 reason,
+@@ -690,7 +700,15 @@ static ssize_t ath12k_read_vdev_tid_stats(struct file *file,
+ 	}
+ 	len += scnprintf(buf + len, size - len, "\n\t\tath12k TX DROP STATS\t\t\n");
+ 	for (tid = 0; tid < IEEE80211_NUM_TIDS; tid++) {
++		u64 total_drop = 0;
++		u64 total_drop_bytes = 0;
+ 		len += scnprintf(buf + len, size - len, "TID%d\t", tid);
++		for (reason = 0; reason < ATH_TX_DROP_REASON_MAX; reason++) {
++			total_drop += tstats->tid_stats[tid].tx_drop_stats[reason];
++			total_drop_bytes += tstats->tid_stats[tid].tx_drop_bytes[reason];
++		}
++		len += scnprintf(buf + len, size - len, "%llu\t, %llu\t",
++				 total_drop, total_drop_bytes);
+ 		for (reason = 0; reason < ATH_TX_DROP_REASON_MAX; reason++) {
+ 			len += scnprintf(buf + len, size - len, "%d:%llu\t",
+ 					 reason,
+diff --git a/drivers/net/wireless/ath/ath12k/dp_rx.c b/drivers/net/wireless/ath/ath12k/dp_rx.c
+index 0d38386..331e7c6 100644
+--- a/drivers/net/wireless/ath/ath12k/dp_rx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_rx.c
+@@ -4021,6 +4021,8 @@ static void ath12k_dp_rx_deliver_msdu(struct ath12k *ar, struct napi_struct *nap
+ 	bool is_mcbc = rxcb->is_mcbc;
+ 	bool is_eapol = rxcb->is_eapol;
+ 	struct ath12k_link_sta *arsta = NULL;
++	struct ath12k_vif *ahvif;
++	struct ath12k_link_vif *arvif;
+ 	struct ieee80211_rx_status *status = rx_info->rx_status;
+ 
+ 	if (status->encoding == RX_ENC_HE && !(status->flag & RX_FLAG_RADIOTAP_HE) &&
+@@ -4056,6 +4058,16 @@ static void ath12k_dp_rx_deliver_msdu(struct ath12k *ar, struct napi_struct *nap
+ 		}
+ 	}
+ 
++	if (unlikely(!ab->tid_stats_disable)) {
++		if (peer) {
++			arvif = ath12k_mac_get_arvif(ar, peer->vdev_id);
++			if (arvif) {
++				ahvif = arvif->ahvif;
++				ath12k_tid_stats(ahvif, rxcb->tid, msdu->len, ATH_RX_TOTAL_OUT_PKTS);
++			}
++		}
++	}
++
+ 	ath12k_dbg(ab, ATH12K_DBG_DATA,
+ 		   "rx skb %pK len %u peer %pM %d %s %s%s%s%s%s%s%s%s%s%s rate_idx %u vht_nss %u freq %u band %u flag 0x%x fcs-err %i mic-err %i amsdu-more %i\n",
+ 		   msdu,
+@@ -6155,6 +6167,7 @@ static void ath12k_dp_rx_wbm_err(struct ath12k *ar,
+ 	struct ieee80211_rx_status rxs = {0};
+ 	struct ath12k_vif *ahvif;
+ 	struct ath12k_dp_rx_info rx_info = {0};
++	struct hal_rx_desc *desc = (struct hal_rx_desc *)msdu->data;
+ 	bool drop = true;
+ 
+ 	rx_info.rx_status = &rxs;
+@@ -6172,12 +6185,14 @@ static void ath12k_dp_rx_wbm_err(struct ath12k *ar,
+ 	}
+ 
+ 	if (unlikely(!ar->ab->tid_stats_disable)) {
++		rx_info.msdu_len = le32_get_bits(desc->u.qcn9274.msdu_end.info10,
++						  RX_MSDU_END_INFO10_MSDU_LENGTH);
+ 		ahvif = ath12k_get_ahvif_from_peer_id(rxcb);
+ 		if (ahvif) {
+ 			if (drop)
+-				ath12k_tid_drop_stats(ahvif, rxcb->tid, msdu->len, rx_info.drop_reason);
++				ath12k_tid_drop_stats(ahvif, rxcb->tid, rx_info.msdu_len, rx_info.drop_reason);
+ 			else
+-				ath12k_tid_stats(ahvif, rxcb->tid, msdu->len, rx_info.pkt_reason);
++				ath12k_tid_stats(ahvif, rxcb->tid, rx_info.msdu_len, rx_info.pkt_reason);
+ 		}
+ 	}
+ 	if (drop) {
+diff --git a/drivers/net/wireless/ath/ath12k/dp_tx.c b/drivers/net/wireless/ath/ath12k/dp_tx.c
+index 1c79290..729a326 100644
+--- a/drivers/net/wireless/ath/ath12k/dp_tx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_tx.c
+@@ -1868,6 +1868,9 @@ int ath12k_dp_tx_completion_handler(struct ath12k_base *ab, int ring_id,
+ 			continue;
+ 		}
+ 
++		if (unlikely(!ab->tid_stats_disable))
++			ath12k_tid_tx_stats(ahvif, skb_cb->tid, msdu->len, ATH_TX_COMPLETED_PKTS);
++
+ 		/* Free skb here if stats is disabled */
+ 		if (ab->stats_disable && tx_desc->flags & DP_TX_DESC_FLAG_FAST)
+ 			__skb_queue_head(&free_list_head, msdu);
+@@ -1880,8 +1883,6 @@ int ath12k_dp_tx_completion_handler(struct ath12k_base *ab, int ring_id,
+ 		dp_tx_dec_count[mac_id]++;
+ 
+ 		ab->soc_stats.tx_completed[data_ring_id]++;
+-		if (unlikely(!ab->tid_stats_disable))
+-			ath12k_tid_tx_stats(ahvif, skb_cb->tid, msdu->len, ATH_TX_COMPLETED_PKTS);
+ 	}
+ 	ath12k_hal_srng_access_dst_ring_end_nolock(status_ring);
+ 
+-- 
+2.34.1
+

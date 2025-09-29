@@ -1,0 +1,53 @@
+From 40b36691eb0fd5485dca408c8846bb34b569511f Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@turris.com>
+Date: Mon, 1 Sep 2025 14:07:43 +0200
+Subject: [PATCH] mpg123: change order of configure args
+
+If `arm_fpu` is used then it is compiled as ARM 32-bit NEON inline
+assembly. This does not work as we use Aarch64.
+
+Fixes:
+```
+src/libmpg123/dct36_neon.S: Assembler messages:
+src/libmpg123/dct36_neon.S:13: Error: unknown pseudo-op: `.code'
+src/libmpg123/dct36_neon.S:16: Error: unknown pseudo-op: `.fpu'
+src/libmpg123/dct36_neon.S:55: Error: unknown mnemonic `push' -- `push {r4-r5,lr}'
+...
+src/libmpg123/dct36_neon.S:277: Error: expected a register or register list at operand 1 -- `add r4,r4,#1152'
+src/libmpg123/dct36_neon.S:278: Error: unknown mnemonic `vst1.32' -- `vst1.32 {d7[0]},[r4]'
+src/libmpg123/dct36_neon.S:280: Error: unknown mnemonic `vpop' -- `vpop {q4-q7}'
+src/libmpg123/dct36_neon.S:281: Error: unknown mnemonic `pop' -- `pop {r4-r5,pc}'
+make[3]: *** [Makefile:4263: src/libmpg123/dct36_neon.lo] Error 1
+make[3]: Leaving directory '/home/rmuzik/omnia-ng-build/build_dir/target-aarch64_cortex-a73+neon-vfpv4_musl/mpg123-1.32.6'
+make[2]: *** [Makefile:157: /home/rmuzik/omnia-ng-build/build_dir/target-aarch64_cortex-a73+neon-vfpv4_musl/mpg123-1.32.6/.built] Error 2
+make[2]: Leaving directory '/home/rmuzik/omnia-ng-build/feeds/packages/sound/mpg123'
+time: package/feeds/packages/mpg123/compile#14.36#3.48#46.09
+    ERROR: package/feeds/packages/mpg123 failed to build.
+```
+---
+ sound/mpg123/Makefile | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/sound/mpg123/Makefile b/sound/mpg123/Makefile
+index c189529b9..0292b5d2c 100644
+--- a/sound/mpg123/Makefile
++++ b/sound/mpg123/Makefile
+@@ -77,12 +77,12 @@ ifeq ($(CONFIG_SOFT_FLOAT),y)
+ else ifneq ($(findstring 464fp,$(CONFIG_CPU_TYPE)),)
+ 	CONFIGURE_ARGS += \
+ 		--with-cpu=altivec
+-else ifneq ($(findstring neon,$(CONFIG_CPU_TYPE)),)
+-	CONFIGURE_ARGS += \
+-		--with-cpu=arm_fpu
+ else ifneq ($(findstring aarch64,$(CONFIG_ARCH)),)
+ 	CONFIGURE_ARGS += \
+ 		--with-cpu=aarch64
++else ifneq ($(findstring neon,$(CONFIG_CPU_TYPE)),)
++	CONFIGURE_ARGS += \
++		--with-cpu=arm_fpu
+ else
+ 	CONFIGURE_ARGS += \
+ 		--with-cpu=generic_fpu
+-- 
+2.51.0
+

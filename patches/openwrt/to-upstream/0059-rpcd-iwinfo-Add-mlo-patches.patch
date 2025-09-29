@@ -1,0 +1,212 @@
+From 211bb179bfccb1af13062535df47957d21ea1a6b Mon Sep 17 00:00:00 2001
+From: Michal Hrusecky <michal.hrusecky@turris.com>
+Date: Tue, 12 Aug 2025 13:55:07 +0200
+Subject: [PATCH] rpcd,iwinfo: Add mlo patches
+
+---
+ .../0001-iwinfo-add-mlo_cap-attribute.patch   | 158 ++++++++++++++++++
+ ...01-rpcd-iwinfo-add-mlo_cap-attribute.patch |  27 +++
+ 2 files changed, 185 insertions(+)
+ create mode 100644 package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
+ create mode 100644 package/system/rpcd/patches/0001-rpcd-iwinfo-add-mlo_cap-attribute.patch
+
+diff --git a/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch b/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
+new file mode 100644
+index 0000000000..e6c7336f86
+--- /dev/null
++++ b/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
+@@ -0,0 +1,158 @@
++From bb2ad0c8c72e8790ffb7abefd7afd16d3916eab8 Mon Sep 17 00:00:00 2001
++From: Stepan Henek <stepan.henek@nic.cz>
++Date: Thu, 7 Aug 2025 14:35:41 +0200
++Subject: [PATCH] iwinfo: add mlo_cap attribute
++
++Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
++---
++ include/iwinfo.h |  1 +
++ iwinfo_cli.c     | 15 +++++++++++++++
++ iwinfo_lua.c     | 17 +++++++++++++++++
++ iwinfo_nl80211.c | 35 ++++++++++++++++++++++++++++++++++-
++ 4 files changed, 67 insertions(+), 1 deletion(-)
++
++diff --git a/include/iwinfo.h b/include/iwinfo.h
++index 2a841be..ab4a874 100644
++--- a/include/iwinfo.h
+++++ b/include/iwinfo.h
++@@ -399,6 +399,7 @@ struct iwinfo_ops {
++ 	int (*quality)(const char *, int *);
++ 	int (*quality_max)(const char *, int *);
++ 	int (*mbssid_support)(const char *, int *);
+++	int (*mlo_cap)(const char *, int *);
++ 	int (*hwmodelist)(const char *, int *);
++ 	int (*htmodelist)(const char *, int *);
++ 	int (*htmode)(const char *, int *);
++diff --git a/iwinfo_cli.c b/iwinfo_cli.c
++index 6f87d98..5131344 100644
++--- a/iwinfo_cli.c
+++++ b/iwinfo_cli.c
++@@ -608,6 +608,19 @@ static char * print_mbssid_supp(const struct iwinfo_ops *iw, const char *ifname)
++ 	return buf;
++ }
++ 
+++static char * print_mlo_cap(const struct iwinfo_ops *iw, const char *ifname)
+++{
+++	int cap;
+++	static char buf[4];
+++
+++	if (iw->mlo_cap(ifname, &cap))
+++		snprintf(buf, sizeof(buf), "no");
+++	else
+++		snprintf(buf, sizeof(buf), "%x", cap);
+++
+++	return buf;
+++}
+++
++ static char * print_phyname(const struct iwinfo_ops *iw, const char *ifname)
++ {
++ 	static char buf[32];
++@@ -660,6 +673,8 @@ static void print_info(const struct iwinfo_ops *iw, const char *ifname)
++ 	printf("          Supports VAPs: %s  PHY name: %s\n",
++ 		print_mbssid_supp(iw, ifname),
++ 		print_phyname(iw, ifname));
+++	printf("          MLO Capabilities: %s\n",
+++		print_mlo_cap(iw, ifname));
++ }
++ 
++ 
++diff --git a/iwinfo_lua.c b/iwinfo_lua.c
++index fbe8c7c..82f68a9 100644
++--- a/iwinfo_lua.c
+++++ b/iwinfo_lua.c
++@@ -611,6 +611,22 @@ static int iwinfo_L_mbssid_support(lua_State *L, int (*func)(const char *, int *
++ 	return 1;
++ }
++ 
+++/* Wrapper for mlo_cap */
+++static int iwinfo_L_mlo_cap(lua_State *L, int (*func)(const char *, int *))
+++{
+++	const char *ifname = luaL_checkstring(L, 1);
+++	int cap = 0;
+++
+++	if (!(*func)(ifname, &cap))
+++	{
+++		lua_pushinteger(L, cap);
+++		return 1;
+++	}
+++
+++	lua_pushnil(L);
+++	return 1;
+++}
+++
++ /* Wrapper for hardware_id */
++ static int iwinfo_L_hardware_id(lua_State *L, int (*func)(const char *, char *))
++ {
++@@ -785,6 +801,7 @@ LUA_WRAP_STRUCT_OP(nl80211,hwmodelist)
++ LUA_WRAP_STRUCT_OP(nl80211,htmodelist)
++ LUA_WRAP_STRUCT_OP(nl80211,encryption)
++ LUA_WRAP_STRUCT_OP(nl80211,mbssid_support)
+++LUA_WRAP_STRUCT_OP(nl80211,mlo_cap)
++ LUA_WRAP_STRUCT_OP(nl80211,hardware_id)
++ #endif
++ 
++diff --git a/iwinfo_nl80211.c b/iwinfo_nl80211.c
++index dc4ff93..a9202b1 100644
++--- a/iwinfo_nl80211.c
+++++ b/iwinfo_nl80211.c
++@@ -3530,6 +3530,29 @@ static int nl80211_get_ifcomb_cb(struct nl_msg *msg, void *arg)
++ 	return NL_SKIP;
++ }
++ 
+++static int nl80211_get_mlo_cap_cb(struct nl_msg *msg, void *arg)
+++{
+++	struct nlattr **attr = nl80211_parse(msg);
+++	struct nlattr *ext_attr;
+++	int ext_rem = 0;
+++
+++	int *ret = arg;
+++
+++	*ret = 0;
+++	if (!attr[NL80211_ATTR_IFTYPE_EXT_CAPA])
+++		return NL_SKIP;
+++
+++	nla_for_each_nested(ext_attr, attr[NL80211_ATTR_IFTYPE_EXT_CAPA], ext_rem)
+++	{
+++		nla_parse(attr, NL80211_ATTR_MAX, nla_data(ext_attr), nla_len(ext_attr), NULL);
+++		if (attr[NL80211_ATTR_EML_CAPABILITY] && attr[NL80211_ATTR_MLD_CAPA_AND_OPS]) {
+++			*ret = nla_get_u16(attr[NL80211_ATTR_MLD_CAPA_AND_OPS]);
+++		}
+++	}
+++
+++	return NL_SKIP;
+++}
+++
++ static int nl80211_get_mbssid_support(const char *ifname, int *buf)
++ {
++ 	if (nl80211_request(ifname, NL80211_CMD_GET_WIPHY, 0,
++@@ -3539,6 +3562,15 @@ static int nl80211_get_mbssid_support(const char *ifname, int *buf)
++ 	return 0;
++ }
++ 
+++static int nl80211_get_mlo_cap(const char *ifname, int *buf)
+++{
+++	if (nl80211_request(ifname, NL80211_CMD_GET_WIPHY, 0,
+++	                    nl80211_get_mlo_cap_cb, buf))
+++		return -1;
+++
+++	return 0;
+++}
+++
++ static int nl80211_hardware_id_from_fdt(struct iwinfo_hardware_id *id, const char *ifname)
++ {
++ 	char *phy, path[PATH_MAX];
++@@ -3693,9 +3725,10 @@ const struct iwinfo_ops nl80211_ops = {
++ 	.quality          = nl80211_get_quality,
++ 	.quality_max      = nl80211_get_quality_max,
++ 	.mbssid_support   = nl80211_get_mbssid_support,
+++	.mlo_cap          = nl80211_get_mlo_cap,
++ 	.hwmodelist       = nl80211_get_hwmodelist,
++ 	.htmodelist       = nl80211_get_htmodelist,
++-	.htmode		  = nl80211_get_htmode,
+++	.htmode           = nl80211_get_htmode,
++ 	.mode             = nl80211_get_mode,
++ 	.ssid             = nl80211_get_ssid,
++ 	.bssid            = nl80211_get_bssid,
++-- 
++2.47.2
++
+diff --git a/package/system/rpcd/patches/0001-rpcd-iwinfo-add-mlo_cap-attribute.patch b/package/system/rpcd/patches/0001-rpcd-iwinfo-add-mlo_cap-attribute.patch
+new file mode 100644
+index 0000000000..009b143642
+--- /dev/null
++++ b/package/system/rpcd/patches/0001-rpcd-iwinfo-add-mlo_cap-attribute.patch
+@@ -0,0 +1,27 @@
++From ae9fa1836b99d49b4884247d615b9c7c894f4216 Mon Sep 17 00:00:00 2001
++From: Stepan Henek <stepan.henek@nic.cz>
++Date: Thu, 7 Aug 2025 15:32:48 +0200
++Subject: [PATCH] iwinfo: add mlo_cap attribute
++
++Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
++---
++ iwinfo.c | 3 +++
++ 1 file changed, 3 insertions(+)
++
++diff --git a/iwinfo.c b/iwinfo.c
++index ff0f38b..94aafa0 100644
++--- a/iwinfo.c
+++++ b/iwinfo.c
++@@ -354,6 +354,9 @@ rpc_iwinfo_info(struct ubus_context *ctx, struct ubus_object *obj,
++ 
++ 	rpc_iwinfo_call_int("bitrate", iw->bitrate, NULL);
++ 
+++	if (iw->mlo_cap)
+++		rpc_iwinfo_call_int("mlo_cap", iw->mlo_cap, NULL);
+++
++ 	rpc_iwinfo_call_encryption("encryption");
++ 	rpc_iwinfo_call_htmodes("htmodes");
++ 	hwmodes = rpc_iwinfo_call_hwmodes("hwmodes");
++-- 
++2.47.2
++
+-- 
+2.50.1
+

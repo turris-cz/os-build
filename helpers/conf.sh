@@ -36,8 +36,12 @@ set_target() {
 			TARGET_BOARD=mox
 			TARGET_ARCH=aarch64
 			;;
+		omnia-ng)
+			TARGET_BOARD=omnia-ng
+			TARGET_ARCH=aarch64
+			;;
 		*)
-			echo "Invalid target board!!! Use -t [turris1x|omnia|mox]!!!"
+			echo "Invalid target board!!! Use -t [turris1x|omnia|mox|omnia-ng]!!!"
 			exit 1
 			;;
 	esac

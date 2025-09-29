@@ -1,0 +1,68 @@
+From 6ad7764811f4e89e59944a610f0f8065ada6b884 Mon Sep 17 00:00:00 2001
+From: Aishwarya R <aisr@qti.qualcomm.com>
+Date: Wed, 7 May 2025 14:53:08 +0530
+Subject: [PATCH] UPSTREAM:PLATFORM:CP:wifi: ath12k: Handle error case for
+ unknown phy capabilities
+
+Handle error cases for unknown phy capabilities when supported
+band details from WMI not provided. Ensure phy name is initialized
+to ATH12K_PHY_UNKNOWN for unknown capabilities.
+
+Fixes : 0ba223e170f5e (wifi: ath12k: fix mapping phy names and wlan instance with bands)
+Signed-off-by: Aishwarya R <aisr@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.h | 1 +
+ drivers/net/wireless/ath/ath12k/mac.c  | 4 ++++
+ drivers/net/wireless/ath/ath12k/wmi.c  | 2 ++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.h b/drivers/net/wireless/ath/ath12k/core.h
+index e89454e..0a3d190 100644
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -74,6 +74,7 @@ extern bool ath12k_migrate_on_link_removal;
+ #define ATH12K_MAX_CORE_MASK	(0xFFFF & ((1 << NR_CPUS) - 1))
+ extern unsigned int ath12k_rfs_core_mask[4];
+ 
++#define ATH12K_PHY_UNKNOWN "invalid"
+ #define ATH12K_PHY_2GHZ "phy00"
+ #define ATH12K_PHY_5GHZ "phy01"
+ #define ATH12K_PHY_5GHZ_LOW "phy01"
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index ffdb812..68e4743 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -21530,6 +21530,10 @@ int ath12k_mac_allocate(struct ath12k_hw_group *ag)
+ 	if (ag->mlo_capable) {
+ 		ab = ag->ab[0];
+ 		pdev = &ab->pdevs[0];
++		if (strcmp(pdev->phy_name, ATH12K_PHY_UNKNOWN) == 0) {
++			ath12k_info(ab, "Invalid phy capabilities\n");
++			return -EINVAL;
++		}
+ 		mlo_phy_name = pdev->phy_name;
+ 		for (i = 0; i < ag->num_chip; i++) {
+ 			for (j = 0; j < ag->ab[i]->num_radios; j++) {
+diff --git a/drivers/net/wireless/ath/ath12k/wmi.c b/drivers/net/wireless/ath/ath12k/wmi.c
+index d9a594d..9dce369 100644
+--- a/drivers/net/wireless/ath/ath12k/wmi.c
++++ b/drivers/net/wireless/ath/ath12k/wmi.c
+@@ -6324,6 +6324,7 @@ ath12k_fill_band_to_mac_param(struct ath12k_base  *soc,
+ 		case WMI_HOST_WLAN_2G_5G_CAP:
+ 			arg[i].start_freq = hal_reg_cap->low_2ghz_chan;
+ 			arg[i].end_freq = hal_reg_cap->high_5ghz_chan;
++			pdev->phy_name = ATH12K_PHY_UNKNOWN;
+ 			break;
+ 		case WMI_HOST_WLAN_2G_CAP:
+ 			arg[i].start_freq = hal_reg_cap->low_2ghz_chan;
+@@ -6351,6 +6352,7 @@ ath12k_fill_band_to_mac_param(struct ath12k_base  *soc,
+ 			}
+ 			break;
+ 		default:
++			pdev->phy_name = ATH12K_PHY_UNKNOWN;
+ 			break;
+ 		}
+ 	}
+-- 
+2.34.1
+
