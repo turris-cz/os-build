@@ -1,0 +1,53 @@
+From 564fde58b1a36371d9acd94779c17dbe73546e60 Mon Sep 17 00:00:00 2001
+From: Richard Muzik <richard.muzik@turris.com>
+Date: Mon, 29 Sep 2025 13:09:28 +0200
+Subject: [PATCH] syslog-ng: Test presence of libunwind just if necessary
+
+Otherwise fails with missing dependency error, even though it is not
+used, since stackdump is disabled.
+
+Signed-off-by: Richard Muzik <richard.muzik@turris.com>
+---
+ ...ure-Test-libunwind-just-if-necessary.patch | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+ create mode 100644 admin/syslog-ng/patches/0001-configure-Test-libunwind-just-if-necessary.patch
+
+diff --git a/admin/syslog-ng/patches/0001-configure-Test-libunwind-just-if-necessary.patch b/admin/syslog-ng/patches/0001-configure-Test-libunwind-just-if-necessary.patch
+new file mode 100644
+index 000000000..a41c90106
+--- /dev/null
++++ b/admin/syslog-ng/patches/0001-configure-Test-libunwind-just-if-necessary.patch
+@@ -0,0 +1,30 @@
++From ea26341eb13ca0bce3385e5ae0476b93f2f27bfd Mon Sep 17 00:00:00 2001
++From: Richard Muzik <richard.muzik@turris.com>
++Date: Mon, 29 Sep 2025 13:07:34 +0200
++Subject: [PATCH] configure: Test libunwind just if necessary
++
++---
++ configure.ac | 7 ++++++-
++ 1 file changed, 6 insertions(+), 1 deletion(-)
++
++diff --git a/configure.ac b/configure.ac
++index 511302f34..e1354509e 100644
++--- a/configure.ac
+++++ b/configure.ac
++@@ -1740,7 +1740,12 @@ dnl ***************************************************************************
++ dnl You can always use the saved ones - CFLAGS_SAVE CPPFLAGS_SAVE LIBS_SAVE LDFLAGS_SAVE between SAFE_C_CHECK_BEGIN/SAFE_C_CHECK_END if needed
++ SAFE_C_CHECK_BEGIN
++ 
++-PKG_CHECK_MODULES(LIBUNWIND, libunwind >= 1.6.2, enable_libunwind="yes", enable_libunwind="no")
+++if test "$enable_stackdump" = "yes"; then
+++    PKG_CHECK_MODULES(LIBUNWIND, libunwind >= 1.6.2, enable_libunwind="yes", enable_libunwind="no")
+++else
+++    enable_libunwind="no"
+++fi
+++
++ 
++ if test "$enable_stackdump" = "yes" && test "$enable_libunwind" = "no"; then
++     AC_MSG_ERROR([Could not find libunwind, and stackdump support was explicitly enabled.])
++-- 
++2.51.0
++
+-- 
+2.51.0
+
