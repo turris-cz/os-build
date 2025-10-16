@@ -1,0 +1,188 @@
+From d72a45ea563925d873b31912d5949aacf53624ba Mon Sep 17 00:00:00 2001
+From: Gunaal R <gunar@qti.qualcomm.com>
+Date: Thu, 17 Apr 2025 18:28:47 +0530
+Subject: [PATCH] UPSTREAM:CP: wifi: ath12k: Add HTT Stats Support to get
+ Powerboost related stats
+
+Add HTT stats to support ANN based powerboost feature. These stats
+are requested from firmware via HTT messages. HTT stats type 75 is
+added to collect stats from the frimware. HTT stats type 75 gives
+information about powerboost parameters like calibration count,
+dpd fail count, powerboost gain for BW.
+
+Sample Output:
+
+root@OpenWrt:~# echo 75 > /sys/kernel/debug/ath12k/qcn9274\ hw2.0_0002:01:00.0/m
+ac0/htt_stats_type
+root@OpenWrt:~# cat /sys/kernel/debug/ath12k/qcn9274\ hw2.0_0002:01:00.0/mac0/ht
+t_stats
+HTT_STATS_PHY_PAPRD_PB_TLV:
+pdev_id = 0
+total_dpd_cal_count = 2
+chan_change_dpd_cal_count = 2
+thermal_dpd_cal_count = 0
+recovery_dpd_cal_count = 0
+total_dpd_fail_count = 1
+chan_change_dpd_fail_count = 1
+thermal_dpd_fail_count = 0
+recovery_dpd_fail_count = 0
+pb_cal_count = 0
+pb_fail_count = 0
+last_dpd_cal_time = 327455
+last_pb_cal_time = 0
+is_dpd_valid = 1
+is_pb_valid = 0
+Power Boost Gain for BW 0 =  0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0,
+Power Boost Gain for BW 1 =  0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0,
+Power Boost Gain for BW 2 =  0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0,
+Power Boost Gain for BW 3 =  0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0,
+Power Boost Gain for BW 4 =  0:0, 1:0, 2:0, 3:0, 4:0, 5:0, 6:0, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0, 13:0, 14:0, 15:0,
+root@OpenWrt:~#
+
+Fixes: [None]
+Patch-dependency: 980-04-wifi-ath12k-Add-Power-Boost-Feature.patch
+Patch-work: [None]
+
+Signed-off-by: Gunaal R <gunar@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/debugfs.h     |  5 +-
+ .../wireless/ath/ath12k/debugfs_htt_stats.c   | 65 ++++++++++++++++++-
+ .../wireless/ath/ath12k/debugfs_htt_stats.h   | 33 +++++++++-
+ 3 files changed, 100 insertions(+), 3 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/debugfs.h
++++ b/drivers/net/wireless/ath/ath12k/debugfs.h
+@@ -97,6 +97,9 @@ enum ath12k_dbg_htt_ext_stats_type {
+ 	ATH12K_DBG_HTT_EXT_STATS_PDEV_RTT_DELAY		    =  70,
+ 	ATH12K_DBG_HTT_EXT_STATS_PDEV_SPECTRAL		    =  71,
+ 	ATH12K_DBG_HTT_EXT_STATS_PDEV_AOA		    =  72,
++	ATH12K_DBG_HTT_EXT_STATS_PDEV_FTM_TPCCAL = 73,
++	ATH12K_DBG_HTT_DBG_EXT_STATS_PDEV_UL_MUMIMO_ELIGIBLE = 74,
++	ATH12K_DBG_HTT_DBG_EXT_STATS_PAPRD_PB = 75,
+ 
+ 	/* keep this last */
+ 	ATH12K_DBG_HTT_NUM_EXT_STATS,
+--- a/drivers/net/wireless/ath/ath12k/debugfs_htt_stats.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs_htt_stats.c
+@@ -10445,6 +10445,66 @@ static void htt_print_pdev_aoa_tlv(const
+ 	stats_req->buf_len = len;
+ }
+ 
++static void htt_print_phy_paprd_pb_tlv(const void *tag_buf, u16 tag_len,
++				   struct debug_htt_stats_req *stats_req)
++{
++	const struct htt_stats_phy_paprd_pb_tlv *htt_stats_buf = tag_buf;
++	u32 buf_len = ATH12K_HTT_STATS_BUF_SIZE, len = stats_req->buf_len;
++	u8 *buf = stats_req->buf, i, j;
++	char str_buf[HTT_MAX_STRING_LEN] = {0};
++	u16 index = 0;
++
++	if(tag_len < sizeof(*htt_stats_buf))
++		return;
++
++	len += scnprintf(buf + len, buf_len - len, "HTT_STATS_PHY_PAPRD_PB_TLV:\n");
++	len += scnprintf(buf + len, buf_len - len, "pdev_id = %u\n",
++				le32_to_cpu(htt_stats_buf->pdev_id));
++	len += scnprintf(buf + len, buf_len - len, "total_dpd_cal_count = %u\n",
++				le32_to_cpu(htt_stats_buf->total_dpd_cal_count));
++	len += scnprintf(buf + len, buf_len - len, "chan_change_dpd_cal_count = %u\n",
++				le32_to_cpu(htt_stats_buf->chan_change_dpd_cal_count));
++	len += scnprintf(buf + len, buf_len - len, "thermal_dpd_cal_count = %u\n",
++				le32_to_cpu(htt_stats_buf->thermal_dpd_cal_count));
++	len += scnprintf(buf + len, buf_len - len, "recovery_dpd_cal_count = %u\n",
++				le32_to_cpu(htt_stats_buf->recovery_dpd_cal_count));
++	len += scnprintf(buf + len, buf_len - len, "total_dpd_fail_count = %u\n",
++				le32_to_cpu(htt_stats_buf->total_dpd_fail_count));
++	len += scnprintf(buf + len, buf_len - len, "chan_change_dpd_fail_count = %u\n",
++				le32_to_cpu(htt_stats_buf->chan_change_dpd_fail_count));
++	len += scnprintf(buf + len, buf_len - len, "thermal_dpd_fail_count = %u\n",
++				le32_to_cpu(htt_stats_buf->thermal_dpd_fail_count));
++	len += scnprintf(buf + len, buf_len - len, "recovery_dpd_fail_count = %u\n",
++				le32_to_cpu(htt_stats_buf->recovery_dpd_fail_count));
++	len += scnprintf(buf + len, buf_len - len, "pb_cal_count = %u\n",
++				le32_to_cpu(htt_stats_buf->pb_cal_count));
++	len += scnprintf(buf + len, buf_len - len, "pb_fail_count = %u\n",
++				le32_to_cpu(htt_stats_buf->pb_fail_count));
++	len += scnprintf(buf + len, buf_len - len, "last_dpd_cal_time = %u\n",
++				le32_to_cpu(htt_stats_buf->last_dpd_cal_time));
++	len += scnprintf(buf + len, buf_len - len, "last_pb_cal_time = %u\n",
++				le32_to_cpu(htt_stats_buf->last_pb_cal_time));
++	len += scnprintf(buf + len, buf_len - len, "is_dpd_valid = %u\n",
++				le32_to_cpu(htt_stats_buf->is_dpd_valid));
++	len += scnprintf(buf + len, buf_len - len, "is_pb_valid = %u\n",
++				le32_to_cpu(htt_stats_buf->is_pb_valid));
++
++	for (i = 0; i < HTT_TX_PDEV_STATS_NUM_BE_BW_COUNTERS; i++) {
++		index = 0;
++		memset(str_buf, 0x0, HTT_MAX_STRING_LEN);
++		for(j = 0; j < HTT_TX_PDEV_STATS_NUM_BE_MCS_COUNTERS; j++) {
++			index += snprintf(&str_buf[index],
++					HTT_MAX_STRING_LEN - index,
++					" %u:%u,", j, htt_stats_buf->power_boost_gain[i][j]);
++		}
++		len += scnprintf(buf + len, buf_len - len, "Power Boost Gain for BW %d = %s ",
++				i, str_buf);
++		len += scnprintf(buf + len, buf_len - len, "\n");
++	}
++	stats_req->buf_len = len;
++}
++
++
+ static int ath12k_dbg_htt_ext_stats_parse(struct ath12k_base *ab,
+ 					  u16 tag, u16 len, const void *tag_buf,
+ 					  void *user_data)
+@@ -11127,6 +11187,9 @@ static int ath12k_dbg_htt_ext_stats_pars
+ 	case HTT_STATS_PDEV_AOA_TAG:
+ 		htt_print_pdev_aoa_tlv(tag_buf, len, stats_req);
+ 		break;
++	case HTT_STATS_PHY_PAPRD_PB_TAG:
++		htt_print_phy_paprd_pb_tlv(tag_buf, len, stats_req);
++		break;
+ 	default:
+ 		break;
+ 	}
+--- a/drivers/net/wireless/ath/ath12k/debugfs_htt_stats.h
++++ b/drivers/net/wireless/ath/ath12k/debugfs_htt_stats.h
+@@ -226,6 +226,12 @@ enum htt_tlv_tag_t {
+ 	HTT_STATS_PDEV_SPECTRAL_TAG			    = 204,
+ 	HTT_STATS_PDEV_RTT_DELAY_TAG			    = 205,
+ 	HTT_STATS_PDEV_AOA_TAG				    = 206,
++	HTT_STATS_PDEV_FTM_TPCCAL_TAG		    = 207,
++	HTT_STATS_PDEV_UL_MUMIMO_GRP_STATS_TAG  = 208,
++	HTT_STATS_PDEV_UL_MUMIMO_DENYLIST_STATS_TAG = 209,
++	HTT_STATS_PDEV_UL_MUMIMO_SEQ_TERM_STATS_TAG = 210,
++	HTT_STATS_PDEV_UL_MUMIMO_HIST_INELIGIBILITY_TAG = 211,
++	HTT_STATS_PHY_PAPRD_PB_TAG			    = 212,
+ 
+ 	HTT_STATS_MAX_TAG,
+ };
+@@ -5125,4 +5131,29 @@ struct htt_stats_pdev_aoa_tlv {
+ 	s32 phase_in_degree[HTT_STATS_PDEV_AOA_MAX_HIST][HTT_STATS_PDEV_AOA_MAX_CHAINS];
+ };
+ 
++struct htt_stats_phy_paprd_pb_tlv {
++	__le32 pdev_id;
++	__le32 total_dpd_cal_count;
++	__le32 chan_change_dpd_cal_count;
++	__le32 thermal_dpd_cal_count;
++	__le32 recovery_dpd_cal_count;
++	__le32 pb_cal_count;
++	__le32 total_dpd_fail_count;
++	__le32 chan_change_dpd_fail_count;
++	__le32 thermal_dpd_fail_count;
++	__le32 recovery_dpd_fail_count;
++	__le32 pb_fail_count;
++	union {
++		__le32 word__dpd_pb_validity_status;
++		struct {
++			__le32 is_dpd_valid:1,
++			       is_pb_valid:1,
++			       rsvd:30;
++		};
++	};
++	__le32 last_dpd_cal_time;
++	__le32 last_pb_cal_time;
++	__le32 power_boost_gain[HTT_TX_PDEV_STATS_NUM_BE_BW_COUNTERS][HTT_TX_PDEV_STATS_NUM_BE_MCS_COUNTERS];
++};
++
+ #endif

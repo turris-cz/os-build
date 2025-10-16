@@ -1,0 +1,54 @@
+From 6fa254852439c5453d016d05f5d4b539f80fe0be Mon Sep 17 00:00:00 2001
+From: Narendhar Reddy <quic_nare@quicinc.com>
+Date: Thu, 17 Apr 2025 20:42:40 +0530
+Subject: [PATCH] QSDK:PROTOCOL mac80211:Avoid calling rcu_read_unlock twice.
+
+Make changes to prevent double unlocking the rcu read lock.
+
+Signed-off-by: Narendhar Reddy <quic_nare@quicinc.com>
+---
+ net/mac80211/cfg.c | 19 ++++++++-----------
+ 1 file changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index fc4d305..150b199 100644
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -3430,18 +3430,16 @@ static int ieee80211_set_wiphy_params(struct wiphy *wiphy, u32 changed,
+ 
+ 	if (wdev) {
+ 		sdata = IEEE80211_WDEV_TO_SUB_IF(wdev);
++		if (changed & WIPHY_PARAM_RTS_THRESHOLD) {
++			rcu_read_lock();
++			link_conf = rcu_dereference(sdata->vif.link_conf[link_id]);
+ 
+-		rcu_read_lock();
+-		link_conf = rcu_dereference(sdata->vif.link_conf[link_id]);
+-
+-		if (!link_conf) {
+-			rcu_read_unlock();
+-			return -ENOLINK;
+-		}
+-
+-		old_rts_threshold = link_conf->rts_threshold;
++			if (!link_conf) {
++				rcu_read_unlock();
++				return -ENOLINK;
++			}
+ 
+-		if (changed & WIPHY_PARAM_RTS_THRESHOLD) {
++			old_rts_threshold = link_conf->rts_threshold;
+ 			link_conf->rts_threshold = wiphy->rts_threshold;
+ 			rcu_read_unlock();
+ 			err = drv_set_rts_threshold(local, wiphy->rts_threshold, sdata, link_id);
+@@ -3454,7 +3452,6 @@ static int ieee80211_set_wiphy_params(struct wiphy *wiphy, u32 changed,
+ 				return err;
+ 			}
+ 		}
+-		rcu_read_unlock();
+ 	} else {
+ 		if (changed & WIPHY_PARAM_RTS_THRESHOLD && !wiphy->num_hw) {
+ 			err = drv_set_rts_threshold(local, wiphy->rts_threshold, NULL, link_id);
+-- 
+2.34.1
+

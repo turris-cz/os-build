@@ -1,0 +1,66 @@
+From 0cf4138139eff3d878b442b8dbe2578375e327ed Mon Sep 17 00:00:00 2001
+From: Thiraviyam Mariyappan <quic_tmariyap@quicinc.com>
+Date: Tue, 15 Apr 2025 10:33:36 +0530
+Subject: [PATCH] UPSTREAM:DP:wifi:ath12k: Drop packets received with incorrect
+ peer_id
+
+Currently, forward packets received with an incorrect peer_id from
+the WMI error path during MEC drop handling. These packets are
+later getting dropped on further processing. Hence, drop these
+packets and remove error checks in the WBM error path itself to
+avoid further processing.
+
+Patch-dependency: 958-wifi-ath12k-Add-support-for-MEC.patch
+
+Signed-off-by: Thiraviyam Mariyappan <quic_tmariyap@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/dp_rx.c | 17 +++++++----------
+ 1 file changed, 7 insertions(+), 10 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/dp_rx.c
++++ b/drivers/net/wireless/ath/ath12k/dp_rx.c
+@@ -5696,30 +5696,17 @@ static bool ath12k_dp_rx_h_mec_drop(stru
+ 	struct ath12k_peer *peer;
+ 	u32 peer_id;
+ 
+-	/* Multicast Echo Check is required, if vdev is STA and
+-	 * received pkt is a multicast/broadcast pkt.
+-	 */
+-
+-	if (!ab->hw_params->hal_ops->rx_desc_is_da_mcbc)
+-		return false;
+-
+-	if (!ab->hw_params->hal_ops->rx_desc_is_da_mcbc(rx_desc))
+-		return false;
+-
+ 	peer_id = ath12k_dp_rx_h_peer_id(ab, rx_desc);
+ 
+ 	rcu_read_lock();
+ 	peer = ath12k_peer_find_by_peer_list_index(ar, peer_id);
+-	if (!peer) {
+-		rcu_read_unlock();
+-		ath12k_warn(ab, "invalid peer with peer_id %u\n", peer_id);
+-		return false;
+-	}
++	if (!peer)
++		goto drop;
++
+ 	if (peer->vif && peer->vif->type != NL80211_IFTYPE_STATION) {
+-		rcu_read_unlock();
+ 		ath12k_warn(ab, "vif type is not station for peer with peer_id %u\n",
+ 			    peer_id);
+-		return false;
++		goto drop;
+ 	}
+ 
+ 	if (!ab->stats_disable) {
+@@ -5731,8 +5718,8 @@ static bool ath12k_dp_rx_h_mec_drop(stru
+ 			spin_unlock_bh(&ab->base_lock);
+ 		}
+ 	}
++drop:
+ 	rcu_read_unlock();
+-
+ 	return true;
+ }
+ 

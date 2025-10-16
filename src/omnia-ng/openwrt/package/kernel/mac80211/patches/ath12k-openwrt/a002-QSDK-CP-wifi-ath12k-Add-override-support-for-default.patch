@@ -1,0 +1,114 @@
+From 16f9b6f6214f5145d2f5353b03395035eb8fc29e Mon Sep 17 00:00:00 2001
+From: Adwait Nayak <quic_adwaitn@quicinc.com>
+Date: Fri, 7 Mar 2025 02:13:36 +0530
+Subject: [PATCH] QSDK:CP: wifi: ath12k: Add override support for default flow
+ queue
+
+The flow override is supported only for user defined
+MSDUQs currently.
+
+For IPQ5424, to support HLOS TID override for default
+queues, enable flow override for default queue by
+indicating it to the target.
+Send this info to the target in the WMI init exchange.
+
+Patch-dependency: None
+Patch-work: None
+Fixes: None
+
+Signed-off-by: Adwait Nayak <quic_adwaitn@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/hw.c  | 6 ++++++
+ drivers/net/wireless/ath/ath12k/hw.h  | 1 +
+ drivers/net/wireless/ath/ath12k/wmi.c | 7 +++++--
+ drivers/net/wireless/ath/ath12k/wmi.h | 2 ++
+ 4 files changed, 14 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/wmi.c
++++ b/drivers/net/wireless/ath/ath12k/wmi.c
+@@ -339,7 +339,7 @@ void ath12k_wmi_init_qcn9274(struct ath1
+ 	if (test_bit(WMI_TLV_SERVICE_PEER_METADATA_V1A_V1B_SUPPORT, ab->wmi_ab.svc_map))
+ 		config->dp_peer_meta_data_ver = TARGET_RX_PEER_METADATA_VER_V1B;
+ 	config->max_beacon_size = TARGET_MAX_BEACON_SIZE;
+-
++	config->def_flow_override = ath12k_def_flow_override;
+ }
+ 
+ void ath12k_wmi_init_ipq5332(struct ath12k_base *ab,
+@@ -409,6 +409,7 @@ void ath12k_wmi_init_ipq5332(struct ath1
+ 	if (test_bit(WMI_TLV_SERVICE_SAWF_LEVEL0, ab->wmi_ab.svc_map))
+ 		config->sawf = true;
+ 	config->max_beacon_size = TARGET_MAX_BEACON_SIZE;
++	config->def_flow_override = ath12k_def_flow_override;
+ }
+ 
+ 
+@@ -459,7 +460,7 @@ void ath12k_wmi_init_wcn7850(struct ath1
+ 
+ 	if (test_bit(WMI_TLV_SERVICE_PEER_METADATA_V1A_V1B_SUPPORT, ab->wmi_ab.svc_map))
+ 		config->dp_peer_meta_data_ver = TARGET_RX_PEER_METADATA_VER_V1A;
+-
++	config->def_flow_override = ath12k_def_flow_override;
+ }
+ 
+ #define PRIMAP(_hw_mode_) \
+@@ -6331,6 +6332,8 @@ ath12k_wmi_copy_resource_config(struct a
+ 	wmi_cfg->host_service_flags |= 1 << WMI_RSRC_CFG_HOST_SVC_FLAG_REG_CC_EXT_SUPPORT_BIT;
+ 	wmi_cfg->host_service_flags |= 1 << WMI_RSRC_CFG_HOST_SVC_FLAG_REO_QREF_SUPPORT_BIT;
+ 	wmi_cfg->host_service_flags |= 1 << WMI_RSRC_CFG_HOST_SVC_FLAG_FULL_BW_NOL_SUPPORT_BIT;
++	if (tg_cfg->def_flow_override)
++		wmi_cfg->host_service_flags |= 1 << WMI_RSRC_CFG_HOST_SVC_FLAG_DEF_FLOW_OVERRIDE_SET_BIT;
+ 	wmi_cfg->ema_max_vap_cnt = tg_cfg->ema_max_vap_cnt;
+ 	wmi_cfg->ema_max_profile_period = tg_cfg->ema_max_profile_period;
+ 	wmi_cfg->ema_init_config =
+@@ -6564,6 +6567,9 @@ int ath12k_wmi_cmd_init(struct ath12k_ba
+ 	if (test_bit(WMI_SERVICE_WDS_NULL_FRAME_SUPPORT, ab->wmi_ab.svc_map))
+ 		arg.res_cfg.is_wds_null_frame_supported = true;
+ 
++	if (of_machine_is_compatible("qcom,ipq5424"))
++		ath12k_def_flow_override = 1;
++
+ 	ath12k_set_afc_config(&arg.res_cfg);
+ 	ab->hw_params->wmi_init(ab, &arg.res_cfg);
+ 
+--- a/drivers/net/wireless/ath/ath12k/wmi.h
++++ b/drivers/net/wireless/ath/ath12k/wmi.h
+@@ -2841,6 +2841,7 @@ struct ath12k_wmi_resource_config_arg {
+ 	bool sawf;
+ 	bool is_full_bw_nol_feature_supported;
+ 	bool is_wds_null_frame_supported;
++	bool def_flow_override;
+ 	u32 max_beacon_size;
+ };
+ 
+@@ -2931,6 +2932,7 @@ struct wmi_init_cmd {
+ #define WMI_RSRC_CFG_HOST_SVC_FLAG_REG_CC_EXT_SUPPORT_BIT 4
+ #define WMI_RSRC_CFG_HOST_SVC_FLAG_REO_QREF_SUPPORT_BIT   12
+ #define WMI_RSRC_CFG_HOST_SVC_FLAG_FULL_BW_NOL_SUPPORT_BIT 14
++#define WMI_RSRC_CFG_HOST_SVC_FLAG_DEF_FLOW_OVERRIDE_SET_BIT 19
+ #define WMI_RSRC_CFG_FLAGS2_RX_PEER_METADATA_VERSION GENMASK(5,4)
+ #define WMI_RSRC_CFG_FLAGS2_CALC_NEXT_DTIM_COUNT_SET      BIT(9)
+ #define WMI_RSRC_CFG_FLAGS2_INTRABSS_MEC_WDS_LEARNING_DISABLE	BIT(15)
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -147,6 +147,10 @@ module_param_named(migrate_on_link_remov
+ MODULE_PARM_DESC(migrate_on_link_removal,
+ 		"Enable primary link migration on link removal (0 - disable, 1 - enable)");
+ 
++bool ath12k_def_flow_override;
++module_param_named(def_flow_override, ath12k_def_flow_override, bool, 0644);
++MODULE_PARM_DESC(def_flow_override, "Def flow override support (0 - disable, 1 - enable)");
++
+ static DEFINE_MUTEX(ath12k_hw_lock);
+ static struct list_head ath12k_hw_groups = LIST_HEAD_INIT(ath12k_hw_groups);
+ 
+--- a/drivers/net/wireless/ath/ath12k/core.h
++++ b/drivers/net/wireless/ath/ath12k/core.h
+@@ -65,6 +65,7 @@ extern unsigned int ath12k_ppe_ds_enable
+ extern bool ath12k_rx_nwifi_err_dump;
+ extern bool ath12k_fse_3_tuple_enabled;
+ extern bool ath12k_mlo_3_link_tx;
++extern bool ath12k_def_flow_override;
+ #ifndef CPTCFG_ATH12K_MEM_PROFILE_512M
+ extern unsigned int ath12k_max_clients;
+ #endif

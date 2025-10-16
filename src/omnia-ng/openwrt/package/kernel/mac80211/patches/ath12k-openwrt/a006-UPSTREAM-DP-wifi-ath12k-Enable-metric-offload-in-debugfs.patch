@@ -1,0 +1,202 @@
+From ea67e83d4c526c8c32e0f05c9bc1300a48d9578a Mon Sep 17 00:00:00 2001
+From: Ramanathan Choodamani <quic_rchoodam@quicinc.com>
+Date: Fri, 4 Apr 2025 14:11:01 -0700
+Subject: [PATCH] wifi:ath12k:DP:Enable metric offload in debugfs
+
+The mesh_metric_offload is a flag that decides whether
+mesh packets have to go to recycler and mac80211 completions
+have to be skipped or not.
+Add support to enable this flag inside debugfs as a part of
+link metrics offload enable/disable instead of making it
+out of box
+
+TODO: Maintain debugfs as the only means to enable/disable metric
+offload. Remove mesh_metric_offload flag.
+
+Signed-off-by: Ramanathan Choodamani <quic_rchoodam@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/core.c    |  2 -
+ drivers/net/wireless/ath/ath12k/debugfs.c | 78 ++++++++++-------------
+ 2 files changed, 33 insertions(+), 47 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.c b/drivers/net/wireless/ath/ath12k/core.c
+index 7894c27..255ad2a 100644
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -64,8 +64,6 @@ module_param_named(mlo_capable, ath12k_mlo_capable, uint, 0644);
+ MODULE_PARM_DESC(mlo_capable, "mlo capable: 0-disable, 1-enable");
+ 
+ unsigned int ath12k_mesh_metric_offload = false;
+-module_param_named(mesh_metric_offload, ath12k_mesh_metric_offload, uint, 0644);
+-MODULE_PARM_DESC(mesh_metric_offload, "stats offload: 0-disable, 1-enable");
+ 
+ static unsigned int ath12k_en_fwlog = true;
+ module_param_named(en_fwlog, ath12k_en_fwlog, uint, 0644);
+diff --git a/drivers/net/wireless/ath/ath12k/debugfs.c b/drivers/net/wireless/ath/ath12k/debugfs.c
+index 6153993..7b5d694 100644
+--- a/drivers/net/wireless/ath/ath12k/debugfs.c
++++ b/drivers/net/wireless/ath/ath12k/debugfs.c
+@@ -2618,13 +2618,10 @@ static ssize_t ath12k_write_stats_disable(struct file *file,
+ {
+ 	struct ath12k_base *ab = file->private_data;
+ 	struct ath12k_pdev *pdev;
+-	struct ath12k *ar;
+-	struct ath12k_link_vif *arvif;
+ 	struct ath12k_peer *peer;
+ 	bool disable;
+ 	int ret, i;
+ 	u32 mask = 0;
+-	bool skip_htt_ppdu_stats = true;
+ 
+ 	if (kstrtobool_from_user(user_buf, count, &disable))
+ 		return -EINVAL;
+@@ -2649,33 +2646,11 @@ static ssize_t ath12k_write_stats_disable(struct file *file,
+ 		for (i = 0; i < ab->num_radios; i++) {
+ 			pdev = &ab->pdevs[i];
+ 			if (pdev && pdev->ar) {
+-				if (ath12k_mesh_metric_offload) {
+-					ar = pdev->ar;
+-					mutex_lock(&ar->conf_mutex);
+-					list_for_each_entry(arvif, &ar->arvifs, list) {
+-						if (arvif->vdev_subtype != WMI_VDEV_SUBTYPE_MESH_11S) {
+-							skip_htt_ppdu_stats = true;
+-							break;
+-						} else if (arvif->vdev_subtype
+-								== WMI_VDEV_SUBTYPE_MESH_11S)
+-							skip_htt_ppdu_stats = false;
+-					}
+-					mutex_unlock(&ar->conf_mutex);
+-				}
+ 				ath12k_debug_config_mon_status(pdev->ar, !disable);
+ 				pdev->ar->ah->hw->perf_mode = disable;
+ 
+ 				if (!disable)
+ 					mask = HTT_PPDU_STATS_TAG_DEFAULT;
+-				else if (!skip_htt_ppdu_stats) {
+-					/* Requesting certain stats from FW for
+-					 * link metric updates.
+-					 * Set is_link_metrics_update_enabled to true
+-					 */
+-					ab->is_link_metrics_update_enabled = true;
+-					mask = HTT_PPDU_STATS_ENHANCED_TX_COMPLN;
+-				}
+-
+ 				ath12k_info(ab, "Requesting ppdu stats with mask 0x%x", mask);
+ 				ath12k_dp_tx_htt_h2t_ppdu_stats_req(pdev->ar, mask);
+ 			}
+@@ -2691,7 +2666,7 @@ static const struct file_operations fops_soc_stats_disable = {
+ 	.write = ath12k_write_stats_disable,
+ };
+ 
+-static ssize_t ath12k_manage_link_metrics_update(struct file *file,
++static ssize_t ath12k_manage_link_metrics_offload(struct file *file,
+ 					  const char __user *user_buf,
+ 					  size_t count, loff_t *ppos)
+ {
+@@ -2701,7 +2676,7 @@ static ssize_t ath12k_manage_link_metrics_update(struct file *file,
+ 	struct ath12k_link_vif *arvif;
+ 	int ret, i;
+ 	u32 mask = 0;
+-	bool link_metrics_update;
++	bool link_metrics_offload;
+ 	char buf[20] = {0};
+ 
+ 	if (count > 20)
+@@ -2711,23 +2686,36 @@ static ssize_t ath12k_manage_link_metrics_update(struct file *file,
+ 	if (ret)
+ 		return -EFAULT;
+ 
++	/* When stats are enabled, no need to request
++	 * specific stats from FW
++	 * TODO: Make the tx_hw_enqueue() path same
++	 * for stats enable/disable case
++	 */
++	if (!ab->stats_disable)
++		return count;
++
+ 	if (strstr(buf, "disable"))
+-		link_metrics_update = false;
++		link_metrics_offload = false;
+ 	else if (strstr(buf, "enable"))
+-		link_metrics_update = true;
++		link_metrics_offload = true;
+ 	else
+ 		return -EINVAL;
+ 
+-	/* If stats are enabled, no need to specifically ask
+-	 * for ENHANCED stats
++	/* Since link metrics offload is requested from FW
++	 * set mesh metric offload to true.
++	 * mesh metric offload is a flag that
++	 * decides to give packets to recycler and skip
++	 * mac80211 completions.
++	 * During scenarios, where stats are disabled
++	 * but link metrics are requested, FW is requested
++	 * to provide PPDU ENHANCED stats - so completions
++	 * can be skipped to mac80211.
++	 * When stats are disabled, but link metrics are also
++	 * disabled, then FW is not requested to provide stats
++	 * and completions also need not go to mac80211.
++	 * TODO: Remove mesh metric offload flag usage
+ 	 */
+-	if (!ab->stats_disable)
+-		return count;
+-
+-	if (!ath12k_mesh_metric_offload) {
+-		ath12k_err(ab, "Mesh Metric offload feature not enabled");
+-		return -EINVAL;
+-	}
++	ath12k_mesh_metric_offload = true;
+ 
+ 	for (i = 0; i < ab->num_radios; i++) {
+ 		pdev = &ab->pdevs[i];
+@@ -2744,7 +2732,7 @@ static ssize_t ath12k_manage_link_metrics_update(struct file *file,
+ 				}
+ 			}
+ 			mutex_unlock(&ar->conf_mutex);
+-			/* If the link metrics update state is true,
++			/* If the link metrics offload state is true,
+ 			 * request for ENHANCED stats from FW.
+ 			 *
+ 			 * It is fine to keep the same logic in stats_disable as
+@@ -2756,14 +2744,14 @@ static ssize_t ath12k_manage_link_metrics_update(struct file *file,
+ 			 * stats are disabled, then it is necessary to disable
+ 			 * link metrics again.
+ 			 */
+-			if (link_metrics_update) {
++			if (link_metrics_offload) {
+ 				ab->is_link_metrics_update_enabled = true;
+ 				mask = HTT_PPDU_STATS_ENHANCED_TX_COMPLN;
+ 			} else
+ 				ab->is_link_metrics_update_enabled = false;
+ 
+-			ath12k_info (ab, "Path selection metrics update has been %s",
+-					link_metrics_update ? "enabled" : "disabled");
++			ath12k_info(ab, "Path selection metrics offload has been %s",
++					link_metrics_offload ? "enabled" : "disabled");
+ 			ath12k_info(ab, "Requesting ppdu stats with mask 0x%x", mask);
+ 			ath12k_dp_tx_htt_h2t_ppdu_stats_req(pdev->ar, mask);
+ 		}
+@@ -2773,7 +2761,7 @@ static ssize_t ath12k_manage_link_metrics_update(struct file *file,
+ 	return ret;
+ }
+ 
+-static ssize_t ath12k_read_link_metrics_update(struct file *file,
++static ssize_t ath12k_read_link_metrics_offload(struct file *file,
+ 					 char __user *user_buf,
+ 					 size_t count, loff_t *ppos)
+ {
+@@ -2788,8 +2776,8 @@ static ssize_t ath12k_read_link_metrics_update(struct file *file,
+ 
+ static const struct file_operations fops_link_metrics_update = {
+ 	.open = simple_open,
+-	.write = ath12k_manage_link_metrics_update,
+-	.read = ath12k_read_link_metrics_update,
++	.write = ath12k_manage_link_metrics_offload,
++	.read = ath12k_read_link_metrics_offload,
+ };
+ 
+ static ssize_t ath12k_write_rx_hash_ix3(struct file *file,
+-- 
+2.34.1
+

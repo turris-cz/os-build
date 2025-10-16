@@ -1,0 +1,90 @@
+From b9cc48d5374c7b34faa65d878594b86c0b65ee67 Mon Sep 17 00:00:00 2001
+From: Ramasamy Kaliappan <quic_rkaliapp@quicinc.com>
+Date: Sun, 16 Mar 2025 15:15:03 +0530
+Subject: [PATCH 2/2] QSDK:PROTOCOL:ath12k: fix dead lock in color change bss
+ notify
+
+In the current mac80211 design, when a BSS color change request is
+received for a TX BSS, it updates all non-TX BSSes in the same MBSSID
+group.
+
+A deadlock occurs when the BSS color change finalize worker is
+scheduled for the tx bss, and at the same time, a stop AP command is
+received for a non-tx bss in the same MBSSID group.
+
+Let's assume wlan0 is the tx bss and wlan1 is the non-tx bss in the same
+MBSSID group. When the color change finalize worker is scheduled for wlan0,
+it acquires the wlan0 sdata lock and the local mtx lock (radio-specific),
+and notifies the driver of the color change. While looping to update
+the color change for the non-TX bss.
+If a stop AP command is received for wlan1, it acquires the wlan1 sdata
+lock and waits for the local mtx lock, which is already acquired by
+the color change finalize worker.
+When updating the color change for wlan1, it waits for the wlan1 sdata lock,
+which is already taken by the stop AP command, resulting in a deadlock.
+
+Avoid deadlock by implementing offload logic to update the color change
+for non-TX BSS whenever a color change request is received for TX BSS.
+
+Signed-off-by: Ramasamy Kaliappan <quic_rkaliapp@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/mac.c | 36 +++++++++++++++++++++++++++
+ 1 file changed, 36 insertions(+)
+
+diff --git a/drivers/net/wireless/ath/ath12k/mac.c b/drivers/net/wireless/ath/ath12k/mac.c
+index 552acbf..4146298 100644
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -5797,6 +5797,8 @@ skip_pending_cs_up:
+ 		ath12k_mac_config_obss_pd(ar, &info->he_obss_pd);
+ 
+ 	if (changed & BSS_CHANGED_HE_BSS_COLOR) {
++		struct ath12k_link_vif *tx_bss_arvif = NULL;
++
+ 		color_collision_detect = (info->he_bss_color.enabled &&
+ 					  info->he_bss_color.collision_detection_enabled);
+ 		if (vif->type == NL80211_IFTYPE_AP) {
+@@ -5827,6 +5829,40 @@ skip_pending_cs_up:
+ 				   "bss color param 0x%x set on vdev %i\n",
+ 				   param_value, arvif->vdev_id);
+ 
++			if (info->mbssid_tx_vif) {
++				tx_ahvif = (void *)info->mbssid_tx_vif->drv_priv;
++				tx_bss_arvif = ath12k_get_arvif_from_link_id(tx_ahvif, info->mbssid_tx_vif_linkid);
++			}
++
++			if (arvif == tx_bss_arvif) {
++				struct ath12k_link_vif *arvif_itr;
++				/* Update bss color change for Non-TX BSSes */
++				list_for_each_entry(arvif_itr, &ar->arvifs, list) {
++
++					if (arvif_itr->tx_vdev_id != arvif->vdev_id)
++						continue;
++
++					if (arvif_itr == tx_bss_arvif)
++						continue;
++
++					ret = ath12k_wmi_obss_color_cfg_cmd(arvif_itr->ar,
++							arvif_itr->vdev_id,
++							info->he_bss_color.color,
++							ATH12K_BSS_COLOR_AP_PERIODS,
++							0);
++					if (ret)
++						ath12k_warn(arvif_itr->ar->ab, "failed to set bss color collision on vdev %i:%d\n",
++							    arvif_itr->vdev_id,  ret);
++
++					ret = ath12k_wmi_vdev_set_param_cmd(arvif_itr->ar, arvif_itr->vdev_id,
++									    param_id, param_value);
++					if (ret)
++						ath12k_warn(arvif_itr->ar->ab,
++							    "failed to set bss color param on vdev %i: %d\n",
++							    arvif_itr->vdev_id,  ret);
++				}
++			}
++
+ 		} else if (vif->type == NL80211_IFTYPE_STATION) {
+ 			ret = ath12k_wmi_send_bss_color_change_enable_cmd(ar,
+ 									  arvif->vdev_id,
+-- 
+2.34.1
+
