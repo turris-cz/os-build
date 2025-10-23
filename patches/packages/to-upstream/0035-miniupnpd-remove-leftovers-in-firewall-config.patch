@@ -1,0 +1,33 @@
+From 692540d60c981831fb38e1ca7d86699393769e56 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Mon, 20 Oct 2025 16:00:59 +0200
+Subject: [PATCH] miniupnpd: remove leftovers in firewall config
+
+Remove leftovers in firewall config, which stays in firewall config after
+upgrade miniupnpd and points on wrong path for configuration scripts.
+---
+ net/miniupnpd/Makefile | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/net/miniupnpd/Makefile b/net/miniupnpd/Makefile
+index 67d22ceea..545c75718 100644
+--- a/net/miniupnpd/Makefile
++++ b/net/miniupnpd/Makefile
+@@ -116,5 +116,14 @@ define Package/miniupnpd-nftables/install
+ 	$(CP) ./files/nftables.d/* $(1)/usr/share/nftables.d/
+ endef
+ 
++define Package/miniupnpd-nftables/postinst
++#!/bin/sh
++# check if we are on real system
++if [ -z "$$IPKG_INSTROOT" ]; then
++uci del firewall.miniupnpd 2>/dev/null
++uci commit
++fi
++endef
++
+ $(eval $(call BuildPackage,miniupnpd-iptables))
+ $(eval $(call BuildPackage,miniupnpd-nftables))
+-- 
+2.51.1.dirty
+
