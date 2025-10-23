@@ -261,12 +261,20 @@ repatch_feeds() {
 	while read -r vcs name url rest; do
 		if [ "$vcs" = src-git-full ]; then
 			patch_repository "$name" "$build_dir/feeds/$name"
-			if [ -d "$src_dir/src/$name" ] && pushd "$build_dir/feeds/$name"; then
-				cp -r "$src_dir"/src/"$name"/* .
-				find "$src_dir"/src/"$name" -type f -printf "%P\\0" | xargs --null git add
-				_git commit -m 'Add additional files'
-				popd
-			fi
+			pushd "$build_dir/feeds/$name"
+			for overlay in "" "${TARGET_BOARD}"; do
+				if [ -f "$src_dir/src/${overlay}/clean.list.$name" ]; then
+					_git rm -r --pathspec-from-file="$src_dir/src/${overlay}/clean.list.$name"
+					_git commit -m 'Removing excess files'
+				fi
+				if [ -d "$src_dir/src/"$overlay"/$name" ]; then
+					cp -r "$src_dir"/src/"$overlay"/"$name"/* .
+					find "$src_dir"/src/"$overlay"/"$name" -type f -printf "%P\\0" | xargs --null git add
+					_git commit -m 'Add additional files'
+					popd
+				fi
+			done
+			popd
 		fi
 	done < feeds.conf
 
