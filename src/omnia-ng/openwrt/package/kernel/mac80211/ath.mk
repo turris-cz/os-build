@@ -343,6 +343,7 @@ define KernelPackage/ath12k
   DEPENDS+= +kmod-ath +kmod-hwmon-core +@DRIVER_11N_SUPPORT +@DRIVER_11W_SUPPORT +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT +@DRIVER_11BE_SUPPORT
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath12k/ath12k.ko
   AUTOLOAD:=$(call AutoProbe,ath12k)
+  MODPARAMS.ath12k:=ppe_rfs_support=0 ppe_ds_enable=0
 endef
 
 define KernelPackage/ath12k/description
