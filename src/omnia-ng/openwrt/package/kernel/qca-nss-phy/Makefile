@@ -8,7 +8,7 @@ PKG_VERSION:=1.0.r29
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/qca-nss-phy.git
 PKG_SOURCE_VERSION:=win.nss.$(PKG_VERSION)
-PKG_MIRROR_HASH:=cbda8782e448e77e5bd932faf174c11b611d832016111ff1a29ebb0b3fd4249d
+PKG_MIRROR_HASH:=7b82a2a21f1783eb0d5a0ab401c4da175194429a6d3d79a41573b8753f834712
 
 include $(INCLUDE_DIR)/package.mk
 
