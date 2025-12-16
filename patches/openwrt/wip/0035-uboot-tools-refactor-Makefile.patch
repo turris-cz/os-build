@@ -1,0 +1,62 @@
+From 01c12c2be6d0cf6cc8690331ccb2392688b1a7d4 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Thu, 2 Jan 2025 18:27:37 +0100
+Subject: [PATCH] uboot-tools: refactor Makefile and add dependency
+
+Added dependency on python3 and refactor Makefile change spaces to tabs
+---
+ package/boot/uboot-tools/Makefile | 24 +++++++++++++++-----------
+ 1 file changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
+index bb12c71302..4aa0c0b64a 100644
+--- a/package/boot/uboot-tools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -85,8 +85,12 @@ TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include
+ 
+ define Build/Configure
+ 	$(call Build/Compile/Default,tools-only_defconfig)
+-	$(SED) 's/CONFIG_TOOLS_LIBCRYPTO=y/# CONFIG_TOOLS_LIBCRYPTO is not set/' $(PKG_BUILD_DIR)/.config
+-	$(SED) 's/CONFIG_TOOLS_KWBIMAGE=y/# CONFIG_TOOLS_KWBIMAGE is not set/' $(PKG_BUILD_DIR)/.config
++	touch $(PKG_BUILD_DIR)/include/config.h
++	mkdir -p $(PKG_BUILD_DIR)/include/config
++	touch $(PKG_BUILD_DIR)/include/config/auto.conf
++	mkdir -p $(PKG_BUILD_DIR)/include/generated
++	touch $(PKG_BUILD_DIR)/include/generated/autoconf.h
++	touch $(PKG_BUILD_DIR)
+ endef
+ 
+ define Build/Compile
+@@ -140,21 +144,21 @@ define Package/uboot-envtools/install
+ 	$(INSTALL_DIR) $(1)/usr/sbin
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/fw_printenv $(1)/usr/sbin/fw_printenv
+ 	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
+-	$(INSTALL_BIN) ./uboot-envtools/files/fw_printsys $(1)/usr/sbin
+-	$(INSTALL_BIN) ./uboot-envtools/files/fw_setsys $(1)/usr/sbin
+-	$(INSTALL_BIN) ./uboot-envtools/files/fw_loadenv $(1)/usr/sbin
++	$(INSTALL_BIN) ./files/fw_printsys $(1)/usr/sbin
++	$(INSTALL_BIN) ./files/fw_setsys $(1)/usr/sbin
++	$(INSTALL_BIN) ./files/fw_loadenv $(1)/usr/sbin
+ 	$(INSTALL_DIR) $(1)/etc/board.d
+-	$(INSTALL_DATA) ./uboot-envtools/files/fw_defaults $(1)/etc/board.d/05_fw_defaults
++	$(INSTALL_DATA) ./files/fw_defaults $(1)/etc/board.d/05_fw_defaults
+ 	$(INSTALL_DIR) $(1)/lib
+-	$(INSTALL_DATA) ./uboot-envtools/files/uboot-envtools.sh $(1)/lib
++	$(INSTALL_DATA) ./files/uboot-envtools.sh $(1)/lib
+ 	$(INSTALL_DIR) $(1)/usr/bin
+-	$(INSTALL_DIR) $(1)/etc/uci-defaults
+-	$(if $(wildcard ./uboot-envtools/files/$(BOARD)_$(SUBTARGET)), \
++		$(INSTALL_DIR) $(1)/etc/uci-defaults
++		$(if $(wildcard ./files/$(BOARD)_$(SUBTARGET)), \
+ 		$(INSTALL_BIN) ./files/$(BOARD)_$(SUBTARGET) \
+ 		$(1)/usr/bin/fw_env-config-init.sh && \
+ 		printf '#!/bin/sh\nexec /usr/bin/fw_env-config-init.sh' \
+ 		>$(1)/etc/uci-defaults/30_uboot-envtools, \
+-		$(if $(wildcard ./uboot-envtools/files/$(BOARD)), \
++			$(if $(wildcard ./files/$(BOARD)), \
+ 			$(INSTALL_BIN) ./files/$(BOARD) $(1)/usr/bin/fw_env-config-init.sh && \
+ 			printf '#!/bin/sh\nexec /usr/bin/fw_env-config-init.sh' \
+ 			>$(1)/etc/uci-defaults/30_uboot-envtools \
+-- 
+2.52.0
+

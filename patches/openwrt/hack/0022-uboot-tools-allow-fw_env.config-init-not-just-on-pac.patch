@@ -1,4 +1,4 @@
-From 176cea96ba7a2939dbce60bbd94e9ce2fc89fcaa Mon Sep 17 00:00:00 2001
+From 4e4a594bb5558857a76458c6fe25e35ceb08fea8 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
 Date: Thu, 24 Feb 2022 15:50:47 +0100
 Subject: [PATCH] uboot-tools: allow fw_env.config init not just on package
@@ -10,34 +10,37 @@ Thus to force new detection of fw_env.config we would have to reinstall
 the package to get that file back.
 This instead installs it as a regular script and adds thin a script to
 the uci-defaults directory instead.
+
 ---
  package/boot/uboot-tools/Makefile | 12 ++++++++----
  1 file changed, 8 insertions(+), 4 deletions(-)
 
 diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
-index de9c575b03..d58b0d1118 100644
+index 6e0c996f6d..041bbe8f27 100644
 --- a/package/boot/uboot-tools/Makefile
 +++ b/package/boot/uboot-tools/Makefile
-@@ -115,11 +115,15 @@ define Package/uboot-envtools/install
+@@ -113,13 +113,17 @@ define Package/uboot-envtools/install
+ 	$(INSTALL_DATA) ./uboot-envtools/files/fw_defaults $(1)/etc/board.d/05_fw_defaults
+ 	$(INSTALL_DIR) $(1)/lib
  	$(INSTALL_DATA) ./uboot-envtools/files/uboot-envtools.sh $(1)/lib
++	$(INSTALL_DIR) $(1)/usr/bin
  	$(INSTALL_DIR) $(1)/etc/uci-defaults
  	$(if $(wildcard ./uboot-envtools/files/$(BOARD)_$(SUBTARGET)), \
 -		$(INSTALL_DATA) ./uboot-envtools/files/$(BOARD)_$(SUBTARGET) \
 -		$(1)/etc/uci-defaults/30_uboot-envtools, \
-+		$(INSTALL_BIN) ./uboot-envtools/files/$(BOARD)_$(SUBTARGET) \
-+		$(1)/usr/sbin/fw_env-config-init.sh && \
-+		printf '#!/bin/sh\nexec /usr/sbin/fw_env-config-init.sh'
++		$(INSTALL_BIN) ./files/$(BOARD)_$(SUBTARGET) \
++		$(1)/usr/bin/fw_env-config-init.sh && \
++		printf '#!/bin/sh\nexec /usr/bin/fw_env-config-init.sh' \
 +		>$(1)/etc/uci-defaults/30_uboot-envtools, \
  		$(if $(wildcard ./uboot-envtools/files/$(BOARD)), \
 -			$(INSTALL_DATA) ./uboot-envtools/files/$(BOARD) \
 -			$(1)/etc/uci-defaults/30_uboot-envtools \
-+			$(INSTALL_BIN) ./uboot-envtools/files/$(BOARD) \
-+			$(1)/usr/sbin/fw_env-config-init.sh && \
-+			printf '#!/bin/sh\nexec /usr/sbin/fw_env-config-init.sh'
++			$(INSTALL_BIN) ./files/$(BOARD) $(1)/usr/bin/fw_env-config-init.sh && \
++			printf '#!/bin/sh\nexec /usr/bin/fw_env-config-init.sh' \
 +			>$(1)/etc/uci-defaults/30_uboot-envtools \
  		) \
  	)
  endef
 -- 
-2.50.0
+2.52.0
 
