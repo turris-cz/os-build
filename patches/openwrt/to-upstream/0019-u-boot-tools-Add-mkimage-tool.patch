@@ -4,7 +4,7 @@ Date: Wed, 20 Mar 2019 16:42:28 +0100
 Subject: [PATCH] u-boot tools: Add mkimage tool
 
 ---
- package/boot/uboot-tools/Makefile             | 50 ++++++++++++++++---
+ package/boot/uboot-tools/Makefile             | 54 ++++++++++++++++---
  .../{uboot-envtools => }/files/apm821xx       |  0
  .../{uboot-envtools => }/files/ath79          |  0
  .../{uboot-envtools => }/files/fw_defaults    |  0
@@ -38,7 +38,7 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  .../{uboot-envtools => }/files/realtek        |  0
  .../{uboot-envtools => }/files/rockchip_armv8 |  0
  .../files/uboot-envtools.sh                   |  0
- 34 files changed, 43 insertions(+), 7 deletions(-)
+ 34 files changed, 46 insertions(+), 8 deletions(-)
  rename package/boot/uboot-tools/{uboot-envtools => }/files/apm821xx (100%)
  rename package/boot/uboot-tools/{uboot-envtools => }/files/ath79 (100%)
  rename package/boot/uboot-tools/{uboot-envtools => }/files/fw_defaults (100%)
@@ -74,10 +74,26 @@ Subject: [PATCH] u-boot tools: Add mkimage tool
  rename package/boot/uboot-tools/{uboot-envtools => }/files/uboot-envtools.sh (100%)
 
 diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
-index 041bbe8f27..47c9337eb4 100644
+index 041bbe8f27..91f65f4bf8 100644
 --- a/package/boot/uboot-tools/Makefile
 +++ b/package/boot/uboot-tools/Makefile
-@@ -68,18 +68,48 @@ define Package/uboot-envtools/conffiles
+@@ -29,6 +29,7 @@ define Package/dumpimage
+ 	CATEGORY:=Utilities
+ 	SUBMENU:=Boot Loaders
+ 	TITLE:=dumpimage lists and extracts data from U-Boot images.
++	DEPENDS:=+libopenssl
+ endef
+ 
+ define Package/dumpimage/description
+@@ -43,6 +44,7 @@ define Package/fit-check-sign
+ 	CATEGORY:=Utilities
+ 	SUBMENU:=Boot Loaders
+ 	TITLE:=verify uImage.FIT
++	DEPENDS:=+libopenssl
+ endef
+ 
+ define Package/fit-check-sign/description
+@@ -68,19 +70,27 @@ define Package/uboot-envtools/conffiles
  	/etc/fw_sys.config
  endef
  
@@ -108,6 +124,14 @@ index 041bbe8f27..47c9337eb4 100644
 -	TARGET_LDFLAGS="$(TARGET_LDFLAGS)" \
 -	NO_PYTHON=1 \
 -	V=$(if $(findstring c,$(OPENWRT_VERBOSE)),1,)
+-
+ define Build/Compile
+ 
+ ifneq ($(CONFIG_PACKAGE_uboot-envtools),)
+@@ -92,6 +102,28 @@ endif
+ 
+ endef
+ 
 +define Build/Compile
 +	$(MAKE) -C $(PKG_BUILD_DIR) \
 +		CROSS_COMPILE="$(TARGET_CROSS)" \
@@ -129,10 +153,11 @@ index 041bbe8f27..47c9337eb4 100644
 +		NO_SDL=1 \
 +		cross_tools
 +endef
- 
- define Build/Compile
- 
-@@ -104,7 +134,7 @@ endef
++
+ define Package/dumpimage/install
+ 	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/tools/dumpimage $(1)/usr/bin
+@@ -104,7 +136,7 @@ endef
  
  define Package/uboot-envtools/install
  	$(INSTALL_DIR) $(1)/usr/sbin
@@ -141,7 +166,7 @@ index 041bbe8f27..47c9337eb4 100644
  	$(LN) fw_printenv $(1)/usr/sbin/fw_setenv
  	$(INSTALL_BIN) ./uboot-envtools/files/fw_printsys $(1)/usr/sbin
  	$(INSTALL_BIN) ./uboot-envtools/files/fw_setsys $(1)/usr/sbin
-@@ -128,6 +158,12 @@ define Package/uboot-envtools/install
+@@ -128,6 +160,12 @@ define Package/uboot-envtools/install
  	)
  endef
  
