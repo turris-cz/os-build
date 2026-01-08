@@ -316,7 +316,6 @@ int tmelcom_qwes_device_provision(u32 *req_buf, u32 req_buf_len, u32 *resp_buf,
 		goto dma_unmap_prov_req_buf;
 	}
 
-	msg.status = TMEL_ERROR_GENERIC;
 	msg.req.buf = (u32)dma_prov_req_buf;
 	msg.req.buf_len = req_buf_len;
 	msg.rsp.buf = (u32)dma_prov_rsp_buf;
@@ -366,6 +365,7 @@ int tmelcom_licensing_check(void *cbor_req, u32 req_len, void *cbor_resp,
 		return ret;
 	}
 
+	msg.status = TMEL_ERROR_GENERIC;
 	msg.request.buf = dma_cbor_req;
 	msg.request.buf_len = req_len;
 	msg.response.buf = dma_cbor_resp;
@@ -825,6 +825,204 @@ int tmelcom_aes_import_key(u32 key_id, struct tme_key_policy *policy,
 }
 EXPORT_SYMBOL_GPL(tmelcom_aes_import_key);
 
+int tmelcom_wrap_key(u32 key_id, u32 kw_key_id, dma_addr_t *key, u32 len)
+{
+	struct device *dev = tmelcom_get_device();
+	struct tmel_wrap_key_msg msg = {0};
+	int ret;
+
+	msg.req.key_id = key_id;
+	msg.req.kw_key_id = kw_key_id;
+	msg.req.cred_slot = 0;
+	msg.resp.wrapped_key.key = *key;
+	msg.resp.wrapped_key.length = len;
+
+	ret = tmelcom_process_request(TMEL_MSG_UID_KM_WRAP, &msg, sizeof(msg));
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+
+	return ret ? ret : msg.resp.status;
+
+}
+EXPORT_SYMBOL_GPL(tmelcom_wrap_key);
+
+int tmelcom_unwrap_key(u32 kw_key_id, dma_addr_t *key, u32 len, u32 *key_id)
+{
+	struct device *dev = tmelcom_get_device();
+	struct tmel_unwrap_key_msg msg = {0};
+	int ret;
+
+	msg.req.key_id = *key_id;
+	msg.req.kw_key_id = kw_key_id;
+	msg.req.wrapped_key.key = *key;
+	msg.req.wrapped_key.length = len;
+
+	ret = tmelcom_process_request(TMEL_MSG_UID_KM_UNWRAP, &msg, sizeof(msg));
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+				__func__, ret, msg.resp.status);
+	else
+		*key_id = msg.resp.key_id;
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcom_unwrap_key);
+
+int tmelcomm_ecc_get_pubkey(u32 curve_id, u32 prv_key_id, dma_addr_t *dma_pub_key,
+			    u32 buf_len, u32 *used_len, u32 ecc_algo)
+{
+	int ret;
+	struct tme_ecc_get_pubkey_msg msg = {0};
+	struct device *dev = tmelcom_get_device();
+
+	msg.req.curve_id = curve_id;
+	msg.req.prv_key_id = prv_key_id;
+	msg.resp.pub_key.buf = (u32)*dma_pub_key;
+	msg.resp.pub_key.length = buf_len;
+
+	if (ecc_algo == 0)
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECC_GET_PUBKEY, &msg,
+					      sizeof(msg));
+	else
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECDH_GET_PUBKEY, &msg,
+					      sizeof(msg));
+
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+	else
+		*used_len = msg.resp.pub_key.length_used;
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcomm_ecc_get_pubkey);
+
+int tmelcomm_ecc_sign_msg(u32 curve_id, u32 prv_key_id, u32 hash_algo, dma_addr_t *buf,
+			  u32 buf_len, dma_addr_t *sig, u32 sig_len, u32 *used_len)
+{
+	int ret;
+	struct tme_ecc_sign_msg_msg msg = {0};
+	struct device *dev = tmelcom_get_device();
+
+	msg.req.curve_id = curve_id;
+	msg.req.prv_key_id = prv_key_id;
+	msg.req.hash_algo = hash_algo;
+	msg.req.msg.buf = (u32)*buf;
+	msg.req.msg.buf_len = buf_len;
+	msg.resp.sig.buf = (u32)*sig;
+	msg.resp.sig.length = sig_len;
+	msg.resp.sig.length_used = 0;
+
+	if (!hash_algo)
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECC_SIGN_DIGEST, &msg,
+					      sizeof(msg));
+	else
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECC_SIGN_MSG, &msg,
+					      sizeof(msg));
+
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+	else
+		*used_len = msg.resp.sig.length_used;
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcomm_ecc_sign_msg);
+
+int tmelcomm_ecc_verify_msg(u32 curve_id, dma_addr_t *pub_key, u32 pub_key_len,
+			    u32 hash_algo, dma_addr_t *buf, u32 buf_len,
+			    dma_addr_t *sig, u32 sig_len)
+{
+	int ret;
+	struct tme_ecc_verify_msg_msg msg = {0};
+	struct device *dev = tmelcom_get_device();
+
+	msg.req.curve_id = curve_id;
+	msg.req.pub_key.buf = (u32)*pub_key;
+	msg.req.pub_key.buf_len = pub_key_len;
+	msg.req.hash_algo = hash_algo;
+	msg.req.msg.buf = (u32)*buf;
+	msg.req.msg.buf_len = buf_len;
+	msg.req.sig.buf = (u32)*sig;
+	msg.req.sig.buf_len = sig_len;
+
+	if (!hash_algo)
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECC_VERIFY_DIGEST, &msg,
+					      sizeof(msg));
+	else
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECC_VERIFY_MSG, &msg,
+					      sizeof(msg));
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcomm_ecc_verify_msg);
+
+int tmelcomm_ecdh_shared_secret_msg(u32 curve_id, u32 prv_key_id, u32 *shared_key_id,
+				    dma_addr_t *pub_key2, u32 pub_key_len2,
+				    struct tme_key_policy *policy)
+{
+	int ret;
+	struct tme_ecdh_shared_secret_msg msg = {0};
+	struct device *dev = tmelcom_get_device();
+
+	msg.req.curve_id = curve_id;
+	msg.req.prv_key_id = prv_key_id;
+	msg.req.shared_key_id = *shared_key_id;
+	msg.req.pub_key2.buf = (u32)*pub_key2;
+	msg.req.pub_key2.buf_len = pub_key_len2;
+	msg.req.policy.low = policy->low;
+	msg.req.policy.high = policy->high;
+
+	ret = tmelcom_process_request(TMEL_MSG_UID_HCS_ECDH_SHARED_SECRET, &msg,
+				      sizeof(msg));
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+	else
+		*shared_key_id = msg.resp.shared_key_id;
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcomm_ecdh_shared_secret_msg);
+
+int tmelcomm_hmac_sha_digest(u32 hash_algo, dma_addr_t *buf_in, u32 buf_in_len,
+			     u32 key_id, dma_addr_t *buf_out, u32 buf_out_len,
+			     u32 *used_len)
+{
+	int ret;
+	struct tme_sha_msg msg = {0};
+	struct device *dev = tmelcom_get_device();
+
+	msg.req.hash_algo = hash_algo;
+	msg.req.input.buf = (u32)*buf_in;
+	msg.req.input.buf_len = buf_in_len;
+	msg.req.hmac_key_id = key_id;
+	msg.resp.digest.buf = (u32)*buf_out;
+	msg.resp.digest.length = buf_out_len;
+	msg.resp.digest.length_used = 0;
+
+	if (key_id)
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_HMAC_DIGEST, &msg,
+					      sizeof(msg));
+	else
+		ret = tmelcom_process_request(TMEL_MSG_UID_HCS_SHA_DIGEST, &msg,
+					      sizeof(msg));
+
+	if (ret || msg.resp.status)
+		dev_err(dev, "%s : IPC Failed. ret: %d msg->resp.status = %x\n",
+			__func__, ret, msg.resp.status);
+	else
+		*used_len = msg.resp.digest.length_used;
+
+	return ret ? ret : msg.resp.status;
+}
+EXPORT_SYMBOL_GPL(tmelcomm_hmac_sha_digest);
+
 int tmelcomm_qwes_enforce_hw_features(void *buf, u32 size)
 {
 	int ret;
@@ -842,6 +1040,7 @@ int tmelcomm_qwes_enforce_hw_features(void *buf, u32 size)
 		return -EINVAL;
 	}
 
+	msg.status = TMEL_ERROR_GENERIC;
 	msg.featid_buf.buf = (u32)dma_addr;
 	msg.featid_buf.buf_len = size;
 	msg.featid_buf.out_buf_len = 0;
@@ -859,3 +1058,4 @@ int tmelcomm_qwes_enforce_hw_features(void *buf, u32 size)
 
 	return ret ? ret : msg.status;
 }
+EXPORT_SYMBOL_GPL(tmelcomm_qwes_enforce_hw_features);

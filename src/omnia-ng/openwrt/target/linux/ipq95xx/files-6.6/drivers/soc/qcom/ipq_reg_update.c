@@ -19,6 +19,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/reset.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/tmelcom_ipc.h>
 #include <soc/qcom/socinfo.h>
@@ -55,6 +56,8 @@
 #define UBI_C2_GDS_CTRL_REQ 0x8
 #define UBI_C3_GDS_CTRL_REQ 0xC
 #define UBI32_CORE_GDS_COLLAPSE_EN_SW 0x1 << 28
+
+#define WCSS_Q6_BCR 0x1818000
 
 static void __iomem *memnoc_base;
 static void __iomem *nssnoc_base;
@@ -135,6 +138,7 @@ static int reg_update_probe(struct platform_device *pdev)
 	int ret, num_elem, i = 0;
 	struct device_node *np = (&pdev->dev)->of_node;
 	struct tmel_secure_io secure_reg;
+	struct reset_control *wcss_aon_reset;
 
 	/* For IPQ54xx, handle secure regs to be updated via tmelcom here */
 	if (of_device_is_compatible(np, "ipq,54xx-reg-update")) {
@@ -255,6 +259,28 @@ static int reg_update_probe(struct platform_device *pdev)
 				memnoc_base + MEM_NOC_QXM_WCSS_Q6_QOSGEN_REGUL0CTL_LOW);
 			writel(MEMNOC_53xx_WCSS_Q6_REGUL0BW_LOW_VAL,
 				memnoc_base + MEM_NOC_QXM_WCSS_Q6_QOSGEN_REGUL0BW_LOW);
+		}
+		if (cpu_is_ipq5300()) {
+			wcss_aon_reset = devm_reset_control_get_exclusive(&pdev->dev, "wcss_aon");
+			if (IS_ERR(wcss_aon_reset)) {
+				dev_err(&pdev->dev,
+					"unable to acquire reset, ret:%ld\n",
+					PTR_ERR(wcss_aon_reset));
+			} else {
+				ret = reset_control_assert(wcss_aon_reset);
+				if (ret)
+					dev_err(&pdev->dev,
+						"failed to assert reset register, ret:%d\n",
+						ret);
+
+				ret = qcom_scm_io_writel(WCSS_Q6_BCR, 0x1);
+				if (ret)
+					dev_err(&pdev->dev,
+						"wcss_q6_bcr assert failed ret:%d\n",
+						ret);
+				else
+					dev_info(&pdev->dev, "Asserted reset registers successfully\n");
+			}
 		}
 	}
 	else {

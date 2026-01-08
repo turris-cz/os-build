@@ -226,6 +226,11 @@ struct tmel_cbuffer_resp {
 	u32 length_used;
 } __packed;
 
+struct tmel_wrapped_key {
+	u32 key;
+	u32 length;
+} __packed;
+
 struct tmel_plain_text_key {
 	u32 buf;
 	u32 buf_len;
@@ -366,6 +371,161 @@ struct tmel_aes_import_key_msg {
 	struct tmel_aes_import_key_resp resp;
 } __packed;
 
+struct tmel_wrap_key_req {
+	u32 key_id; /* ID of the key to be wrapped */
+	u32 kw_key_id; /* The ID of the key wrapping key to be used to wrap the target key */
+	u32 cred_slot;
+} __packed;
+
+struct tmel_wrap_key_resp {
+	struct tmel_wrapped_key wrapped_key;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tmel_wrap_key_msg {
+	struct tmel_wrap_key_req req;
+	struct tmel_wrap_key_resp resp;
+} __packed;
+
+struct tmel_unwrap_key_req {
+	u32 key_id;
+	u32 kw_key_id; /* The ID of the key to be used to unwrap the key */
+	struct tmel_wrapped_key wrapped_key;
+	u32 cred_slot;
+} __packed;
+
+struct tmel_unwrap_key_resp {
+	u32 key_id;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tmel_unwrap_key_msg {
+	struct tmel_unwrap_key_req req;
+	struct tmel_unwrap_key_resp resp;
+} __packed;
+
+typedef enum {
+	TME_CURVE_P_NONE   = 0x00,
+	TME_CURVE_P_192    = 0x01,
+	TME_CURVE_P_224    = 0x02,
+	TME_CURVE_P_256    = 0x03, /**< Eliptical Curve P-256 */
+	TME_CURVE_P_384    = 0x04, /**< Eliptical Curve P-384 */
+	TME_CURVE_P_521    = 0x05, /**< Eliptical Curve P-521 */
+	TME_CURVE_P_256R1  = 0x06,
+	TME_CURVE_ED_25519 = 0x07,
+	TME_CURVE_ED_448   = 0x08,
+	TME_CURVE_E_521    = 0x09,
+	TME_CURVE_BP_192   = 0x11,
+	TME_CURVE_BP_224   = 0x12,
+	TME_CURVE_BP_256   = 0x13,
+	TME_CURVE_BP_320   = 0x14,
+	TME_CURVE_BP_384   = 0x15,
+	TME_CURVE_BP_512   = 0x16,
+	TME_CURVE_F_256V1  = 0x17,
+	TME_CURVE_RSA_2048 = 0x20,
+	TME_CURVE_RSA_3072 = 0x21,
+	TME_CURVE_RSA_4096 = 0x22,
+	TME_CURVE_MAX      = 0x7FFFFFFF,
+} tme_curve_id;
+
+struct tme_ecc_get_pubkey_req {
+	tme_curve_id curve_id;
+	u32 prv_key_id;
+} __packed;
+
+struct tme_ecc_get_pubkey_resp {
+	struct tmel_cbuffer_resp pub_key;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tme_ecc_get_pubkey_msg {
+	struct tme_ecc_get_pubkey_req req;
+	struct tme_ecc_get_pubkey_resp resp;
+} __packed;
+
+typedef enum {
+	TME_HA_INVALID = 0x00,       /**< Hash Algorithm: INVALID */
+	TME_HA_SHA256  = 0x02,       /**< Hash Algorithm: SHA256  */
+	TME_HA_SHA384  = 0x03,       /**< Hash Algorithm: SHA384  */
+	TME_HA_SHA512  = 0x05,       /**< Hash Algorithm: SHA512  */
+	TME_HA_MAX     = 0x7FFFFFFF, /**< Hash Algorithm: MAX  */
+} tme_hash_algo_id;
+
+struct tme_ecc_sign_msg_req {
+	tme_curve_id curve_id;
+	u32 prv_key_id;
+	tme_hash_algo_id hash_algo;
+	struct tmel_cbuffer msg;
+} __packed;
+
+struct tme_ecc_sign_msg_resp {
+	struct tmel_cbuffer_resp sig;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tme_ecc_sign_msg_msg {
+	struct tme_ecc_sign_msg_req req;
+	struct tme_ecc_sign_msg_resp resp;
+} __packed;
+
+struct tme_ecc_verify_msg_req {
+	tme_curve_id curve_id;
+	struct tmel_cbuffer pub_key;
+	tme_hash_algo_id hash_algo;
+	struct tmel_cbuffer msg;
+	struct tmel_cbuffer sig;
+} __packed;
+
+struct tme_ecc_verify_msg_resp {
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tme_ecc_verify_msg_msg {
+	struct tme_ecc_verify_msg_req req;
+	struct tme_ecc_verify_msg_resp resp;
+} __packed;
+
+struct tme_ecdh_shared_secret_msg_req {
+	tme_curve_id curve_id;
+	u32 prv_key_id;
+	u32 shared_key_id;
+	struct tmel_cbuffer pub_key2;
+	struct tme_key_policy policy;
+} __packed;
+
+struct tme_ecdh_shared_secret_msg_resp {
+	u32 shared_key_id;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tme_ecdh_shared_secret_msg {
+	struct tme_ecdh_shared_secret_msg_req req;
+	struct tme_ecdh_shared_secret_msg_resp resp;
+} __packed;
+
+struct tme_sha_msg_req {
+	tme_hash_algo_id hash_algo;
+	struct tmel_cbuffer input;
+	u32 hmac_key_id;
+} __packed;
+
+struct tme_sha_msg_resp {
+	struct tmel_cbuffer_resp digest;
+	tme_status status;
+	struct tme_sequencer_status_resp seq_status;
+} __packed;
+
+struct tme_sha_msg {
+	struct tme_sha_msg_req req;
+	struct tme_sha_msg_resp resp;
+} __packed;
+
 struct tmel_update_arb_version_sw_id_list_req {
 	struct tmel_cbuffer cbuffer;
 } __packed;
@@ -418,9 +578,29 @@ int tmelcom_aes_generate_key(u32 key_id, struct tme_key_policy *policy,
 int tmelcom_aes_import_key(u32 key_id, struct tme_key_policy *policy,
 			   struct tmel_plain_text_key *key_material,
 			   u8 *key_handle);
-
+int tmelcom_wrap_key(u32 key_id, u32 kw_key_id, dma_addr_t *key, u32 len);
+int tmelcom_unwrap_key(u32 kw_key_id, dma_addr_t *key, u32 len, u32 *key_id);
+int tmelcomm_ecc_get_pubkey(u32 curve_id, u32 prv_key_id, dma_addr_t *dma_pub_key,
+			    u32 buf_len, u32 *used_len, u32 ecc_algo);
+int tmelcomm_ecc_sign_msg(u32 curve_id, u32 prv_key_id, u32 hash_algo, dma_addr_t *buf,
+			  u32 buf_len, dma_addr_t *sig, u32 sig_len, u32 *used_len);
+int tmelcomm_ecc_verify_msg(u32 curve_id, dma_addr_t *pub_key, u32 pub_key_len,
+			    u32 hash_algo, dma_addr_t *buf, u32 buf_len,
+			    dma_addr_t *sig, u32 sig_len);
+int tmelcomm_ecdh_shared_secret_msg(u32 curve_id, u32 prv_key_id, u32 *shared_key_id,
+				    dma_addr_t *pub_key2, u32 pub_key_len2,
+				    struct tme_key_policy *policy);
+int tmelcomm_hmac_sha_digest(u32 hash_algo, dma_addr_t *buf_in, u32 buf_in_len,
+			     u32 key_id, dma_addr_t *buf_out, u32 buf_out_len,
+			     u32 *used_len);
 #else
 static inline int tmelcom_probed(void)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_get_ecc_public_key(u32 type, void *buf, u32 size,
+					      u32 *rsp_len)
 {
 	return -EOPNOTSUPP;
 }
@@ -574,5 +754,55 @@ static inline int tmelcom_aes_import_key(u32 key_id, struct tme_key_policy *poli
 	return -EOPNOTSUPP;
 }
 
+static inline int tmelcom_wrap_key(u32 key_id, u32 kw_key_id, dma_addr_t *key,
+				   u32 len)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcom_unwrap_key(u32 kw_key_id, dma_addr_t *key, u32 len,
+				     u32 *key_id)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_ecc_get_pubkey(u32 curve_id, u32 prv_key_id,
+					  dma_addr_t *dma_pub_key, u32 buf_len,
+					  u32 *used_len, u32 ecc_algo)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_ecc_sign_msg(u32 curve_id, u32 prv_key_id,
+					   u32 hash_algo, dma_addr_t *buf,
+					   u32 buf_len, dma_addr_t *sig,
+					   u32 sig_len, u32 *used_len)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_ecc_verify_msg(u32 curve_id, dma_addr_t *pub_key, u32 pub_key_len,
+					     u32 hash_algo, dma_addr_t *buf, u32 buf_len,
+					     dma_addr_t *sig, u32 sig_len)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_ecdh_shared_secret_msg(u32 curve_id, u32 prv_key_id,
+						  u32 *shared_key_id,
+						  dma_addr_t *pub_key2,
+						  u32 pub_key_len2,
+						  struct tme_key_policy *policy)
+{
+	return -EOPNOTSUPP;
+}
+
+static inline int tmelcomm_hmac_sha_digest(u32 hash_algo, dma_addr_t *buf_in,
+					   u32 buf_in_len, u32 key_id,
+					   dma_addr_t *buf_out, u32 buf_out_len,
+					   u32 *used_len)
+{
+	return -EOPNOTSUPP;
+}
 #endif /* CONFIG_QCOM_TMELCOM */
 #endif /* _TMELCOM_IPC_H_ */

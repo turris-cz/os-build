@@ -238,6 +238,13 @@
 			qcom,rx-page-mode = <0>;		/* Rx fill ring page mode */
 			qcom,tx-map-priority-level = <1>;	/* Tx priority level per port */
 			qcom,rx-map-priority-level = <1>;	/* Rx priority level per core */
+			qcom,num_loopback_rings = <1>;
+			qcom,txdesc_loopback_ring_id = <0>;
+			qcom,txcmpl_loopback_ring_id = <0>;
+			qcom,rxfill_loopback_ring_id = <0>;
+			qcom,rxdesc_loopback_ring_id = <0>;
+			qcom,loopback_queue_base = <56>;
+			qcom,loopback_num_queues = <8>;
 			qcom,ppeds-num = <3>;			/* Number of PPEDS nodes */
 			/* PPE-DS node format: <Rx-fill Tx-cmpl Rx Tx Queue-base Queue-count> */
 			qcom,ppeds-map = <1 1 1 1 32 8>,	/* PPEDS Node#0 ring and queue map */
@@ -332,11 +339,35 @@
 			boot-args = <0x2 0x4 0x34 0x3 0x0 0x0     /* MX Rail, GPIO52, Drive strength 0x3 */
 					0x4 0x4 0x18 0x3 0x0 0x0  /* RFA1p2 Rail, GPIO24, Drive strength 0x3 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie2>, <&mhi_region2>;
+			memory-region = <&qcn9224_pcie2>, <&mhi_region2>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x8A800>;
 			qcom,board_id = <0x04>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <0>;
 			status = "okay";
+			qcom,wsi-controller;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi2_wsi_tx: endpoint {
+						remote-endpoint = <&wifi3_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi2_wsi_rx: endpoint {
+						remote-endpoint = <&wifi3_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -359,11 +390,35 @@
 			boot-args = <0x2 0x4 0x34 0x3 0x0 0x0     /* MX Rail, GPIO52, Drive strength 0x3 */
 					0x4 0x4 0x18 0x3 0x0 0x0  /* RFA1p2 Rail, GPIO24, Drive strength 0x3 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie3>, <&mhi_region3>;
+			memory-region = <&qcn9224_pcie3>, <&mhi_region3>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0xBC800>;
 			qcom,board_id = <0x02>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <1>;
 			status = "okay";
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi3_wsi_tx: endpoint {
+						remote-endpoint = <&wifi2_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi3_wsi_rx: endpoint {
+						remote-endpoint = <&wifi2_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };

@@ -24,6 +24,9 @@
 #define CPU_SEQ_FORCE_PWR_CTL_VAL 0x20
 #define CPU_PCHANNEL_FSM_CTL 0x44
 
+#define CPU_PWR_CTL		0x04
+#define CPU_PWR_GATE_CTL	0x14
+
 inline void a55ss_unclamp_cpu(void __iomem *reg)
 {
 	/* Program skew between en_few and en_rest to 40 XO clk cycles (~2us) */
@@ -85,5 +88,43 @@ inline void a55ss_unclamp_cpu(void __iomem *reg)
 
 	/* Assert CPU_PWRDUP */
 	writel_relaxed(0x00000428, reg + CPU_HEAD_SWITCH_CTL);
+	mb();
+}
+
+inline void a53ss_unclamp_cpu(void __iomem *reg)
+{
+	writel_relaxed(0x00000033, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x10000001, reg + CPU_PWR_GATE_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000031, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000039, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000239, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00004239, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000239, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000238, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000208, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000288, reg + CPU_PWR_CTL);
 	mb();
 }

@@ -766,7 +766,12 @@ static struct platform_driver qmp_mbox_driver = {
 	.probe = qmp_mbox_probe,
 	.remove = qmp_mbox_remove,
 };
-module_platform_driver(qmp_mbox_driver);
+
+static int __init qmp_mbox_driver_init(void)
+{
+	return platform_driver_register(&qmp_mbox_driver);
+}
+arch_initcall(qmp_mbox_driver_init);
 
 MODULE_DESCRIPTION("QTI Mailbox Protocol");
 MODULE_LICENSE("GPL v2");

@@ -40,6 +40,8 @@
 #include <linux/crc32.h>
 #include <linux/bio.h>
 #include <linux/blkdev.h>
+#include <linux/of.h>
+#include <linux/of_address.h>
 #include "bootconfig.h"
 
 
@@ -77,6 +79,7 @@ static u32 *trymode_inprogress;
 static int try_feature;
 
 static unsigned long int trybit;
+uint32_t active_bootconfig;
 #define CFG_MAX_DIG_COUNT	2
 #define QCOM_SCM_SVC_BOOT	0x1
 
@@ -267,6 +270,90 @@ static const struct proc_ops trybit_ops = {
 	.proc_lseek	= seq_lseek,
 	.proc_release	= single_release,
 	.proc_write	= trybit_write,
+};
+
+static int which_bootconfig_show(struct seq_file *m, void *v)
+{
+	struct device_node *imem_np;
+	void __iomem *imem_base;
+	imem_np = of_find_compatible_node(NULL, NULL,
+					  "qcom,msm-imem-bootconfig-status-buf-addr");
+	active_bootconfig = -1;
+
+	if (!imem_np) {
+		pr_err("bootconfig_status_buf_addr imem DT node does not exist\n");
+		return 0;
+	}
+
+	imem_base = of_iomap(imem_np, 0);
+	if (!imem_base) {
+		of_node_put(imem_np);
+		pr_err("bootconfig_status_buf_addr imem offset mapping failed\n");
+		return 0;
+	}
+
+	memcpy_fromio(&active_bootconfig, imem_base, 4);
+
+	seq_printf(m, "%x\n", active_bootconfig);
+	iounmap(imem_base);
+	of_node_put(imem_np);
+	return 0;
+}
+
+static int which_bootconfig_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, which_bootconfig_show, pde_data(inode));
+}
+
+static const struct proc_ops which_bootconfig_ops = {
+	.proc_open	= which_bootconfig_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+};
+
+static int bootconfig0_health_show(struct seq_file *m, void *v)
+{
+	uint32_t val;
+	val = qcom_read_dload_reg();
+	val = (val & BOOTCONFIG_HEALTH) ? 0 : 1;
+
+	seq_printf(m, "%x\n", val);
+	return 0;
+}
+
+static int bootconfig0_health_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, bootconfig0_health_show, pde_data(inode));
+}
+
+static const struct proc_ops bootconfig0_health_ops = {
+	.proc_open	= bootconfig0_health_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
+};
+
+static int bootconfig1_health_show(struct seq_file *m, void *v)
+{
+	uint32_t val;
+	val = qcom_read_dload_reg();
+	val = (val & BOOTCONFIG1_HEALTH) ? 0 : 1;
+
+	seq_printf(m, "%x\n", val);
+	return 0;
+}
+
+static int bootconfig1_health_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, bootconfig1_health_show, pde_data(inode));
+}
+
+static const struct proc_ops bootconfig1_health_ops = {
+	.proc_open	= bootconfig1_health_open,
+	.proc_read	= seq_read,
+	.proc_lseek	= seq_lseek,
+	.proc_release	= single_release,
 };
 
 static int trymode_inprogress_show(struct seq_file *m, void *v)
@@ -1007,11 +1094,20 @@ static int __init bootconfig_partition_init(void)
 	proc_create_data("age", S_IRUGO, bootconfig1_info_dir,
 			&age_ops, bootconfig1);
 
+	proc_create_data("health_status", S_IRUGO, bootconfig1_info_dir,
+			&bootconfig0_health_ops, bootconfig1);
+
 	proc_create_data("getbinary_bootconfig", S_IRUGO, bootconfig2_info_dir,
 			&getbinary_ops, bootconfig2);
 
 	proc_create_data("age", S_IRUGO, bootconfig2_info_dir,
 			&age_ops, bootconfig2);
+
+	proc_create_data("health_status", S_IRUGO, bootconfig2_info_dir,
+			&bootconfig1_health_ops, bootconfig2);
+
+	proc_create_data("active_bootconfig", S_IRUGO, boot_info_dir,
+			&which_bootconfig_ops, &active_bootconfig);
 
 	return 0;
 

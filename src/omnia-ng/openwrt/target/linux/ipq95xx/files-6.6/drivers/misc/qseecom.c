@@ -1,7 +1,7 @@
 /* QTI Secure Execution Environment Communicator (QSEECOM) driver
  *
  * Copyright (c) 2012, 2015, 2017-2018, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -87,6 +87,20 @@ static int unload_app_libs(void)
 	return 0;
 }
 
+static int tzapp_log_alloc(struct device *dev, u64 len)
+{
+	tzapp_log = kzalloc(len, GFP_KERNEL);
+	q_qsee_log = dma_alloc_coherent(dev, len, &dma_qsee_log_buf, GFP_KERNEL);
+
+	if (!tzapp_log || !q_qsee_log) {
+		kfree(tzapp_log);
+		dma_free_coherent(dev, len, q_qsee_log, dma_qsee_log_buf);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 static int qtidbg_register_qsee_log_buf(struct device *dev)
 {
 	uint64_t len = 0;
@@ -94,12 +108,20 @@ static int qtidbg_register_qsee_log_buf(struct device *dev)
 	struct qsee_reg_log_buf_req req;
 	struct qseecom_command_scm_resp resp;
 
-	len = QSEE_LOG_BUF_SIZE;
-	q_qsee_log = dma_alloc_coherent(dev, len, &dma_qsee_log_buf, GFP_KERNEL);
-	if (!q_qsee_log) {
-		pr_err("Failed to alloc memory for size %llu\n", len);
-		return -ENOMEM;
+	len = qsee_log_buf_len;
+
+	ret = tzapp_log_alloc(dev, len);
+	if (ret && (len > SZ_4K)) {
+		/* Switch back to 4k size */
+		len = SZ_4K;
+		ret = tzapp_log_alloc(dev, len);
+		if (ret) {
+			pr_err("Failed to allocate memory for tzapp_log\n");
+			return -ENOMEM;
+		}
 	}
+
+	qsee_log_buf_len = len;
 
 	req.phy_addr = dma_qsee_log_buf;
 	req.len = len;
@@ -120,10 +142,12 @@ static int qtidbg_register_qsee_log_buf(struct device *dev)
 		return ret;
 	}
 
+	pr_info("Tzapp log buffer size = %u bytes\n", qsee_log_buf_len);
+
 	return 0;
 }
 
-static ssize_t tmecomm_show_aes_key(struct device *dev,
+static ssize_t tmecomm_show_key(struct device *dev,
 				    struct device_attribute *attr,
 				    char *buf)
 {
@@ -138,7 +162,7 @@ static ssize_t tmecomm_show_aes_key(struct device *dev,
 }
 
 static ssize_t
-tmecomm_store_aes_key(struct device *dev, struct device_attribute *attr,
+tmecomm_store_key(struct device *dev, struct device_attribute *attr,
 		      const char *buf, size_t count)
 {
 	unsigned int val;
@@ -148,7 +172,7 @@ tmecomm_store_aes_key(struct device *dev, struct device_attribute *attr,
 
 	*tmel_key_handle = val;
 	if (*tmel_key_handle == TME_KID_INVALID) {
-		pr_info("Invalid aes key handle: %u\n",
+		pr_info("Invalid key handle: %u\n",
 			(unsigned int)*tmel_key_handle);
 		return -EINVAL;
 	}
@@ -156,9 +180,9 @@ tmecomm_store_aes_key(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-static ssize_t tmecomm_show_aes_generate_key(struct device *dev,
-					     struct device_attribute *attr,
-					     char *buf)
+static ssize_t tmecomm_show_generate_key(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
 {
 	struct tme_key_policy policy;
 	u32 key_id;
@@ -168,20 +192,51 @@ static ssize_t tmecomm_show_aes_generate_key(struct device *dev,
 	memset(message, 0, MESSAGE_LEN);
 
 	key_id = TME_KID_ALLOC;
-	if (tmel_aes_mode == TME_KAL_AES256_ECB) {
+	if (tmel_algo == TME_KAL_AES256_ECB) {
 		policy.low = 0xc204c20;
-		policy.high = 0x84040;
-	} else { //TME_KAL_AES256_CBC
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_AES256_CBC) {
 		policy.low = 0xc214c20;
-		policy.high = 0x84040;
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_AES256_GCM) {
+		policy.low = 0xc260c20;
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDSA) {
+		if (tmel_curve_id == TME_CURVE_P_256) {
+			policy.low = 0xc200421;
+			policy.high = 0x84044;
+		} else if (tmel_curve_id == TME_CURVE_P_384) {
+			policy.low = 0xc200429;
+			policy.high = 0x84044;
+		} else {
+			pr_err("Invalid ECC curve ID\n");
+			return -EINVAL;
+		}
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDH) {
+		if (tmel_curve_id == TME_CURVE_P_256) {
+			policy.low = 0xc204821;
+			policy.high = 0x84044;
+		} else if (tmel_curve_id == TME_CURVE_P_384) {
+			policy.low = 0xc204829;
+			policy.high = 0x84044;
+		} else {
+			pr_err("Invalid ECC curve ID\n");
+			return -EINVAL;
+		}
+	} else if (tmel_algo == TME_KAL_SHA256_HMAC) {
+		policy.low = 0xc249020;
+		policy.high = 0x84044;
+	} else {
+		pr_err("Invalid algo\n");
+		return -EINVAL;
 	}
 
 	ret = tmelcom_aes_generate_key(key_id, &policy, tmel_key_handle);
 	if (ret) {
 		pr_info("Error: Failed to generate key\n");
-		snprintf(message, MESSAGE_LEN, "AES generate key failed\n");
+		snprintf(message, MESSAGE_LEN, "generate key failed\n");
 	} else {
-		pr_info("aes key handle: %lu\n", (unsigned long)*tmel_key_handle);
+		pr_info("key handle: %lu\n", (unsigned long)*tmel_key_handle);
 		snprintf(message, MESSAGE_LEN, "%lu\n", (unsigned long)*tmel_key_handle);
 	}
 
@@ -195,25 +250,38 @@ static ssize_t tmecomm_store_pt_key(struct device *dev,
 				    struct device_attribute *attr,
 				    const char *buf, size_t count)
 {
-	memset(pt_key, 0, KEY_SIZE);
-	tmel_aes_pt_key_len = 0;
+	uint32_t key_size = 0;
 
-	if (count != KEY_SIZE) {
+	memset(pt_key, 0, TME_MAX_KEY_LEN);
+	tmel_pt_key_len = 0;
+
+	if ((tmel_algo == TME_KAL_ECC_ALGO_ECDSA) || (tmel_algo == TME_KAL_ECC_ALGO_ECDH)) {
+		if (tmel_curve_id == TME_CURVE_P_256)
+			key_size = 32;
+		else if (tmel_curve_id == TME_CURVE_P_384)
+			key_size = 48;
+	} else {
+		key_size = 32;
+	}
+
+	if (count != key_size) {
 		pr_info("Invalid input\n");
 		pr_info("Key length is %lu bytes\n", (unsigned long)count);
-		pr_info("Key length must be %u bytes\n", (unsigned int)KEY_SIZE);
+		pr_info("Key length must be 32 bytes for AES256 modes.\n "
+			"Key length must be 32 bytes for ECC curve P-256 and "
+			"48 bytes for ECC curve P-384\n");
 		return -EINVAL;
 	}
 
-	tmel_aes_pt_key_len = count;
-	memcpy(pt_key, buf, tmel_aes_pt_key_len);
+	tmel_pt_key_len = count;
+	memcpy(pt_key, buf, tmel_pt_key_len);
 
 	return count;
 }
 
-static ssize_t tmecomm_show_aes_import_key(struct device *dev,
-					   struct device_attribute *attr,
-					   char *buf)
+static ssize_t tmecomm_show_import_key(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
 {
 	struct tmel_plain_text_key key_material;
 	struct tme_key_policy policy;
@@ -224,23 +292,54 @@ static ssize_t tmecomm_show_aes_import_key(struct device *dev,
 	memset(message, 0, MESSAGE_LEN);
 
 	key_material.buf = dma_pt_key;
-	key_material.buf_len = tmel_aes_pt_key_len;
+	key_material.buf_len = tmel_pt_key_len;
 	key_id = TME_KID_ALLOC;
-	if (tmel_aes_mode == TME_KAL_AES256_ECB) {
+	if (tmel_algo == TME_KAL_AES256_ECB) {
 		policy.low = 0xc104c20;
-		policy.high = 0x84040;
-	} else { //TME_KAL_AES256_CBC
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_AES256_CBC) {
 		policy.low = 0xc114c20;
-		policy.high = 0x84040;
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_AES256_GCM) {
+		policy.low = 0xc160c20;
+		policy.high = 0x84044;
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDSA) {
+		if (tmel_curve_id == TME_CURVE_P_256) {
+			policy.low = 0xc100421;
+			policy.high = 0x84044;
+		} else if (tmel_curve_id == TME_CURVE_P_384) {
+			policy.low = 0xc100429;
+			policy.high = 0x84044;
+		} else {
+			pr_err("Invalid ECC curve ID\n");
+			return -EINVAL;
+		}
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDH) {
+		if (tmel_curve_id == TME_CURVE_P_256) {
+			policy.low = 0xc104821;
+			policy.high = 0x84044;
+		} else if (tmel_curve_id == TME_CURVE_P_384) {
+			policy.low = 0xc104829;
+			policy.high = 0x84044;
+		} else {
+			pr_err("Invalid ECC curve ID\n");
+			return -EINVAL;
+		}
+	} else if (tmel_algo == TME_KAL_SHA256_HMAC) {
+		policy.low = 0xc149020;
+		policy.high = 0x84044;
+	} else {
+		pr_err("Invalid algo\n");
+		return -EINVAL;
 	}
 
 	ret = tmelcom_aes_import_key(key_id, &policy, &key_material,
 				     tmel_key_handle);
 	if (ret) {
 		pr_info("Error: Failed to import key\n");
-		snprintf(message, MESSAGE_LEN, "AES import key failed\n");
+		snprintf(message, MESSAGE_LEN, "import key failed\n");
 	} else {
-		pr_info("aes key handle: %lu\n", (unsigned long)*tmel_key_handle);
+		pr_info("key handle: %lu\n", (unsigned long)*tmel_key_handle);
 		snprintf(message, MESSAGE_LEN, "%lu\n", (unsigned long)*tmel_key_handle);
 	}
 
@@ -251,9 +350,8 @@ static ssize_t tmecomm_show_aes_import_key(struct device *dev,
 }
 
 
-static ssize_t tmecomm_show_aes_derive_key(struct device *dev,
-					   struct device_attribute *attr,
-					   char *buf)
+static ssize_t tmecomm_show_derive_key(struct device *dev,
+				       struct device_attribute *attr, char *buf)
 {
 	struct tme_kdf_spec *kdf_spec;
 	int ret = 0;
@@ -276,31 +374,103 @@ static ssize_t tmecomm_show_aes_derive_key(struct device *dev,
 		return -ENOMEM;
 
 	kdf_spec->kdf_algo = TME_KAL_KDF_NIST;
-	kdf_spec->input_key = tmel_aes_input_key;
-	kdf_spec->mix_key = 0x0;
+	kdf_spec->input_key = tmel_input_key;
+	kdf_spec->mix_key = tmel_mix_key_id;
 	kdf_spec->l2_key = TME_KID_L2_SECURESTRGSVC;
-	if (tmel_aes_mode == TME_KAL_AES256_ECB) {
-		if (tmel_aes_input_key == TME_KID_CHIP_RAND_BASE) {
+	if (tmel_algo == TME_KAL_AES256_ECB) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
 			kdf_spec->policy.low = 0x4c204c20;
-			kdf_spec->policy.high = 0x84040;
+			kdf_spec->policy.high = 0x84044;
 		} else { //TME_KID_OEM_PRODUCT_SEED
 			kdf_spec->policy.low = 0xc204c20;
-			kdf_spec->policy.high = 0x84040;
+			kdf_spec->policy.high = 0x84048;
 		}
-	} else { //TME_KAL_AES256_CBC
-		if (tmel_aes_input_key == TME_KID_CHIP_RAND_BASE) {
+	} else if (tmel_algo == TME_KAL_AES256_CBC) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
 			kdf_spec->policy.low = 0x4c214c20;
-			kdf_spec->policy.high = 0x84040;
+			kdf_spec->policy.high = 0x84044;
 		} else { //TME_KID_OEM_PRODUCT_SEED
 			kdf_spec->policy.low = 0xc214c20;
-			kdf_spec->policy.high = 0x84040;
+			kdf_spec->policy.high = 0x84048;
 		}
+	} else if (tmel_algo == TME_KAL_AES256_GCM) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
+			kdf_spec->policy.low = 0x4c260c20;
+			kdf_spec->policy.high = 0x84044;
+		} else { //TME_KID_OEM_PRODUCT_SEED
+			kdf_spec->policy.low = 0xc260c20;
+			kdf_spec->policy.high = 0x84048;
+		}
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDSA) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
+			if (tmel_curve_id == TME_CURVE_P_256) {
+				kdf_spec->policy.low = 0x4c200421;
+				kdf_spec->policy.high = 0x84044;
+			} else if (tmel_curve_id == TME_CURVE_P_384) {
+				kdf_spec->policy.low = 0x4c200429;
+				kdf_spec->policy.high = 0x84044;
+			} else {
+				pr_err("Invalid ECC curve ID\n");
+				return -EINVAL;
+			}
+		} else { //TME_KID_OEM_PRODUCT_SEED
+			if (tmel_curve_id == TME_CURVE_P_256) {
+				kdf_spec->policy.low = 0xc200421;
+				kdf_spec->policy.high = 0x84048;
+			} else if (tmel_curve_id == TME_CURVE_P_384) {
+				kdf_spec->policy.low = 0xc200429;
+				kdf_spec->policy.high = 0x84048;
+			}
+		}
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDH) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
+			if (tmel_curve_id == TME_CURVE_P_256) {
+				kdf_spec->policy.low = 0x4c204821;
+				kdf_spec->policy.high = 0x84044;
+			} else if (tmel_curve_id == TME_CURVE_P_384) {
+				kdf_spec->policy.low = 0x4c204829;
+				kdf_spec->policy.high = 0x84044;
+			} else {
+				pr_err("Invalid ECC curve ID\n");
+				return -EINVAL;
+			}
+		} else { //TME_KID_OEM_PRODUCT_SEED
+			if (tmel_curve_id == TME_CURVE_P_256) {
+				kdf_spec->policy.low = 0xc204821;
+				kdf_spec->policy.high = 0x84048;
+			} else if (tmel_curve_id == TME_CURVE_P_384) {
+				kdf_spec->policy.low = 0xc204829;
+				kdf_spec->policy.high = 0x84048;
+			} else {
+				pr_err("Invalid ECC curve ID\n");
+				return -EINVAL;
+			}
+		}
+	} else if (tmel_algo == TME_KAL_SHA256_HMAC) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE) {
+			kdf_spec->policy.low = 0x4c249020;
+			kdf_spec->policy.high = 0x84044;
+		} else { //TME_KID_OEM_PRODUCT_SEED
+			kdf_spec->policy.low = 0xc249020;
+			kdf_spec->policy.high = 0x84048;
+		}
+	} else if (tmel_algo == TME_KAL_AES256_SIV) {
+		if (tmel_input_key == TME_KID_CHIP_RAND_BASE)
+			kdf_spec->policy.low = 0x4c230d38;
+		else //TME_KID_OEM_PRODUCT_SEED
+			kdf_spec->policy.low = 0xc230e38;
+		kdf_spec->policy.high = 0x84040;
+	} else {
+		pr_err("Invalid algo\n");
+		return -EINVAL;
 	}
-	memcpy(kdf_spec->sw_context, sw_context, tmel_aes_sw_context_len);
-	kdf_spec->sw_context_len = tmel_aes_sw_context_len;
-	kdf_spec->security_context = tmel_aes_sec_ctx;
-	memcpy(kdf_spec->salt_label, salt_label, tmel_aes_salt_label_len);
-	kdf_spec->salt_label_len = tmel_aes_salt_label_len;
+	memcpy(kdf_spec->sw_context, sw_context, tmel_sw_context_len);
+	kdf_spec->sw_context_len = tmel_sw_context_len;
+	kdf_spec->security_context = tmel_sec_ctx;
+	if (kdf_spec->mix_key)
+		kdf_spec->security_context |= TME_KSC_MixingKey;
+	memcpy(kdf_spec->salt_label, salt_label, tmel_salt_label_len);
+	kdf_spec->salt_label_len = tmel_salt_label_len;
 	kdf_spec->prf_digest_algo = TME_KAL_SHA512_HMAC;
 
 	kdf_len = sizeof(struct tme_kdf_spec);
@@ -310,7 +480,7 @@ static ssize_t tmecomm_show_aes_derive_key(struct device *dev,
 		pr_info("Error: Failed to derive key\n");
 	} else {
 		snprintf(message, MESSAGE_LEN, "%lu\n", (unsigned long)*tmel_key_handle);
-		pr_info("aes key handle: %lu\n", (unsigned long)*tmel_key_handle);
+		pr_info("key handle: %lu\n", (unsigned long)*tmel_key_handle);
 	}
 
 	len = strlen(message) + 1;
@@ -320,7 +490,7 @@ static ssize_t tmecomm_show_aes_derive_key(struct device *dev,
 	return len;
 }
 
-static ssize_t tmecomm_store_aes_clear_key(struct device *dev,
+static ssize_t tmecomm_store_clear_key(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
 {
@@ -366,9 +536,9 @@ static ssize_t tmecomm_store_aes_decrypted_data(struct device *dev,
 	return count;
 }
 
-static ssize_t tmecomm_store_aes_mode(struct device *dev,
-				      struct device_attribute *attr,
-				      const char *buf, size_t count)
+static ssize_t tmecomm_store_algo(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
 {
 	unsigned int val;
 
@@ -376,16 +546,26 @@ static ssize_t tmecomm_store_aes_mode(struct device *dev,
 		return -EINVAL;
 
 	if (val == 0)
-		tmel_aes_mode = TME_KAL_AES256_ECB;
+		tmel_algo = TME_KAL_AES256_ECB;
 	else if (val == 1)
-		tmel_aes_mode = TME_KAL_AES256_CBC;
+		tmel_algo = TME_KAL_AES256_CBC;
+	else if (val == 2)
+		tmel_algo = TME_KAL_AES256_GCM;
+	else if (val == 3)
+		tmel_algo = TME_KAL_ECC_ALGO_ECDSA;
+	else if (val == 4)
+		tmel_algo = TME_KAL_ECC_ALGO_ECDH;
+	else if (val == 5)
+		tmel_algo = TME_KAL_SHA256_HMAC;
+	else if (val == 6)
+		tmel_algo = TME_KAL_AES256_SIV;
 	else
 		return -EINVAL;
 
 	return count;
 }
 
-static ssize_t tmecomm_aes_store_input_key(struct device *dev,
+static ssize_t tmecomm_store_input_key(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
 {
@@ -395,9 +575,9 @@ static ssize_t tmecomm_aes_store_input_key(struct device *dev,
 		return -EINVAL;
 
 	if (val == 0)
-		tmel_aes_input_key = TME_KID_CHIP_RAND_BASE;
+		tmel_input_key = TME_KID_CHIP_RAND_BASE;
 	else if (val == 1)
-		tmel_aes_input_key = TME_KID_OEM_PRODUCT_SEED;
+		tmel_input_key = TME_KID_OEM_PRODUCT_SEED;
 	else
 		return -EINVAL;
 
@@ -425,7 +605,7 @@ static ssize_t tmecomm_show_aes_encrypted_data(struct device *dev,
 	tag = memset(tag, 0, TME_MAX_TAG_LEN);
 	cipher_txt = memset(cipher_txt, 0, MAX_PLAIN_DATA_SIZE);
 
-	msg.req.algo = tmel_aes_mode;
+	msg.req.algo = tmel_algo;
 	msg.req.key_id = *tmel_key_handle;
 	msg.req.in_aad.buf = (u32) dma_aad;
 	msg.req.in_aad.buf_len = tmel_aes_aad_len;
@@ -508,7 +688,7 @@ static ssize_t tmecomm_show_aes_decrypted_data(struct device *dev,
 		return -EINVAL;
 	}
 
-	msg.req.algo = tmel_aes_mode;
+	msg.req.algo = tmel_algo;
 	msg.req.key_id = *tmel_key_handle;
 	msg.req.in_aad.buf = (u32) dma_aad;
 	msg.req.in_aad.buf_len = tmel_aes_aad_len;
@@ -539,9 +719,9 @@ static ssize_t tmecomm_show_aes_decrypted_data(struct device *dev,
 	return tmel_aes_decrypted_len;
 }
 
-static ssize_t tmecomm_aes_store_context_data(struct device *dev,
-					      struct device_attribute *attr,
-					      const char *buf, size_t count)
+static ssize_t tmecomm_store_context_data(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
 {
 	int i = 0;
 	int num_bytes = count / 2 ;
@@ -564,11 +744,11 @@ static ssize_t tmecomm_aes_store_context_data(struct device *dev,
 			 (unsigned long)count);
 		pr_info("Context data length must be less than %d bytes\n",
 			 TME_KDF_SW_CONTEXT_BYTES_MAX);
-		tmel_aes_sw_context_len = 0;
+		tmel_sw_context_len = 0;
 		return -EINVAL;
 	}
 
-	tmel_aes_sw_context_len = num_bytes;
+	tmel_sw_context_len = num_bytes;
 
 	for (i = 0; i < num_bytes; i++) {
 		sscanf(buf, "%2hhx", &sw_context[i]);
@@ -582,9 +762,9 @@ static ssize_t tmecomm_aes_store_context_data(struct device *dev,
 	return count;
 }
 
-static ssize_t tmecomm_aes_store_salt_label_data(struct device *dev,
-						 struct device_attribute *attr,
-						 const char *buf, size_t count)
+static ssize_t tmecomm_store_salt_label_data(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
 {
 	int i = 0;
 
@@ -596,30 +776,576 @@ static ssize_t tmecomm_aes_store_salt_label_data(struct device *dev,
 		pr_info("salt label length is %lu bytes\n", (unsigned long)count);
 		pr_info("salt label length must be less than %d bytes\n",
 			 TME_KDF_SALT_LABEL_BYTES_MAX);
-		tmel_aes_salt_label_len = 0;
+		tmel_salt_label_len = 0;
 		return -EINVAL;
 	}
 
-	tmel_aes_salt_label_len = count;
+	tmel_salt_label_len = count;
 	memcpy(salt_label, buf, count);
 
 	return count;
 }
 
-static ssize_t tmecomm_aes_store_security_context(struct device *dev,
-						  struct device_attribute *attr,
-						  const char *buf, size_t count)
+static ssize_t tmecomm_aes_show_iv_data(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	if (!iv) {
+		pr_err("Invalid IV buffer\n");
+		return 0;
+	}
+
+	memcpy(buf, iv, tmel_aes_iv_len);
+
+	return tmel_aes_iv_len;
+}
+
+static ssize_t tmecomm_aes_store_iv_data(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+
+	if (!iv) {
+		pr_err("Invalid IV buffer\n");
+		return 0;
+	}
+
+	memset(iv, 0, AES_BLOCK_SIZE);
+	memcpy(iv, buf, count);
+	tmel_aes_iv_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_security_context(struct device *dev,
+					      struct device_attribute *attr,
+					      const char *buf, size_t count)
 {
 	u32 val;
 
 	if (kstrtouint(buf, 0, &val))
 		return -EINVAL;
 
-	tmel_aes_sec_ctx = val;
+	tmel_sec_ctx = val;
 
 	return count;
 }
 
+static ssize_t tmecomm_aes_show_aad_data(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	if (!aad) {
+		pr_err("Invalid AAD buffer\n");
+		return 0;
+	}
+
+	memcpy(buf, aad, tmel_aes_aad_len);
+
+	return tmel_aes_aad_len;
+}
+
+static ssize_t tmecomm_aes_store_aad_data(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	if (!aad) {
+		pr_err("Invalid AAD buffer\n");
+		return 0;
+	}
+
+	if (count > TME_MAX_AAD_LEN) {
+		pr_err("AAD size should be less than %u bytes\n", TME_MAX_AAD_LEN);
+		return -EINVAL;
+	}
+
+	memset(aad, 0, TME_MAX_AAD_LEN);
+	memcpy(aad, buf, count);
+	tmel_aes_aad_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_aes_show_tag_data(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	if (!tag) {
+		pr_err("Invalid Tag buffer\n");
+		return 0;
+	}
+
+	memcpy(buf, tag, tmel_aes_tag_len);
+
+	return tmel_aes_tag_len;
+}
+
+static ssize_t tmecomm_aes_store_tag_data(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	if (!tag) {
+		pr_err("Invalid Tag buffer\n");
+		return 0;
+	}
+
+	if (count > TME_MAX_TAG_LEN) {
+		pr_err("Tag size should be less than %u bytes\n", TME_MAX_TAG_LEN);
+		return -EINVAL;
+	}
+
+	memset(tag, 0, TME_MAX_TAG_LEN);
+	memcpy(tag, buf, count);
+	tmel_aes_tag_len = count;
+
+	return count;
+}
+
+
+static ssize_t tmecomm_store_wrap_key_id(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_wrap_key_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_wrapping_key_id(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_wrapping_key_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_wrap_key(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	int ret;
+	u32 len = 0;
+
+	ret = tmelcom_wrap_key(tmel_wrap_key_id, tmel_wrapping_key_id,
+			&dma_wrapped_key, TME_WK_CONTEXT_BYTES_MAX);
+	if (ret) {
+		pr_err("Failed to wrap key\n");
+		len = 0;
+	} else {
+		memcpy(buf, wrapped_key, TME_WK_CONTEXT_BYTES_MAX);
+		len = TME_WK_CONTEXT_BYTES_MAX;
+	}
+
+	return len;
+}
+
+static ssize_t tmecomm_store_unwrap_key(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	int ret;
+	u32 key_id = TME_KID_ALLOC;
+
+	memcpy(wrapped_key, buf, count);
+
+	ret = tmelcom_unwrap_key(tmel_wrapping_key_id, &dma_wrapped_key, count, &key_id);
+	if (ret)
+		pr_err("Failed to unwrap key\n");
+	else
+		tmel_wrap_key_id = key_id;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_unwrap_key(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	return snprintf(buf, sizeof(u32), "%u\n", tmel_wrap_key_id);
+}
+
+static ssize_t tmecomm_store_ecc_curve_id(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	switch (val) {
+	case 3:
+		val = TME_CURVE_P_256;
+		break;
+	case 4:
+		val = TME_CURVE_P_384;
+		break;
+	default:
+		val = TME_CURVE_P_NONE;
+		pr_err("Invalid hash algorithm\n");
+	}
+
+	tmel_curve_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_ecc_prv_key_id(struct device *dev,
+					    struct device_attribute *attr,
+					    const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_prv_key_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_ecc_prv_key_id2(struct device *dev,
+					    struct device_attribute *attr,
+					    const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_prv_key2_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_ecc_pub_key(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int ret;
+
+	if (tmel_algo == TME_KAL_ECC_ALGO_ECDSA) {
+		tmel_ecc_algo = 0;
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDH) {
+		tmel_ecc_algo = 1;
+	} else {
+		pr_err("Invalid ECC algorithm for getting public key\n");
+		return 0;
+	}
+
+	ret = tmelcomm_ecc_get_pubkey(tmel_curve_id, tmel_prv_key_id, &dma_pub_key,
+				      PAGE_SIZE, &tmel_pub_key_len, tmel_ecc_algo);
+	if (ret) {
+		pr_err("Failed to get public key\n");
+		return 0;
+	}
+
+	memcpy(buf, pub_key, tmel_pub_key_len);
+
+	return tmel_pub_key_len;
+}
+
+static ssize_t tmecomm_show_ecc_pub_key2(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	int ret;
+
+	if (tmel_algo == TME_KAL_ECC_ALGO_ECDSA) {
+		tmel_ecc_algo = 0;
+	} else if (tmel_algo == TME_KAL_ECC_ALGO_ECDH) {
+		tmel_ecc_algo = 1;
+	} else {
+		pr_err("Invalid ECC algorithm for getting public key\n");
+		return 0;
+	}
+
+	ret = tmelcomm_ecc_get_pubkey(tmel_curve_id, tmel_prv_key2_id, &dma_pub_key2,
+				      PAGE_SIZE, &tmel_pub_key2_len, tmel_ecc_algo);
+	if (ret) {
+		pr_err("Failed to get public key\n");
+		return 0;
+	}
+
+	memcpy(buf, pub_key2, tmel_pub_key2_len);
+
+	return tmel_pub_key2_len;
+}
+
+static ssize_t tmecomm_store_ecc_pub_key(struct device *dev,
+					 struct device_attribute *attr,
+					 const char *buf, size_t count)
+{
+	if (!pub_key) {
+		pr_err("Invalid public key buffer\n");
+		return -EINVAL;
+	}
+
+	memset(pub_key, 0, PAGE_SIZE);
+	memcpy(pub_key, buf, count);
+	tmel_pub_key_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_ecc_pub_key2(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+	if (!pub_key2) {
+		pr_err("Invalid public key buffer\n");
+		return -EINVAL;
+	}
+
+	memset(pub_key2, 0, PAGE_SIZE);
+	memcpy(pub_key2, buf, count);
+	tmel_pub_key2_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_hash_algo(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	switch (val) {
+	case 0:
+		val = TME_HA_INVALID;
+		break;
+	case 2:
+		val = TME_HA_SHA256;
+		break;
+	default:
+		val = TME_HA_INVALID;
+		pr_err("Invalid hash algorithm\n");
+	}
+
+	tmel_hash_algo_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_ecc_sign_msg(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	int ret;
+
+	if (!ecc_msg || !ecc_signature) {
+		pr_err("Invalid ECC msg and sign buffers\n");
+		return -EINVAL;
+	}
+
+	tmel_ecc_sign_msg_len = 0;
+	ret = tmelcomm_ecc_sign_msg(tmel_curve_id, tmel_prv_key_id, tmel_hash_algo_id,
+				   &dma_ecc_msg, tmel_ecc_plain_txt_len,
+				   &dma_ecc_signature, MAX_PLAIN_DATA_SIZE,
+				   &tmel_ecc_sign_msg_len);
+	if (ret) {
+		pr_err("Failed to sign message\n");
+		return -EINVAL;
+	}
+
+	memcpy(buf, ecc_signature, tmel_ecc_sign_msg_len);
+
+	return tmel_ecc_sign_msg_len;
+}
+
+static ssize_t tmecomm_store_ecc_input_buf(struct device *dev,
+					   struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	if (!ecc_msg) {
+		pr_err("Invalid ECC msg buffer\n");
+		return -EINVAL;
+	}
+
+	if (count > MAX_PLAIN_DATA_SIZE) {
+		pr_err("ECC msg size should be less than %u bytes\n",
+			(unsigned int)MAX_PLAIN_DATA_SIZE);
+		return -EINVAL;
+	}
+
+	memset(ecc_msg, 0, MAX_PLAIN_DATA_SIZE);
+	memcpy(ecc_msg, buf, count);
+	tmel_ecc_plain_txt_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_ecc_signature(struct device *dev,
+					   struct device_attribute *attr,
+					   const char *buf, size_t count)
+{
+	if (!ecc_signature) {
+		pr_err("Invalid ECC msg buffer\n");
+		return -EINVAL;
+	}
+
+	if (count > MAX_PLAIN_DATA_SIZE) {
+		pr_err("ECC msg size should be less than %u bytes\n",
+			(unsigned int)MAX_PLAIN_DATA_SIZE);
+		return -EINVAL;
+	}
+
+	memset(ecc_signature, 0, MAX_PLAIN_DATA_SIZE);
+	memcpy(ecc_signature, buf, count);
+	tmel_ecc_sign_msg_len = count;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_ecc_verify_msg(struct device *dev,
+					   struct device_attribute *attr,
+					   char *buf)
+{
+	int ret;
+	char success[] = "ECC verification success\n";
+	char failure[] = "ECC verification failed\n";
+
+	if (!ecc_msg || !ecc_signature) {
+		pr_err("Invalid ECC msg and sign buffers\n");
+		return -EINVAL;
+	}
+
+	ret = tmelcomm_ecc_verify_msg(tmel_curve_id, &dma_pub_key,
+				      tmel_pub_key_len, tmel_hash_algo_id,
+				      &dma_ecc_msg, tmel_ecc_plain_txt_len,
+				      &dma_ecc_signature, tmel_ecc_sign_msg_len);
+
+	if (ret) {
+		memcpy(buf, failure, strlen(failure));
+		return strlen(failure);
+	}
+
+	memcpy(buf, success, strlen(success));
+	return strlen(success);
+}
+
+static ssize_t tmecomm_show_ecdh_shared_secret(struct device *dev,
+					       struct device_attribute *attr,
+					       char *buf)
+{
+	int ret;
+	u32 len;
+	struct tme_key_policy policy = {0xc2860a0, 0x84040};
+
+	memset(message, 0, MESSAGE_LEN);
+	tmel_shared_key_id = TME_KID_ALLOC;
+
+	if (tmel_curve_id == TME_CURVE_P_256) {
+		policy.low = 0xc2860a0;
+		policy.high = 0x84040;
+	} else if (tmel_curve_id == TME_CURVE_P_384) {
+		policy.low = 0xc2860a8;
+		policy.high = 0x84040;
+	} else {
+		pr_err("Invalid ECC curve ID\n");
+		return -EINVAL;
+	}
+
+	ret = tmelcomm_ecdh_shared_secret_msg(tmel_curve_id, tmel_prv_key_id,
+					      &tmel_shared_key_id, &dma_pub_key2,
+					      tmel_pub_key2_len, &policy);
+	if (ret) {
+		pr_err("Shared secret service failed\n");
+		return -EINVAL;
+	}
+
+	snprintf(message, MESSAGE_LEN, "%u\n", tmel_shared_key_id);
+	pr_info("Shared key handle: %u\n", tmel_shared_key_id);
+
+	len = strlen(message) + 1;
+	memcpy(buf, message, len);
+
+	return len;
+}
+
+static ssize_t tmecomm_store_mix_key_id(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_mix_key_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_store_hmac_sha_key_id(struct device *dev,
+					     struct device_attribute *attr,
+					     const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	tmel_hmac_sha_key_id = val;
+
+	return count;
+}
+
+static ssize_t tmecomm_show_hmac_sha(struct device *dev,
+				     struct device_attribute *attr,
+				     char *buf)
+{
+	int ret;
+
+	ret = tmelcomm_hmac_sha_digest(tmel_hash_algo_id, &dma_hmac_sha_input,
+				       tmel_hmac_sha_input_len,
+				       tmel_hmac_sha_key_id, &dma_hmac_sha_digest,
+				       PAGE_SIZE, &tmel_hmac_sha_digest_len);
+	if (ret) {
+		pr_err("Failed to generate digest\n");
+		return -EINVAL;
+	}
+
+	memcpy(buf, hmac_sha_digest, tmel_hmac_sha_digest_len);
+
+	return tmel_hmac_sha_digest_len;
+}
+
+static ssize_t tmecomm_store_hmac_sha(struct device *dev,
+				      struct device_attribute *attr,
+				      const char *buf, size_t count)
+{
+	if (!hmac_sha_input) {
+		pr_err("Invalid HMAC SHA buffer\n");
+		return -EINVAL;
+	}
+
+	if (count > MAX_PLAIN_DATA_SIZE) {
+		pr_err("HMAC SHA size should be less than %u bytes\n",
+			(unsigned int)MAX_PLAIN_DATA_SIZE);
+		return -EINVAL;
+	}
+
+	memset(hmac_sha_input, 0, MAX_PLAIN_DATA_SIZE);
+	memcpy(hmac_sha_input, buf, count);
+	tmel_hmac_sha_input_len = count;
+
+	return count;
+}
 /*
  * store_aes_derive_key()
  * Function to store aes derive key
@@ -2708,12 +3434,28 @@ static int tmel_aes_init(struct device *dev)
 	buf_sw_context = dma_alloc_coherent(dev, dma_buf_size, &dma_sw_context, GFP_KERNEL);
 	dma_buf_size = PAGE_SIZE * (1 << get_order(TME_KDF_SALT_LABEL_BYTES_MAX));
 	buf_salt_label = dma_alloc_coherent(dev, dma_buf_size, &dma_salt_label, GFP_KERNEL);
-	dma_buf_size = PAGE_SIZE * (1 << get_order(KEY_SIZE));
+	dma_buf_size = PAGE_SIZE * (1 << get_order(TME_MAX_KEY_LEN));
 	buf_pt_key = dma_alloc_coherent(dev, dma_buf_size, &dma_pt_key, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE;
+	buf_wrapped_key = dma_alloc_coherent(dev, dma_buf_size, &dma_wrapped_key, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE;
+	buf_pub_key = dma_alloc_coherent(dev, dma_buf_size, &dma_pub_key, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE;
+	buf_pub_key2 = dma_alloc_coherent(dev, dma_buf_size, &dma_pub_key2, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE * (1 << get_order(MAX_PLAIN_DATA_SIZE));
+	buf_ecc_msg = dma_alloc_coherent(dev, dma_buf_size, &dma_ecc_msg, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE * (1 << get_order(MAX_PLAIN_DATA_SIZE));
+	buf_ecc_signature = dma_alloc_coherent(dev, dma_buf_size, &dma_ecc_signature, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE;
+	buf_hmac_sha_input = dma_alloc_coherent(dev, dma_buf_size, &dma_hmac_sha_input, GFP_KERNEL);
+	dma_buf_size = PAGE_SIZE;
+	buf_hmac_sha_digest = dma_alloc_coherent(dev, dma_buf_size, &dma_hmac_sha_digest, GFP_KERNEL);
 
 	if (!tmel_key_handle || !buf_aad || !buf_plain_txt ||
 	    !buf_ivd || !buf_tag || !buf_cipher_txt || !buf_sw_context ||
-	    !buf_salt_label || !buf_pt_key) {
+	    !buf_salt_label || !buf_pt_key || !buf_wrapped_key ||
+	    !buf_pub_key || !buf_pub_key2 || !buf_ecc_msg || !buf_ecc_signature ||
+	    !buf_hmac_sha_input || !buf_hmac_sha_digest) {
 		if (tmel_key_handle) {
 			dma_buf_size = PAGE_SIZE *
 					(1 << get_order(MAX_KEY_HANDLE_SIZE));
@@ -2772,9 +3514,51 @@ static int tmel_aes_init(struct device *dev)
 
 		if (buf_pt_key) {
 			dma_buf_size = PAGE_SIZE *
-					(1 << get_order(KEY_SIZE));
+					(1 << get_order(TME_MAX_KEY_LEN));
 			dma_free_coherent(dev, dma_buf_size,
 					  buf_pt_key, dma_pt_key);
+		}
+
+		if (buf_wrapped_key) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_wrapped_key,
+					  dma_wrapped_key);
+		}
+
+		if (buf_pub_key) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_pub_key,
+					  dma_pub_key);
+		}
+
+		if (buf_pub_key2) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_pub_key2,
+					  dma_pub_key2);
+		}
+
+		if (buf_ecc_msg) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_ecc_msg,
+					  dma_ecc_msg);
+		}
+
+		if (buf_ecc_signature) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_ecc_signature,
+					  dma_ecc_signature);
+		}
+
+		if (buf_hmac_sha_input) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_hmac_sha_input,
+					  dma_hmac_sha_input);
+		}
+
+		if (buf_hmac_sha_digest) {
+			dma_buf_size = PAGE_SIZE;
+			dma_free_coherent(dev, dma_buf_size, buf_hmac_sha_digest,
+					  dma_hmac_sha_digest);
 		}
 
 		sysfs_remove_group(tmel_sec_kobj, &sec_key_tmel_attr_grp);
@@ -2792,6 +3576,13 @@ static int tmel_aes_init(struct device *dev)
 	sw_context = (uint8_t *) buf_sw_context;
 	salt_label = (uint8_t *) buf_salt_label;
 	pt_key = (uint8_t *) buf_pt_key;
+	wrapped_key = (uint8_t *) buf_wrapped_key;
+	pub_key = (uint8_t *) buf_pub_key;
+	pub_key2 = (uint8_t *) buf_pub_key2;
+	ecc_msg = (uint8_t *) buf_ecc_msg;
+	ecc_signature = (uint8_t *) buf_ecc_signature;
+	hmac_sha_input = (uint8_t *) buf_hmac_sha_input;
+	hmac_sha_digest = (uint8_t *) buf_hmac_sha_digest;
 
 	return 0;
 }
@@ -3164,6 +3955,23 @@ static int qtiapp_test(struct device *dev, void *input,
 	case QTI_APP_CLEAR_KEY:
 		msgreq->cmd_id = CLIENT_CMD122_CLEAR_KEY;
 		msgreq->data = *((dma_addr_t *)input);
+		break;
+	case QTI_APP_GET_VERSION:
+		break;
+	case QTI_APP_ECDSA_IMPORT_KEY:
+		msgreq->cmd_id = CLIENT_CMD1_ECDSA_IMPORT_KEY;
+		msgreq->data = (dma_addr_t)input;
+		msgreq->len = input_len;
+		break;
+	case QTI_APP_ECDSA_SIGN:
+		msgreq->cmd_id = CLIENT_CMD2_ECDSA_SIGN;
+		msgreq->data = (dma_addr_t)input;
+		msgreq->len = input_len;
+		break;
+	case QTI_APP_ECDSA_VERIFY:
+		msgreq->cmd_id = CLIENT_CMD3_ECDSA_VERIFY;
+		msgreq->data = (dma_addr_t)input;
+		msgreq->len = input_len;
 		break;
 	default:
 		pr_err("Invalid Option\n");
@@ -3932,7 +4740,11 @@ static int tzapp_log_open(struct inode *inode, struct file *file)
 		return -EINVAL;
 	}
 
-	memset(tzapp_log, 0, QSEE_LOG_BUF_SIZE);
+	if (!tzapp_log) {
+		pr_err("Invalid tzapp log buffer\n");
+		return -EIO;
+	}
+	memset(tzapp_log, 0, qsee_log_buf_len);
 
 	if (props->tzapp_log_ver == TZAPP_LOG_VER1) {
 		wrap = ((struct qtidbg_log_v1_t *) q_qsee_log)->log_pos.wrap;
@@ -3947,8 +4759,8 @@ static int tzapp_log_open(struct inode *inode, struct file *file)
 	}
 
 	if (wrap != 0) {
-		memcpy(tzapp_log, log + offset, QSEE_LOG_BUF_SIZE - offset - skip);
-		count = QSEE_LOG_BUF_SIZE - offset - skip;
+		memcpy(tzapp_log, log + offset, qsee_log_buf_len - offset - skip);
+		count = qsee_log_buf_len - offset - skip;
 		memcpy(tzapp_log + count, log, offset);
 		count = count + offset;
 	} else {
@@ -3972,6 +4784,19 @@ static const struct file_operations fops_tzapp_log = {
 	.open = tzapp_log_open,
 	.read = tzapp_log_read,
 };
+
+static ssize_t store_log_size(struct device *dev, struct device_attribute *attr,
+			      const char *buf, size_t count)
+{
+	u32 val;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	qsee_log_buf_len = val;
+
+	return count;
+}
 
 static ssize_t
 store_load_start(struct device *dev, struct device_attribute *attr,
@@ -3998,14 +4823,15 @@ store_load_start(struct device *dev, struct device_attribute *attr,
 			cmd_id = QSEE_LOAD_SERV_IMAGE_COMMAND;
 			req_size = sizeof(struct qseecom_load_lib_ireq);
 			if (load_request(dev, smc_id, cmd_id, req_size))
-				pr_info("Loading app libs failed\n");
+				pr_err("Loading app libs failed\n");
 			else {
 				pr_info("Successfully loaded app libraries\n");
 				app_libs_state = 1;
-			}
-			if (props->logging_support_enabled) {
-				if (qtidbg_register_qsee_log_buf(dev))
-					pr_info("Registering log buf failed\n");
+
+				if (props->logging_support_enabled) {
+					if (qtidbg_register_qsee_log_buf(dev))
+						pr_err("Registering log buf failed\n");
+				}
 			}
 		} else {
 			pr_info("Libraries are either already loaded or are inbuilt in this platform\n");
@@ -4018,9 +4844,9 @@ store_load_start(struct device *dev, struct device_attribute *attr,
 						QTI_CMD_LOAD_APP_ID);
 				cmd_id = QSEOS_APP_START_COMMAND;
 				req_size = sizeof(struct qseecom_load_app_ireq);
-				if (load_request(dev, smc_id, cmd_id, req_size))
-					pr_info("Loading app failed\n");
-				else {
+				if (load_request(dev, smc_id, cmd_id, req_size)) {
+					pr_err("Loading app failed\n");
+				} else {
 					if (props->logging_support_enabled) {
 						tzapp_log_dir = debugfs_create_file("tzapp_log",
 										    0444,
@@ -4058,6 +4884,7 @@ store_load_start(struct device *dev, struct device_attribute *attr,
 		}
 		debugfs_remove(tzapp_log_dir);
 		tzapp_log_dir = NULL;
+		memset(tzapp_log, 0, qsee_log_buf_len);
 	} else {
 		pr_info("Echo 0 to load app libs if its not inbuilt\n");
 		pr_info("Echo 1 to load app if its not already loaded\n");
@@ -4624,6 +5451,7 @@ static int __init qtiapp_init(struct device *dev)
 		return -ENOMEM;
 	}
 
+	qtiapp_attrs[i++] = &dev_attr_log_size.attr;
 	qtiapp_attrs[i++] = &dev_attr_load_start.attr;
 	qtiapp_attrs[i++] = &dev_attr_qsee_app_id.attr;
 
@@ -4852,6 +5680,581 @@ static int __init qtiapp_init(struct device *dev)
 	return 0;
 }
 
+static int qseecom_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static int qseecom_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static long qseecom_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	void __user *argp = (void __user *)arg;
+	struct qsee_ecdsa_import_blob *blob;
+	struct qsee_ecdsa_import_key *ikey = NULL;;
+	struct ecdsa_import_key *ikey_ubuf = NULL;
+	struct qsee_ecdsa_verify *verify = NULL;
+	struct ecdsa_verify *verify_ubuf = NULL;
+	struct qsee_ecdsa_sign *sign = NULL;
+	struct ecdsa_sign *sign_ubuf = NULL;
+	dma_addr_t buf1_dma_addr = 0;
+	dma_addr_t buf2_dma_addr = 0;
+	dma_addr_t buf3_dma_addr = 0;
+	struct ecdsa_points *ec_pnts;
+	size_t buf1_dma_size = 0;
+	size_t buf2_dma_size = 0;
+	size_t buf3_dma_size = 0;
+	size_t buf1_size = 0;
+	size_t req_size = 0;
+	u32 key_handle = 0;
+	u32 smc_id = 0;
+	u32 cmd_id = 0;
+	void *buf2;
+	void *buf3;
+	int ret = 0;
+
+	struct ta_info *info_ubuf;
+
+	switch (cmd) {
+	case QSEECOM_LOAD_TA_LIB:
+
+		if (app_libs_state) {
+			pr_err("Lib already loaded\n");
+			return -EIO;
+		}
+
+		info_ubuf = kzalloc(sizeof(*info_ubuf), GFP_KERNEL);
+		if (!info_ubuf)
+			return -ENOMEM;
+
+		ret = copy_from_user(info_ubuf, argp, sizeof(struct ta_info));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto lib_info_ubuf_free;
+		}
+
+		ret = kernel_read_file_from_path(info_ubuf->mdt_file, 0,
+						 (void **)&mdt_file, INT_MAX, &mdt_size,
+						 READING_POLICY);
+		if (ret <= 0) {
+			pr_err("File open failed %s, ret %d\n", info_ubuf->mdt_file, ret);
+			goto lib_info_ubuf_free;
+		}
+
+		ret = kernel_read_file_from_path(info_ubuf->seg_file, 0,
+						 (void **)&seg_file, INT_MAX, &seg_size,
+						 READING_POLICY);
+		if (ret <= 0) {
+			pr_err("File open failed %s, ret %d\n", info_ubuf->seg_file, ret);
+			goto lib_mdt_buf_free;
+		}
+
+		smc_id = QTI_SYSCALL_CREATE_SMC_ID(QTI_OWNER_QSEE_OS,
+						   QTI_SVC_APP_MGR,
+						   QTI_CMD_LOAD_LIB);
+		cmd_id = QSEE_LOAD_SERV_IMAGE_COMMAND;
+		req_size = sizeof(struct qseecom_load_lib_ireq);
+
+		ret = load_request(qdev, smc_id, cmd_id, req_size);
+		if (ret) {
+			pr_err("TA LIB load failed\n");
+			goto lib_seg_buf_free;
+		}
+		/* Register for TA log */
+		if (qtidbg_register_qsee_log_buf(qdev)) {
+			pr_err("Registering log buf failed\n");
+			ret = -EIO;
+			goto lib_seg_buf_free;
+		}
+
+		app_libs_state = 1;
+
+lib_seg_buf_free:
+		vfree(seg_file);
+		seg_file = NULL;
+lib_mdt_buf_free:
+		vfree(mdt_file);
+		mdt_file = NULL;
+lib_info_ubuf_free:
+		kfree(info_ubuf);
+	break;
+
+	case QSEECOM_LOAD_TA_APP:
+
+		if (!app_libs_state) {
+			pr_err("TA lib must be loaded first\n");
+			return -EIO;
+		}
+
+		if (app_state) {
+			pr_err("App already loaded\n");
+			return -EIO;
+		}
+
+		info_ubuf = kzalloc(sizeof(*info_ubuf), GFP_KERNEL);
+		if (!info_ubuf)
+			return -ENOMEM;
+
+		ret = copy_from_user(info_ubuf, argp, sizeof(struct ta_info));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto app_info_ubuf_free;
+		}
+
+		ret = kernel_read_file_from_path(info_ubuf->mdt_file, 0,
+						 (void **)&mdt_file, INT_MAX, &mdt_size,
+						 READING_POLICY);
+		if (ret <= 0) {
+			pr_err("File open failed %s\n", info_ubuf->mdt_file);
+			goto app_info_ubuf_free;
+		}
+
+		ret = kernel_read_file_from_path(info_ubuf->seg_file, 0,
+						 (void **)&seg_file, INT_MAX, &seg_size,
+						 READING_POLICY);
+		if (ret <= 0) {
+			pr_err("File open failed %s\n", info_ubuf->seg_file);
+			goto app_mdt_buf_free;
+		}
+
+		smc_id = QTI_SYSCALL_CREATE_SMC_ID(QTI_OWNER_QSEE_OS,
+						   QTI_SVC_APP_MGR,
+						   QTI_CMD_LOAD_APP_ID);
+		cmd_id = QSEOS_APP_START_COMMAND;
+		req_size = sizeof(struct qseecom_load_app_ireq);
+
+		ret = load_request(qdev, smc_id, cmd_id, req_size);
+		if (ret) {
+			pr_err("TA App load failed\n");
+			goto app_seg_buf_free;
+		}
+
+		/* Create sysfs for TA log */
+		tzapp_log_dir = debugfs_create_file("tzapp_log", 0444, NULL, NULL,
+						    &fops_tzapp_log);
+		if (IS_ERR_OR_NULL(tzapp_log_dir)) {
+			pr_err("unable to create tzapp_log debugfs entry\n");
+			ret = -EIO;
+			goto app_seg_buf_free;
+		}
+
+		app_state = 1;
+
+app_seg_buf_free:
+		vfree(seg_file);
+		seg_file = NULL;
+app_mdt_buf_free:
+		vfree(mdt_file);
+		mdt_file = NULL;
+app_info_ubuf_free:
+		kfree(info_ubuf);
+
+	break;
+
+	case QSEECOM_UNLOAD_TA_LIB:
+
+		if (!app_libs_state) {
+			pr_err("No Lib to unload\n");
+			return -EIO;
+		}
+
+		ret = unload_app_libs();
+		if (ret)
+			pr_err("Lib unload failed\n");
+		else
+			app_libs_state = 0;
+	break;
+
+	case QSEECOM_UNLOAD_TA_APP:
+
+		if (!app_state) {
+			pr_err("No App to unload\n");
+			return -EIO;
+		}
+
+		ret = qseecom_unload_app();
+		if (ret)
+			pr_err("App unload failed\n");
+		else
+			app_state = 0;
+
+		debugfs_remove(tzapp_log_dir);
+		tzapp_log_dir = NULL;
+		memset(tzapp_log, 0, qsee_log_buf_len);
+	break;
+
+	case QSEECOM_ECDSA_IMPORT_KEY:
+
+		ikey_ubuf = kzalloc(sizeof(*ikey_ubuf), GFP_KERNEL);
+		if (!ikey_ubuf)
+			return -ENOMEM;
+
+		ret = copy_from_user(ikey_ubuf, argp, sizeof(struct ecdsa_import_key));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto ikey_ubuf_free;
+		}
+
+		if (!ikey_ubuf->ecdsa_blob_len) {
+			pr_err("Invalid ecdsa_blob_len from user\n");
+			ret = -EINVAL;
+			goto ikey_ubuf_free;
+		}
+
+		/* Allocate DMA buffers for TA */
+		buf1_size = sizeof(struct qsee_ecdsa_import_key);
+		buf1_dma_size = PAGE_SIZE * (1 << get_order(buf1_size));
+		ikey = dma_alloc_coherent(qdev, buf1_dma_size, &buf1_dma_addr, GFP_KERNEL);
+		if (!ikey) {
+			pr_err("DMA alloc failed\n");
+			ret = -ENOMEM;
+			goto ikey_ubuf_free;
+		}
+
+		buf2_dma_size = PAGE_SIZE * (1 << get_order(ikey_ubuf->ecdsa_blob_len));
+		buf2 = dma_alloc_coherent(qdev, buf2_dma_size, &buf2_dma_addr, GFP_KERNEL);
+		if (!buf2) {
+			ret = -ENOMEM;
+			goto ikey_buf1_free;
+		}
+
+		/* Copy data to DMA buffers for TA */
+		ikey->ecdsa_blob_len = ikey_ubuf->ecdsa_blob_len;
+
+		ret = copy_from_user(buf2, ikey_ubuf->ecdsa_blob, ikey_ubuf->ecdsa_blob_len);
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto ikey_buf2_free;
+		}
+
+		ikey->ecdsa_blob = (u32)buf2_dma_addr;
+
+		ret = qtiapp_test(qdev, (void *)buf1_dma_addr, NULL, buf1_dma_size,
+				  QTI_APP_ECDSA_IMPORT_KEY);
+		if (ret)
+			goto ikey_buf2_free;
+
+		/* Copy TA responses to userspace */
+		ikey_ubuf->key_handle = ikey->key_handle;
+		ikey_ubuf->result = ikey->result;
+
+		/* Copy the ecdsa blob */
+		if (!ikey->result && ikey_ubuf->ecdsa_blob_len == sizeof(struct qsee_ecdsa_import_blob)) {
+			blob = (struct qsee_ecdsa_import_blob *)buf2;
+			ec_points.public_key_len = blob->public_key_len;
+			memcpy(ec_points.public_key, blob->public_key, blob->public_key_len);
+		}
+		else {
+			pr_err("Size mismatch. Unable to store the ecdsa_blob\n");
+		}
+
+		ret = copy_to_user(argp, ikey_ubuf, sizeof(struct ecdsa_import_key));
+		if (ret)
+			pr_err("Failed, copy to user, %d\n", ret);
+
+ikey_buf2_free:
+		dma_free_coherent(qdev, buf2_dma_size, buf2, buf2_dma_addr);
+ikey_buf1_free:
+		dma_free_coherent(qdev, buf1_dma_size, ikey, buf1_dma_addr);
+ikey_ubuf_free:
+		kfree(ikey_ubuf);
+
+	break;
+
+	case QSEECOM_ECDSA_SIGN:
+
+		if (!ecdsa_key_handle) {
+			pr_err("key_handle is not set yet\n");
+			return -EINVAL;
+		}
+
+		sign_ubuf = kzalloc(sizeof(*sign_ubuf), GFP_KERNEL);
+		if (!sign_ubuf)
+			return -ENOMEM;
+
+		ret = copy_from_user(sign_ubuf, argp, sizeof(struct ecdsa_sign));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto sign_ubuf_free;
+		}
+
+		if (!sign_ubuf->data_len) {
+			pr_err("Invalid data length from user\n");
+			ret = -EINVAL;
+			goto sign_ubuf_free;
+		}
+
+		/* Allocate DMA buffers for TA */
+		buf1_size = sizeof(struct qsee_ecdsa_sign);
+		buf1_dma_size = PAGE_SIZE * (1 << get_order(buf1_size));
+		sign = dma_alloc_coherent(qdev, buf1_dma_size, &buf1_dma_addr, GFP_KERNEL);
+		if (!sign) {
+			pr_err("DMA alloc failed\n");
+			ret = -ENOMEM;
+			goto sign_ubuf_free;
+		}
+
+		buf2_dma_size = PAGE_SIZE * (1 << get_order(sign_ubuf->data_len));
+		buf2 = dma_alloc_coherent(qdev, buf2_dma_size, &buf2_dma_addr, GFP_KERNEL);
+		if (!buf2) {
+			ret = -ENOMEM;
+			goto sign_buf1_free;
+		}
+
+		buf3_dma_size = PAGE_SIZE * (1 << get_order(ECDSA_SIGNATURE_MAX_LEN));
+		buf3 = dma_alloc_coherent(qdev, buf3_dma_size, &buf3_dma_addr, GFP_KERNEL);
+		if (!buf3) {
+			ret = -ENOMEM;
+			goto sign_buf2_free;
+		}
+
+		/* Copy data to DMA buffers for TA */
+		ret = copy_from_user(buf2, sign_ubuf->data, sign_ubuf->data_len);
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto sign_buf3_free;
+		}
+
+		/* Always use key_handle via QSEECOM_SET_KEY_HANDLE */
+		sign->key_handle = ecdsa_key_handle;
+		sign->data_len = sign_ubuf->data_len;
+		sign->signature_len = ECDSA_SIGNATURE_MAX_LEN;
+		sign->data = (u32)buf2_dma_addr;
+		sign->signature = (u32)buf3_dma_addr;
+
+		ret = qtiapp_test(qdev, (void *)buf1_dma_addr, NULL, buf1_dma_size,
+				  QTI_APP_ECDSA_SIGN);
+		if (ret)
+			goto sign_buf3_free;
+
+		/* Copy TA responses to userspace */
+		ret = copy_to_user(sign_ubuf->signature, buf3, sign->signature_out_len);
+		if (ret) {
+			pr_err("Failed, copy to user, %d\n", ret);
+			goto sign_buf3_free;
+		}
+
+		sign_ubuf->signature_out_len = sign->signature_out_len;
+		sign_ubuf->result = sign->result;
+
+		ret = copy_to_user(argp, sign_ubuf, sizeof(struct ecdsa_sign));
+		if (ret)
+			pr_err("Failed, copy to user, %d\n", ret);
+
+sign_buf3_free:
+		dma_free_coherent(qdev, buf3_dma_size, buf3, buf3_dma_addr);
+sign_buf2_free:
+		dma_free_coherent(qdev, buf2_dma_size, buf2, buf2_dma_addr);
+sign_buf1_free:
+		dma_free_coherent(qdev, buf1_dma_size, sign, buf1_dma_addr);
+sign_ubuf_free:
+		kfree(sign_ubuf);
+
+	break;
+
+	case QSEECOM_ECDSA_VERIFY:
+
+		if (!ecdsa_key_handle) {
+			pr_err("key_handle is not set yet\n");
+			return -EINVAL;
+		}
+
+		verify_ubuf = kzalloc(sizeof(*verify_ubuf), GFP_KERNEL);
+		if (!verify_ubuf)
+			return -ENOMEM;
+
+		ret = copy_from_user(verify_ubuf, argp, sizeof(struct ecdsa_verify));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto verify_ubuf_free;
+		}
+
+		if (!verify_ubuf->data_len && !verify_ubuf->signature_len) {
+			pr_err("Invalid data/signature length from user\n");
+			ret = -EINVAL;
+			goto verify_ubuf_free;
+		}
+
+		/* Allocate DMA buffers for TA */
+		buf1_size = sizeof(struct qsee_ecdsa_verify);
+		buf1_dma_size = PAGE_SIZE * (1 << get_order(buf1_size));
+		verify = dma_alloc_coherent(qdev, buf1_dma_size, &buf1_dma_addr, GFP_KERNEL);
+		if (!verify) {
+			pr_err("DMA alloc failed\n");
+			ret = -ENOMEM;
+			goto verify_ubuf_free;
+		}
+
+		buf2_dma_size = PAGE_SIZE * (1 << get_order(verify_ubuf->data_len));
+		buf2 = dma_alloc_coherent(qdev, buf2_dma_size, &buf2_dma_addr, GFP_KERNEL);
+		if (!buf2) {
+			ret = -ENOMEM;
+			goto verify_buf1_free;
+		}
+
+		buf3_dma_size = PAGE_SIZE * (1 << get_order(verify_ubuf->signature_len));
+		buf3 = dma_alloc_coherent(qdev, buf3_dma_size, &buf3_dma_addr, GFP_KERNEL);
+		if (!buf3) {
+			ret = -ENOMEM;
+			goto verify_buf2_free;
+		}
+
+		/* Copy data to DMA buffers for TA */
+		ret = copy_from_user(buf2, verify_ubuf->data, verify_ubuf->data_len);
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto verify_buf3_free;
+		}
+
+		ret = copy_from_user(buf3, verify_ubuf->signature, verify_ubuf->signature_len);
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto verify_buf3_free;
+		}
+
+		verify->key_handle = ecdsa_key_handle;
+		verify->data = (u32)buf2_dma_addr;
+		verify->data_len = verify_ubuf->data_len;
+		verify->signature = (u32)buf3_dma_addr;
+		verify->signature_len = verify_ubuf->signature_len;
+
+		ret = qtiapp_test(qdev, (void *)buf1_dma_addr, NULL, buf1_dma_size,
+				  QTI_APP_ECDSA_VERIFY);
+		if (ret)
+			goto verify_buf3_free;
+
+		/* Copy TA response to userspace */
+		verify_ubuf->result = verify->result;
+
+		ret = copy_to_user(argp, verify_ubuf, sizeof(struct ecdsa_verify));
+		if (ret)
+			pr_err("Failed, copy to user, %d\n", ret);
+
+verify_buf3_free:
+		dma_free_coherent(qdev, buf3_dma_size, buf3, buf3_dma_addr);
+verify_buf2_free:
+		dma_free_coherent(qdev, buf2_dma_size, buf2, buf2_dma_addr);
+verify_buf1_free:
+		dma_free_coherent(qdev, buf1_dma_size, verify, buf1_dma_addr);
+verify_ubuf_free:
+		kfree(verify_ubuf);
+
+	break;
+
+	case QSEECOM_SET_KEY_HANDLE:
+		ret = copy_from_user(&key_handle, argp, sizeof(uint32_t));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			return -EFAULT;
+		}
+
+		if (!key_handle) {
+			pr_err("Invalid key_handler from user\n");
+			return -EINVAL;
+		}
+
+		ecdsa_key_handle = key_handle;
+
+	break;
+
+	case QSEECOM_GET_EC_POINTS:
+		ec_pnts = kzalloc(sizeof(*ec_pnts), GFP_KERNEL);
+		if (!ec_pnts)
+			return -ENOMEM;
+
+		ret = copy_from_user(ec_pnts, argp, sizeof(struct ecdsa_points));
+		if (ret) {
+			pr_err("Failed to copy from user, %d\n", ret);
+			goto free_ec_pnts;
+		}
+
+		/* Copy EC_Points to userspace from global buffer */
+		ec_pnts->public_key_len = ec_points.public_key_len;
+		memcpy(ec_pnts->public_key, ec_points.public_key, ec_points.public_key_len);
+
+		ret = copy_to_user(argp, ec_pnts, sizeof(struct ecdsa_points));
+		if (ret) {
+			pr_err("Copy to user failed, %d\n", ret);
+			goto free_ec_pnts;
+		}
+free_ec_pnts:
+		kfree(ec_pnts);
+	break;
+
+	default:
+	break;
+	}
+
+	return ret;
+}
+
+static const struct file_operations ioctl_fops = {
+	.owner          = THIS_MODULE,
+	.open           = qseecom_open,
+	.unlocked_ioctl = qseecom_ioctl,
+	.release        = qseecom_release,
+};
+
+static int qseecom_ioctl_init(void)
+{
+	int ret;
+	struct device *device;
+
+	ret = alloc_chrdev_region(&chr_dev, 0, 1, "qseecom_dev");
+	if (ret) {
+		pr_err("IOCTL: Major number allocation failure\n");
+		return ret;
+	}
+
+	/*Creating cdev structure*/
+	cdev_init(&qseecom_cdev, &ioctl_fops);
+
+	/*Adding character device to the system*/
+	ret = cdev_add(&qseecom_cdev, chr_dev, 1);
+	if (ret) {
+		pr_err("IOCTL: adding device failed\n");
+		goto out_chrdev;
+	}
+
+	/* Creating struct class */
+	dev_class = class_create("qseecom_class");
+	if (IS_ERR(dev_class)) {
+		pr_err("IOCTL: struct class creation failed\n");
+		ret = PTR_ERR(dev_class);
+		goto out_cdev;
+	}
+
+	/* Creating device */
+	device = device_create(dev_class, NULL, chr_dev, NULL, "qseecom_device");
+	if (IS_ERR(device)) {
+		pr_err("IOCTL: device creation failed\n");
+		ret = PTR_ERR(device);
+		goto out_class;
+	}
+
+	return 0;
+
+out_class:
+	class_destroy(dev_class);
+out_cdev:
+	cdev_del(&qseecom_cdev);
+out_chrdev:
+	unregister_chrdev_region(chr_dev, 1);
+
+	return ret;
+}
+
+static void qseecom_ioctl_free(void)
+{
+	device_destroy(dev_class, chr_dev);
+	class_destroy(dev_class);
+	cdev_del(&qseecom_cdev);
+	unregister_chrdev_region(chr_dev, 1);
+}
+
 static int __init qseecom_probe(struct platform_device *pdev)
 {
 	struct device_node *of_node = pdev->dev.of_node;
@@ -4909,6 +6312,12 @@ static int __init qseecom_probe(struct platform_device *pdev)
 		(long long unsigned int) notify_app.applications_region_addr +
 		(long long unsigned int) notify_app.applications_region_size);
 
+	ret = qseecom_ioctl_init();
+	if (ret) {
+		pr_info("IOCTL init failed, %d\n", ret);
+		return ret;
+	}
+
 load:
 	props = ((struct qseecom_props *)id->data);
 
@@ -4963,6 +6372,8 @@ static int __exit qseecom_remove(struct platform_device *pdev)
 		else
 			app_state = 0;
 	}
+
+	qseecom_ioctl_free();
 
 	sysfs_remove_bin_file(firmware_kobj, &mdt_attr);
 	sysfs_remove_bin_file(firmware_kobj, &seg_attr);
@@ -5084,9 +6495,49 @@ static int __exit qseecom_remove(struct platform_device *pdev)
 
 			if (buf_pt_key) {
 				dma_buf_size = PAGE_SIZE *
-						(1 << get_order(KEY_SIZE));
+						(1 << get_order(TME_MAX_KEY_LEN));
 				dma_free_coherent(dev, dma_buf_size,
 						  buf_pt_key, dma_pt_key);
+			}
+
+			if (buf_wrapped_key) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size,
+						  buf_wrapped_key, dma_wrapped_key);
+			}
+
+			if (buf_pub_key) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_pub_key, dma_pub_key);
+			}
+
+			if (buf_pub_key2) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_pub_key2, dma_pub_key2);
+			}
+
+			if (buf_ecc_msg) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_ecc_msg,
+						  dma_ecc_msg);
+			}
+
+			if (buf_ecc_signature) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_ecc_signature,
+						  dma_ecc_signature);
+			}
+
+			if (buf_hmac_sha_input) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_hmac_sha_input,
+						  dma_hmac_sha_input);
+			}
+
+			if (buf_hmac_sha_digest) {
+				dma_buf_size = PAGE_SIZE;
+				dma_free_coherent(dev, dma_buf_size, buf_hmac_sha_digest,
+						  dma_hmac_sha_digest);
 			}
 
 			sysfs_remove_group(tmel_sec_kobj, &sec_key_tmel_attr_grp);
@@ -5263,12 +6714,14 @@ static int __exit qseecom_remove(struct platform_device *pdev)
 			app_libs_state = 0;
 	}
 
-	if (q_qsee_log) {
-		dma_free_coherent(dev, QSEE_LOG_BUF_SIZE, q_qsee_log, dma_qsee_log_buf);
-		q_qsee_log = NULL;
-	}
 	debugfs_remove(tzapp_log_dir);
 	tzapp_log_dir = NULL;
+	kfree(tzapp_log);
+	tzapp_log = NULL;
+	if (q_qsee_log) {
+		dma_free_coherent(dev, qsee_log_buf_len, q_qsee_log, dma_qsee_log_buf);
+		q_qsee_log = NULL;
+	}
 
 	ret = qti_scm_qseecom_remove_xpu();
 	if (ret && (ret != -ENOTSUPP))
