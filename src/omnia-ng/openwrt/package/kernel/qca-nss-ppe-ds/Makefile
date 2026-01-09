@@ -127,7 +127,8 @@ endef
 EXTRA_CFLAGS+= \
 	-I$(STAGING_DIR)/usr/include/qca-nss-ppe \
 	-I$(STAGING_DIR)/usr/include/qca-nss-dp \
-	-I$(STAGING_DIR)/usr/include/qca-ssdk
+	-I$(STAGING_DIR)/usr/include/qca-ssdk \
+	-I$(PKG_BUILD_DIR)/drv/exports
 
 MAKE_OPTS+=ppe-ds=y ppe-vp=y ppe-qdisc=y ppe-rule=y \
 		   PPE_ACL_ENABLED=y PPE_RFS_ENABLED=y PPE_POLICER_ENABLED=y \
