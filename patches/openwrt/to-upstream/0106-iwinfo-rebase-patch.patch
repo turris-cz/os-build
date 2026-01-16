@@ -1,0 +1,124 @@
+From 002db6226e3825032d378528a7299008cbdd198e Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Fri, 16 Jan 2026 18:42:10 +0100
+Subject: [PATCH] iwinfo: rebase patch
+
+Rebase patch to reflect upstream changes
+---
+ .../0001-iwinfo-add-mlo_cap-attribute.patch   | 55 ++++++++-----------
+ 1 file changed, 24 insertions(+), 31 deletions(-)
+
+diff --git a/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch b/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
+index ae5dc4a84d..087240e5dd 100644
+--- a/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
++++ b/package/network/utils/iwinfo/patches/0001-iwinfo-add-mlo_cap-attribute.patch
+@@ -11,11 +11,11 @@ Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
+  iwinfo_nl80211.c | 35 ++++++++++++++++++++++++++++++++++-
+  4 files changed, 67 insertions(+), 1 deletion(-)
+ 
+-diff --git a/include/iwinfo.h b/include/iwinfo.h
+-index 2a841be..ab4a874 100644
+---- a/include/iwinfo.h
+-+++ b/include/iwinfo.h
+-@@ -399,6 +399,7 @@ struct iwinfo_ops {
++Index: libiwinfo-2026.01.14~f5dd57a8/include/iwinfo.h
++===================================================================
++--- libiwinfo-2026.01.14~f5dd57a8.orig/include/iwinfo.h
+++++ libiwinfo-2026.01.14~f5dd57a8/include/iwinfo.h
++@@ -407,6 +407,7 @@ struct iwinfo_ops {
+  	int (*quality)(const char *, int *);
+  	int (*quality_max)(const char *, int *);
+  	int (*mbssid_support)(const char *, int *);
+@@ -23,11 +23,11 @@ index 2a841be..ab4a874 100644
+  	int (*hwmodelist)(const char *, int *);
+  	int (*htmodelist)(const char *, int *);
+  	int (*htmode)(const char *, int *);
+-diff --git a/iwinfo_cli.c b/iwinfo_cli.c
+-index 6f87d98..5131344 100644
+---- a/iwinfo_cli.c
+-+++ b/iwinfo_cli.c
+-@@ -608,6 +608,19 @@ static char * print_mbssid_supp(const struct iwinfo_ops *iw, const char *ifname)
++Index: libiwinfo-2026.01.14~f5dd57a8/iwinfo_cli.c
++===================================================================
++--- libiwinfo-2026.01.14~f5dd57a8.orig/iwinfo_cli.c
+++++ libiwinfo-2026.01.14~f5dd57a8/iwinfo_cli.c
++@@ -621,6 +621,19 @@ static char * print_mbssid_supp(const st
+  	return buf;
+  }
+  
+@@ -47,7 +47,7 @@ index 6f87d98..5131344 100644
+  static char * print_phyname(const struct iwinfo_ops *iw, const char *ifname)
+  {
+  	static char buf[32];
+-@@ -660,6 +673,8 @@ static void print_info(const struct iwinfo_ops *iw, const char *ifname)
++@@ -673,6 +686,8 @@ static void print_info(const struct iwin
+  	printf("          Supports VAPs: %s  PHY name: %s\n",
+  		print_mbssid_supp(iw, ifname),
+  		print_phyname(iw, ifname));
+@@ -56,11 +56,11 @@ index 6f87d98..5131344 100644
+  }
+  
+  
+-diff --git a/iwinfo_lua.c b/iwinfo_lua.c
+-index fbe8c7c..82f68a9 100644
+---- a/iwinfo_lua.c
+-+++ b/iwinfo_lua.c
+-@@ -611,6 +611,22 @@ static int iwinfo_L_mbssid_support(lua_State *L, int (*func)(const char *, int *
++Index: libiwinfo-2026.01.14~f5dd57a8/iwinfo_lua.c
++===================================================================
++--- libiwinfo-2026.01.14~f5dd57a8.orig/iwinfo_lua.c
+++++ libiwinfo-2026.01.14~f5dd57a8/iwinfo_lua.c
++@@ -611,6 +611,22 @@ static int iwinfo_L_mbssid_support(lua_S
+  	return 1;
+  }
+  
+@@ -91,11 +91,11 @@ index fbe8c7c..82f68a9 100644
+  LUA_WRAP_STRUCT_OP(nl80211,hardware_id)
+  #endif
+  
+-diff --git a/iwinfo_nl80211.c b/iwinfo_nl80211.c
+-index dc4ff93..a9202b1 100644
+---- a/iwinfo_nl80211.c
+-+++ b/iwinfo_nl80211.c
+-@@ -3530,6 +3530,29 @@ static int nl80211_get_ifcomb_cb(struct nl_msg *msg, void *arg)
++Index: libiwinfo-2026.01.14~f5dd57a8/iwinfo_nl80211.c
++===================================================================
++--- libiwinfo-2026.01.14~f5dd57a8.orig/iwinfo_nl80211.c
+++++ libiwinfo-2026.01.14~f5dd57a8/iwinfo_nl80211.c
++@@ -3696,6 +3696,29 @@ static int nl80211_get_ifcomb_cb(struct
+  	return NL_SKIP;
+  }
+  
+@@ -125,7 +125,7 @@ index dc4ff93..a9202b1 100644
+  static int nl80211_get_mbssid_support(const char *ifname, int *buf)
+  {
+  	if (nl80211_request(ifname, NL80211_CMD_GET_WIPHY, 0,
+-@@ -3539,6 +3562,15 @@ static int nl80211_get_mbssid_support(const char *ifname, int *buf)
++@@ -3705,6 +3728,15 @@ static int nl80211_get_mbssid_support(co
+  	return 0;
+  }
+  
+@@ -141,18 +141,11 @@ index dc4ff93..a9202b1 100644
+  static int nl80211_hardware_id_from_fdt(struct iwinfo_hardware_id *id, const char *ifname)
+  {
+  	char *phy, path[PATH_MAX];
+-@@ -3693,9 +3725,10 @@ const struct iwinfo_ops nl80211_ops = {
++@@ -3859,6 +3891,7 @@ const struct iwinfo_ops nl80211_ops = {
+  	.quality          = nl80211_get_quality,
+  	.quality_max      = nl80211_get_quality_max,
+  	.mbssid_support   = nl80211_get_mbssid_support,
+ +	.mlo_cap          = nl80211_get_mlo_cap,
+  	.hwmodelist       = nl80211_get_hwmodelist,
+  	.htmodelist       = nl80211_get_htmodelist,
+--	.htmode		  = nl80211_get_htmode,
+-+	.htmode           = nl80211_get_htmode,
+- 	.mode             = nl80211_get_mode,
+- 	.ssid             = nl80211_get_ssid,
+- 	.bssid            = nl80211_get_bssid,
+--- 
+-2.47.2
+-
++ 	.htmode           = nl80211_get_htmode,
+-- 
+2.52.0
+
