@@ -65,24 +65,6 @@
 		enable-active-high;
 	};
 
-	sfp0_tx_dis_hack: sfp0-tx-dis-hack {
-		compatible = "regulator-fixed";
-		regulator-name = "sfp0-tx-dis-hack";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpios = <&i2c_sfp0_gpio 1 GPIO_ACTIVE_LOW>;
-		startup-delay-us = <50000>;
-	};
-
-	sfp1_tx_dis_hack: sfp1-tx-dis-hack {
-		compatible = "regulator-fixed";
-		regulator-name = "sfp1-tx-dis-hack";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		gpios = <&i2c_sfp1_gpio 1 GPIO_ACTIVE_LOW>;
-		startup-delay-us = <50000>;
-	};
-
 	vcc_sfp: regulator-3v3-sfp {
 		compatible = "regulator-fixed";
 		regulator-name = "3V3-sfp-supply";
@@ -153,6 +135,34 @@
 		regulator-always-on;
 		startup-delay-us = <50000>;
 	};
+
+#if !BROKEN_SFP
+	sfp0: sfp0 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c_sfp0>;
+		tx-fault-gpios = <&i2c_sfp0_gpio 0 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&i2c_sfp0_gpio 1 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&i2c_sfp0_gpio 3 GPIO_ACTIVE_HIGH>;
+		rate-select1-gpios = <&i2c_sfp0_gpio 5 GPIO_ACTIVE_HIGH>;
+		los-gpios = <&i2c_sfp0_gpio 4 GPIO_ACTIVE_HIGH>;
+		mod-def0-gpios = <&i2c_sfp0_gpio 2 GPIO_ACTIVE_LOW>;
+		maximum-power-milliwatt = <3000>;
+		status = "okay";
+	};
+
+	sfp1: sfp1 {
+		compatible = "sff,sfp";
+		i2c-bus = <&i2c_sfp1>;
+		tx-fault-gpios = <&i2c_sfp1_gpio 0 GPIO_ACTIVE_HIGH>;
+		tx-disable-gpios = <&i2c_sfp1_gpio 1 GPIO_ACTIVE_HIGH>;
+		rate-select0-gpios = <&i2c_sfp1_gpio 3 GPIO_ACTIVE_HIGH>;
+		rate-select1-gpios = <&i2c_sfp1_gpio 5 GPIO_ACTIVE_HIGH>;
+		los-gpios = <&i2c_sfp1_gpio 4 GPIO_ACTIVE_HIGH>;
+		mod-def0-gpios = <&i2c_sfp1_gpio 2 GPIO_ACTIVE_LOW>;
+		maximum-power-milliwatt = <3000>;
+		status = "okay";
+	};
+#endif
 
 	soc@0 {
 		mdio@90000 {
@@ -239,23 +249,13 @@
 						port_id = <5>;
 						media-type = "sfp";
 						phy_address = <30>;
-						phy_i2c_address = <0x56>;
-						phy-i2c-mode;
-						/* i2c-bus = <&i2c_sfp0>; */
-						sfp_rx_los_pin = <&i2c_sfp0_gpio 4 GPIO_ACTIVE_HIGH>;
-						sfp_tx_dis_pin = <&i2c_sfp0_gpio 1 GPIO_ACTIVE_HIGH>;
-						sfp_mod_present_pin = <&i2c_sfp0_gpio 2 GPIO_ACTIVE_LOW>;
+						sfp = <&sfp0>;
 					};
 					port@5 {
 						port_id = <6>;
 						media-type = "sfp";
 						phy_address = <31>;
-						phy_i2c_address = <0x56>;
-						phy-i2c-mode;
-						/* i2c-bus = <&i2c_sfp1>; */
-						sfp_rx_los_pin = <&i2c_sfp1_gpio 4 GPIO_ACTIVE_HIGH>;
-						sfp_tx_dis_pin = <&i2c_sfp1_gpio 1 GPIO_ACTIVE_HIGH>;
-						sfp_mod_present_pin = <&i2c_sfp1_gpio 2 GPIO_ACTIVE_LOW>;
+						sfp = <&sfp1>;
 					};
 #endif
 				};
@@ -863,12 +863,6 @@
 			i2c_gpio0: gpio-controller@20 {
 				compatible = "nxp,pcal6408";
 				reg = <0x20>;
- 
- 
-				/* HACK HACK HACK HACK so that sfp0 tx disable will be cleared by kernel itself */
-				vcc-supply = <&sfp0_tx_dis_hack>;
- 
- 
 				gpio-controller;
 				#gpio-cells = <2>;
 				gpio-line-names = "M2M_CFG0", "M2M_CFG1", "M2M_CFG2", "M2M_CFG3", "M2E_nCARD_DET", "M2E_nWDIS1", "M2E_nWDIS2", "IO07";
@@ -880,12 +874,6 @@
 			i2c_gpio1: gpio-controller@21 {
 				compatible = "nxp,pcal6408";
 				reg = <0x21>;
- 
- 
-				/* HACK HACK HACK HACK so that sfp tx disable will be cleared by kernel itself */
-				vcc-supply = <&sfp1_tx_dis_hack>;
- 
- 
 				gpio-controller;
 				#gpio-cells = <2>;
 				gpio-line-names = "M2B_CFG0", "M2B_CFG1", "M2B_CFG2", "M2B_CFG3", "M2B_nWDIS", "M2B_nCRD_OFF", "M2B_RST", "SDC_DET";
