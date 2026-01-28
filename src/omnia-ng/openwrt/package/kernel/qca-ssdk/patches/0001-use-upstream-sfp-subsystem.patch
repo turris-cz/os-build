@@ -31,7 +31,7 @@
  #include "ssdk_plat.h"
  #include "ssdk_phy_i2c.h"
  #include "ssdk_dts.h"
-@@ -37,18 +40,381 @@
+@@ -37,18 +40,388 @@
  
  static a_bool_t sfp_phy_drv_registered = A_FALSE;
  
@@ -88,6 +88,18 @@
 +		return "unknown";
 +}
 +
++static int sfp_iface_to_speed(phy_interface_t iface)
++{
++	switch (iface) {
++	case PHY_INTERFACE_MODE_USXGMII: return SPEED_10000;
++	case PHY_INTERFACE_MODE_10GBASER: return SPEED_10000;
++	case PHY_INTERFACE_MODE_2500BASEX: return SPEED_2500;
++	case PHY_INTERFACE_MODE_SGMII: return SPEED_1000;
++	case PHY_INTERFACE_MODE_1000BASEX: return SPEED_1000;
++	default: return SPEED_1000;
++	}
++}
++
 +static int sfp_module_config_optical(struct sfp_priv *pl, const unsigned long *advertising)
 +{
 +	DECLARE_PHY_INTERFACE_MASK(interfaces) = {};
@@ -121,6 +133,8 @@
 +	for (int i = 0; i < ARRAY_SIZE(sfp_interface_preference); i++) {
 +		if (test_bit(sfp_interface_preference[i], interfaces)) {
 +			pl->link_config.interface = sfp_interface_preference[i];
++			pl->link_config.speed = sfp_iface_to_speed(pl->link_config.interface);
++			pl->link_config.duplex = 1;
 +			pr_info("%s: switched to %s link mode\n", sfp_priv_netdev_name(pl), phy_modes(pl->link_config.interface));
 +			pl->force_link_down_once = true;
 +			break;
@@ -203,14 +217,7 @@
 +
 +	if (!pl->phydev) {
 +		pl->link_config.link = 1;
-+		switch (pl->link_config.interface) {
-+		case PHY_INTERFACE_MODE_USXGMII: pl->link_config.speed = SPEED_10000; break;
-+		case PHY_INTERFACE_MODE_10GBASER: pl->link_config.speed = SPEED_10000; break;
-+		case PHY_INTERFACE_MODE_2500BASEX: pl->link_config.speed = SPEED_2500; break;
-+		case PHY_INTERFACE_MODE_SGMII: pl->link_config.speed = SPEED_1000; break;
-+		case PHY_INTERFACE_MODE_1000BASEX: pl->link_config.speed = SPEED_1000; break;
-+		default: pl->link_config.speed = SPEED_1000; break;
-+		}
++		pl->link_config.speed = sfp_iface_to_speed(pl->link_config.interface);
 +		pl->link_config.duplex = 1;
 +	}
 +
@@ -415,7 +422,7 @@
  	return 0;
  }
  
-@@ -59,173 +425,49 @@ sfp_phy_remove(struct phy_device *pdev)
+@@ -59,173 +432,49 @@ sfp_phy_remove(struct phy_device *pdev)
  }
  
  static int
@@ -457,7 +464,8 @@
 -	a_bool_t rx_los_status = A_TRUE;
 -	a_uint32_t uniphy_index = 0, link_status = 0;
 -	sw_error_t rv = SW_OK;
--
++	struct sfp_priv *pl = get_sfp_priv(phydev);
+ 
 -	phy_status->link_status = PORT_LINK_DOWN;
 -	phy_status->speed = FAL_SPEED_BUTT;
 -	phy_status->duplex = FAL_DUPLEX_BUTT;
@@ -534,14 +542,13 @@
 -	SSDK_DEBUG("phy_status->link_status:%d, phy_status->speed:%d, "
 -	"phy_status->duplex:%d\n", phy_status->link_status, phy_status->speed,
 -	phy_status->duplex);
-+	struct sfp_priv *pl = get_sfp_priv(phydev);
- 
--	return SW_OK;
--}
 +	phydev->link = pl->link_config.link;
 +	phydev->speed = pl->link_config.speed;
 +	phydev->duplex = pl->link_config.duplex;
  
+-	return SW_OK;
+-}
+-
 -static int
 -sfp_read_status(struct phy_device *pdev)
 -{
@@ -610,7 +617,7 @@
  		ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
  		ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
  		ETHTOOL_LINK_MODE_Pause_BIT,
-@@ -233,48 +475,12 @@ static int sfp_phy_read_abilities(struct
+@@ -233,48 +482,12 @@ static int sfp_phy_read_abilities(struct
  		ETHTOOL_LINK_MODE_Autoneg_BIT,
  	};
  
@@ -663,7 +670,7 @@
  }
  
  static struct phy_driver sfp_phy_driver = {
-@@ -296,33 +502,18 @@ int sfp_phy_device_setup(a_uint32_t dev_
+@@ -296,33 +509,18 @@ int sfp_phy_device_setup(a_uint32_t dev_
  	struct phy_device *phydev;
  	a_uint32_t addr = 0;
  	struct mii_bus *bus;
@@ -699,7 +706,7 @@
  	if (IS_ERR(phydev) || phydev == NULL) {
  		SSDK_ERROR("Failed to create phy device!\n");
  		return SW_NOT_SUPPORTED;
-@@ -330,24 +521,7 @@ int sfp_phy_device_setup(a_uint32_t dev_
+@@ -330,24 +528,7 @@ int sfp_phy_device_setup(a_uint32_t dev_
  	phydev->priv = priv;
  	/*register phy device*/
  	phy_device_register(phydev);
@@ -725,7 +732,7 @@
  	return 0;
  }
  
-@@ -365,14 +539,7 @@ void sfp_phy_device_remove(a_uint32_t de
+@@ -365,14 +546,7 @@ void sfp_phy_device_remove(a_uint32_t de
  	bus = ssdk_port_miibus_get(dev_id, port);
  	if(!bus)
  		return;
@@ -741,7 +748,7 @@
  
  	if (addr < PHY_MAX_ADDR)
  	if (bus->mdio_map[addr])
-@@ -401,39 +568,6 @@ void sfp_phy_driver_unregister(void)
+@@ -401,39 +575,6 @@ void sfp_phy_driver_unregister(void)
  	}
  }
  
@@ -781,7 +788,7 @@
  int sfp_phy_init(a_uint32_t dev_id, a_uint32_t port_id, a_uint32_t bus_index)
  {
  	a_uint32_t phy_id;
-@@ -442,12 +576,6 @@ int sfp_phy_init(a_uint32_t dev_id, a_ui
+@@ -442,12 +583,6 @@ int sfp_phy_init(a_uint32_t dev_id, a_ui
  	SSDK_INFO("qca probe sfp phy driver succeeded on port%d\n",port_id);
  
  	phy_id = SFP_PHY;
@@ -794,7 +801,7 @@
  
  	SSDK_INFO("SFP phy id is 0x%x\n", phy_id);
  	sfp_phy_device_setup(dev_id, port_id, phy_id, priv);
-@@ -480,161 +608,24 @@ void sfp_phy_exit(a_uint32_t dev_id)
+@@ -480,161 +615,24 @@ void sfp_phy_exit(a_uint32_t dev_id)
  	}
  }
  
@@ -963,7 +970,7 @@
  
  	return SW_OK;
  }
-@@ -663,207 +654,41 @@ sw_error_t
+@@ -663,207 +661,41 @@ sw_error_t
  sfp_phy_rx_los_status_get(a_uint32_t dev_id, a_uint32_t port_id,
  	a_bool_t *rx_los_status)
  {
