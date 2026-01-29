@@ -1,0 +1,66 @@
+From 7c0357548a08b4168e842b0a83c09e9068f5b75a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Wed, 28 Jan 2026 21:05:34 +0100
+Subject: [PATCH] generic: 6.6: Backport pending quirk fix for Ubiquiti U-Fiber
+ Instant SFP module
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ ...k-for-Ubiquiti-U-Fiber-Instant-SFP-m.patch | 42 +++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+ create mode 100644 target/linux/generic/pending-6.6/787-net-sfp-Fix-quirk-for-Ubiquiti-U-Fiber-Instant-SFP-m.patch
+
+diff --git a/target/linux/generic/pending-6.6/787-net-sfp-Fix-quirk-for-Ubiquiti-U-Fiber-Instant-SFP-m.patch b/target/linux/generic/pending-6.6/787-net-sfp-Fix-quirk-for-Ubiquiti-U-Fiber-Instant-SFP-m.patch
+new file mode 100644
+index 0000000000..5c746bc050
+--- /dev/null
++++ b/target/linux/generic/pending-6.6/787-net-sfp-Fix-quirk-for-Ubiquiti-U-Fiber-Instant-SFP-m.patch
+@@ -0,0 +1,42 @@
++From 25d746a9e4df03b3a7c760fa9eb5f26e0d549c31 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 28 Jan 2026 18:49:44 +0100
++Subject: [PATCH net] net: sfp: Fix quirk for Ubiquiti U-Fiber Instant SFP
++ module
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Commit fd580c9830316eda ("net: sfp: augment SFP parsing with
++phy_interface_t bitmap") did not add augumentation for the interface
++bitmap in the quirk for Ubiquiti U-Fiber Instant.
++
++The subsequent commit f81fa96d8a6c7a77 ("net: phylink: use
++phy_interface_t bitmaps for optical modules") then changed phylink code
++for selection of SFP interface: instead of using link mode bitmap, the
++interface bitmap is used, and the fastest interface mode supported by
++both SFP module and MAC is chosen.
++
++Since the interface bitmap contains also modes faster than 1000base-x,
++this caused a regression wherein this module stopped working
++out-of-the-box.
++
++Fix this.
++
++Fixes: fd580c9830316eda ("net: sfp: augment SFP parsing with phy_interface_t bitmap")
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/net/phy/sfp.c | 2 ++
++ 1 file changed, 2 insertions(+)
++ 
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -456,6 +456,8 @@ static void sfp_quirk_ubnt_uf_instant(co
++ 	 */
++ 	linkmode_zero(modes);
++ 	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseX_Full_BIT, modes);
+++	phy_interface_zero(interfaces);
+++	__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
++ }
++ 
++ #define SFP_QUIRK(_v, _p, _m, _f) \
+-- 
+2.52.0
+
