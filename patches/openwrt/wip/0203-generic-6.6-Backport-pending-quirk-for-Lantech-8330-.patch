@@ -1,0 +1,61 @@
+From ac9cd5691fd3b9825a60544a662c1c0db1bb7efa Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Wed, 28 Jan 2026 18:11:51 +0100
+Subject: [PATCH] generic: 6.6: Backport pending quirk for Lantech 8330-265D
+ SFP module
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ ...-sfp-add-quirk-for-Lantech-8330-265D.patch | 37 +++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+ create mode 100644 target/linux/generic/pending-6.6/786-net-sfp-add-quirk-for-Lantech-8330-265D.patch
+
+diff --git a/target/linux/generic/pending-6.6/786-net-sfp-add-quirk-for-Lantech-8330-265D.patch b/target/linux/generic/pending-6.6/786-net-sfp-add-quirk-for-Lantech-8330-265D.patch
+new file mode 100644
+index 0000000000..a5c0208e29
+--- /dev/null
++++ b/target/linux/generic/pending-6.6/786-net-sfp-add-quirk-for-Lantech-8330-265D.patch
+@@ -0,0 +1,37 @@
++From f5889d31da59fdadd86ef41f1c03f8d3c7a93243 Mon Sep 17 00:00:00 2001
++From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
++Date: Wed, 28 Jan 2026 17:56:58 +0100
++Subject: [PATCH net-next] net: sfp: add quirk for Lantech 8330-265D
++MIME-Version: 1.0
++Content-Type: text/plain; charset=UTF-8
++Content-Transfer-Encoding: 8bit
++
++Similar to Lantech 8330-262D-E, the Lantech 8330-265D also reports
++2500MBd instead of 3125MBd.
++
++Also, all 8330-265D report normal RX_LOS in EEPROM, but some signal
++inverted RX_LOS. We therefore need to ignore RX_LOS on these modules.
++
++Signed-off-by: Marek Behún <kabel@kernel.org>
++---
++ drivers/net/phy/sfp.c | 8 ++++++--
++ 1 file changed, 6 insertions(+), 2 deletions(-)
++ 
++--- a/drivers/net/phy/sfp.c
+++++ b/drivers/net/phy/sfp.c
++@@ -500,9 +500,13 @@ static const struct sfp_quirk sfp_quirks
++ 	SFP_QUIRK("HUAWEI", "MA5671A", sfp_quirk_2500basex,
++ 		  sfp_fixup_ignore_tx_fault),
++ 
++-	// Lantech 8330-262D-E can operate at 2500base-X, but incorrectly report
++-	// 2500MBd NRZ in their EEPROM
+++	// Lantech 8330-262D-E and 8330-265D can operate at 2500base-X, but
+++	// incorrectly report 2500MBd NRZ in their EEPROM.
+++	// Some 8330-265D modules have inverted LOS, while all of them report
+++	// normal LOS in EEPROM. Therefore we need to ignore LOS entirely.
++ 	SFP_QUIRK_M("Lantech", "8330-262D-E", sfp_quirk_2500basex),
+++	SFP_QUIRK("Lantech", "8330-265D", sfp_quirk_2500basex,
+++		  sfp_fixup_ignore_los),
++ 
++ 	SFP_QUIRK_M("UBNT", "UF-INSTANT", sfp_quirk_ubnt_uf_instant),
++ 
+-- 
+2.52.0
+
