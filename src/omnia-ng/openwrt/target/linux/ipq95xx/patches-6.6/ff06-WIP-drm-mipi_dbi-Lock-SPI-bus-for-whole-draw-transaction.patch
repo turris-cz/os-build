@@ -1,0 +1,128 @@
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 12 Feb 2026 16:38:14 +0100
+Subject: [PATCH] WIP: drm/mipi_dbi: Lock SPI bus for whole drawing
+ transaction
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+
+--- a/drivers/gpu/drm/drm_mipi_dbi.c
++++ b/drivers/gpu/drm/drm_mipi_dbi.c
+@@ -262,6 +262,7 @@ static void mipi_dbi_fb_dirty(struct ios
+ 	int ret = 0;
+ 	bool full;
+ 	void *tr;
++	bool locked_here = false;
+ 
+ 	full = width == fb->width && height == fb->height;
+ 
+@@ -277,11 +278,22 @@ static void mipi_dbi_fb_dirty(struct ios
+ 		tr = src->vaddr; /* TODO: Use mapping abstraction properly */
+ 	}
+ 
++	if (!dbi->spi_locked) {
++		spi_bus_lock(dbi->spi->controller);
++		dbi->spi_locked = true;
++		locked_here = true;
++	}
++
+ 	mipi_dbi_set_window_address(dbidev, rect->x1, rect->x2 - 1, rect->y1,
+ 				    rect->y2 - 1);
+ 
+ 	ret = mipi_dbi_command_buf(dbi, MIPI_DCS_WRITE_MEMORY_START, tr,
+ 				   width * height * 2);
++
++	if (locked_here) {
++		dbi->spi_locked = false;
++		spi_bus_unlock(dbi->spi->controller);
++	}
+ err_msg:
+ 	if (ret)
+ 		drm_err_once(fb->dev, "Failed to update display %d\n", ret);
+@@ -1141,12 +1153,14 @@ static int mipi_dbi_typec3_command_read(
+ 
+ 	tr[1].rx_buf = buf;
+ 
+-	spi_bus_lock(spi->controller);
++	if (!dbi->spi_locked)
++		spi_bus_lock(spi->controller);
+ 	gpiod_set_value_cansleep(dbi->dc, 0);
+ 
+ 	spi_message_init_with_transfers(&m, tr, ARRAY_SIZE(tr));
+ 	ret = spi_sync_locked(spi, &m);
+-	spi_bus_unlock(spi->controller);
++	if (!dbi->spi_locked)
++		spi_bus_unlock(spi->controller);
+ 	if (ret)
+ 		goto err_free;
+ 
+@@ -1180,22 +1194,26 @@ static int mipi_dbi_typec3_command(struc
+ 
+ 	MIPI_DBI_DEBUG_COMMAND(*cmd, par, num);
+ 
+-	spi_bus_lock(spi->controller);
++	if (!dbi->spi_locked)
++		spi_bus_lock(spi->controller);
+ 	gpiod_set_value_cansleep(dbi->dc, 0);
+ 	speed_hz = mipi_dbi_spi_cmd_max_speed(spi, 1);
+ 	ret = mipi_dbi_spi_transfer(spi, speed_hz, 8, cmd, 1);
+-	spi_bus_unlock(spi->controller);
+-	if (ret || !num)
++	if (ret || !num) {
++		if (!dbi->spi_locked)
++			spi_bus_unlock(spi->controller);
++	
+ 		return ret;
++	}
+ 
+ 	if (*cmd == MIPI_DCS_WRITE_MEMORY_START && !dbi->swap_bytes)
+ 		bpw = 16;
+ 
+-	spi_bus_lock(spi->controller);
+ 	gpiod_set_value_cansleep(dbi->dc, 1);
+ 	speed_hz = mipi_dbi_spi_cmd_max_speed(spi, num);
+ 	ret = mipi_dbi_spi_transfer(spi, speed_hz, bpw, par, num);
+-	spi_bus_unlock(spi->controller);
++	if (!dbi->spi_locked)
++		spi_bus_unlock(spi->controller);
+ 
+ 	return ret;
+ }
+Index: b/include/drm/drm_mipi_dbi.h
+===================================================================
+--- a/include/drm/drm_mipi_dbi.h
++++ b/include/drm/drm_mipi_dbi.h
+@@ -69,6 +69,8 @@ struct mipi_dbi {
+ 	 * @tx_buf9_len: Size of tx_buf9.
+ 	 */
+ 	size_t tx_buf9_len;
++
++	bool spi_locked;
+ };
+ 
+ /**
+Index: b/drivers/gpu/drm/tiny/panel-mipi-dbi.c
+===================================================================
+--- a/drivers/gpu/drm/tiny/panel-mipi-dbi.c
++++ b/drivers/gpu/drm/tiny/panel-mipi-dbi.c
+@@ -200,6 +200,9 @@ static void panel_mipi_dbi_enable(struct
+ 
+ 	drm_dbg(pipe->crtc.dev, "\n");
+ 
++	spi_bus_lock(dbi->spi->controller);
++	dbi->spi_locked = true;
++
+ 	ret = mipi_dbi_poweron_conditional_reset(dbidev);
+ 	if (ret < 0)
+ 		goto out_exit;
+@@ -208,6 +211,8 @@ static void panel_mipi_dbi_enable(struct
+ 
+ 	mipi_dbi_enable_flush(dbidev, crtc_state, plane_state);
+ out_exit:
++	dbi->spi_locked = false;
++	spi_bus_unlock(dbi->spi->controller);
+ 	drm_dev_exit(idx);
+ }
+ 
