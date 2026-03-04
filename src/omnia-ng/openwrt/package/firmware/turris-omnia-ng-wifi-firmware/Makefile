@@ -43,6 +43,10 @@ define Package/turris-omnia-ng-wifi-firmware/install
 		$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/
 	$(INSTALL_DATA) ./files/qcn9224/rxgainlutSKY_6G.bin \
 		$(1)/lib/firmware/ath12k/QCN92XX/hw1.0/rxgainlut.bin
+	$(INSTALL_DIR) $(1)/lib/firmware/
+	$(INSTALL_DATA) ./files/ini/*.ini $(1)/lib/firmware/
+	$(INSTALL_DIR) $(1)/lib/firmware/internal/
+	$(INSTALL_DATA) ./files/ini/internal/*.ini $(1)/lib/firmware/internal/
 endef
 
 $(eval $(call BuildPackage,turris-omnia-ng-wifi-firmware))
