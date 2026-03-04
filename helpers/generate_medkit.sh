@@ -169,6 +169,8 @@ get_updater_ng
 exec fakeroot -- /bin/bash -s <<EOF
 set -e
 
+umask 0022
+
 mkdir -p root
 ## Create base filesystem for updater
 ln -sf tmp root/var
