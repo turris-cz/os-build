@@ -1,0 +1,30 @@
+Print SFP PHY ID if failed adding SFP PHY.
+This way we can determine what PHY user has in their SFP module
+and enable the corresponding PHY driver (or write a new one,
+or extend existing one).
+
+diff '--color=auto' -Naurp a/drivers/net/phy/sfp.c b/drivers/net/phy/sfp.c
+--- a/drivers/net/phy/sfp.c	2026-02-24 11:18:01.119559657 +0100
++++ b/drivers/net/phy/sfp.c	2026-02-24 11:35:47.974795866 +0100
+@@ -1805,6 +1805,21 @@ static int sfp_sm_probe_phy(struct sfp *
+ 		phy_device_remove(phy);
+ 		phy_device_free(phy);
+ 		dev_err(sfp->dev, "sfp_add_phy failed: %pe\n", ERR_PTR(err));
++		if (is_c45) {
++			const int num_ids = ARRAY_SIZE(phy->c45_ids.device_ids);
++			char buf[256];
++			ssize_t n = 0;
++
++			buf[0] = '\0';
++			for (int i = 1; i < num_ids; ++i) {
++				u32 id = phy->c45_ids.device_ids[i];
++				if (id != 0 && id != 0xffffffff)
++					n += scnprintf(buf + n, 256 - n, " %d=%08x", i, id);
++			}
++			dev_err(sfp->dev, "  phy_c45_ids:%s\n", buf);
++		} else {
++			dev_err(sfp->dev, "  phy_c22_id=%08x\n", phy->phy_id);
++		}
+ 		return err;
+ 	}
+ 
