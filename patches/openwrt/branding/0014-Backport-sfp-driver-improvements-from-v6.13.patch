@@ -1,27 +1,19 @@
-From 38424044dddcb06cfd342ab835464331c032f80b Mon Sep 17 00:00:00 2001
+From c35124351edf72458c2ebf0555c1b0c302bb3a50 Mon Sep 17 00:00:00 2001
 From: Maximilian Maliar <maximilian.maliar@nic.cz>
 Date: Wed, 19 Mar 2025 16:23:17 +0000
 Subject: [PATCH] Backport sfp driver improvements from v6.13
 
 ---
- ...ment-ignoring-the-hardware-TX_FAULT-.patch |  86 +++++++++++
- ...net-sfp-improve-Nokia-GPON-sfp-fixup.patch |  57 ++++++++
- ...fill-in-missing-MODULE_DESCRIPTION-s.patch |  25 ++++
- ...rework-the-RollBall-PHY-waiting-code.patch | 134 ++++++++++++++++++
- ...HY-discovery-for-FS-SFP-10G-T-module.patch |  85 +++++++++++
- ...k-for-another-multigig-RollBall-tran.patch |  31 ++++
- ...pdate-comment-for-FS-SFP-10G-T-quirk.patch |  36 +++++
- ...quirk-for-Fibrestore-2.5G-copper-SFP.patch |  78 ++++++++++
- .../790-SFP-GE-T-ignore-TX_FAULT.patch        |  63 --------
- 9 files changed, 532 insertions(+), 63 deletions(-)
+ ...ment-ignoring-the-hardware-TX_FAULT-.patch | 86 +++++++++++++++++++
+ ...net-sfp-improve-Nokia-GPON-sfp-fixup.patch | 57 ++++++++++++
+ ...fill-in-missing-MODULE_DESCRIPTION-s.patch | 25 ++++++
+ ...k-for-another-multigig-RollBall-tran.patch | 31 +++++++
+ .../790-SFP-GE-T-ignore-TX_FAULT.patch        | 63 --------------
+ 5 files changed, 199 insertions(+), 63 deletions(-)
  create mode 100644 target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch
  create mode 100644 target/linux/generic/backport-6.6/0004-net-sfp-improve-Nokia-GPON-sfp-fixup.patch
  create mode 100644 target/linux/generic/backport-6.6/0005-net-phy-fill-in-missing-MODULE_DESCRIPTION-s.patch
- create mode 100644 target/linux/generic/backport-6.6/0006-net-sfp-rework-the-RollBall-PHY-waiting-code.patch
- create mode 100644 target/linux/generic/backport-6.6/0008-net-sfp-fix-PHY-discovery-for-FS-SFP-10G-T-module.patch
  create mode 100644 target/linux/generic/backport-6.6/0009-net-sfp-add-quirk-for-another-multigig-RollBall-tran.patch
- create mode 100644 target/linux/generic/backport-6.6/0010-net-sfp-update-comment-for-FS-SFP-10G-T-quirk.patch
- create mode 100644 target/linux/generic/backport-6.6/0011-net-sfp-enhance-quirk-for-Fibrestore-2.5G-copper-SFP.patch
  delete mode 100644 target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
 
 diff --git a/target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch b/target/linux/generic/backport-6.6/0003-net-sfp-re-implement-ignoring-the-hardware-TX_FAULT-.patch
@@ -249,7 +241,7 @@ index 0000000000..8466ac09c4
 + };
 diff --git a/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch b/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
 deleted file mode 100644
-index 1d6bc6ee07..0000000000
+index 5d67e0ea8f..0000000000
 --- a/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
 +++ /dev/null
 @@ -1,63 +0,0 @@
@@ -281,7 +273,7 @@ index 1d6bc6ee07..0000000000
 -
 ---- a/drivers/net/phy/sfp.c
 -+++ b/drivers/net/phy/sfp.c
--@@ -485,6 +485,9 @@ static const struct sfp_quirk sfp_quirks
+-@@ -487,6 +487,9 @@ static const struct sfp_quirk sfp_quirks
 - 	SFP_QUIRK("HUAWEI", "MA5671A", sfp_quirk_2500basex,
 - 		  sfp_fixup_ignore_tx_fault),
 - 
@@ -291,7 +283,7 @@ index 1d6bc6ee07..0000000000
 - 	// Lantech 8330-262D-E can operate at 2500base-X, but incorrectly report
 - 	// 2500MBd NRZ in their EEPROM
 - 	SFP_QUIRK_M("Lantech", "8330-262D-E", sfp_quirk_2500basex),
--@@ -2606,7 +2609,8 @@ static void sfp_sm_main(struct sfp *sfp,
+-@@ -2608,7 +2611,8 @@ static void sfp_sm_main(struct sfp *sfp,
 - 			 * or t_start_up, so assume there is a fault.
 - 			 */
 - 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
@@ -301,7 +293,7 @@ index 1d6bc6ee07..0000000000
 - 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
 - 	init_done:
 - 			/* Create mdiobus and start trying for PHY */
--@@ -2864,10 +2868,12 @@ static void sfp_check_state(struct sfp *
+-@@ -2866,10 +2870,12 @@ static void sfp_check_state(struct sfp *
 - 	mutex_lock(&sfp->st_mutex);
 - 	state = sfp_get_state(sfp);
 - 	changed = state ^ sfp->state;
@@ -317,5 +309,5 @@ index 1d6bc6ee07..0000000000
 - 	for (i = 0; i < GPIO_MAX; i++)
 - 		if (changed & BIT(i))
 -- 
-2.25.1
+2.52.0
 
