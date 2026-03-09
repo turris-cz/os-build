@@ -1,0 +1,16 @@
+Allow bypassing PHY probe retry if the .connect_phy() method
+returns -EMEDIUMTYPE.
+
+--- linux-6.6.47.orig/drivers/net/phy/sfp.c
++++ linux-6.6.47/drivers/net/phy/sfp.c
+@@ -2643,6 +2643,10 @@ static void sfp_sm_main(struct sfp *sfp,
+ 		 * clear.  Probe for the PHY and check the LOS state.
+ 		 */
+ 		ret = sfp_sm_probe_for_phy(sfp);
++		if (ret == -EMEDIUMTYPE) {
++			sfp->sm_phy_retries = 1;
++			ret = -ENODEV;
++		}
+ 		if (ret == -ENODEV) {
+ 			if (--sfp->sm_phy_retries) {
+ 				sfp_sm_next(sfp, SFP_S_INIT_PHY, T_PHY_RETRY);
