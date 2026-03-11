@@ -16,6 +16,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -eu
 
+clean_and_exit() {
+	[ -f "$src_dir/feeds.conf.bak" ] && \
+		mv "$src_dir/feeds.conf.bak" "$src_dir/feeds.conf"
+	exit 0
+}
+
 FEED_NAME="updater-lists"
 
 src_dir="$(readlink -f "${0%/*}")"
@@ -24,6 +30,7 @@ source "$src_dir/helpers/generate_common.sh"
 output_path=
 sign_key=
 prepare="n"
+board="omnia-ng"
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-h|--help)
@@ -39,6 +46,10 @@ while [ $# -gt 0 ]; do
 			echo "    Only prepare in current directory. Do not generate lists."
 			echo "  --debug"
 			echo "    Run this script in debug mode"
+			echo "  --target, -t BOARD"
+			echo "    Set given board as target for generated lists. In default"
+			echo "    if this options is not specified omnia-ng is used. Allowed"
+			echo "    values are: turris1x, omnia, mox, omnia-ng"
 			exit
 			;;
 		--sign)
@@ -50,6 +61,10 @@ while [ $# -gt 0 ]; do
 			;;
 		--debug)
 			set -x
+			;;
+		--target|-t)
+			shift
+			board="$1"
 			;;
 		*)
 			if [ -z "$output_path" ]; then
@@ -68,6 +83,12 @@ output_path="$(readlink -f "$output_path")"
 [ -f "$src_dir/feeds.conf" ] || \
 	die "This script has to be in the same directory as feeds.conf file."
 
+trap clean_and_exit TERM INT QUIT ABRT
+[ -f "$src_dir/feeds.conf.${board}" ] && {
+	cp "$src_dir/feeds.conf" "$src_dir/feeds.conf.bak";
+	cat "$src_dir/feeds.conf.${board}" >> "$src_dir/feeds.conf";
+}
+
 set_protected_build_dir "lists"
 
 url="$(get_feed "#" "$FEED_NAME" "$src_dir/feeds.conf")"
@@ -84,7 +105,7 @@ cd "$build_dir"
 	-d "$output_path"
 )
 
-[ "$prepare" = "n" ] || exit 0
+[ "$prepare" = "n" ] || clean_and_exit
 
 make -C "$build_dir"
 
@@ -103,3 +124,5 @@ Project was build from following repositories:
  * $FEED_NAME: $(git_remote_hash "$build_dir")
 
 EOF
+
+clean_and_exit
