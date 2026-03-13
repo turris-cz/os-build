@@ -385,6 +385,7 @@ define Package/wpad-mesh-openssl
 $(call Package/wpad-mesh,$(1))
   TITLE+= (OpenSSL, 11s, SAE)
   DEPENDS+=$(OPENSSL_DEPENDS)
+  PROVIDES+=wpad-openssl hostapd-openssl
   VARIANT:=wpad-mesh-openssl
 endef
 
