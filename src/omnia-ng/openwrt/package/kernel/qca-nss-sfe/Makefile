@@ -3,10 +3,10 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=qca-nss-sfe
 PKG_RELEASE:=1
-PKG_VERSION:=1.0.r26
+PKG_VERSION:=1.0.r29
 
 PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/shortcut-fe.git
-PKG_MIRROR_HASH:=56117545e831db8f9527506d96169110b8e3fcb4c9150adcc0d05094e543f7ff
+PKG_MIRROR_HASH:=a34ca82de5abc45cb96daa61863f0f61a3729a22b2918c6cf95fa6ffcb165309
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=win.nss.$(PKG_VERSION)
 
