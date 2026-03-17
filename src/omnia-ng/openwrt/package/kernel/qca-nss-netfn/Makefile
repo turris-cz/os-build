@@ -65,6 +65,7 @@ define KernelPackage/qca-nss-flowmgr
   SUBMENU:=Network Devices
   TITLE:=Kernel driver for Network function manager
   DEPENDS:=@TARGET_ipq53xx||TARGET_ipq54xx||TARGET_ipq95xx \
+	  +kmod-ppp \
 	  +kmod-qca-nss-ppe \
 	  +kmod-qca-nss-ppe-rule \
 	  +kmod-qca-nss-sfe
