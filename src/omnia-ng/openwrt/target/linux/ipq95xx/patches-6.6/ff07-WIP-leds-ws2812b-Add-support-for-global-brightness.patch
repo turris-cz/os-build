@@ -1,0 +1,119 @@
+Index: b/drivers/leds/leds-ws2812b-spi.c
+===================================================================
+--- a/drivers/leds/leds-ws2812b-spi.c
++++ b/drivers/leds/leds-ws2812b-spi.c
+@@ -22,6 +22,7 @@ struct ws2812b {
+ 	struct spi_device *spi;
+ 	struct mutex lock;
+ 	u8 *buf;
++	unsigned int global_brightness;
+ 	size_t buf_size;
+ 	size_t led_count;
+ 	struct ws2812b_led leds[];
+@@ -76,6 +77,17 @@ static int ws2812b_write(struct ws2812b
+ }
+ */
+ 
++static void ws2812b_calc_color_components(struct led_classdev_mc *mc_cdev,
++					  enum led_brightness brightness,
++					  unsigned int global_brightness)
++{
++	for (int i = 0; i < 3; i++)
++		mc_cdev->subled_info[i].brightness =
++			DIV_ROUND_CLOSEST(brightness * global_brightness *
++					  mc_cdev->subled_info[i].intensity,
++					  255 * 100);
++}
++
+ static int
+ ws2812b_brightness_set_blocking(struct led_classdev *cdev, enum led_brightness brightness)
+ {
+@@ -85,17 +97,69 @@ ws2812b_brightness_set_blocking(struct l
+ 	unsigned int idx = led - priv->leds;
+ 	int err;
+ 
+-	mutex_lock(&led->priv->lock);
++	mutex_lock(&priv->lock);
+ 
+-	led_mc_calc_color_components(mc_cdev, brightness);
++	ws2812b_calc_color_components(mc_cdev, brightness, priv->global_brightness);
+ 	ws2812b_buf_fill_color(priv, idx);
+ 	err = spi_write(priv->spi, priv->buf, priv->buf_size);
+ 
+-	mutex_unlock(&led->priv->lock);
++	mutex_unlock(&priv->lock);
+ 
+ 	return err;
+ }
+ 
++static int ws2812b_set_global_brightness(struct ws2812b *priv, unsigned int global_brightness)
++{
++	int err;
++
++	mutex_lock(&priv->lock);
++
++	for (unsigned int i = 0; i < priv->led_count; ++i) {
++		ws2812b_calc_color_components(&priv->leds[i].mc_lcdev,
++					      priv->leds[i].mc_lcdev.led_cdev.brightness,
++					      global_brightness);
++		ws2812b_buf_fill_color(priv, i);
++	}
++
++	err = spi_write(priv->spi, priv->buf, priv->buf_size);
++	if (!err)
++		priv->global_brightness = global_brightness;
++
++	mutex_unlock(&priv->lock);
++
++	return err;
++}
++
++static ssize_t brightness_show(struct device *dev, struct device_attribute *a,
++			       char *buf)
++{
++	struct ws2812b *priv = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf, "%u\n", priv->global_brightness);
++}
++
++static ssize_t brightness_store(struct device *dev, struct device_attribute *a,
++				const char *buf, size_t count)
++{
++	struct ws2812b *priv = dev_get_drvdata(dev);
++	unsigned long brightness;
++
++	if (kstrtoul(buf, 10, &brightness))
++		return -EINVAL;
++
++	if (brightness > 100)
++		return -EINVAL;
++
++	return ws2812b_set_global_brightness(priv, brightness) ?: count;
++}
++static DEVICE_ATTR_RW(brightness);
++
++static struct attribute *ws2812b_attrs[] = {
++	&dev_attr_brightness.attr,
++	NULL
++};
++ATTRIBUTE_GROUPS(ws2812b);
++
+ static int ws2812b_probe_dt(struct ws2812b *priv)
+ {
+ 	struct led_init_data init_data = {};
+@@ -170,6 +234,7 @@ static int ws2812b_probe(struct spi_devi
+ 	priv->spi = spi;
+ 	priv->led_count = count;
+ 	priv->dev = &spi->dev;
++	priv->global_brightness = 100;
+ 	mutex_init(&priv->lock);
+ 
+ 	spi_set_drvdata(spi, priv);
+@@ -197,6 +262,7 @@ static struct spi_driver ws2812b_spi_dri
+ 	.driver = {
+ 		   .name = KBUILD_MODNAME,
+ 		   .of_match_table = ws2812b_spi_dts_ids,
++		   .dev_groups = ws2812b_groups,
+ 	},
+ };
+ 

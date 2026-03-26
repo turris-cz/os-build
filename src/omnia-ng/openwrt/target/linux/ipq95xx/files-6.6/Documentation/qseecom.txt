@@ -4,8 +4,8 @@ the secure world(QSEE) and TME-L for various crypto and other miscellaneous oper
 
 The TZ binary provides support for secure AES, ECC and RSA crypto operations.
 
-TME-L supports AES crypto operations directly from HLOS if IPC support is
-available in the target.
+TME-L supports Key management and Host crypto operations directly from HLOS if
+IPC support is available in the target.
 
 Similar to TZ, customers can develop a custom application(aka TZapp) to be
 used for secure crypto and other functionalities. This custom application will
@@ -15,37 +15,103 @@ Note: All the requests to Tzapp will be routed via TZ.
 Summary of all the supported operations via qseecom for various targets is
 listed in the below table.
 
-        ______________________________________________________
-        |                      |         |         |         |
-        |      Operations      | IPQ95xx | IPQ53xx | IPQ54xx |
-________|______________________|_________|_________|_________|
-|       |                      |         |         |         |
-|       |   RSA(sign/verify)   |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|  TZ   |        AESv1         |    Y    |    Y    |    N    |
-|       |                      |         |         |         |
-|       |        AESv2         |    Y    |    Y    |    Y    |
-|_______|______________________|_________|_________|_________|
-|       |                      |         |         |         |
-| TME-L |         AES          |    N    |    N    |    Y    |
-|_______|______________________|_________|_________|_________|
-|       |                      |         |         |         |
-|       | Basic Multiplication |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |    Sample Crypto     |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |     RSA(enc/dec)     |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |        AESv2         |    Y    |    Y    |    Y    |
-| TZAPP |                      |         |         |         |
-|       |      Fuse read       |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |     Fuse write       |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |     Logbitmask       |    Y    |    Y    |    Y    |
-|       |                      |         |         |         |
-|       |        Misc          |    Y    |    Y    |    Y    |
-|_______|______________________|_________|_________|_________|
+________________________________________________________________
+|          |                      |         |         |         |
+| Platform |      Operations      | IPQ95xx | IPQ53xx | IPQ54xx |
+|__________|______________________|_________|_________|_________|
+|          |                      |         |         |         |
+|          |     TLS hardening    |         |         |         |
+|          |                      |         |         |         |
+|          |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          |      RSA keyblob     |    Y    |    Y    |    Y    |
+|          |Generate/Import/Update|         |         |         |
+|          |                      |         |         |         |
+|          |         RSA          |    Y    |    Y    |    Y    |
+|          |    (Sign/Verify)     |         |         |         |
+|          |                      |         |         |         |
+|          |     AESv1 keyblob    |    Y    |    Y    |    N    |
+|          |  (Genetrate/Import)  |         |         |         |
+|          |                      |         |         |         |
+|          |   AESv1 Seal/Unseal  |    Y    |    Y    |    N    |
+|          |       (AES CCM)      |         |         |         |
+|    TZ    |    (Using keyblob)   |         |         |         |
+|          |                      |         |         |         |
+|          | AESv2 encrypt/decrypt|    Y    |    Y    |    Y    |
+|          |   (AES256 ECB/CBC)   |         |         |         |
+|          |  (Using key handle   |         |         |         |
+|          |  derived from TME-L) |         |         |         |
+|          |                      |         |         |         |
+|          |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          | TME-L based services |         |         |         |
+|          |                      |         |         |         |
+|          |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          |       Derive key     |    Y    |    Y    |    Y    |
+|          | (CRBK/OEM Prod seed) |         |         |         |
+|          |                      |         |         |         |
+|          |       Clear key      |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|__________|______________________|_________|_________|_________|
+|          |                      |         |         |         |
+|          |     Key Management   |         |         |         |
+|          |                      |         |         |         |
+|          |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          |      Generate key    |    N    |    N    |    Y    |
+|          |                      |         |         |         |
+|          |      Import key      |    N    |    N    |    Y    |
+|          |                      |         |         |         |
+|          | Derive key - NIST KDF|    N    |    N    |    Y    |
+|          | (CRBK/OEM Prod seed) |         |         |         |
+|          |                      |         |         |         |
+|          |       Clear key      |    N    |    N    |    Y    |
+|          |                      |         |         |         |
+|          |      Wrap/Unwrap     |    N    |    N    |    Y    |
+|          |    (via Import key)  |         |         |         |
+|          |                      |         |         |         |
+|  TME-L   |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          | Host Crypto Services |         |         |         |
+|          |                      |         |         |         |
+|          |----------------------|         |         |         |
+|          |                      |         |         |         |
+|          | AES encrypt/decrypt  |    N    |    N    |    Y    |
+|          | (AES256 ECB/CBC/GCM) |         |         |         |
+|          |                      |         |         |         |
+|          |  ECDSA sign/verify   |    N    |    N    |    Y    |
+|          | (Curve P-256/P-384)  |         |         |         |
+|          |                      |         |         |         |
+|          |  ECDH Shared secret  |    N    |    N    |    Y    |
+|          | (Curve P-256/P-384)  |         |         |         |
+|          |                      |         |         |         |
+|          |  SHA256/HMAC-SHA256  |    N    |    N    |    Y    |
+|__________|______________________|_________|_________|_________|
+|          |                      |         |         |         |
+|          | Basic Multiplication |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |    Sample Crypto     |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |     RSA(enc/dec)     |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |        AESv2         |    Y    |    Y    |    Y    |
+|  TZAPP   |                      |         |         |         |
+|          |      Fuse read       |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |     Fuse write       |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |     Logbitmask       |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |        Misc          |    Y    |    Y    |    Y    |
+|__________|______________________|_________|_________|_________|
+|          |                      |         |         |         |
+|          |   ECDSA Import Key   |    Y    |    Y    |    Y    |
+|  Crypto  |                      |         |         |         |
+|  APP     |     ECDSA Sign       |    Y    |    Y    |    Y    |
+|          |                      |         |         |         |
+|          |    ECDSA Verify      |    Y    |    Y    |    Y    |
+|__________|______________________|_________|_________|_________|
 
 --------------------------------------------------------------------------------
 
@@ -60,7 +126,8 @@ AESv1 -> Supported via a crypto library in TZ (Supported chipsets:IPQ95xx/IPQ53x
 AESv2 -> Key derivation is supported via a hardware sequencer in TME-L (Supported chipsets: IPQ95xx/IPQ53xx/IPQ54xx)
          A key will be derived by TME-L and stored in TZ. Only the key handle
          will be returned to the user. User can decide which key handle needs
-         to be used for encrypt/decrypt operations.
+         to be used for encrypt/decrypt operations. TZ will do the encrypt/decrypt
+         using crypto library with the key handle.
 
 Please refer the qseecom_props structure in qseecom driver(drivers/misc/qseecom.c)
 to know the list of TZ API's supported by each platform.
@@ -266,45 +333,60 @@ AES 256 API's supported in TME-L based platform can be used as below:
 (qseecom_props function = AES_SEC_KEY ipc_support = true)
 
 key handle for AES encrypt/decrypt can be obtained in three ways: (Generate/Import/Derive)
+There are 4 key handle slots reserved for HLOS in the TME key table (20 21 22 23)
+
+-------------------------------------------------------------------------------
+| Key management operation |                  Description                     |
+-------------------------------------------------------------------------------
+|      Generate            |   Generates a key using PRNG and stores it in    |
+|                          |   TME key table.                                 |
+|                          |                                                  |
+|      Import              |   The Plain text key provided by user will be    |
+|                          |   imported to the TME key table.                 |
+|                          |                                                  |
+|      Derive              |   TME will derive a key from the base key stored |
+|                          |   in the chip. The base key can be               |
+|                          |   CRBK(Chip Random Base Key) or OEM Product seed.|
+-------------------------------------------------------------------------------
 
 Generate:
 Key will be generated using PRNG
-Provide AES256 mode (0->ECB 1->CBC)
-(1) echo 0 > /sys/tmel_sec_key/tmel_aes_mode
+Select TMEL algo (0->ECB 1->CBC 2->GCM 3->ECDSA 4->ECDH 5->HMAC-SHA)
+(1) echo 0 > /sys/tmel_sec_key/tmel_algo
 Generate key handle
-(2) cat /sys/tmel_sec_key/tmel_aes_generate_key > key_handle.txt
+(2) cat /sys/tmel_sec_key/tmel_generate_key > key_handle.txt
 
 Import:
-Key will be generated using the plain text key provided by user
-Provide AES256 mode (0->ECB 1->CBC)
-(1) echo 0 > /sys/tmel_sec_key/tmel_aes_mode
+Plain text key will be provided by user
+Select TMEL algo (0->ECB 1->CBC 2->GCM 3->ECDSA 4->ECDH 5->HMAC-SHA)
+(1) echo 0 > /sys/tmel_sec_key/tmel_algo
 Provide plain text key
 Example:
 (2) echo -n "01234567890123456789012345678901" > pt_key.txt
-(3) cat pt_key.txt > /sys/tmel_sec_key/tmel_aes_pt_key
+(3) cat pt_key.txt > /sys/tmel_sec_key/tmel_pt_key
 Import key handle
-(4) cat /sys/tmel_sec_key/tmel_aes_import_key > key_handle.txt
+(4) cat /sys/tmel_sec_key/tmel_import_key > key_handle.txt
 
 Derive:
 CRBK or OEM product seed stored in the chip will be used to derive a key
-Provide AES256 mode (0->ECB 1->CBC)
-(1) echo 0 > /sys/tmel_sec_key/tmel_aes_mode
+Select TMEL algo (0->ECB 1->CBC 2->GCM 3->ECDSA 4->ECDH 5->HMAC-SHA 6->SIV)
+(1) Eg: echo 0 > /sys/tmel_sec_key/tmel_algo
 Provide base key (0->CRBK 1->OEM Product seed)
-(2) echo 0 > /sys/tmel_sec_key/tmel_aes_input_key
+(2) Eg: echo 0 > /sys/tmel_sec_key/tmel_input_key
 Context data is 64 or 128 bytes which can be fed as below:
 Example:
-(3) echo -n "34613132613738396434316363323738656166343132363635613831643530313461313261373839643431636332373865616634313236363561383164353032" > /sys/tmel_sec_key/tmel_aes_context_data
+(3) echo -n "34613132613738396434316363323738656166343132363635613831643530313461313261373839643431636332373865616634313236363561383164353032" > /sys/tmel_sec_key/tmel_context_data
 Provide the security bindings for KDF context. Please refer the Crypto user
 guide for the list of supported values. By default software context is applied.
 The security bindings can be provided as below,
 Example:
-echo 32 > /sys/tmel_sec_key/tmel_aes_sec_ctx
+echo 32 > /sys/tmel_sec_key/tmel_sec_ctx
 Note: If software context is used as security bindings, salt/label will be included
 in KDF context. The salt/label can be 64 bytes at max and can be fed as below:
 Example:
-(4) echo -n "0123456789012345678901234567890123456789012345678901234567890123" > /sys/tmel_sec_key/tmel_aes_salt_label_data
+(4) echo -n "0123456789012345678901234567890123456789012345678901234567890123" > /sys/tmel_sec_key/tmel_salt_label_data
 Derive key handle
-(5) cat /sys/tmel_sec_key/tmel_aes_derive_key > key_handle.txt
+(5) cat /sys/tmel_sec_key/tmel_derive_key > key_handle.txt
 
 Once a key handle is obtained via any of the three operations mentioned above,
 it can be used for encrypt/decrypt operations.
@@ -313,25 +395,253 @@ Note: TME-L will generate IV internally for AES encryption and does not accept I
 from user.
 
 To encrypt:
-Provide the key handle to used for enc/dec
-(1) cat key_handle.txt > /sys/tmel_sec_key/tmel_aes_key
-Provide the plain text to encrypt. Note: Plain text must be multiple of AES block size (i.e 16 bytes) and less than 2k bytes
+Provide the key handle to be used for encrypt
+(1) cat key_handle.txt > /sys/tmel_sec_key/tmel_key
+Provide AES256 mode (0->ECB 1->CBC 2->GCM)
+(2) echo 0 > /sys/tmel_sec_key/tmel_algo
+Note: The same AES mode used while obtaining the key handle has to be
+specified here.
+Note: Step (3) is needed only for AES GCM mode. For other AES modes AAD is not
+used.
+(3) echo -n "0123456789012345" > /sys/tmel_sec_key/tmel_aes_aad_data
+Provide the plain text to encrypt.
+Note: Plain text must be multiple of AES block size (i.e 16 bytes) and less than 2k bytes
 Example:
-(2) echo "Aes Encryption!" > /sys/tmel_sec_key/tmel_aes_encrypt
-(3) cat /sys/tmel_sec_key/tmel_aes_encrypt > enc.txt
+(4) echo "Aes Encryption!" > /sys/tmel_sec_key/tmel_aes_encrypt
+(5) cat /sys/tmel_sec_key/tmel_aes_encrypt > enc.txt
+Copy the IV that was generated by TME during encryption. This IV has to be
+passed for decrypting the data.
+(6) cat /sys/tmel_sec_key/tmel_aes_iv_data > iv.txt
+Copy the Tag data that was generated by TME for authentication during decrypt
+call.
+Note: Steps (7) and (8) are needed only for AES GCM mode. For other AES modes AAD
+and Tag are not used.
+(7) cat /sys/tmel_sec_key/tmel_aes_aad_data > aad.txt
+(8) cat /sys/tmel_sec_key/tmel_aes_tag_data > tag.txt
 
 To decrypt:
-(1) cat enc.txt > /sys/tmel_sec_key/tmel_aes_decrypt
-(2) cat /sys/tmel_sec_key/tmel_aes_decrypt > dec.txt
-(3) cat dec.txt
+Provide the key handle to be used for decrypt
+(1) cat key_handle.txt > /sys/tmel_sec_key/tmel_key
+Provide AES256 mode (0->ECB 1->CBC 2->GCM)
+(2) echo 0 > /sys/tmel_sec_key/tmel_algo
+Note: The same key handle and AES mode used for encrypting the data has to be
+specified here.
+Provide the IV which was obtained during encrypt IPC
+(3) cat iv.txt > /sys/tmel_sec_key/tmel_aes_iv_data
+Note: Steps (4) and (5) are needed only for AES GCM mode. For other AES modes AAD and
+Tag are not used.
+(4) cat aad.txt > /sys/tmel_sec_key/tmel_aes_aad_data
+(5) cat tag.txt > /sys/tmel_sec_key/tmel_aes_tag_data
+(6) cat enc.txt > /sys/tmel_sec_key/tmel_aes_decrypt
+(7) cat /sys/tmel_sec_key/tmel_aes_decrypt > dec.txt
+(8) cat dec.txt
 
 Clear:
-(1) cat key_handle.txt > /sys/tmel_sec_key/tmel_aes_clear_key
+This call can be used to clear a previously obtained key handle from TME.
+Example:
+(1) cat key_handle.txt > /sys/tmel_sec_key/tmel_clear_key
 Note: User cannot get more than 4 key handles from TME-L. Trying to get a 5th key
 would result in an error. If the user wants to get a new key handle after 4 successful
 attempts, then the user has to clear an already existing key by passing it's key
-handle to the clear_key sysfs entry. Once a key handle is cleared, the key cannot
-be used for further encryption/decryption of data.
+handle to the tmel_aes_clear_key sysfs entry. Once a key handle is cleared, the
+key cannot be used for further encryption/decryption of data.
+
+Wrap/Unwrap:
+
+The wrap/unwrap operations can be used to achieve AES keyblob usecases.
+Wrap IPC is an encryption process of converting a plain text into a cipher text
+and unwrap does the converse of it, decrypting the cipher text and storing the
+plain text. Here the plain text is the source key (KSK) and the key used to
+encrypt that is the wrapping key (KWK). TME encrypts the KSK using KWK and returns the
+encrypted key buffer to the client. The AES algorithm used for wrap/unwrap is the
+AES SIV (Advanced Encryption Standard -  Synthetic Initialization Vector)
+
+The keys stored in the TME key table will be cleared after reboot.
+The below steps can be followed to achieve the AES keyblob usecase where a key can be
+wrapped into a keyblob buffer which can be used across reboots for encrypting
+and decrypting plain data.
+
+Steps to wrap a source key,
+
+Import the source key (KSK) to be used for encryption/decryption as per
+the procedure mentioned in the "Import" section into ksk.txt
+(1) cat /sys/tmel_sec_key/tmel_import_key > ksk.txt
+
+Derive the key wrapping key (KWK) to be used for wrapping the KSK using derive IPC
+Select the AES SIV mode (6 -> AES SIV)
+(2) echo 6 > /sys/tmel_sec_key/tmel_algo
+Note: Here the mode should always be 6 which corresponds to AES SIV algorithm
+Select the input key as CRBK
+Note: Only CRBK input key should be selected for AES keyblob usecase.
+(3) echo 0 > /sys/tmel_sec_key/tmel_input_key
+Provide context, salt and security context if needed and derive the KWK
+(4) cat /sys/tmel_sec_key/tmel_derive_key > kwk.txt
+
+Now wrap the KSK
+(5) cat ksk.txt > /sys/tmel_sec_key/tmel_wrap_key_id
+(6) cat kwk.txt > /sys/tmel_sec_key/tmel_wrapping_key_id
+(7) cat /sys/tmel_sec_key/tmel_wrap_key > keyblob.txt
+
+The keyblob.txt contains the wrapped key buffer. This keyblob can be used across
+reboots by unwrapping it into key handle and using it for AES encryption/decryption.
+
+Steps to unwrap the wrapped key,
+
+Derive the KWK again into kwk.txt using the same derive IPC parameters used while
+wrapping the KSK
+(1) cat kwk.txt > /sys/tmel_sec_key/tmel_wrapping_key_id
+(2) cat keyblob.txt > /sys/tmel_sec_key/tmel_unwrap_key
+Note: If the above operation fails, make sure atleast one destination key slot is
+free. If not, please clear a key and try again.
+(3) cat /sys/tmel_sec_key/tmel_unwrap_key > ksk.txt
+(4) cat ksk.txt
+
+ksk.txt will display the key slot where the keyblob was unwrapped to. Now the
+key slot can be used for AES encryption/decryption.
+
+Note: While using wrapped key blob across reboots for encryption/decryption,
+users should make sure the required AES parameters returned by TME such as IV,
+AAD, Tag and Cipher text are copied and stored locally so that they may be used
+for decryption during succesive boot.
+
+ECDSA sign/verify:
+
+TME-L provides support for Elliptic Curve Cryptography (ECC) algorithms which
+is more efficient compared to RSA algorithm.
+It uses the Elliptic Curve Digital Signature Algorithm (ECDSA) for signing and
+verification service. This algorithm makes use of a private and a public key.
+The private key will be used for signing the data and the public key will be
+used for verifying the signature. Using this operation, plain text as well as
+digest can be signed and verified. Qseecom driver makes use of the ECC P-256
+and P-384 curves in TME-L to support the ECDSA sign/verification service.
+
+This feature can be used in the following way,
+
+Steps to sign the data,
+
+Select TME algo as ECDSA (3 -> ECDSA)
+(1) echo 3 > /sys/tmel_sec_key/tmel_algo
+Select the ECC curve-id (3 -> P-256, 4 -> P-384)
+(2) Eg: echo 3 > /sys/tmel_sec_key/tmel_ecc_curve_id
+Generate or Import or Derive a private key
+Note: While using Import mechanism, users need to make sure the key size
+aligns with the curve ID that is selected. For curve P-256 key size should be 32
+bytes. For curve P-384 key size should be 48 bytes.
+(3) Eg: cat /sys/tmel_sec_key/tmel_generate_key > key_handle.txt
+        (or)
+        echo -n "01234567890123456789012345678901" > pt_key.txt
+        cat pt_key.txt > /sys/tmel_sec_key/tmel_pt_key
+        cat /sys/tmel_sec_key/tmel_import_key > key_handle.txt
+        (or)
+        Give the required derive key parameters and derive a key
+        cat /sys/tmel_sec_key/tmel_derive_key > key_handle.txt
+Get the public key for the corresponding private key
+(4) cat key_handle.txt > /sys/tmel_sec_key/tmel_ecc_prv_key_id
+(5) cat /sys/tmel_sec_key/tmel_ecc_pub_key > pub_key.txt
+Copy the plain text or digest to be signed in temporary file (eg: data.txt)
+(6) echo -n "hello world" > data.txt
+    (or)
+    cat digest.txt > data.txt
+Note: The content to be signed and verified can be plain text or a digest.
+      Digest for a plain text can be generated using the TME-L SHA/HMAC-SHA
+      algorithms discussed below.
+      If data is plain text then by selecting the hash algo TME-L will
+      internally hash and sign the data.
+Select the hash algorithm if data is not digest. Select 0 if data is digest.
+(0 -> Invalid, 2 -> SHA256)
+(7) Eg: echo 2 > /sys/tmel_sec_key/tmel_hash_algo
+Feed the private key and data for signing
+(8) cat key_handle.txt > /sys/tmel_sec_key/tmel_ecc_prv_key_id
+(9) cat data.txt > /sys/tmel_sec_key/tmel_ecc_input_buf
+Select the ECC curve-id (3 -> P-256, 4 -> P-384)
+(10) Eg: echo 3 > /sys/tmel_sec_key/tmel_ecc_curve_id
+Note: The same ECC curve id used for creating the public key must be used here
+for signing. Only then the public key can be used for verification.
+Sign the data
+(11) cat /sys/tmel_sec_key/tmel_ecc_sign_msg > sign.txt
+
+Steps to verify the signature,
+
+Feed the public key which was obtained from the private key
+(10) cat pub_key.txt > /sys/tmel_sec_key/tmel_ecc_pub_key
+Select the ECC curve-id (3 -> P-256, 4 -> P-384)
+(11) Eg: echo 3 > /sys/tmel_sec_key/tmel_ecc_curve_id
+Note: The same ECC curve-id used for signing must be passed here.
+Select the appropriate hash algorithm which was used during signing
+(0 -> Invalid,  2 -> SHA256)
+(11) Eg: echo 2 > /sys/tmel_sec_key/tmel_hash_algo
+Feed the data and signature for verification
+(12) cat data.txt > /sys/tmel_sec_key/tmel_ecc_input_buf
+(13) cat sign.txt > /sys/tmel_sec_key/tmel_ecc_signature
+Verify the signature
+(14) cat /sys/tmel_sec_key/tmel_ecc_verify_msg > result.txt
+(15) cat result.txt
+
+Check the result.txt for success/failure
+
+ECDH Shared secret service:
+
+The ECDH Shared secret service can be used to derive a shared key.
+Two parties will have their own private/public key pairs to derive upon a
+shared secret key. Qseecom driver makes use of the ECC P-256 and P-384 curves
+in TME-L to support the ECDH shared secret service.
+
+Create the private/public key pair for user 1
+
+Select TME algo as ECDH (4 -> ECDH)
+(1) echo 4 > /sys/tmel_sec_key/tmel_algo
+Select the ECC curve-id (3 -> P-256, 4 -> P-384)
+(2) Eg: echo 3 > /sys/tmel_sec_key/tmel_ecc_curve_id
+Generate/Import/Derive a private key
+Note: While using Import mechanism, users need to make sure the key size
+aligns with the curve ID that is selected. For curve P-256 key size should be 32
+bytes. For curve P-384 key size should be 48 bytes.
+(3) Eg: cat /sys/tmel_sec_key/tmel_generate_key > prv_key1.txt
+(4) cat prv_key1.txt > /sys/tmel_sec_key/tmel_ecc_prv_key_id
+Get the public key
+(5) cat /sys/tmel_sec_key/tmel_ecc_pub_key > pub_key1.txt
+(6) cat pub_key1.txt > /sys/tmel_sec_key/tmel_ecc_pub_key
+
+Create the private/public key pair for user 2
+
+Select TME algo as ECDH (4 -> ECDH)
+(7) echo 4 > /sys/tmel_sec_key/tmel_algo
+Select the ECC curve-id (3 -> P-256, 4 -> P-384)
+(8) Eg: echo 3 > /sys/tmel_sec_key/tmel_ecc_curve_id
+Generate/Import/Derive a private key
+Note: While using Import mechanism, users need to make sure the key size
+aligns with the curve ID that is selected. For curve P-256 key size should be 32
+bytes. For curve P-384 key size should be 48 bytes.
+(9) Eg: cat /sys/tmel_sec_key/tmel_generate_key > prv_key2.txt
+(10) cat prv_key2.txt > /sys/tmel_sec_key/tmel_ecc_prv_key_id2
+Get the public key
+(11) cat /sys/tmel_sec_key/tmel_ecc_pub_key2 > pub_key2.txt
+(12) cat pub_key2.txt > /sys/tmel_sec_key/tmel_ecc_pub_key2
+
+Derive the shared key
+(13) cat /sys/tmel_sec_key/tmel_ecdh_shared_secret > shared_key.txt
+
+SHA256/HMAC-SHA256:
+
+TME-L can generate SHA and HMAC-SHA digest for the provided plain text.
+
+SHA256
+Select hash algo as SHA256 (2 -> SHA256)
+(1) echo 2 > /sys/tmel_sec_key/tmel_hash_algo
+Plain SHA256 does not use any private key for hashing. So set hash key id as 0.
+(2) echo 0 > /sys/tmel_sec_key/tmel_hmac_sha_key_id
+(3) Eg: echo -n "hello world" > /sys/tmel_sec_key/tmel_hmac_sha
+(4) cat /sys/tmel_sec_key/tmel_hmac_sha > digest.txt
+
+HMAC-SHA256
+Select TME algo as HMAC-SHA (5 -> HMAC-SHA)
+(1) echo 5 > /sys/tmel_sec_key/tmel_algo
+Select hash algo as SHA256 (2 -> SHA256)
+(2) echo 2 > /sys/tmel_sec_key/tmel_hash_algo
+(3) Generate/Import/Derive a private key into key_handle.txt
+(4) cat key_handle.txt > /sys/tmel_sec_key/tmel_hmac_sha_key_id
+(5) Eg: echo -n "hello world" > /sys/tmel_sec_key/tmel_hmac_sha
+(6) cat /sys/tmel_sec_key/tmel_hmac_sha > digest.txt
 
 --------------------------------------------------------------------------------
 
@@ -369,7 +679,17 @@ Note: We support only 64 bit sampleapp in ipq platforms.
 Before loading the sample app, the library required by sample app needs to be
 loaded.
 
-(1) To load sample app libraries
+(1) Provide the size to be used for TZApp log buffer. Incase the buffer is
+insufficient to view the entire contents, this size can be increased.
+Note: If the log size is not provided or if the memory allocation fails for
+the provided size, the default size will be taken as 4k bytes.
+Eg: echo 0x8000 > /sys/firmware/tzapp/log_size
+
+If the TZApp log size has to be increased, then unload the qseecom driver and
+load it back. Now provide the updated log size in the above sysfs entry and load
+the sample app libraries.
+
+(2) To load sample app libraries
 
 Concatenate all the seg files into 1 segment file and feed it as
 input to sys/firmware/seg_file and feed the mdt file as input to
@@ -391,7 +711,7 @@ echo 0 > /sys/firmware/tzapp/load_start
 
 You will get a print saying you have successfully loaded app libraries.
 
-(2) To load sample app
+(3) To load sample app
 
 Concatenate all the seg files into 1 segment file and feed it as
 input to sys/firmware/seg_file and feed the mdt file as input to
@@ -641,3 +961,40 @@ driver is removed (i.e. during rmmod to remove the qseecom module).
 
 If the user doesn't unload the app, then the app is unloaded when the
 device driver is removed.
+
+--------------------------------------------------------------------------------
+
+CryptoApp operations
+
+CryptoApp requires reserved memory similar to TZApp. If the reserved memory node
+reference is not provided, CryptoApp cannot function.
+
+Support for IOCTLs has been introduced for the CryptoApp, leveraging existing SCM APIs.
+
+Available IOCTLs in the Kernel:
+
+(1) QSEECOM_LOAD_TA_LIB        -> loads the Crypto Library
+(2) QSEECOM_LOAD_TA_APP        -> loads the Crypto Application
+(3) QSEECOM_UNLOAD_TA_LIB      -> unloads the Crypto Library
+(4) QSEECOM_UNLOAD_TA_APP      -> unloads the Crypto Application
+(5) QSEECOM_ECDSA_IMPORT_KEY   -> imports the ECDSA blob into CryptoApp
+(6) QSEECOM_SET_KEY_HANDLE     -> sets the key handle in the kernel
+(7) QSEECOM_ECDSA_SIGN         -> signs the data
+(8) QSEECOM_ECDSA_VERIFY       -> verifys the signed data
+
+For further details, refer to the source code in drivers/misc/qseecom.c and qseecom.h.
+
+A Test Utility is available as part of the QSDK, with the source code located at
+qsdk/qca/src/qca-pkcs11/test/. This utility can be used as a reference for IOCTL usage.
+
+The CryptoApp support is added for the PKCS#11 and enabled by default in the kernel.
+
+LOAD and UNLOAD IOCTLs function similar to the TZapp Sysfs. During LOAD, all the segment
+files must be concatenated into a single binary, which is then passed to the LOAD IOCTL.
+
+Application and Library can be loaded either via IOCTL or Sysfs. Re-loading is
+prevented by the kernel and will result in failure.
+
+CryptoApp log can be viewed in /sys/kernel/debug/tzapp_log
+
+--------------------------------------------------------------------------------

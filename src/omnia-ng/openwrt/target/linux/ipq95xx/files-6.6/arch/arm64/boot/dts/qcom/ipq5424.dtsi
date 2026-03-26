@@ -94,6 +94,7 @@
 			reg = <0x0>;
 			enable-method = "psci";
 			next-level-cache = <&L2_0>;
+			cpu-idle-states = <&LITTLE_CPU_OFF>;
 			clocks = <&apss_clk APSS_SILVER_CORE_CLK>;
 			clock-names = "cpu";
 			operating-points-v2 = <&cpu_opp_table>;
@@ -117,6 +118,7 @@
 			enable-method = "psci";
 			reg = <0x100>;
 			next-level-cache = <&L2_100>;
+			cpu-idle-states = <&LITTLE_CPU_OFF>;
 			clocks = <&apss_clk APSS_SILVER_CORE_CLK>;
 			clock-names = "cpu";
 			operating-points-v2 = <&cpu_opp_table>;
@@ -135,6 +137,7 @@
 			enable-method = "psci";
 			reg = <0x200>;
 			next-level-cache = <&L2_200>;
+			cpu-idle-states = <&LITTLE_CPU_OFF>;
 			clocks = <&apss_clk APSS_SILVER_CORE_CLK>;
 			clock-names = "cpu";
 			operating-points-v2 = <&cpu_opp_table>;
@@ -153,6 +156,7 @@
 			enable-method = "psci";
 			reg = <0x300>;
 			next-level-cache = <&L2_300>;
+			cpu-idle-states = <&LITTLE_CPU_OFF>;
 			clocks = <&apss_clk APSS_SILVER_CORE_CLK>;
 			clock-names = "cpu";
 			operating-points-v2 = <&cpu_opp_table>;
@@ -163,6 +167,20 @@
 				cache-unified;
 				next-level-cache = <&L3_0>;
 			};
+		};
+	};
+
+	idle-states {
+		entry-method = "psci";
+
+		LITTLE_CPU_OFF: silver-c3 {  /* C3 */
+			compatible = "arm,idle-state";
+			idle-state-name = "pc";
+			entry-latency-us = <549>;
+			exit-latency-us = <901>;
+			min-residency-us = <1774>;
+			arm,psci-suspend-param = <0x40000003>;
+			local-timer-stop;
 		};
 	};
 
@@ -207,6 +225,8 @@
 	ctx-save {
 		compatible = "qti,ctxt-save-ipq5424";
 		memory-region = <&minidump_mem>;
+		qcom,imem = <&imem>;
+		minidump-level = <2>;
 	};
 
 	firmware {
@@ -287,6 +307,9 @@
 	psci {
 		compatible = "arm,psci-1.0";
 		method = "smc";
+		reset-types {
+			mode-edl = <0 0x1>;
+		};
 	};
 
 	qti,tzlog {
@@ -322,10 +345,6 @@
 			no-map;
 		};
 
-		tz@0x8a600000 {
-			reg = <0x0 0x8a600000 0x0 0x200000>;
-			no-map;
-		};
 #else
 		secure_upgrade: secure_upgrade@0 {
 			reg = <0x0 0x8a300000 0x0 0x500000>;
@@ -333,6 +352,14 @@
 			status = "disabled";
 		};
 #endif
+		tz@0x8a600000 {
+			reg = <0x0 0x8a600000 0x0 0x200000>;
+			no-map;
+#if defined(__IPQ_MEM_PROFILE_256_MB__)
+			status = "disabled";
+#endif
+		};
+
 		smem@8a800000 {
 			compatible = "qcom,smem";
 			reg = <0x0 0x8a800000 0x0 0x32000>;
@@ -390,6 +417,16 @@
 			interrupts = <GIC_SPI 105 IRQ_TYPE_EDGE_RISING>;
 			interrupt-names = "combined";
 			#thermal-sensor-cells = <1>;
+		};
+
+		eud {
+			compatible = "qcom,sc7280-eud","qcom,eud";
+			reg = <0x78000 0x2000>,
+			      <0x7A000 0x1000>;
+			interrupts = <GIC_SPI 415 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&gcc GCC_USB0_PHY_CFG_AHB_CLK>;
+			clock-names = "eud_ahb2phy_clk";
+			status = "disabled";
 		};
 
 		rng: rng@4c3000 {
@@ -1011,6 +1048,7 @@
 				label = "rtr";
 				qcom,remote-pid = <1>;
 				mboxes = <&apcs_glb 8>;
+				global_timer = <0x4A5000>;
 			};
 
 #ifdef __QCOM_NON_SECURE_PIL__
@@ -1240,7 +1278,7 @@
 				port_scheduler_resource {
 					port@0 {
 						port_id = <0>;
-						ucast_queue = <0 63>;
+						ucast_queue = <0 95>;
 						mcast_queue = <256 263>;
 						l0sp = <0 0>;
 						l0cdrr = <0 7>;
@@ -1279,7 +1317,7 @@
 						l1edrr = <16 19>;
 					};
 					reserved {
-						ucast_queue = <64 143>;
+						ucast_queue = <96 143>;
 						mcast_queue = <264 271>;
 						l0sp = <1 35>;
 						l0cdrr = <8 47>;
@@ -1349,6 +1387,26 @@
 								ucast_queue = <56>;
 								ucast_loop_pri = <8>;
 								mcast_queue = <263>;
+								cfg = <0 0 0 0 0>;
+							};
+							group@8 {
+								ucast_queue = <64>;
+								ucast_loop_pri = <8>;
+								cfg = <0 0 0 0 0>;
+							};
+							group@9 {
+								ucast_queue = <72>;
+								ucast_loop_pri = <8>;
+								cfg = <0 0 0 0 0>;
+							};
+							group@a {
+								ucast_queue = <80>;
+								ucast_loop_pri = <8>;
+								cfg = <0 0 0 0 0>;
+							};
+							group@b {
+								ucast_queue = <88>;
+								ucast_loop_pri = <8>;
 								cfg = <0 0 0 0 0>;
 							};
 						};
@@ -1628,6 +1686,16 @@
 				ring-name = "lookaside";
 				ring-id = /bits/ 8 <3>;
 			};
+
+#ifdef __CONFIG_IO_COHERENCY__
+			eip_ioc {
+				prop-name = "eip_ioc";
+				secure-write;
+				reg-base = <0x01D80000>;
+				reg-offset = <0x000051B8 0x44410>,	/* EIP196 Type LUT lower bits */
+						<0x00005188 0x100>;	/* EIP196 Main control low */
+			};
+#endif
 		};
 
 		eip_crypto: eip_crypto {
@@ -1666,11 +1734,6 @@
 			compatible = "qcom,tmelcom-qmp-client";
 			mboxes = <&qmp_tmel 0>;
 			status = "disabled";
-
-			tmel-log {
-				compatible = "qcom,tmel-log";
-			};
-
 		};
 
 		watchdog: watchdog@f410000 {
@@ -1679,6 +1742,7 @@
 			interrupts = <GIC_SPI 0 IRQ_TYPE_EDGE_RISING>;
 			clocks = <&sleep_clk>;
 			timeout-sec = <30>;
+			qcom,restart-reason = <&imem 0x7b0 0x5>;
 		};
 
 		noc_lat_bw {
@@ -1925,6 +1989,7 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			axi-halt-val = <0x1e>; /* increase halt window size to 1GB */
+			cal-status-offset = <0x2400000>;
 
 			ranges = <0x81000000 0 0x40200000 0x40200000 0 0x00100000>,   /* downstream I/O */
 				 <0x82000000 0 0x40300000 0x40300000 0 0x0fd00000>; /* non-prefetchable memory */
@@ -2022,6 +2087,7 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			axi-halt-val = <0x1e>; /* increase halt window size to 1GB */
+			cal-status-offset = <0x2400000>;
 
 			ranges = <0x81000000 0 0x50200000 0x50200000 0 0x00100000>,   /* downstream I/O */
 				 <0x82000000 0 0x50300000 0x50300000 0 0x0fd00000>; /* non-prefetchable memory */
@@ -2119,6 +2185,7 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			axi-halt-val = <0x1e>; /* increase halt window size to 1GB */
+			cal-status-offset = <0x2400000>;
 
 			ranges = <0x81000000 0 0x60200000 0x60200000 0 0x00100000>,   /* downstream I/O */
 				 <0x82000000 0 0x60300000 0x60300000 0 0x0fd00000>; /* non-prefetchable memory */
@@ -2216,6 +2283,7 @@
 			#address-cells = <3>;
 			#size-cells = <2>;
 			axi-halt-val = <0x1e>; /* increase halt window size to 1GB */
+			cal-status-offset = <0x2400000>;
 
 			ranges = <0x81000000 0 0x70200000 0x70200000 0 0x00100000>,   /* downstream I/O */
 				 <0x82000000 0 0x70300000 0x70300000 0 0x0fd00000>; /* non-prefetchable memory */
@@ -2299,6 +2367,8 @@
 
 		wifi0: wifi@c0000000 {
 			compatible = "qcom,cnss-qca5424", "qcom,ipq5424-wifi";
+			qcom,userpd-subsys-name = "q6v5_wcss_userpd1";
+			qcom,mm_cal_support = "okay";
 		#ifdef __CONFIG_IO_COHERENCY__
 			dma-coherent;
 		#endif
@@ -2494,19 +2564,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x8d900000  |   20MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x8ed00000  |   1MB   |
+			 * |  Caldb  |  0x8ed00000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x8ee00000  |   1MB   |
+			 * | M3 Dump |  0x8f500000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x8ef00000  |   8MB   |
+			 * |   ETR   |  0x8f600000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x8f700000  |   7MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x8d900000>;
-			m3-dump-addr = <0x8ed00000>;
-			etr-addr = <0x8ee00000>;
-			caldb-addr = <0x8ef00000>;
+			caldb-addr = <0x8ed00000>;
+			m3-dump-addr = <0x8f500000>;
+			etr-addr = <0x8f600000>;
 			pageable-addr = <0x8f700000>;
 			hremote-size = <0x1400000>;
 			pageable-size = <0x700000>;
@@ -2518,19 +2588,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x8d900000  |   28MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x8f500000  |   1MB   |
+			 * |  Caldb  |  0x8f500000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x8f600000  |   1MB   |
+			 * | M3 Dump |  0x8fd00000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x8f700000  |   8MB   |
+			 * |   ETR   |  0x8fe00000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x8ff00000  |  12MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x8d900000>;
-			m3-dump-addr = <0x8f500000>;
-			etr-addr = <0x8f600000>;
-			caldb-addr = <0x8f700000>;
+			caldb-addr = <0x8f500000>;
+			m3-dump-addr = <0x8fd00000>;
+			etr-addr = <0x8fe00000>;
 			pageable-addr = <0x8ff00000>;
 			hremote-size = <0x1c00000>;
 			pageable-size = <0xc00000>;
@@ -2538,6 +2608,7 @@
 		#endif
 			caldb-size = <0x800000>;
 			qca,extended-intc;
+			early_cal = <&pcie0>;
 			interrupts-extended =
 				<&qcn9224_in0 5 0>,
 				<&qcn9224_in0 6 0>,
@@ -2772,19 +2843,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x8fe00000  |   20MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x91200000  |   1MB   |
+			 * |  Caldb  |  0x91200000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x91300000  |   1MB   |
+			 * | M3 Dump |  0x91a00000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x91400000  |   8MB   |
+			 * |   ETR   |  0x91b00000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x91c00000  |   7MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x8fe00000>;
-			m3-dump-addr = <0x91200000>;
-			etr-addr = <0x91300000>;
-			caldb-addr = <0x91400000>;
+			caldb-addr = <0x91200000>;
+			m3-dump-addr = <0x91a00000>;
+			etr-addr = <0x91b00000>;
 			pageable-addr = <0x91c00000>;
 			hremote-size = <0x1400000>;
 			pageable-size = <0x700000>;
@@ -2796,19 +2867,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x90b00000  |   28MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x92700000  |   1MB   |
+			 * |  Caldb  |  0x92700000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x92800000  |   1MB   |
+			 * | M3 Dump |  0x92f00000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x92900000  |   8MB   |
+			 * |   ETR   |  0x93000000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x93100000  |  12MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x90b00000>;
-			m3-dump-addr = <0x92700000>;
-			etr-addr = <0x92800000>;
-			caldb-addr = <0x92900000>;
+			caldb-addr = <0x92700000>;
+			m3-dump-addr = <0x92f00000>;
+			etr-addr = <0x93000000>;
 			pageable-addr = <0x93100000>;
 			hremote-size = <0x1c00000>;
 			pageable-size = <0xc00000>;
@@ -2816,6 +2887,7 @@
 		#endif
 			caldb-size = <0x800000>;
 			qca,extended-intc;
+			early_cal = <&pcie1>;
 			interrupts-extended =
 				<&qcn9224_in1 5 0>,
 				<&qcn9224_in1 6 0>,
@@ -3050,19 +3122,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x92300000  |   20MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x93700000  |   1MB   |
+			 * |  Caldb  |  0x93700000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x93800000  |   1MB   |
+			 * | M3 Dump |  0x93f00000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x93900000  |   8MB   |
+			 * |   ETR   |  0x94000000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x94100000  |   7MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x92300000>;
-			m3-dump-addr = <0x93700000>;
-			etr-addr = <0x93800000>;
-			caldb-addr = <0x93900000>;
+			caldb-addr = <0x93700000>;
+			m3-dump-addr = <0x93f00000>;
+			etr-addr = <0x94000000>;
 			pageable-addr = <0x94100000>;
 			hremote-size = <0x1400000>;
 			pageable-size = <0x700000>;
@@ -3074,19 +3146,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x93d00000  |   28MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x95900000  |   1MB   |
+			 * |  Caldb  |  0x95900000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x95a00000  |   1MB   |
+			 * | M3 Dump |  0x96100000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x95b00000  |   8MB   |
+			 * |   ETR   |  0x96200000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x96300000  |  12MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x93d00000>;
-			m3-dump-addr = <0x95900000>;
-			etr-addr = <0x95a00000>;
-			caldb-addr = <0x95b00000>;
+			caldb-addr = <0x95900000>;
+			m3-dump-addr = <0x96100000>;
+			etr-addr = <0x96200000>;
 			pageable-addr = <0x96300000>;
 			hremote-size = <0x1c00000>;
 			pageable-size = <0xc00000>;
@@ -3094,6 +3166,7 @@
 		#endif
 			caldb-size = <0x800000>;
 			qca,extended-intc;
+			early_cal = <&pcie2>;
 			interrupts-extended =
 				<&qcn9224_in2 5 0>,
 				<&qcn9224_in2 6 0>,
@@ -3328,20 +3401,20 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x94800000  |   20MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x95c00000  |   1MB   |
+			 * |  Caldb  |  0x95c00000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x95600000  |   1MB   |
+			 * | M3 Dump |  0x96400000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x95700000  |   8MB   |
+			 * |   ETR   |  0x96500000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |Pageable |  0x95f00000  |   7MB   |
+			 * |Pageable |  0x96600000  |   7MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x94800000>;
-			m3-dump-addr = <0x95c00000>;
-			etr-addr = <0x95600000>;
-			caldb-addr = <0x95700000>;
-			pageable-addr = <0x95f00000>;
+			caldb-addr = <0x95c00000>;
+			m3-dump-addr = <0x96400000>;
+			etr-addr = <0x96500000>;
+			pageable-addr = <0x96600000>;
 			hremote-size = <0x1400000>;
 			pageable-size = <0x700000>;
 			tgt-mem-mode = <0x1>;
@@ -3352,19 +3425,19 @@
 			 * +---------+--------------+---------+
 			 * | HREMOTE |  0x96f00000  |   28MB  |
 			 * +---------+--------------+---------+
-			 * | M3 Dump |  0x98b00000  |   1MB   |
+			 * |  Caldb  |  0x98b00000  |   8MB   |
 			 * +---------+--------------+---------+
-			 * |   ETR   |  0x98c00000  |   1MB   |
+			 * | M3 Dump |  0x99300000  |   1MB   |
 			 * +---------+--------------+---------+
-			 * |  Caldb  |  0x98d00000  |   8MB   |
+			 * |   ETR   |  0x99400000  |   1MB   |
 			 * +---------+--------------+---------+
 			 * |Pageable |  0x99500000  |  12MB   |
 			 * +==================================+
 			 */
 			base-addr = <0x96f00000>;
-			m3-dump-addr = <0x98b00000>;
-			etr-addr = <0x98c00000>;
-			caldb-addr = <0x98d00000>;
+			caldb-addr = <0x98b00000>;
+			m3-dump-addr = <0x99300000>;
+			etr-addr = <0x99400000>;
 			pageable-addr = <0x99500000>;
 			hremote-size = <0x1c00000>;
 			pageable-size = <0xc00000>;
@@ -3372,6 +3445,7 @@
 		#endif
 			caldb-size = <0x800000>;
 			qca,extended-intc;
+			early_cal = <&pcie3>;
 			interrupts-extended =
 				<&qcn9224_in3 5 0>,
 				<&qcn9224_in3 6 0>,
@@ -4009,7 +4083,7 @@
 		       };
 	       };
 
-		sram@8600000 {
+		imem: sram@8600000 {
 			compatible = "qcom,ipq5424-imem", "syscon", "simple-mfd";
 			reg = <0x08600000 0x1000>;
 			ranges = <0 0x08600000 0x1000>;
@@ -4202,6 +4276,10 @@
 			     <GIC_PPI 12 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_LOW)>;
 	};
 
+	tmel-log {
+		compatible = "qcom,tmel-log-ipq5424";
+	};
+
 	qcom,test@0 {
 		compatible = "qcom,testmhi";
 		qcom,wlan-ramdump-dynamic = <0x600000>;
@@ -4218,6 +4296,7 @@
 
 		qcom,local-pid = <0>;
 		qcom,remote-pid = <1>;
+		global_timer = <0x4A5000>;
 
 		wcss_smp2p_out: master-kernel {
 			qcom,entry-name = "master-kernel";

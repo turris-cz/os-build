@@ -13,8 +13,6 @@
  */
 
 #include <linux/err.h>
-#include <linux/remoteproc.h>
-#include <linux/remoteproc/qcom_rproc.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/dma-direction.h>
@@ -50,52 +48,22 @@
 #define PCIE_SOC_GLOBAL_RESET_VALUE     0x5
 #define MAX_SOC_GLOBAL_RESET_WAIT_CNT   50 /* x 20msec */
 
-/* Add DEBUG related here  */
-enum MHITEST_DEBUG_KLVL{
-	MHITEST_LOG_LVL_VERBOSE,
-	MHITEST_LOG_LVL_INFO,
-	MHITEST_LOG_LVL_ERR,
-};
-extern int debug_lvl;
-
-#define pr_mhitest(msg, ...)  pr_err("[mhitest]: " msg,  ##__VA_ARGS__)
-#define pr_mhitest2(msg, ...) \
-	pr_err("[mhitest]: %s[%d] " msg, __func__, __LINE__,   ##__VA_ARGS__)
-
-#define MHITEST_EMERG(msg, ...) do {\
-		pr_err("[mhitest][A]: [%s] " msg, __func__,   ##__VA_ARGS__);\
-} while (0)
-
-#define MHITEST_ERR(msg, ...) do {\
-	if  (debug_lvl <= MHITEST_LOG_LVL_ERR) \
-		pr_err("[mhitest][E]: [%s] " msg, __func__,   ##__VA_ARGS__);\
-} while (0)
-
-#define MHITEST_VERB(msg, ...) do {\
-	if  (debug_lvl <= MHITEST_LOG_LVL_VERBOSE) \
-		pr_err("[mhitest][D]: [%s][%d] " msg, __func__, __LINE__,   ##__VA_ARGS__);\
-} while (0)
-
-#define MHITEST_LOG(msg, ...) do {\
-	if  (debug_lvl <= MHITEST_LOG_LVL_INFO) \
-		pr_err("[mhitest][I]: [%s] " msg, __func__,   ##__VA_ARGS__);\
-} while (0)
-
-#define VERIFY_ME(val, announce)\
-	do {		\
-		if (val) {	\
-			pr_mhitest2("%s Error val :%d\n", announce, val);\
-		}		\
-		else {		\
-			pr_mhitest2("%s Pass!\n", announce);	\
-		}	\
-	} while (0)
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "[mhitest]: [%s]: " fmt, __func__
 
 #define QTI_PCI_VENDOR_ID		0x17CB
-#define QCN90xx_DEVICE_ID		0x1104
+#define QCN90XX_DEVICE_ID		0x1104
 #define QCN92XX_DEVICE_ID		0x1109
+#define QCN96XX_DEVICE_ID		0x1113
 
 #define PCI_LINK_DOWN                   0
+
+#define DEVICE_RDDM_COOKIE		0xCAFECACE
+#define MHITEST_IN_MISSION_MODE(ee)	(ee == MHI_EE_AMSS  || \
+					 ee == MHI_EE_WFW || \
+					 ee == MHI_EE_FP)
 
 /*
  *Structure specific to mhitest module
@@ -184,10 +152,6 @@ struct mhitest_platform {
 	struct mhitest_msi_config *msi_config;
 	u32 msi_ep_base_data;
 	struct mhi_controller *mhi_ctrl;
-/* subsystem related */
-	char *mhitest_ss_desc_name;
-	phandle rproc_handle;
-	struct rproc *subsys_handle;
 /* ramdump */
 	struct mhitest_ramdump_info mhitest_rdinfo;
 /* event work queue*/
@@ -198,9 +162,10 @@ struct mhitest_platform {
 /* probed device no. 0 to (MAX-1)*/
 	int d_instance;
 /* klog level for mhitest driver */
-	enum MHITEST_DEBUG_KLVL  mhitest_klog_lvl;
 	bool soc_reset_requested;
 	struct completion soc_reset_request;
+	bool running;
+	struct timer_list boot_debug_timer;
 };
 enum MHI_STATE {
 	MHI_INIT,
@@ -226,9 +191,7 @@ struct mhitest_driver_event {
 };
 
 int mhitest_pci_register(void);
-int mhitest_subsystem_register(struct mhitest_platform *);
 void mhitest_pci_unregister(void);
-void mhitest_subsystem_unregister(struct mhitest_platform *);
 int mhitest_pci_enable_bus(struct mhitest_platform *);
 struct mhitest_platform *get_mhitest_mplat_by_pcidev(struct pci_dev *pci_dev);
 int mhitest_pci_en_msi(struct mhitest_platform *);
@@ -249,9 +212,10 @@ int mhitest_event_work_init(struct mhitest_platform *);
 void mhitest_event_work_deinit(struct mhitest_platform *);
 int mhitest_pci_start_mhi(struct mhitest_platform *);
 void mhitest_global_soc_reset(struct mhitest_platform *);
-int mhitest_ss_powerup(struct rproc *);
 int mhitest_pci_set_mhi_state(struct mhitest_platform *, enum MHI_STATE);
 void mhitest_pci_disable_bus(struct mhitest_platform *);
 int mhitest_unregister_ramdump(struct mhitest_platform *);
 int mhitest_pci_remove_all(struct mhitest_platform *);
 void mhitest_pci_soc_reset(struct mhitest_platform *mplat);
+void mhitest_reset_mhi_state(struct mhitest_platform *mplat);
+void mhitest_pci_dump_bl_sram_mem(struct mhitest_platform *mplat);

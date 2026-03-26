@@ -92,19 +92,19 @@ diff --git a/include/uapi/linux/netfilter/xt_connmark.h b/include/uapi/linux/net
 index 41b578ccd03b..1ef51bca5cc7 100644
 --- a/include/uapi/linux/netfilter/xt_connmark.h
 +++ b/include/uapi/linux/netfilter/xt_connmark.h
-@@ -14,6 +14,11 @@ enum {
- 	XT_CONNMARK_RESTORE
+@@ -15,6 +15,11 @@
  };
  
-+enum {
-+	XT_CONNMARK_VALUE =	(1 << 0),
-+	XT_CONNMARK_DSCP = 	(1 << 1)
+ enum {
++	XT_CONNMARK_VALUE = (1 << 0),
++	XT_CONNMARK_DSCP =  (1 << 1)
 +};
 +
- enum {
++enum {
  	D_SHIFT_LEFT = 0,
  	D_SHIFT_RIGHT,
-@@ -29,6 +34,11 @@ struct xt_connmark_tginfo2 {
+ };
+@@ -29,6 +34,11 @@
  	__u8 shift_dir, shift_bits, mode;
  };
  
@@ -120,7 +120,7 @@ diff --git a/net/netfilter/xt_connmark.c b/net/netfilter/xt_connmark.c
 index ad3c033db64e..5e1341f06bd7 100644
 --- a/net/netfilter/xt_connmark.c
 +++ b/net/netfilter/xt_connmark.c
-@@ -24,13 +24,13 @@ MODULE_ALIAS("ipt_connmark");
+@@ -24,13 +24,13 @@
  MODULE_ALIAS("ip6t_connmark");
  
  static unsigned int
@@ -136,7 +136,7 @@ index ad3c033db64e..5e1341f06bd7 100644
  
  	ct = nf_ct_get(skb, &ctinfo);
  	if (ct == NULL)
-@@ -38,13 +38,24 @@ connmark_tg_shift(struct sk_buff *skb, const struct xt_connmark_tginfo2 *info)
+@@ -38,13 +38,24 @@
  
  	switch (info->mode) {
  	case XT_CONNMARK_SET:
@@ -146,7 +146,6 @@ index ad3c033db64e..5e1341f06bd7 100644
 -			newmark >>= info->shift_bits;
 -		else
 -			newmark <<= info->shift_bits;
--
 +		newmark = READ_ONCE(ct->mark);
 +		if (info->func & XT_CONNMARK_VALUE) {
 +			newmark = (newmark & ~info->ctmask) ^ info->ctmark;
@@ -159,16 +158,16 @@ index ad3c033db64e..5e1341f06bd7 100644
 +				dscp = ipv4_get_dsfield(ip_hdr(skb)) >> 2;
 +			else if (skb->protocol == htons(ETH_P_IPV6))
 +				dscp = ipv6_get_dsfield(ipv6_hdr(skb)) >> 2;
-+			else	/* protocol doesn't have diffserv */
++			else
 +				break;
-+
+ 
 +			newmark = (newmark & ~info->ctmark) |
 +				  (info->ctmask | (dscp << info->shift_bits));
 +		}
  		if (READ_ONCE(ct->mark) != newmark) {
  			WRITE_ONCE(ct->mark, newmark);
  			nf_conntrack_event_cache(IPCT_MARK, ct);
-@@ -83,20 +94,36 @@ static unsigned int
+@@ -83,20 +94,36 @@
  connmark_tg(struct sk_buff *skb, const struct xt_action_param *par)
  {
  	const struct xt_connmark_tginfo1 *info = par->targinfo;
@@ -178,7 +177,7 @@ index ad3c033db64e..5e1341f06bd7 100644
  		.ctmask	= info->ctmask,
  		.nfmask	= info->nfmask,
  		.mode	= info->mode,
-+		.func	= XT_CONNMARK_VALUE
++		.func   = XT_CONNMARK_VALUE
  	};
  
 -	return connmark_tg_shift(skb, &info2);
@@ -190,11 +189,11 @@ index ad3c033db64e..5e1341f06bd7 100644
  {
  	const struct xt_connmark_tginfo2 *info = par->targinfo;
 +	const struct xt_connmark_tginfo3 info3 = {
-+		.ctmark	= info->ctmark,
-+		.ctmask	= info->ctmask,
-+		.nfmask	= info->nfmask,
-+		.mode	= info->mode,
-+		.func	= XT_CONNMARK_VALUE
++		.ctmark = info->ctmark,
++		.ctmask = info->ctmask,
++		.nfmask = info->nfmask,
++		.mode   = info->mode,
++		.func   = XT_CONNMARK_VALUE
 +	};
 +
 +	return connmark_tg_shift(skb, &info3);
@@ -207,11 +206,10 @@ index ad3c033db64e..5e1341f06bd7 100644
  
  	return connmark_tg_shift(skb, info);
  }
-@@ -167,6 +194,16 @@ static struct xt_target connmark_tg_reg[] __read_mostly = {
- 		.targetsize     = sizeof(struct xt_connmark_tginfo2),
+@@ -168,6 +195,16 @@
  		.destroy        = connmark_tg_destroy,
  		.me             = THIS_MODULE,
-+	},
+ 	},
 +	{
 +		.name           = "CONNMARK",
 +		.revision       = 3,
@@ -221,9 +219,8 @@ index ad3c033db64e..5e1341f06bd7 100644
 +		.targetsize     = sizeof(struct xt_connmark_tginfo3),
 +		.destroy        = connmark_tg_destroy,
 +		.me             = THIS_MODULE,
- 	}
- };
- 
--- 
-2.34.1
++	},
+ #if IS_ENABLED(CONFIG_IP6_NF_IPTABLES)
+ 	{
+ 		.name           = "CONNMARK",
 

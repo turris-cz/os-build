@@ -226,8 +226,7 @@
 			/* PPE-DS node format: <Rx-fill Tx-cmpl Rx Tx Queue-base Queue-count> */
 			qcom,ppeds-map = <1 1 1 1 32 8>,	/* PPEDS Node #0 ring and queue map */
 					<2 2 2 2 40 8>,		/* PPEDS Node #1 ring and queue map */
-					<3 3 3 3 48 8>,		/* PPEDS Node #2 ring and queue map */
-					<0 0 0 0 56 8>;		/* PPEDS Node #3 ring and queue map */
+					<3 3 3 3 48 8>;		/* PPEDS Node #2 ring and queue map */
 			qcom,txdesc-map = <4 5 6 7>,		/* Port1 per-core Tx ring map */
 					<8 9 10 11>,		/* Port2 per-core Tx ring map */
 					<12 13 14 15>,		/* MHT-Port1 per-core Tx ring map */
@@ -289,9 +288,6 @@
 					<0 285 4>,		/* PPEDS Node #2(TxComp ring id #3) TxComplete IRQ info */
 					<0 253 4>,		/* PPEDS Node #2(Rx Desc ring id #3) Rx Desc IRQ info */
 					<0 277 4>,		/* PPEDS Node #2(RxFill Desc ring id #3) Rx Fill IRQ info */
-					<0 282 4>,		/* PPEDS Node #3(TxComp ring id #0) TxComplete IRQ info */
-					<0 250 4>,		/* PPEDS Node #3(Rx Desc ring id #0) Rx Desc IRQ info */
-					<0 274 4>,		/* PPEDS Node #3(RxFill Desc ring id #0) Rx Fill IRQ info */
 					<0 302 4>,		/* MHT port Tx complete ring id #20 IRQ info */
 					<0 303 4>,		/* MHT port Tx complete ring id #21 IRQ info */
 					<0 304 4>,		/* MHT port Tx complete ring id #22 IRQ info */
@@ -356,10 +352,33 @@
 			boot-args = <0x2 0x4 0xFF 0x3 0x0 0x0  /* MX Rail, Invalid GPIO, Drive strength 0x3 */
 					0x5 0x4 0x34 0x3 0x0 0x16 /* CX Rail, GPIO52, Drive strength 0x3, CPR1_fuse 0x0, CPR0_fuse 0x16 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie2>, <&mhi_region2>;
+			memory-region = <&qcn9224_pcie2>, <&mhi_region2>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x12000>;
 			qcom,board_id = <0x33>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <1>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi1_wsi_tx: endpoint {
+						remote-endpoint = <&wifi0_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi1_wsi_rx: endpoint {
+						remote-endpoint = <&wifi0_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -573,12 +592,41 @@
 
 &wifi0 {
 	qcom,rproc = <&q6v5_wcss>;
-	memory-region = <&q6_region>, <&q6_region>;
+#if !defined(__IPQ_MEM_PROFILE_256_MB__)
+	memory-region = <&q6_region>, <&q6_region>,<&q6_ipq5424_data>, <&m3_dump>,
+			<&mlo_global_mem0>, <&q6_etr_region>;
+	memory-region-names = "q6-region", "q6-region-1", "host-ddr-mem", "m3-dump",
+			"mlo-global-mem", "q6-etr-dump";
+#else
+	memory-region = <&q6_region>, <&q6_region>, <&mlo_global_mem0>;
+	memory-region-names = "q6-region", "q6-region-1", "mlo-global-mem";
+#endif
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index = <0>;
 	qcom,board_id = <0x14>;
 	hw_link_id = <0 0>;
 	status = "okay";
+	qcom,wsi-controller;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi0_wsi_tx: endpoint {
+				remote-endpoint = <&wifi1_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi0_wsi_rx: endpoint {
+				remote-endpoint = <&wifi1_wsi_tx>;
+			};
+		};
+	};
 };
 
 &wifi3 {

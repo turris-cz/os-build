@@ -48,7 +48,9 @@
 #define TZBSP_ENCRYPTION_HEADERS_SIZE 0x400
 #define TZBSP_ENTIRE_LOG_SEG_REQUESTED_ID 0x1
 
-static unsigned int paniconaccessviolation = 0;
+#define DEFAULT_PANIC	0x1
+
+static unsigned int paniconaccessviolation = U32_MAX;
 module_param(paniconaccessviolation, uint, 0644);
 MODULE_PARM_DESC(paniconaccessviolation, "Panic on Access Violation detected: 0,1");
 
@@ -407,7 +409,7 @@ static const struct file_operations fops_tz_smmu_state = {
 
 static irqreturn_t tzerr_irq(int irq, void *data)
 {
-	if (paniconaccessviolation) {
+	if ((paniconaccessviolation && data) || (paniconaccessviolation == 1)) {
 		panic("WARN: Access Violation!!!");
 	} else {
 		pr_emerg_ratelimited("WARN: Access Violation!!!, "
@@ -427,6 +429,7 @@ static int qti_tzlog_probe(struct platform_device *pdev)
 	int ret = 0;
 	int irq;
 	void __iomem *imem_base;
+	const void *data;
 
 	tz_hvc_log = (struct tz_hvc_log_struct *)
 			kzalloc(sizeof(struct tz_hvc_log_struct), GFP_KERNEL);
@@ -578,10 +581,11 @@ static int qti_tzlog_probe(struct platform_device *pdev)
 		}
 	}
 
+	data = of_device_get_match_data(&pdev->dev);
 	irq = platform_get_irq(pdev, 0);
 	if (irq > 0) {
 		ret = devm_request_irq(&pdev->dev, irq, tzerr_irq,
-				IRQF_ONESHOT, "tzerror", NULL);
+					IRQF_ONESHOT, "tzerror", (void *)data);
 		if (ret < 0) {
 			dev_err(&pdev->dev, "failed to request interrupt\n");
 			goto remove_debugfs;
@@ -590,7 +594,7 @@ static int qti_tzlog_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, tz_hvc_log);
 
-	if (paniconaccessviolation) {
+	if ((paniconaccessviolation && data) || (paniconaccessviolation == 1)) {
 		printk("TZ Log : Will panic on Access Violation, as paniconaccessviolation is set\n");
 	} else {
 		printk("TZ Log : Will warn on Access Violation, as paniconaccessviolation is not set\n");
@@ -637,7 +641,7 @@ static int qti_tzlog_remove(struct platform_device *pdev)
 static const struct of_device_id qti_tzlog_of_match[] = {
 	{ .compatible = "qti,tzlog" },
 	{ .compatible = "qti,tzlog-ipq5332" },
-	{ .compatible = "qti,tzlog-ipq54xx" },
+	{ .compatible = "qti,tzlog-ipq54xx", .data = (void *)(DEFAULT_PANIC) },
 	{ .compatible = "qti,tzlog-ipq9574" },
 	{}
 };

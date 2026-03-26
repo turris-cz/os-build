@@ -27,6 +27,7 @@
 
 	chosen {
 		stdout-path = "serial0";
+		bootargs-append = " clk_ignore_unused";
 	};
 
 	soc@0 {
@@ -293,7 +294,7 @@
 						<5 13 21 29>,	/* Priority 5 queues per-core Rx ring map */
 						<6 14 22 30>,	/* Priority 6 queues per-core Rx ring map */
 						<7 15 23 31>;	/* Priority 7 queues per-core Rx ring map */
-			qcom,edma_loopback_ring;
+			qcom,loopback_ext_ddr_upstream;
 			qcom,num_loopback_rings = <1>;
 			qcom,txdesc_loopback_ring_id = <0>;
 			qcom,txcmpl_loopback_ring_id = <0>;
@@ -426,10 +427,33 @@
 			boot-args = <0x2 0x4 0x34 0x3 0x0 0x0     /* MX Rail, GPIO52, Drive strength 0x3 */
 					0x4 0x4 0x18 0x3 0x0 0x0  /* RFA1p2 Rail, GPIO24, Drive strength 0x3 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie0>, <&mhi_region0>;
+			memory-region = <&qcn9224_pcie0>, <&mhi_region0>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x26800>;
 			qcom,board_id = <0x15>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <1>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi1_wsi_tx: endpoint {
+						remote-endpoint = <&wifi2_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi1_wsi_rx: endpoint {
+						remote-endpoint = <&wifi0_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -452,10 +476,33 @@
 			boot-args = <0x2 0x4 0x34 0x3 0x0 0x0     /* MX Rail, GPIO52, Drive strength 0x3 */
 					0x4 0x4 0x18 0x3 0x0 0x0  /* RFA1p2 Rail, GPIO24, Drive strength 0x3 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie1>, <&mhi_region1>;
+			memory-region = <&qcn9224_pcie1>, <&mhi_region1>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x58800>;
 			qcom,board_id = <0x16>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <2>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi2_wsi_tx: endpoint {
+						remote-endpoint = <&wifi0_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi2_wsi_rx: endpoint {
+						remote-endpoint = <&wifi1_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -475,12 +522,36 @@
 	qcom,rproc_rpd = <&q6v5_wcss>;
 #endif
 	qcom,userpd-subsys-name = "q6v5_wcss_userpd1";
-	memory-region = <&q6_region>, <&q6_region>;
+	memory-region = <&q6_region>, <&q6_region>, <&q6_ipq5332_data>, <&m3_dump>,
+			<&mlo_global_mem0>,<&q6_etr_region>;
+	memory-region-names = "q6-region", "q6region-1", "host-ddr-mem", "m3-dump",
+			      "mlo-global-mem", "q6-etr-dump";
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index = <0>;
 	qcom,board_id = <0x12>;
 	hw_link_id = <0 0>;
 	status = "okay";
+	qcom,wsi-controller;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi0_wsi_tx: endpoint {
+				remote-endpoint = <&wifi1_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi0_wsi_rx: endpoint {
+				remote-endpoint = <&wifi2_wsi_tx>;
+			};
+		};
+	};
 };
 
 &qcn9224_pcie0 {

@@ -176,7 +176,7 @@
 			qcom,tx-map-priority-level = <1>;	/* Tx priority level per port */
 			qcom,rx-map-priority-level = <1>;	/* Rx priority level per core */
 			qcom,ppeds-num = <3>;			/* Number of PPEDS nodes */
-			qcom,edma_loopback_ring;                /* Enable Loopback ring */
+			qcom,loopback_ext_ddr_upstream;		/* Enable Loopback ring */
 			qcom,num_loopback_rings = <1>;          /* Number of loopback rings */
 			qcom,txdesc_loopback_ring_id = <0>;     /* Loopback TX desc ring ID */
 			qcom,txcmpl_loopback_ring_id = <0>;     /* Loopback TX cmpl ring ID */
@@ -311,10 +311,33 @@
 			boot-args = <0x2 0x4 0xFF 0x3 0x0 0x0  /* MX Rail, Invalid GPIO, Drive strength 0x3 */
 					0x5 0x4 0x34 0x3 0x0 0x16 /* CX Rail, GPIO52, Drive strength 0x3, CPR1_fuse 0x0, CPR0_fuse 0x16 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie2>, <&mhi_region2>;
+			memory-region = <&qcn9224_pcie2>, <&mhi_region2>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x12000>;
 			qcom,board_id = <0x29>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <1>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi1_wsi_tx: endpoint {
+						remote-endpoint = <&wifi2_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi1_wsi_rx: endpoint {
+						remote-endpoint = <&wifi0_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -335,10 +358,33 @@
 			boot-args = <0x2 0x4 0xFF 0x3 0x0 0x0  /* MX Rail, Invalid GPIO, Drive strength 0x3 */
 					0x5 0x4 0x34 0x3 0x0 0x16 /* CX Rail, GPIO52, Drive strength 0x3, CPR1_fuse 0x0, CPR0_fuse 0x16 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie3>, <&mhi_region3>;
+			memory-region = <&qcn9224_pcie3>, <&mhi_region3>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x2E800>;
 			qcom,board_id = <0x28>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <2>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi2_wsi_tx: endpoint {
+						remote-endpoint = <&wifi0_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi2_wsi_rx: endpoint {
+						remote-endpoint = <&wifi1_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -377,6 +423,25 @@
 	status = "okay";
 };
 #endif
+
+&spi1 {
+	pinctrl-0 = <&qup_spi1_default>;
+	pinctrl-names = "default";
+	cs-select = <0>;
+	status = "disabled";
+
+	spi@0 {
+		compatible = "qti,spidev";
+		reg = <0>;
+		spi-max-frequency = <9600000>;
+	};
+};
+
+&pcm {
+	pinctrl-0 = <&audio_pins_pri>;
+	pinctrl-names = "primary";
+	status = "disabled";
+};
 
 &tlmm {
 	gpio_leds_default: gpio-leds-default-state {
@@ -538,6 +603,66 @@
 			bias-pull-up;
 		};
 	};
+
+	audio_pins_pri: audio_pinmux_pri {
+		mux_1 {
+			pins = "gpio36";
+			function = "audio_pri";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+
+		mux_2 {
+			pins = "gpio37";
+			function = "audio_pri";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+
+		mux_3 {
+			pins = "gpio38";
+			function = "audio_pri";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+
+		mux_4 {
+			pins = "gpio39";
+			function = "audio_pri";
+			drive-strength = <16>;
+			bias-pull-down;
+		};
+	};
+
+	qup_spi1_default: qup-spi1-default-state {
+		qup_spi1_clk {
+			pins = "gpio45";
+			function = "spi10";
+			drive-strength = <8>;
+			bias-disable;
+		};
+
+		qup_spi1_cs {
+			pins = "gpio46";
+			function = "spi1_cs";
+			drive-strength = <8>;
+			bias-disable;
+		};
+
+		qup_spi1_miso {
+			pins = "gpio47";
+			function = "spi10";
+			drive-strength = <8>;
+			bias-disable;
+		};
+
+		qup_spi1_mosi {
+			pins = "gpio48";
+			function = "spi10";
+			drive-strength = <8>;
+			bias-disable;
+		};
+	};
 };
 
 &qcn9224_pcie2 {
@@ -565,12 +690,36 @@
 &wifi0 {
 	qcom,rproc = <&q6v5_wcss>;
 	qcom,tgt-mem-mode = <0>;
-	memory-region = <&q6_region>, <&q6_region>;
+	memory-region = <&q6_region>, <&q6_region>, <&q6_ipq5424_data>, <&m3_dump>,
+			<&mlo_global_mem0>, <&q6_etr_region>;
+	memory-region-names = "q6-region", "q6-region-1", "host-ddr-mem","m3-dump",
+			      "mlo-global-mem", "q6-etr-dump";
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index = <0>;
 	qcom,board_id = <0x11>;
 	hw_link_id = <0 0>;
 	status = "okay";
+	qcom,wsi-controller;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi0_wsi_tx: endpoint {
+				remote-endpoint = <&wifi1_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi0_wsi_rx: endpoint {
+				remote-endpoint = <&wifi2_wsi_tx>;
+			};
+		};
+	};
 };
 
 &wifi3 {

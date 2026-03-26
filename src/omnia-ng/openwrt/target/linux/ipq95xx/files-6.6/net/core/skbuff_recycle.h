@@ -191,6 +191,7 @@ bool skb_recycler_consume(struct sk_buff *skb);
 bool skb_recycler_consume_list_fast(struct sk_buff_head *skb_list);
 void skb_recycler_print_all_lists(void);
 void skb_recycler_clear_flags(struct sk_buff *skb);
+void skb_recycler_clear_fast_flags(struct sk_buff *skb);
 #else
 #define skb_recycler_init()  {}
 #define skb_recycler_alloc(dev, len, reset_skb) NULL
@@ -198,5 +199,6 @@ void skb_recycler_clear_flags(struct sk_buff *skb);
 #define skb_recycler_consume_list_fast(skb_list) false
 #define skb_recycler_print_all_lists() false
 #define skb_recycler_clear_flags(skb) {}
+#define skb_recycler_clear_fast_flags(skb) {}
 #endif
 #endif

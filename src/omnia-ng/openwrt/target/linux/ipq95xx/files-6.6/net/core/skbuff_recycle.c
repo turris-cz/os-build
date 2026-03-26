@@ -70,6 +70,24 @@ do { \
 #endif
 
 /**
+ * skb_recycler_clear_fast_flags - Clear skb flags
+ * @skb: skb pointer
+ *
+ * This API clears the skb recycler flags here to make sure that all fast path
+ * optimization related flags are cleared.
+ *
+ * Return: Void
+ */
+void skb_recycler_clear_fast_flags(struct sk_buff *skb)
+{
+	skb->fast_xmit = 0;
+	skb->is_from_recycler = 0;
+	skb->fast_recycled = 0;
+	skb->recycled_for_ds = 0;
+	skb->fast_qdisc = 0;
+}
+
+/**
  * skb_recycler_clear_flags - Clear skb flags
  * @skb: skb pointer
  *
@@ -80,11 +98,7 @@ do { \
  */
 void skb_recycler_clear_flags(struct sk_buff *skb)
 {
-	skb->fast_xmit = 0;
-	skb->is_from_recycler = 0;
-	skb->fast_recycled = 0;
-	skb->recycled_for_ds = 0;
-	skb->fast_qdisc = 0;
+	skb_recycler_clear_fast_flags(skb);
 	skb->int_pri = 0;
 }
 
@@ -500,11 +514,13 @@ static void skb_recycler_free_skb(struct sk_buff_head *list)
 		skb_release_data(skb, SKB_CONSUMED, false);
 #endif
 		kfree_skbmem(skb);
-		/*
-		 * Update the skb->sum for next due to skb_link operation
-		 */
-		if (next) {
-			skbuff_debugobj_sum_update(next);
+		if (!skb_queue_empty(list)) {
+			/*
+			 * Update the skb->sum for next due to skb_link operation
+			 */
+			if (next) {
+				skbuff_debugobj_sum_update(next);
+			}
 		}
 	}
 	spin_unlock_irqrestore(&list->lock, flags);
@@ -995,7 +1011,9 @@ static int skb_recycler_per_cpu_show(struct seq_file *seq, void *v, bool is_spar
 	union void_int cpu = (union void_int)seq->private;
 
 	if (is_spare_skb) {
+#ifdef CONFIG_SKB_RECYCLER_MULTI_CPU
 		seq_printf(seq, "%d\n", skb_recycler_max_spare_skbs_core[cpu.num]);
+#endif
 	} else {
 		seq_printf(seq, "%d\n", skb_recycler_max_skbs_core[cpu.num]);
 	}
@@ -1025,7 +1043,9 @@ static ssize_t skb_recycler_per_cpu_write(struct file *file,
 		cpu = (union void_int)seq->private;
 
 		if (is_spare_skb) {
+#ifdef CONFIG_SKB_RECYCLER_MULTI_CPU
 			skb_recycler_max_spare_skbs_core[cpu.num] = max;
+#endif
 		} else {
 			skb_recycler_max_skbs_core[cpu.num] = max;
 		}
@@ -1178,7 +1198,7 @@ static void skb_recycler_init_procfs(void)
 					proc_net_skbrecycler_per_cpu, &proc_skb_max_spare_skbs_per_cpu_fops, icpu.ptr))
 			pr_err("cannot create proc net skb_recycle max_spare_skbs\n");
 #endif
-		if (!proc_create_data("count", S_IWUGO, proc_net_skbrecycler_per_cpu,
+		if (!proc_create_data("count", S_IRUGO, proc_net_skbrecycler_per_cpu,
 					&proc_skb_count_per_cpu_fops, icpu.ptr))
 			pr_err("cannot create proc net skb_recycle held\n");
 	}
@@ -1223,11 +1243,12 @@ void skb_recycler_print_all_lists(void)
 {
 	unsigned long flags;
 	int cpu;
+	struct sk_buff_head *h;
+	cpu = get_cpu();
+
 #ifdef CONFIG_SKB_RECYCLER_MULTI_CPU
 	int i;
-	struct sk_buff_head *h;
 
-	cpu = get_cpu();
 	spin_lock_irqsave(&glob_recycler.lock, flags);
 	for (i = 0; i < SKB_RECYCLE_MAX_SHARED_POOLS; i++)
 		skbuff_debugobj_print_skb_list((&glob_recycler.pool[i])->next,

@@ -159,6 +159,18 @@
 			};
 		};
 
+		sfp0: sfp@0 {
+			status = "okay";
+			compatible = "qcom,nss-phy";
+			i2c-bus = <&i2c1>;
+		};
+
+		sfp1: sfp@1 {
+			status = "okay";
+			compatible = "qcom,nss-phy";
+			i2c-bus = <&i2c2>;
+		};
+
 		ess-instance {
 #ifdef __CONFIG_IO_COHERENCY__
 			dma-coherent;
@@ -343,9 +355,9 @@
 			id = <0>;
 			num_chip = <4>;
 			chip_info = <0 2 1 3>,
-				    <1 2 0 2>,
+				    <1 2 2 0>,
 				    <2 2 3 1>,
-				    <3 2 2 0>;
+				    <3 2 0 2>;
 			status = "okay";
 		};
 	};
@@ -412,10 +424,31 @@
 					0x6 0x4 0x30 0x7 0x0 0x0  /* WSI0, GPIO48, Drive strength 16mA */
 					0x7 0x4 0x31 0x7 0x0 0x0  /* WSI1, GPIO49, Drive strength 16mA */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie1>, <&mhi_region1>;
+			memory-region = <&qcn9224_pcie1>, <&mhi_region1>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
 			qcom,board_id = <0x21>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <2>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi1_wsi_tx: endpoint {
+						remote-endpoint = <&wifi2_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi1_wsi_rx: endpoint {
+						remote-endpoint = <&wifi3_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -438,10 +471,31 @@
 					0x6 0x4 0x30 0x7 0x0 0x0  /* WSI0, GPIO48, Drive strength 16mA */
 					0x7 0x4 0x31 0x7 0x0 0x0  /* WSI1, GPIO49, Drive strength 16mA */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie2>, <&mhi_region2>;
+			memory-region = <&qcn9224_pcie2>, <&mhi_region2>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
 			qcom,board_id = <0x26>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <3>;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi2_wsi_tx: endpoint {
+						remote-endpoint = <&wifi0_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi2_wsi_rx: endpoint {
+						remote-endpoint = <&wifi1_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -464,10 +518,32 @@
 					0x6 0x4 0x30 0x7 0x0 0x0  /* WSI0, GPIO48, Drive strength 16mA */
 					0x7 0x4 0x31 0x7 0x0 0x0  /* WSI1, GPIO49, Drive strength 16mA */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie3>, <&mhi_region3>;
+			memory-region = <&qcn9224_pcie3>, <&mhi_region3>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
 			qcom,board_id = <0x22>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <1>;
+
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					reg = <0>;
+
+					wifi3_wsi_tx: endpoint {
+						remote-endpoint = <&wifi1_wsi_rx>;
+					};
+				};
+
+				port@1 {
+					reg = <1>;
+
+					wifi3_wsi_rx: endpoint {
+						remote-endpoint = <&wifi0_wsi_tx>;
+					};
+				};
+			};
 		};
 	};
 };
@@ -780,7 +856,10 @@
 &wifi0 {
 	qcom,rproc = <&q6v5_wcss>;
 	qcom,tgt-mem-mode = <0>;
-	memory-region = <&q6_region>, <&q6_region>;
+	memory-region = <&q6_region>, <&q6_region>, <&q6_ipq5424_data>, <&m3_dump>,
+			<&mlo_global_mem0>, <&q6_etr_region>;
+	memory-region-names = "q6-region", "q6-region-1", "host-ddr-mem", "m3-dump",
+			      "mlo-global-mem", "q6-etr-dump";
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index = <0>;
 	qcom,board_id = <0x10>;
@@ -788,6 +867,28 @@
 	led-gpio = <&tlmm 41 GPIO_ACTIVE_HIGH>;
 	probe-order = <1>;
 	status = "okay";
+	qcom,wsi-controller;
+
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi0_wsi_tx: endpoint {
+				remote-endpoint = <&wifi3_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi0_wsi_rx: endpoint {
+				remote-endpoint = <&wifi2_wsi_tx>;
+			};
+		};
+	};
 };
 
 /* 5GL radio */

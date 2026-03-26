@@ -19,6 +19,7 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	qcom-apq8084-mtp.dtb \
 	ipq5424-rdp464.dtb \
 	ipq5424-rdp464-c2.dtb \
+	ipq5424-rdp508.dtb \
 	ipq5424-rdp466.dtb \
 	ipq5424-rdp466-c2.dtb \
 	ipq5424-rdp466-rffe.dtb \
@@ -27,10 +28,11 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	ipq5424-rdp485.dtb \
 	ipq5424-rdp485-c2.dtb \
 	ipq5424-rdp485-rffe.dtb \
-	ipq5424-rdp485-rffe-c2.dtb \
 	ipq5424-rdp485-c3.dtb \
+	ipq5424-rdp485-c4.dtb \
 	ipq5424-rdp487.dtb \
 	ipq5424-rdp487-c2.dtb \
+	ipq5424-rdp487-c3.dtb \
 	ipq5424-db-mr01.1.dtb \
 	qcom-ipq4018-ap120c-ac.dtb \
 	qcom-ipq4018-ap120c-ac-bit.dtb \
@@ -72,6 +74,7 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	ipq9574-db-al02-c1.dtb \
 	ipq9574-db-al02-c2.dtb \
 	ipq9574-db-al02-c3.dtb \
+	ipq9574-rdp475-c1.dtb \
 	ipq5332-rdp441.dtb \
 	ipq5332-rdp441-qca81xx.dtb \
 	ipq5332-rdp441-qca81xx-i2c.dtb \
@@ -91,6 +94,8 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	ipq5332-rdp483.dtb \
 	ipq5332-rdp484.dtb \
 	ipq5332-rdp486.dtb \
+	ipq5332-rdp494.dtb \
+	ipq5332-rdp509.dtb \
 	ipq5332-tb-mi03.1.dtb \
 	ipq5332-tb-mi05.1.dtb \
 	ipq5332-db-mi01.1.dtb \
