@@ -1,0 +1,52 @@
+From 7e8fd86d6df498084879802fd6cd332bf7c77efc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 26 Mar 2026 13:18:42 +0100
+Subject: [PATCH net] net: sfp: Fix Ubiquiti U-Fiber Instant SFP module on
+ mvneta
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+In commit 8110633db49d7de2 ("net: sfp-bus: allow SFP quirks to override
+Autoneg and pause bits") we moved the setting of Autoneg and pause bits
+before the call to SFP quirk when parsing SFP module support.
+
+Since the quirk for Ubiquiti U-Fiber Instant SFP module zeroes the
+support bits and sets 1000baseX_Full only, the above mentioned commit
+changed the overall computed support from
+  1000baseX_Full, Autoneg, Pause, Asym_Pause
+to just
+  1000baseX_Full.
+
+This broke the SFP module for mvneta, which requires Autoneg for
+1000baseX since commit c762b7fac1b249a9 ("net: mvneta: deny disabling
+autoneg for 802.3z modes").
+
+Fix this by setting back the Autoneg, Pause and Asym_Pause bits in the
+quirk.
+
+Fixes: 8110633db49d7de2 ("net: sfp-bus: allow SFP quirks to override Autoneg and pause bits")
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ drivers/net/phy/sfp.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+--- a/drivers/net/phy/sfp.c
++++ b/drivers/net/phy/sfp.c
+@@ -433,10 +433,15 @@ static void sfp_quirk_ubnt_uf_instant(co
+ {
+ 	/* Ubiquiti U-Fiber Instant module claims that support all transceiver
+ 	 * types including 10G Ethernet which is not truth. So clear all claimed
+-	 * modes and set only one mode which module supports: 1000baseX_Full.
++	 * modes and set only one mode which module supports: 1000baseX_Full,
++	 * along with the Autoneg and pause bits.
+ 	 */
+ 	linkmode_zero(modes);
+ 	linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseX_Full_BIT, modes);
++	linkmode_set_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, modes);
++	linkmode_set_bit(ETHTOOL_LINK_MODE_Pause_BIT, modes);
++	linkmode_set_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, modes);
++
+ 	phy_interface_zero(interfaces);
+ 	__set_bit(PHY_INTERFACE_MODE_1000BASEX, interfaces);
+ }
