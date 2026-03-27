@@ -1,0 +1,56 @@
+From 985633105a25f59e40f8a4cc556e7c6da7d53ca4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Tom=C3=A1=C5=A1=20Macholda?= <tomas.macholda@nic.cz>
+Date: Fri, 27 Mar 2026 15:42:28 +0100
+Subject: [PATCH 1/2] base-files: led color support to generate_config
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+when color_* is found in board.json, include it in UCI
+
+Signed-off-by: Tomáš Macholda <tomas.macholda@nic.cz>
+---
+ package/base-files/files/bin/config_generate | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/package/base-files/files/bin/config_generate b/package/base-files/files/bin/config_generate
+index ca40a62cd4..bcde78d1f8 100755
+--- a/package/base-files/files/bin/config_generate
++++ b/package/base-files/files/bin/config_generate
+@@ -390,6 +390,7 @@ generate_led() {
+ 
+ 	json_select led
+ 	json_select "$key"
++
+ 	json_get_vars name sysfs type trigger default
+ 
+ 	uci -q batch <<-EOF
+@@ -401,6 +402,25 @@ generate_led() {
+ 		set system.$cfg.default='$default'
+ 	EOF
+ 
++	local colors
++	json_get_keys attrs
++
++	# set color_* variables, add to `colors' array
++	for attr in $attrs; do
++		echo $attr
++		echo "$attr" | grep -q "^color_.*" || continue
++		json_get_var "${attr}_val" "$attr" 	#
++		eval local $attr="\$${attr}_val"	# ex. color_blue=$color_blue_val
++		colors="$colors $attr"
++	done
++
++
++	for color in $colors; do
++		eval local color_val=\$$color
++		echo uci set system.$cfg.$color="$color_val"
++		uci set system.$cfg.$color="$color_val"
++	done
++
+ 	case "$type" in
+ 		gpio)
+ 			local gpio inverted
+-- 
+2.53.0
+
