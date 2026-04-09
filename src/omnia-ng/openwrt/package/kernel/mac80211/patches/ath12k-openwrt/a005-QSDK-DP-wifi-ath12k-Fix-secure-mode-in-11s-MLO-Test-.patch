@@ -1,0 +1,131 @@
+From 754f9de61b874d1c9b1c6a87e28eaef3780f6616 Mon Sep 17 00:00:00 2001
+From: Pradeep Kumar Chitrapu <quic_pradeepc@quicinc.com>
+Date: Tue, 25 Mar 2025 23:16:48 -0700
+Subject: [PATCH] QSDK:DP wifi:ath12k: Fix secure mode in 11s MLO Test
+ framework
+
+Currently, when need_ptk_4_way is set, firmware expects EAPOL 4
+way handshake exchanges for allowing encryption using the
+configured PTK keys installed. However, as 11s mesh uses mesh
+peering frames for exchanging security related parameters like
+AMPE and MIC further deriving keys, EAPOLs frames are not
+expected like AP mode. This results in TX packets to go in
+unencypted format leading to ping failure. Fix this by unsetting
+need_ptk_4_way in peer association flags.
+
+Also fix unnecessay warnings and messages seen during wifi down
+on console.
+
+fixes-patch: 999-Z-b-QSDK-CP-Wifi-ath12k-11s-MLO-Test-framework-implement.patch
+
+Signed-off-by: Pradeep Kumar Chitrapu <quic_pradeepc@quicinc.com>
+---
+ drivers/net/wireless/ath/ath12k/test_mlo_mesh.c | 11 +++++++----
+ 2 files changed, 8 insertions(+), 5 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/test_mlo_mesh.c
++++ b/drivers/net/wireless/ath/ath12k/test_mlo_mesh.c
+@@ -71,6 +71,9 @@ int ath12k_11s_mlo_testing_disable_addr_
+ /* Uses predefined GTK and PTK 16 byte keys for debugging only */
+ int use_predef_keys;
+ 
++/* informs driver about upcoming wifi down to handle sta delete sequence */
++int notify_wifidown;
++
+ /* Protects 11s mlo sta states maintained locally */
+ static DEFINE_SPINLOCK(state_change_lock);
+ 
+@@ -400,6 +403,12 @@ ath12k_11s_mlo_testing_fill_peer_assoc_h
+ 	if (!arvif || !arvif->is_started)
+ 		return;
+ 
++	/* In 802.11S case, keys are generated using mesh peering frames
++	 * instead of EAPOL 4-way handshake. Setting this causes TX encryption
++	 * failures in TX path.
++	 */
++	arg->need_ptk_4_way = false;
++
+ 	ml->enabled = true;
+ 	ml->assoc_link = link_info->is_assoc_link;
+ 
+@@ -761,7 +770,8 @@ static ssize_t ath12k_read_tmm_options(s
+ 		"`enable` - Enable beacons in dp rx after all VAPs are up.\n"
+ 		"`disable_addr_trans` - Disable address translation in Datapath TX/RX\n"
+ 		"`enable_addr_trans` - Enable address translation in Datapath TX/RX\n"
+-		"`use_predef_keys` - Replace both GTK and PTK with static keys for debugging\n";
++		"`use_predef_keys` - Replace both GTK and PTK with static keys for debugging\n"
++		"`notify_wifidown` - notifies driver on upcoming wifi down\n";
+ 
+ 	return simple_read_from_buffer(user_buf, count, ppos, buf, strlen(buf));
+ }
+@@ -793,6 +803,7 @@ static ssize_t ath12k_write_tmm_options(
+ 	if (!strcmp(buf, "block")) {
+ 		ath12k_info(ab, "blocking mesh beacons\n");
+ 		ath12k_block_mesh_beacon_rx = 1;
++		notify_wifidown = 0;
+ 		ret = 0;
+ 	} else if (!strcmp(buf, "enable")) {
+ 		ath12k_info(ab, "enabling mesh beacons\n");
+@@ -810,6 +821,14 @@ static ssize_t ath12k_write_tmm_options(
+ 		ath12k_info(ab, "Replaces both GTK and PTKs with static keys during key install.\n");
+ 		use_predef_keys = 1;
+ 		ret = 0;
++	} else if (!strcmp(buf, "notify_wifidown")) {
++		ath12k_info(ab, "notified sta state transition handler about upcoming wifi down\n");
++		notify_wifidown = 1;
++		ret = 0;
++	} else if (!strcmp(buf, "notify_wifidown_reset")) {
++		ath12k_info(ab, "reset wifi down notification\n");
++		notify_wifidown = 0;
++		ret = 0;
+ 	} else {
+ 		ret = -EINVAL;
+ 	}
+@@ -1063,11 +1082,8 @@ ath12k_mlo_testing_replace_or_store_ptk(
+ 		return -EINVAL;
+ 	}
+ 
+-	if (arg->key_len != KEY_LENGTH) {
+-		ath12k_warn(NULL, "11S_MLO_TEST: KEY_LENGTH mismatch %d cannot change any keys \n",
+-			    arg->key_len);
++	if (arg->key_len != KEY_LENGTH)
+ 		return -EINVAL;
+-	}
+ 
+ 	if (use_predef_keys) {
+ 		if (arg->key_flags == WMI_KEY_PAIRWISE)
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -9421,15 +9421,20 @@ ath12k_11s_mlo_testing_handle_sta_state_
+ 	if (!ath12k_11s_mlo_testing_enable ||
+ 	    ahvif->vif->type != NL80211_IFTYPE_MESH_POINT ||
+ 	    !ath12k_11s_mlo_testing_is_preconfigured_11s_mlo_sta(sta->addr) ||
+-	    wdev->is_netdev_going_down)
++	    wdev->is_netdev_going_down || notify_wifidown)
+ 		return 0;
+ 
+ 	/* Dont allow 11S MLO STA state changes before all VAPS comes up or
+ 	 *	beacons enabled on DP RX
+ 	 */
+-	if (!ath12k_11s_mlo_testing_are_all_vaps_up() || ath12k_block_mesh_beacon_rx)
++	if (new_state > old_state &&
++	    (!ath12k_11s_mlo_testing_are_all_vaps_up() || ath12k_block_mesh_beacon_rx))
+ 		return -EBUSY;
+ 
++	/* allow STA down sequence */
++	if (new_state < old_state && !ath12k_11s_mlo_testing_are_all_vaps_up())
++		return 0;
++
+ 	/* First time NOEXIST <-> NONE transitions are handled in regular path */
+ 	if ((old_state == IEEE80211_STA_NONE && new_state == IEEE80211_STA_NOTEXIST) ||
+ 	    (old_state == IEEE80211_STA_NOTEXIST && new_state == IEEE80211_STA_NONE)) {
+--- a/drivers/net/wireless/ath/ath12k/test_mlo_mesh.h
++++ b/drivers/net/wireless/ath/ath12k/test_mlo_mesh.h
+@@ -13,6 +13,7 @@
+ 
+ extern int ath12k_block_mesh_beacon_rx;
+ extern bool ath12k_11s_mlo_testing_enable;
++extern int notify_wifidown;
+ 
+ #ifdef CPTCFG_ATH12K_TEST_FW_FOR_11S_MLO
+ u8 ath12k_11s_mlo_testing_are_all_vaps_up(void);

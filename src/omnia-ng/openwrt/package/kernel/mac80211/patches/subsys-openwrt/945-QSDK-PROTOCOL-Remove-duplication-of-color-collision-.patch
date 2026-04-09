@@ -1,0 +1,39 @@
+From 585206e7ce46b442e2c695b2f791bd77b4d5ebb7 Mon Sep 17 00:00:00 2001
+From: Ramasamy Kaliappan <rkaliapp@qti.qualcomm.com>
+Date: Thu, 8 May 2025 15:31:43 +0530
+Subject: [PATCH] QSDK:PROTOCOL: Remove duplication of color collision notify
+
+In the upstream, the design was added to queue the color collision
+detection event every 500 ms to avoid sending too many netlink
+messages to userspace. However, the package upgrade
+cfg80211_obss_color_collision_notify added duplicated functionality.
+
+Fix removes the duplication of the color collision notification
+
+Patch-dependency: None
+Patch-work: None
+
+Fixes: Ibb90784e659(subsys: Upgrade backports to backport-6.5-rc3)
+
+Signed-off-by: Ramasamy Kaliappan <rkaliapp@qti.qualcomm.com>
+---
+ net/mac80211/cfg.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/net/mac80211/cfg.c b/net/mac80211/cfg.c
+index 2cd2fcf..150b199 100644
+--- a/net/mac80211/cfg.c
++++ b/net/mac80211/cfg.c
+@@ -5732,9 +5732,6 @@ ieee80211_obss_color_collision_notify(struct ieee80211_vif *vif,
+ 				     &link->color_collision_detect_work,
+ 				     msecs_to_jiffies(500));
+ 	rcu_read_unlock();
+-
+-	cfg80211_obss_color_collision_notify(sdata->dev, color_bitmap, gfp,
+-					     link_id);
+ }
+ EXPORT_SYMBOL_GPL(ieee80211_obss_color_collision_notify);
+ 
+-- 
+2.34.1
+

@@ -3,13 +3,13 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=qca-nss-dp
 PKG_RELEASE:=1
-PKG_VERSION:=1.0.r29
+PKG_VERSION:=1.0.r26
 MAKE_OPTS:=
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://git.codelinaro.org/clo/qsdk/oss/lklm/nss-dp.git
 PKG_SOURCE_VERSION:=win.nss.$(PKG_VERSION)
-PKG_MIRROR_HASH:=e9a595bd0c99819cf31a5ec0cfe2eeae12f5b6e0985c6b23871377506287ba90
+PKG_MIRROR_HASH:=81d72db71ec76e999bfceaad53b6be9747411fdc2bb9560638387795bf7d0423
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -40,8 +40,7 @@ endef
 
 EXTRA_CFLAGS+= \
 	-I$(STAGING_DIR)/usr/include/qca-ssdk \
-	-I$(STAGING_DIR)/usr/include/qca-nss-ppe \
-	-Wno-unused-variable
+	-I$(STAGING_DIR)/usr/include/qca-nss-ppe
 
 ifeq ($(CONFIG_TARGET_ipq),y)
 subtarget:=$(SUBTARGET)

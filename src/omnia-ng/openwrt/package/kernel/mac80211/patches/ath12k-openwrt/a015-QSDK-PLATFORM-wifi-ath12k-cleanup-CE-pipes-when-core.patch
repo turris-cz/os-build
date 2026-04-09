@@ -1,0 +1,60 @@
+From b5e4568ee16dd75dece00b54febe6cefec7ed057 Mon Sep 17 00:00:00 2001
+From: Saravanakumar Duraisamy <saradura@qti.qualcomm.com>
+Date: Tue, 27 May 2025 14:47:23 +0530
+Subject: [PATCH] QSDK: PLATFORM: wifi: ath12k: cleanup CE pipes when core
+ registered flag set
+
+Crash observed when reboot done before the FW READY event due
+to CE pipes got cleanup without core registered set.
+
+cleanup CE pipes only when the core register flag set and core
+registered flag to be clear once all core related resource
+got freed.
+
+Signed-off-by: Saravanakumar Duraisamy <saradura@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/core.c | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/wireless/ath/ath12k/core.c b/drivers/net/wireless/ath/ath12k/core.c
+index 89b3c36..0ec735c 100644
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -3975,7 +3975,6 @@ static void ath12k_core_hw_group_stop(struct ath12k_hw_group *ag)
+ 		ath12k_core_pdev_destroy(ab);
+ 		ath12k_core_stop(ab);
+ 		ath12k_dp_umac_reset_deinit(ab);
+-		clear_bit(ATH12K_FLAG_CORE_REGISTERED, &ab->dev_flags);
+ 
+ 		if (!ab->hw_params->reoq_lut_support)
+ 			break;
+@@ -4001,6 +4000,8 @@ static void ath12k_core_hw_group_stop(struct ath12k_hw_group *ag)
+ 			ath12k_qmi_firmware_stop(ab);
+ 
+ 		ath12k_ce_cleanup_pipes(ab);
++		clear_bit(ATH12K_FLAG_CORE_REGISTERED, &ab->dev_flags);
++
+ 		ath12k_hif_power_down(ab);
+ 
+ 		mutex_unlock(&ab->core_lock);
+@@ -4027,13 +4028,15 @@ void ath12k_core_deinit(struct ath12k_base *ab)
+ 			ath12k_core_stop(ab);
+ 			ath12k_reg_free(ab);
+ 			ath12k_dp_free(ab);
+-			clear_bit(ATH12K_FLAG_CORE_REGISTERED, &ab->dev_flags);
+ 		}
+ 
+ 		if (!test_bit(ATH12K_FLAG_CRASH_FLUSH, &ab->dev_flags))
+ 			ath12k_qmi_firmware_stop(ab);
+ 
+-		ath12k_ce_cleanup_pipes(ab);
++		if (test_bit(ATH12K_FLAG_CORE_REGISTERED, &ab->dev_flags)) {
++			ath12k_ce_cleanup_pipes(ab);
++			clear_bit(ATH12K_FLAG_CORE_REGISTERED, &ab->dev_flags);
++		}
+ 		ath12k_hif_power_down(ab);
+ 		ath12k_core_soc_destroy(ab);
+ 
+-- 
+2.34.1
+

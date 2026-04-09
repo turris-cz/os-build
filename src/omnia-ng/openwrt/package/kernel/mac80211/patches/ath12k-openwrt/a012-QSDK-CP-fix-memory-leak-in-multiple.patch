@@ -1,0 +1,77 @@
+From 4cd7e485bab054756e9f716a2592ceb1a0e51940 Mon Sep 17 00:00:00 2001
+From: Narendhar Reddy <nare@qti.qualcomm.com>
+Date: Fri, 25 Apr 2025 15:01:24 +0530
+Subject: [PATCH] QSDK:CP ath12k: fix memory leak in multiple regions.
+
+Currently in SSR and rmmod/insmod usecase, memory allocated
+for ce and peer list is not getting freed, leading to
+out of memory issue during continuous SSR and rmmod/insmod.
+
+Fix the leak by propely freeing the memory.
+
+Below are the memory allocations that are freed.
+1. CE pipes
+2. ml peer list
+3. ml peers
+4. reg rule.
+
+patch dependency: 886-001-wifi-ath12k-add-array-based-peer-lookup-to-avoid-CPU.patch
+Signed-off-by: Narendhar Reddy <nare@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/mac.c | 7 +++++--
+ drivers/net/wireless/ath/ath12k/reg.c | 1 +
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/mac.c
++++ b/drivers/net/wireless/ath/ath12k/mac.c
+@@ -21569,7 +21569,7 @@ void ath12k_mac_destroy(struct ath12k_hw
+ 	struct ath12k *ar;
+ 	struct ath12k_pdev *pdev;
+ 	const struct ieee80211_ops *ops;
+-	int i, j;
++	int i, j, k;
+ 	u16 hw_link_id;
+ 
+ 	if (!ah)
+@@ -21596,9 +21596,17 @@ void ath12k_mac_destroy(struct ath12k_hw
+ 				continue;
+ 
+ 			pdev->ar = NULL;
+-			spin_lock_bh(&ab->base_lock);
+-			kfree(ab->ml_peer_list[j]);
+-			spin_unlock_bh(&ab->base_lock);
++			if (ab->ml_peer_list) {
++				for (k = 0; k < ab->ml_peer_list_size; k++) {
++					if (ab->ml_peer_list[k]) {
++						kfree(ab->ml_peer_list[k]);
++						rcu_assign_pointer(ab->ml_peer_list[k], NULL);
++					}
++				}
++				kfree(ab->ml_peer_list);
++				rcu_assign_pointer(ab->ml_peer_list, NULL);
++				synchronize_rcu();
++			}
+ 		}
+ 
+ 		spin_lock_bh(&ab->base_lock);
+--- a/drivers/net/wireless/ath/ath12k/reg.c
++++ b/drivers/net/wireless/ath/ath12k/reg.c
+@@ -1478,6 +1478,8 @@ void ath12k_reg_free(struct ath12k_base
+ {
+ 	int i;
+ 
++	if (ab->sp_rule)
++		kfree(ab->sp_rule);
+ 	for (i = 0; i < ab->hw_params->max_radios; i++) {
+ 		kfree(ab->default_regd[i]);
+ 		kfree(ab->new_regd[i]);
+--- a/drivers/net/wireless/ath/ath12k/core.c
++++ b/drivers/net/wireless/ath/ath12k/core.c
+@@ -2230,6 +2230,7 @@ static int ath12k_core_reconfigure_on_cr
+ 	ath12k_core_pdev_deinit(ab);
+ 	ath12k_dp_pdev_free(ab);
+ 	ath12k_hif_stop(ab);
++	ath12k_ce_cleanup_pipes(ab);
+ 	ath12k_wmi_detach(ab);
+ 	ath12k_dp_rx_pdev_reo_cleanup(ab);
+ 	mutex_unlock(&ab->core_lock);
