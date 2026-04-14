@@ -244,7 +244,7 @@ deleted file mode 100644
 index 5d67e0ea8f..0000000000
 --- a/target/linux/generic/hack-6.6/790-SFP-GE-T-ignore-TX_FAULT.patch
 +++ /dev/null
-@@ -1,63 +0,0 @@
+@@ -1,38 +0,0 @@
 -From 7cc39a6bedbd85f3ff7e16845f310e4ce8d9833f Mon Sep 17 00:00:00 2001
 -From: Daniel Golle <daniel@makrotopia.org>
 -Date: Tue, 6 Sep 2022 00:31:19 +0100
@@ -273,9 +273,9 @@ index 5d67e0ea8f..0000000000
 -
 ---- a/drivers/net/phy/sfp.c
 -+++ b/drivers/net/phy/sfp.c
--@@ -487,6 +487,9 @@ static const struct sfp_quirk sfp_quirks
+-@@ -525,6 +525,9 @@ static const struct sfp_quirk sfp_quirks
 - 	SFP_QUIRK("HUAWEI", "MA5671A", sfp_quirk_2500basex,
-- 		  sfp_fixup_ignore_tx_fault),
+- 		  sfp_fixup_ignore_tx_fault_and_los),
 - 
 -+	// OEM SFP-GE-T is 1000Base-T module
 -+	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
@@ -283,31 +283,6 @@ index 5d67e0ea8f..0000000000
 - 	// Lantech 8330-262D-E can operate at 2500base-X, but incorrectly report
 - 	// 2500MBd NRZ in their EEPROM
 - 	SFP_QUIRK_M("Lantech", "8330-262D-E", sfp_quirk_2500basex),
--@@ -2608,7 +2611,8 @@ static void sfp_sm_main(struct sfp *sfp,
-- 			 * or t_start_up, so assume there is a fault.
-- 			 */
-- 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
---				     sfp->sm_fault_retries == N_FAULT_INIT);
--+				     !sfp->tx_fault_ignore &&
--+				     (sfp->sm_fault_retries == N_FAULT_INIT));
-- 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
-- 	init_done:
-- 			/* Create mdiobus and start trying for PHY */
--@@ -2866,10 +2870,12 @@ static void sfp_check_state(struct sfp *
-- 	mutex_lock(&sfp->st_mutex);
-- 	state = sfp_get_state(sfp);
-- 	changed = state ^ sfp->state;
---	if (sfp->tx_fault_ignore)
--+	if (sfp->tx_fault_ignore) {
-- 		changed &= SFP_F_PRESENT | SFP_F_LOS;
---	else
--+		state &= ~SFP_F_TX_FAULT;
--+	} else {
-- 		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
--+	}
-- 
-- 	for (i = 0; i < GPIO_MAX; i++)
-- 		if (changed & BIT(i))
 -- 
 2.52.0
 
