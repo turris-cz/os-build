@@ -7,11 +7,11 @@ Some interfaces are harder to restart then just link down/up. For
 example VPNs or NCM modems.
 ---
  utils/watchcat/files/watchcat.init |  3 ++-
- utils/watchcat/files/watchcat.sh   | 22 +++++++++++++++++-----
- 2 files changed, 19 insertions(+), 6 deletions(-)
+ utils/watchcat/files/watchcat.sh   | 21 ++++++++++++++++-----
+ 2 files changed, 18 insertions(+), 6 deletions(-)
 
 diff --git a/utils/watchcat/files/watchcat.init b/utils/watchcat/files/watchcat.init
-index dcaa8ece5..6af22db1f 100644
+index 9bfc68d0e..d98ab884c 100644
 --- a/utils/watchcat/files/watchcat.init
 +++ b/utils/watchcat/files/watchcat.init
 @@ -39,6 +39,7 @@ config_watchcat() {
@@ -32,24 +32,23 @@ index dcaa8ece5..6af22db1f 100644
  		procd_close_instance
  		;;
 diff --git a/utils/watchcat/files/watchcat.sh b/utils/watchcat/files/watchcat.sh
-index 0f300a4a4..0735145c9 100644
+index 5167911fd..b16c25133 100644
 --- a/utils/watchcat/files/watchcat.sh
 +++ b/utils/watchcat/files/watchcat.sh
-@@ -87,6 +87,13 @@ watchcat_restart_network_iface() {
- 	ip link set "$1" up
+@@ -90,6 +90,12 @@ watchcat_restart_network_iface() {
+ 	ifup "$network"
  }
  
 +watchcat_restart_logical_network_iface() {
-+	logger -p daemon.info -t "watchcat[$$]" "Restarting logical network interface: \"$1\"."
-+	ifdown "$1"
-+	ifup "$1"
++       logger -p daemon.info -t "watchcat[$$]" "Restarting logical network interface: \"$1\"."
++       ifdown "$1"
++       ifup "$1"
 +}
-+
 +
  watchcat_run_script() {
  	logger -p daemon.info -t "watchcat[$$]" "Running script \"$1\" for network interface: \"$2\"."
  	"$1" "$2"
-@@ -105,8 +112,9 @@ watchcat_monitor_network() {
+@@ -108,8 +114,9 @@ watchcat_monitor_network() {
  	iface="$5"
  	mm_iface_name="$6"
  	mm_iface_unlock_bands="$7"
@@ -61,7 +60,7 @@ index 0f300a4a4..0735145c9 100644
  
  	time_now="$(cat /proc/uptime)"
  	time_now="${time_now%%.*}"
-@@ -152,6 +160,8 @@ watchcat_monitor_network() {
+@@ -155,6 +162,8 @@ watchcat_monitor_network() {
  			else
  				if [ "$script" != "" ]; then
  					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Running script after reaching \"$failure_period\" seconds"
@@ -70,7 +69,7 @@ index 0f300a4a4..0735145c9 100644
  				elif [ "$iface" != "" ]; then
  					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Restarting \"$iface\" after reaching \"$failure_period\" seconds"
  				else
-@@ -167,7 +177,9 @@ watchcat_monitor_network() {
+@@ -170,7 +179,9 @@ watchcat_monitor_network() {
  				if [ "$mm_iface_name" != "" ]; then
  					watchcat_restart_modemmanager_iface "$mm_iface_name" "$mm_iface_unlock_bands"
  				fi
@@ -81,7 +80,7 @@ index 0f300a4a4..0735145c9 100644
  					watchcat_restart_network_iface "$iface"
  				else
  					watchcat_restart_all_network
-@@ -257,11 +269,11 @@ ping_reboot)
+@@ -261,11 +272,11 @@ ping_reboot)
  	;;
  restart_iface)
  	# args from init script: period pinghosts pingperiod pingsize interface mmifacename unlockbands addressfamily
@@ -96,5 +95,5 @@ index 0f300a4a4..0735145c9 100644
  *)
  	echo "Error: invalid mode selected: $mode"
 -- 
-2.52.0
+2.47.3
 
