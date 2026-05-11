@@ -1,6 +1,6 @@
 #!/bin/bash
 # OpenWRT compilation script
-# (C) 2018-2020 CZ.NIC, z.s.p.o.
+# (C) 2018-2026 CZ.NIC, z.s.p.o.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,6 +22,12 @@ DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_
 # Paths to turris-build sources and common utilities inclusion
 src_dir="$(readlink -f "${0%/*}")"
 source "$src_dir/helpers/generate_common.sh"
+
+# Prebuilt tools and toolchain variables
+PREBUILT_TOOLS=
+PREBUILT_TOOLCHAIN=
+PREBUILT_TOOLS_TAR=
+PREBUILT_TOOLCHAIN_TAR=
 
 # Configuration
 source "$src_dir/helpers/conf.sh"
@@ -308,7 +314,21 @@ pkgsrepo() {
 available_commands+=( ["compile_tools"]="Compile host tools" )
 compile_tools() {
 	report "Compiling tools"
-	_openwrt_make tools/compile toolchain/compile
+	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		echo "Skipping because of prebuilt tools/toolchain"
+		return
+	fi
+	_openwrt_make tools/compile
+}
+
+available_commands+=( ["compile_toolchain"]="Compile cross toolchain" )
+compile_toolchain() {
+	report "Compiling toolchain"
+	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		echo "Skipping because of prebuilt tools/toolchain"
+		return
+	fi
+	_openwrt_make toolchain/compile
 }
 
 available_commands+=( ["compile_target"]="Compile target specific software (Linux kernel)" )
@@ -325,25 +345,106 @@ compile_packages() {
 
 available_commands+=( ["compile_SDK"]="Compiles SDK" )
 compile_SDK() {
+	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		echo "Skipping because of prebuilt tools/toolchain"
+		return
+	fi
 	if grep -q '^CONFIG_SDK=y' "$build_dir"/.config; then
 		report "Compiling SDK"
 		_openwrt_make target/sdk/compile
 	fi
 }
 
+available_commands+=( ["package_tools"]="Packages tools" )
+package_tools() {
+	report "Packaging tools"
+	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		echo "Skipping because of prebuilt tools/toolchain"
+		return
+	fi
+	(cd "$build_dir"; tar -c build_dir/host staging_dir/host | zstd -o "tools-${TARGET_BOARD}-x86_64.tar.zst")
+}
+
 available_commands+=( ["package_toolchain"]="Packages toolchain" )
 package_toolchain() {
+	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		echo "Skipping because of prebuilt tools/toolchain"
+		return
+	fi
 	if grep -q '^CONFIG_MAKE_TOOLCHAIN=y' "$build_dir"/.config; then
 		report "Packaging toolchain"
 		_openwrt_make target/toolchain/compile
 	fi
 }
 
+available_commands+=( ["prebuilt_tools"]="	Setting up prebuilt tools" )
+prebuilt_tools() {
+	PREBUILT_TOOLS=1
+	local tools_dir="${build_dir}/prebuilt_toolchain/tools"
+
+	if [ -z "$TARGET_BOARD" ]; then
+		echo "Need to specify target board"
+		print_help
+		exit 1
+	fi
+
+	if [ -d "${tools_dir}" ]; then
+		echo Deleting previous tools
+		rm -rf "${tools_dir}"
+	fi
+	mkdir -p "$tools_dir"
+
+	if [ -z "$PREBUILT_TOOLS_TAR" ]; then
+		local dl_name="tools-${TARGET_BOARD}-x86_64.tar.zst"
+		echo "Downloading prebuilt tools"
+		wget -O "${tools_dir}/${dl_name}" "https://repo.turris.cz/${PUBLISH_BRANCH}/${TARGET_BOARD}/packages/${dl_name}" || return 1
+		PREBUILT_TOOLS_TAR="${tools_dir}/${dl_name}"
+	fi
+
+	PREBUILT_TOOLS_TAR="$(realpath "$PREBUILT_TOOLS_TAR")"
+	echo "Extracting tools"
+	(cd "$build_dir"; ./scripts/ext-tools.sh --tools "$PREBUILT_TOOLS_TAR")
+}
+
+available_commands+=( ["prebuilt_toolchain"]="	Setting up prebuilt toolchain" )
+prebuilt_toolchain() {
+	PREBUILT_TOOLCHAIN=1
+	local toolchain_dir="${build_dir}/prebuilt_toolchain/toolchain"
+
+	if [ -z "$TARGET_BOARD" ]; then
+		echo "Need to specify target board"
+		print_help
+		exit 1
+	fi
+
+	if [ -d "${toolchain_dir}" ]; then
+		echo Deleting previous toolchain
+		rm -rf "${toolchain_dir}"
+	fi
+	mkdir -p "$toolchain_dir"
+
+	if [ -z "$PREBUILT_TOOLCHAIN_TAR" ]; then
+		local dl_name="toolchain-${TARGET_BOARD}-x86_64.tar.zst"
+		echo "Downloading prebuilt toolchain"
+		wget -O "${toolchain_dir}/${dl_name}" "https://repo.turris.cz/${PUBLISH_BRANCH}/${TARGET_BOARD}/packages/${dl_name}" || return 1
+		PREBUILT_TOOLCHAIN_TAR="${toolchain_dir}/${dl_name}"
+	fi
+	PREBUILT_TOOLCHAIN_TAR="$(realpath "$PREBUILT_TOOLCHAIN_TAR")"
+
+	echo "Extracting toolchain"
+	tar -C "$build_dir/prebuilt_toolchain/toolchain/" -xf "$PREBUILT_TOOLCHAIN_TAR"
+
+	(cd "$build_dir"; ./scripts/ext-toolchain.sh --toolchain prebuilt_toolchain/toolchain/turrisos-toolchain-*.Linux-x86_64/toolchain-*/ --overwrite-config --config .config)
+}
+
+
 available_commands+=( ["compile"]="	Compile tools, target and packages" )
 compile() {
 	compile_tools
+	compile_toolchain
 	compile_target
 	compile_SDK
+	package_tools
 	package_toolchain
 	compile_packages
 }
@@ -371,10 +472,19 @@ prepare() {
 	set_ccache
 }
 
-available_commands+=( ["prepare_tools"]="Prepare build and build tools (Impies: prepare compile_tools compile_target)" )
+available_commands+=( ["prepare_tools"]="Prepare build and build tools (Impies: prepare prebuilt_tools/compile_tools prebuilt_toolchain/compile_toolchain compile_target)" )
 prepare_tools() {
 	prepare
-	compile_tools
+	if [ -n "$PREBUILT_TOOLS" ]; then
+		prebuilt_tools
+	else
+		compile_tools
+	fi
+	if [ -n "$PREBUILT_TOOLCHAIN" ]; then
+		prebuilt_toolchain
+	else
+		compile_toolchain
+	fi
 	compile_target
 }
 
@@ -400,6 +510,12 @@ print_help() {
 	echo "	-o PATH		Path to output directory where repository is prepared. In default ./pkgsrepo is used."
 	echo "	-s KEY		Sign packges with given private key. Key has to be generated using using tool."
 	echo "	-h, --help	Show this help text"
+	echo
+	echo "Prebuilt toolchain options:"
+	echo "	--tools			Use prepackaged tools (downloaded unless --tools-path is specified)."
+	echo "	--toolchain		Use prepackaged toolchain (downloaded unless --toolchain-path is specified)."
+	echo "	--tools-path TOOLS_TAR	Use prepackaged tools in TOOLS_TAR"
+	echo "	--toolchain-path TOOLCHAIN_TAR	Use prepackaged tools in TOOLCHAIN_TAR"
 	echo
 	echo "Advanced options:"
 	echo "	-p BRANCH	Name of the target build alias. This is used to set OPKG feeds. If not specified '$PUBLISH_BRANCH' is used."
@@ -428,6 +544,22 @@ while [ $# -gt 0 ]; do
 		-f*)
 			FORCE="${1#-f}"
 			[ -n "$FORCE" ] || FORCE="1"
+			;;
+		--tools)
+			PREBUILT_TOOLS=1
+			;;
+		--toolchain)
+			PREBUILT_TOOLCHAIN=1
+			;;
+		--tools-path)
+			PREBUILT_TOOLS=1
+			shift
+			PREBUILT_TOOLS_TAR="$1"
+			;;
+		--toolchain-path)
+			PREBUILT_TOOLCHAIN=1
+			shift
+			PREBUILT_TOOLCHAIN_TAR="$1"
 			;;
 		-t)
 			shift
@@ -472,6 +604,10 @@ done
 
 # Set build_dir variable
 set_protected_build_dir
+
+# check for prebuilt tools/toolchain
+[ -d "${build_dir}/prebuilt_toolchain/tools" ] && PREBUILT_TOOLS=1
+[ -d "${build_dir}/prebuilt_toolchain/toolchain" ] && PREBUILT_TOOLCHAIN=1
 
 # OpenWRT directory for temporally data
 export TMPDIR="${build_dir}/tmp"
