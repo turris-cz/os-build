@@ -335,17 +335,28 @@
 			};
 		};
 
-		gpio-keys {
-			compatible = "gpio-keys";
-			pinctrl-0 = <&button_pins>;
+		gpio-key-lights-toggle {
+			compatible = "openwrt,gpio-button-hotplug", "gpio-keys";
+			pinctrl-0 = <&force_usb_button_pins>;
 			pinctrl-names = "default";
 			status = "okay";
-
 			button {
 				label = "Force USB Boot";
-				linux,code = <KEY_F1>;
+				/* 
+				 * Default behaviour in vendor OS is to control
+				 * LED dimming, so use OpenWrt lights_toggle code
+				 * https://openwrt.org/docs/guide-user/hardware/hardware.button
+				 */
+				linux,code = <0x021e>;
 				gpios = <&tlmm 21 GPIO_ACTIVE_HIGH>;
 			};
+		};
+
+		gpio-keys {
+			compatible = "gpio-keys";
+			pinctrl-0 = <&dpad_pins>;
+			pinctrl-names = "default";
+			status = "okay";
 
 			button-up {
 				linux,code = <KEY_UP>;
@@ -472,6 +483,13 @@
 			qcom,rx-page-mode = <0>;		/* Rx fill ring page mode */
 			qcom,tx-map-priority-level = <1>;	/* Tx priority level per port */
 			qcom,rx-map-priority-level = <1>;	/* Rx priority level per core */
+			qcom,num_loopback_rings = <1>;
+			qcom,txdesc_loopback_ring_id = <0>;
+			qcom,txcmpl_loopback_ring_id = <0>;
+			qcom,rxfill_loopback_ring_id = <0>;
+			qcom,rxdesc_loopback_ring_id = <0>;
+			qcom,loopback_queue_base = <56>;
+			qcom,loopback_num_queues = <8>;
 			qcom,ppeds-num = <3>;			/* Number of PPEDS nodes */
 			/* PPE-DS node format: <Rx-fill Tx-cmpl Rx Tx Queue-base Queue-count> */
 			qcom,ppeds-map = <1 1 1 1 32 8>,	/* PPEDS Node#0 ring and queue map */
@@ -663,11 +681,24 @@
 			boot-args = <0x2 0x4 0x34 0x3 0x0 0x0     /* MX Rail, GPIO52, Drive strength 0x3 */
 					0x4 0x4 0x18 0x3 0x0 0x0  /* RFA1p2 Rail, GPIO24, Drive strength 0x3 */
 					0x0 0x4 0x0 0x0 0x0 0x0>; /* End of arguments */
-			memory-region = <&qcn9224_pcie2>, <&mhi_region2>;
+			memory-region = <&qcn9224_pcie2>, <&mhi_region2>, <&mlo_global_mem0>;
+			memory-region-names = "host-ddr-mem", "mhi-region", "mlo-global-mem";
+			qcom,early_cal_enabled = "supported";
+			qcom,caldata_offset = <0x8A800>;
 			qcom,board_id = <0x1006>;
 			qcom,wsi = <&wsi>;
 			qcom,wsi_index = <0>;
 			turris,try-hacky-board-id;
+			ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+				port@0 {
+					reg = <0>;
+				};
+				port@1 {
+					reg = <1>;
+				};
+			};
 		};
 	};
 };
@@ -1011,8 +1042,15 @@
 		bias-disable;
 	};
 
-	button_pins: button-pins {
-		pins = "gpio21", "gpio40", "gpio41", "gpio42", "gpio43", "gpio44";
+	dpad_pins: button-pins {
+		pins = "gpio40", "gpio41", "gpio42", "gpio43", "gpio44";
+		function = "gpio";
+		drive-strength = <8>;
+		bias-disable;
+	};
+
+	force_usb_button_pins: force-usb-button-pins {
+		pins = "gpio21";
 		function = "gpio";
 		drive-strength = <8>;
 		bias-disable;

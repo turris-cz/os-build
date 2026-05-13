@@ -906,6 +906,7 @@ static void qdss_mhi_remove(struct mhi_device *mhi_dev)
 	} else
 		spin_unlock_bh(&drvdata->lock);
 
+	destroy_workqueue(drvdata->mhi_wq);
 	device_destroy(mhi_class, drvdata->cdev->dev);
 	unregister_chrdev_region(drvdata->cdev->dev, 1);
 	cdev_del(drvdata->cdev);

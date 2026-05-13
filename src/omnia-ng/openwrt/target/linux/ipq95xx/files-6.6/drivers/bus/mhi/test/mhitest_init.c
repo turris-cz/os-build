@@ -28,16 +28,6 @@ int domain = -1;
 module_param(domain, int, 0);
 MODULE_PARM_DESC(domain, "Domain number of specific device to be probed");
 
-/*
- * 0 - MHITEST_LOG_LVL_VERBOSE
- * 1 - MHITEST_LOG_LVL_INFO
- * 2 - MHITEST_LOG_LVL_ERR
- */
-
-int debug_lvl = MHITEST_LOG_LVL_ERR; /* Let' go with default as ERR */
-module_param(debug_lvl, int, 0);
-MODULE_PARM_DESC(debug_lvl, "Debug level for mhitest driver 0-VERB,1-INFO,2-ERR");
-
 int timeout_ms = MHI_TIMEOUT_DEFAULT;
 module_param(timeout_ms, int, 0);
 MODULE_PARM_DESC(timeout_ms, "timeout mhi test");
@@ -98,21 +88,25 @@ void mhitest_recovery_post_rddm(struct mhitest_platform *mplat)
 {
 	int ret;
 
-	MHITEST_EMERG("Enter\n");
+	pr_debug("Enter\n");
 	msleep(10000); /*Let's wait for some time !*/
 
+	mhitest_pci_soc_reset(mplat);
 	mhitest_pci_set_mhi_state(mplat, MHI_POWER_OFF);
 	mhitest_pci_set_mhi_state(mplat, MHI_DEINIT);
+	mplat->running = false;
 
-	mhitest_pci_remove_all(mplat);
+	mhitest_global_soc_reset(mplat);
+	msleep(2000);
+	mhitest_reset_mhi_state(mplat);
 
-	ret = mhitest_ss_powerup(mplat->subsys_handle);
+	ret = mhitest_prepare_start_mhi(mplat);
 	if (ret) {
-		MHITEST_ERR("ERRORRRR..ret:%d\n", ret);
+		pr_err("Error preapare start mhi  ret:%d\n", ret);
 		return;
 	}
 
-	MHITEST_EMERG("Exit\n");
+	pr_debug("Exit\n");
 }
 
 int mhitest_recovery_event_handler(struct mhitest_platform *mplat, void *data)
@@ -120,8 +114,8 @@ int mhitest_recovery_event_handler(struct mhitest_platform *mplat, void *data)
 	struct mhitest_driver_event *event = data;
 	struct mhitest_recovery_data *rdata = event->data;
 
-	MHITEST_EMERG("Recovery triggred with reason:(%s)-(%d)\n",
-		mhitest_recov_reason_to_str(rdata->reason), rdata->reason);
+	pr_emerg("Recovery triggred with reason:(%s)-(%d)\n",
+		 mhitest_recov_reason_to_str(rdata->reason), rdata->reason);
 
 	switch (rdata->reason) {
 	case MHI_DEFAULT:
@@ -139,7 +133,7 @@ int mhitest_recovery_event_handler(struct mhitest_platform *mplat, void *data)
 			return 0;
 		break;
 	default:
-		MHITEST_ERR("Incorect reason\n");
+		pr_err("Incorrect reason\n");
 		break;
 	}
 	kfree(data);
@@ -155,7 +149,7 @@ static void mhitest_event_work(struct work_struct *work)
 	int ret = 0;
 
 	if (!mplat) {
-		MHITEST_ERR("NULL mplat\n");
+		pr_err("NULL mplat\n");
 		return;
 	}
 	spin_lock_irqsave(&mplat->event_lock, flags);
@@ -168,11 +162,11 @@ static void mhitest_event_work(struct work_struct *work)
 		switch (event->type) {
 		/*only support recovery event so far*/
 		case MHITEST_RECOVERY_EVENT:
-			MHITEST_LOG("MHITEST_RECOVERY_EVENT event\n");
+			pr_info("MHITEST_RECOVERY_EVENT event\n");
 			ret = mhitest_recovery_event_handler(mplat, event);
 			break;
 		default:
-			MHITEST_ERR("Invalid event recived ..\n");
+			pr_err("Invalid event received ..\n");
 			kfree(event);
 			continue;
 		}
@@ -180,7 +174,7 @@ static void mhitest_event_work(struct work_struct *work)
 		spin_lock_irqsave(&mplat->event_lock, flags);
 		event->ret = ret;
 		if (event->sync) {
-			MHITEST_ERR("Sending event completion event\n");
+			pr_err("Sending event completion event\n");
 			complete(&event->complete);
 			continue;
 		}
@@ -195,10 +189,10 @@ int mhitest_register_driver(void)
 {
 	int ret = 1;
 
-	MHITEST_LOG("Going for register pci and subsystem\n");
+	pr_info("Going for register pci and subsystem\n");
 	ret = mhitest_pci_register();
 	if (ret) {
-		MHITEST_ERR("Error pci register ret:%d\n", ret);
+		pr_err("Error pci register ret:%d\n", ret);
 		goto error_pci_reg;
 	}
 	return 0;
@@ -210,7 +204,7 @@ error_pci_reg:
 
 void mhitest_unregister_driver(void)
 {
-	MHITEST_LOG("Unregistering\n");
+	pr_info("Unregistering\n");
 
 	/* add driver related unregister stuffs here */
 	mhitest_pci_unregister();
@@ -223,7 +217,7 @@ int mhitest_event_work_init(struct mhitest_platform *mplat)
 	mplat->event_wq = alloc_workqueue("mhitest_mod_event",
 						      WQ_UNBOUND, 1);
 	if (!mplat->event_wq) {
-		MHITEST_ERR("Failed to create event workqueue!\n");
+		pr_err("Failed to create event workqueue!\n");
 		return -EFAULT;
 	}
 	INIT_WORK(&mplat->event_work, mhitest_event_work);
@@ -242,16 +236,16 @@ static int mhitest_probe(struct platform_device *plat_dev)
 {
 	int ret;
 
-	MHITEST_VERB("Enter\n");
+	pr_debug("Enter\n");
 
 	m_plat_dev = plat_dev;
 
 	ret = mhitest_register_driver();
 	if (ret) {
-		MHITEST_ERR("Error ret:%d\n", ret);
+		pr_err("Error ret:%d\n", ret);
 		goto fail_probe;
 	}
-	MHITEST_VERB("Exit\n");
+	pr_debug("Exit\n");
 	return 0;
 
 fail_probe:
@@ -260,10 +254,10 @@ fail_probe:
 
 static int mhitest_remove(struct platform_device *plat_dev)
 {
-	MHITEST_VERB("Enter\n");
+	pr_debug("Enter\n");
 	mhitest_unregister_driver();
 	m_plat_dev = NULL;
-	MHITEST_VERB("Exit\n");
+	pr_debug("Exit\n");
 	return 0;
 }
 
@@ -288,7 +282,7 @@ static void mhitest_pci_free_mhi_controller(struct mhitest_platform *mplat)
 
 int mhitest_pci_remove_all(struct mhitest_platform *mplat)
 {
-	MHITEST_VERB("Enter\n");
+	pr_debug("Enter\n");
 
 	mhitest_pci_unregister_mhi(mplat);
 	mhitest_pci_disable_msi(mplat);
@@ -296,13 +290,13 @@ int mhitest_pci_remove_all(struct mhitest_platform *mplat)
 	mhitest_pci_free_mhi_controller(mplat);
 	mhitest_unregister_ramdump(mplat);
 
-	MHITEST_VERB("Exit\n");
+	pr_debug("Exit\n");
 
 	return 0;
 }
 
 static const struct platform_device_id test_platform_id_table[] = {
-	{ .name = "qcn90xx", .driver_data = QCN90xx_DEVICE_ID, },
+	{ .name = "qcn90xx", .driver_data = QCN90XX_DEVICE_ID, },
 };
 
 static const struct of_device_id test_of_match_table[] = {
@@ -327,19 +321,19 @@ struct platform_driver mhitest_platform_driver = {
 int __init mhitest_init(void)
 {
 	int ret;
-	MHITEST_EMERG("--->\n");
+	pr_debug("--->\n");
 	ret = platform_driver_register(&mhitest_platform_driver);
 	if (ret)
-		MHITEST_ERR("Error ret:%d\n", ret);
-	MHITEST_EMERG("<---done\n");
+		pr_err("Error ret:%d\n", ret);
+	pr_debug("<---done\n");
 	return ret;
 }
 
 void __exit mhitest_exit(void)
 {
-	MHITEST_EMERG("Enter\n");
+	pr_debug("Enter\n");
 	platform_driver_unregister(&mhitest_platform_driver);
-	MHITEST_EMERG("Exit\n");
+	pr_debug("Exit\n");
 }
 
 module_init(mhitest_init);

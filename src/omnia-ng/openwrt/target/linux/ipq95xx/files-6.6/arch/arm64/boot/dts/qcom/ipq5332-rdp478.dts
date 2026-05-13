@@ -52,6 +52,10 @@
 		#size-cells = <2>;
 		ranges;
 
+		tz@4a600000 {
+			status = "okay";
+		};
+
 		q6_mem_regions: q6_mem_regions@4A900000  {
 			no-map;
 			reg = <0x0 0x4a900000 0x0 0x2B00000>;
@@ -563,6 +567,13 @@
 			qcom,rx-page-mode = <0>;		/* Rx fill ring page mode */
 			qcom,tx-map-priority-level = <1>;	/* Tx priority level per port */
 			qcom,rx-map-priority-level = <1>;	/* Rx priority level per core */
+			qcom,num_loopback_rings = <1>;
+			qcom,txdesc_loopback_ring_id = <0>;
+			qcom,txcmpl_loopback_ring_id = <0>;
+			qcom,rxfill_loopback_ring_id = <0>;
+			qcom,rxdesc_loopback_ring_id = <0>;
+			qcom,loopback_queue_base = <56>;
+			qcom,loopback_num_queues = <8>;
 			qcom,ppeds-num = <2>;			/* Number of PPEDS nodes */
 			/* PPE-DS node format: <Rx-fill Tx-cmpl Rx Tx Queue-base Queue-count> */
 			qcom,ppeds-map = <1 1 1 1 32 8>,	/* PPEDS Node#0 ring and queue map */
@@ -862,10 +873,40 @@
 	qcom,caldb-size = <0x500000>;
 #endif
 	qcom,board_id = <0x42>;
-	memory-region = <&q6_ipq5332_data>, <&q6_mem_regions>;
+
+#ifndef __IPQ_MEM_PROFILE_256_MB__
+	memory-region = <&q6_ipq5332_data>, <&q6_mem_regions>, <&m3_dump>,
+			<&mlo_global_mem0>, <&q6_etr_region>;
+	memory-region-names = "host-ddr-mem", "q6-region", "m3-dump",
+			      "mlo-global-mem", "q6-etr-dump";
+#else
+	memory-region = <&q6_ipq5332_data>, <&q6_mem_regions>, <&mlo_global_mem0>;
+	memory-region-names = "host-ddr-mem", "q6-region", "mlo-global-mem";
+#endif
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index  = <0>;
 	status = "ok";
+	qcom,wsi-controller;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi0_wsi_tx: endpoint {
+				remote-endpoint = <&wifi1_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi0_wsi_rx: endpoint {
+				remote-endpoint = <&wifi1_wsi_tx>;
+			};
+		};
+	};
 };
 
 &wifi1 {
@@ -897,7 +938,15 @@
 	qcom,caldb-size = <0x500000>;
 #endif
 	qcom,board_id = <0x053>;
-	memory-region = <&q6_qcn6432_data_1>, <&q6_mem_regions>;
+#ifndef __IPQ_MEM_PROFILE_256_MB__
+	memory-region = <&q6_qcn6432_data_1>, <&q6_mem_regions>, <&m3_dump_qcn6432_1>,
+			<&mlo_global_mem0>, <&q6_qcn6432_etr_1>;
+	memory-region-names = "host-ddr-mem", "q6-region", "m3-dump",
+			      "mlo-global-mem", "q6-etr-dump";
+#else
+	memory-region = <&q6_qcn6432_data_1>, <&q6_mem_regions>, <&mlo_global_mem0>;
+	memory-region-names = "host-ddr-mem", "q6-region", "mlo-global-mem";
+#endif
 	qcom,wsi = <&wsi>;
 	qcom,wsi_index = <1>;
 	qcom,pci_slot_id = <1>;
@@ -907,4 +956,24 @@
 		<0 0 0>,
 		<GIC_SPI 410 IRQ_TYPE_EDGE_RISING>;
 	status = "ok";
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@0 {
+			reg = <0>;
+
+			wifi1_wsi_tx: endpoint {
+				remote-endpoint = <&wifi0_wsi_rx>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			wifi1_wsi_rx: endpoint {
+				remote-endpoint = <&wifi0_wsi_tx>;
+			};
+		};
+	};
 };

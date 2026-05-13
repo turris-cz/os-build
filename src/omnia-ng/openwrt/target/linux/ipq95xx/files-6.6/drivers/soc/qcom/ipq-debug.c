@@ -17,7 +17,6 @@
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/debugfs.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -29,41 +28,23 @@
 #include <linux/panic_notifier.h>
 #include <linux/remoteproc/qcom_rproc.h>
 #include <linux/remoteproc.h>
+#include <soc/qcom/ipq-debug.h>
 
-#define NON_SECURE_WATCHDOG             0x1
-#define AHB_TIMEOUT                     0x3
-#define NOC_ERROR                       0x6
-#define SYSTEM_RESET_OR_REBOOT          0x10
-#define POWER_ON_RESET                  0x20
-#define SECURE_WATCHDOG                 0x23
-#define HLOS_PANIC                      0x47
-#define VFSM_RESET                      0x68
-#define TME_L_FATAL_ERROR               0x49
-#define TME_L_WDT_BITE_FATAL_ERROR      0x69
+static struct restart_reason *g_reason;
 
-/* IPQ5424 specific restart reason codes */
-#define IPQ5424_POWER_ON_RESET		0x1
-#define IPQ5424_SYSTEM_RESET_OR_REBOOT	0x2
-#define IPQ5424_TME_L_SECURE_WATCHDOG	0x3
-#define IPQ5424_SECURE_WATCHDOG		0x4
-#define IPQ5424_NON_SECURE_WATCHDOG	0x5
-#define IPQ5424_HLOS_PANIC		0x6
-#define IPQ5424_EXTERNAL_WDT		0x7
-#define IPQ5424_TME_L_FORCE_RESET	0x8
-#define IPQ5424_TSENS_RESET		0x9
-#define IPQ5424_AHB_TIMEOUT		0xA
-#define IPQ5424_INTERNAL_Q6_CRASH	0xB
+int debug_log_reset_reason(unsigned int val)
+{
+	if (!g_reason)
+		return -EOPNOTSUPP;
 
-#define RESET_REASON_MSG_MAX_LEN        100
+	if (val >= IPQ5424_RESET_MAX)
+		return -EINVAL;
 
-struct restart_reason {
-	void __iomem *wr_addr;
-	struct notifier_block panic_blk;
-	struct notifier_block	ssr_blk;
-	struct notifier_block	atomic_ssr_blk;
-	void *cookie;
-	void *atomic_cookie;
-};
+	memcpy_toio(g_reason->wr_addr, &val, sizeof(int));
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(debug_log_reset_reason);
 
 static int debug_panic_handler(struct notifier_block *nb, unsigned long action,
 			       void *data)
@@ -203,9 +184,9 @@ static int restart_reason_logging_ipq5424(unsigned int reason, unsigned int q6_r
 			scnprintf(reset_reason_msg, RESET_REASON_MSG_MAX_LEN,
 					"%s", "TME-L Force Reset");
 			break;
-		case IPQ5424_TSENS_RESET:
+		case IPQ5424_TSENS_HW_RESET:
 			scnprintf(reset_reason_msg, RESET_REASON_MSG_MAX_LEN,
-					"%s", "TSENS Reset");
+					"%s", "TSENS HW Reset");
 			break;
 		case IPQ5424_AHB_TIMEOUT:
 			scnprintf(reset_reason_msg, RESET_REASON_MSG_MAX_LEN,
@@ -218,6 +199,10 @@ static int restart_reason_logging_ipq5424(unsigned int reason, unsigned int q6_r
 			else
 				scnprintf(reset_reason_msg, RESET_REASON_MSG_MAX_LEN,
 						"%s", "Internal Q6 WDT error");
+			break;
+		case IPQ5424_TSENS_SW_RESET:
+			scnprintf(reset_reason_msg, RESET_REASON_MSG_MAX_LEN,
+					"%s", "TSENS SW Reset");
 			break;
 	}
 
@@ -316,7 +301,7 @@ static int ipq_debug_register_rproc_notifiers(struct platform_device *pdev,
 static int ipq_debug_probe(struct platform_device *pdev)
 {
 	struct restart_reason *reason;
-	unsigned int *reset_reason, q6_reason;
+	unsigned int q6_reason;
 	void __iomem *imem_base, *q6_base;
 	struct device_node *np;
 	int ret;
@@ -325,21 +310,22 @@ static int ipq_debug_probe(struct platform_device *pdev)
 	if (!np)
 		return 0;
 
-	reset_reason = devm_kzalloc(&pdev->dev, sizeof(unsigned int), GFP_KERNEL);
-	if (!reset_reason)
+	reason = devm_kzalloc(&pdev->dev, sizeof(*reason), GFP_KERNEL);
+	if (!reason)
 		return -ENOMEM;
+
+	dev_set_drvdata(&pdev->dev, reason);
 
 	imem_base = ipq_debug_parse_address(&pdev->dev,
 				"qcom,msm-imem-restart-reason-buf-addr");
 	if (IS_ERR_OR_NULL(imem_base))
 		return PTR_ERR(imem_base);
 
-	memcpy_fromio(reset_reason, imem_base, 4);
+	memcpy_fromio(&reason->reset_reason, imem_base, 4);
 	iounmap(imem_base);
 
 	if (of_device_is_compatible(np, "qcom,ipq-debug")) {
-		debugfs_create_x32("reset_reason", 0444, NULL, reset_reason);
-		restart_reason_logging(*reset_reason);
+		restart_reason_logging(reason->reset_reason);
 		return 0;
 	}
 
@@ -347,10 +333,6 @@ static int ipq_debug_probe(struct platform_device *pdev)
 	 * For ipq5424, kernel needs to write the restart reason in IMEM
 	 * during the kernel panic and Q6 crash.
 	 */
-
-	reason = devm_kzalloc(&pdev->dev, sizeof(*reason), GFP_KERNEL);
-	if (!reason)
-		return -ENOMEM;
 
 	reason->wr_addr = ipq_debug_parse_address(&pdev->dev,
 				"qcom,imem-restart-reason-buf-wr-addr");
@@ -378,21 +360,16 @@ static int ipq_debug_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	/*
-	 * In debugfs entry we could not able to differentiate b/w
-	 * internal Q6 Fatal and WDT crash.
-	 */
-	debugfs_create_x32("reset_reason", 0444, NULL, reset_reason);
-	restart_reason_logging_ipq5424(*reset_reason, q6_reason);
+	restart_reason_logging_ipq5424(reason->reset_reason, q6_reason);
 
-	platform_set_drvdata(pdev, reason);
+	g_reason = reason;
 
 	return 0;
 }
 
 static int ipq_debug_remove(struct platform_device *pdev)
 {
-	struct restart_reason *reason = platform_get_drvdata(pdev);
+	struct restart_reason *reason = dev_get_drvdata(&pdev->dev);
 
 	if (reason)
 		atomic_notifier_chain_unregister(&panic_notifier_list,
@@ -409,12 +386,48 @@ static int ipq_debug_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static ssize_t reset_reason_store(struct device *device,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	int ret;
+	unsigned int val;
+
+	ret = kstrtouint(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+
+	ret = debug_log_reset_reason(val);
+
+	return ret < 0 ? ret : count;
+}
+
+static ssize_t reset_reason_show(struct device *dev,
+			      struct device_attribute *attr, char *buf)
+{
+	struct restart_reason *reason = dev_get_drvdata(dev);
+
+	if (!reason)
+		return -EINVAL;
+
+	return sysfs_emit(buf, "%u\n", reason->reset_reason);
+}
+
+static DEVICE_ATTR_RW(reset_reason);
+
+static struct attribute *ipq_debug_attrs[] = {
+	&dev_attr_reset_reason.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(ipq_debug);
+
 static struct platform_driver ipq_debug_driver = {
 	.probe	= ipq_debug_probe,
 	.remove	= ipq_debug_remove,
 	.driver	= {
 		.name = "qcom,ipq-debug",
 		.of_match_table = ipq_debug_match_table,
+		.dev_groups = ipq_debug_groups,
 	},
 };
 

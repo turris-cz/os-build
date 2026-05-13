@@ -121,8 +121,17 @@ static int q6v5_wcss_sec_start(struct rproc *rproc)
 	qcom_q6v5_prepare(&wcss->q6);
 
 	if (debug_wcss) {
-		writel(0x1, wcss->debug_wcss_reg);
-		dev_info(wcss->dev, "Writing 1 to TCSR_SPARE_REG0\n");
+		if (desc->tmelcom_support) {
+			writel(0x1, wcss->debug_wcss_reg);
+			dev_info(wcss->dev, "Writing 1 to TCSR_SPARE_REG0\n");
+		} else {
+			dev_info(wcss->dev, "Invoking SCM for break_at_start\n");
+			ret = qcom_scm_break_q6_start(RESET_CMD_ID);
+			if (ret) {
+				dev_err(wcss->dev, "breaking q6 failed\n");
+				goto free_lic_buf;
+			}
+		}
 	}
 
 	if (desc->tmelcom_support)
@@ -147,11 +156,6 @@ wait_for_start:
 		}
 	}
 
-	if (lic_param.buf) {
-		lm_free_license(lic_param.buf, lic_param.dma_buf, lic_param.size);
-		lic_param.buf = NULL;
-	}
-
 	if (!ret && wcss->textpd_fw) {
 		ret = qcom_scm_pas_auth_and_reset(wcss->textpd_pasid);
 		if (ret) {
@@ -167,6 +171,12 @@ wait_for_start:
 out:
 	if (ret && desc->tmelcom_support)
 		tmelcom_secboot_teardown(desc->pasid, 0);
+
+free_lic_buf:
+	if (lic_param.buf) {
+		lm_free_license(lic_param.buf, lic_param.dma_buf, lic_param.size);
+		lic_param.buf = NULL;
+	}
 
 	return ret;
 }

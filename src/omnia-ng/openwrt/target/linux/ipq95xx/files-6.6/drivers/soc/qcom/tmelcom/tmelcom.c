@@ -30,6 +30,7 @@ struct tmelcom {
 	struct qmp_pkt pkt;
 	struct tmel_ipc_pkt *ipc_pkt;
 	dma_addr_t sram_dma_addr;
+	void *sram_coherent_buf;
 	wait_queue_head_t waitq;
 	bool rx_done;
 };
@@ -53,7 +54,6 @@ static int tmelcom_prepare_msg(struct tmelcom *tdev, u32 msg_uid,
 	struct ipc_header *msg_hdr = &ipc_pkt->msg_hdr;
 	struct mbox_payload *mbox_payload = &ipc_pkt->payload.mbox_payload;
 	struct sram_payload *sram_payload = &ipc_pkt->payload.sram_payload;
-	int ret;
 
 	memset(ipc_pkt, 0, sizeof(struct tmel_ipc_pkt));
 
@@ -69,18 +69,18 @@ static int tmelcom_prepare_msg(struct tmelcom *tdev, u32 msg_uid,
 		msg_hdr->msg_len = msg_size;
 		memcpy((void *)mbox_payload, msg_buf, msg_size);
 	} else if (msg_size <= SRAM_IPC_MAX_BUF_SIZE) {
-		/* SRAM */
 		msg_hdr->ipc_type = IPC_MBOX_SRAM;
 		msg_hdr->msg_len = 8; //payload_ptr + payload_len
 
-		tdev->sram_dma_addr = dma_map_single(tdev->dev, msg_buf,
-						     msg_size,
-						     DMA_BIDIRECTIONAL);
-		ret = dma_mapping_error(tdev->dev, tdev->sram_dma_addr);
-		if (ret != 0) {
-			pr_err("SRAM DMA mapping error: %d\n", ret);
-			return ret;
+		tdev->sram_coherent_buf = dma_alloc_coherent(tdev->dev, msg_size,
+							     &tdev->sram_dma_addr,
+							     GFP_KERNEL);
+		if (!tdev->sram_coherent_buf) {
+			pr_err("Failed to allocate coherent DMA memory\n");
+			return -ENOMEM;
 		}
+
+		memcpy(tdev->sram_coherent_buf, msg_buf, msg_size);
 
 		sram_payload->payload_ptr = tdev->sram_dma_addr;
 		sram_payload->payload_len = msg_size;
@@ -102,9 +102,14 @@ static void tmelcom_unprepare_message(struct tmelcom *tdev,
 	if (ipc_pkt->msg_hdr.ipc_type == IPC_MBOX_ONLY) {
 		memcpy(msg_buf, (void *)mbox_payload, msg_size);
 	} else if (ipc_pkt->msg_hdr.ipc_type == IPC_MBOX_SRAM) {
-		dma_unmap_single(tdev->dev, tdev->sram_dma_addr, msg_size,
-				 DMA_BIDIRECTIONAL);
-		tdev->sram_dma_addr = 0;
+		if (tdev->sram_coherent_buf) {
+			memcpy(msg_buf, tdev->sram_coherent_buf, msg_size);
+			dma_free_coherent(tdev->dev, msg_size,
+					  tdev->sram_coherent_buf,
+					  tdev->sram_dma_addr);
+			tdev->sram_coherent_buf = NULL;
+			tdev->sram_dma_addr = 0;
+		}
 	}
 }
 
@@ -138,8 +143,10 @@ enum tmelcom_resp tmelcom_process_request(u32 msg_uid, void *msg_buf,
 	tdev->rx_done = false;
 
 	ret = tmelcom_prepare_msg(tdev, msg_uid, msg_buf, msg_size);
-	if (ret)
-		return ret;
+	if (ret) {
+		pr_err("Failed to prepare message: %d\n", ret);
+		goto err_exit;
+	}
 
 	tdev->pkt.size = sizeof(struct tmel_ipc_pkt);
 	tdev->pkt.data = (void *)tdev->ipc_pkt;
@@ -281,7 +288,12 @@ static struct platform_driver tmelcom_driver = {
 		.of_match_table = tmelcom_match_tbl,
 	},
 };
-module_platform_driver(tmelcom_driver);
+
+static int __init tmelcom_driver_init(void)
+{
+	return platform_driver_register(&tmelcom_driver);
+}
+subsys_initcall(tmelcom_driver_init);
 
 MODULE_DESCRIPTION("QCOM TME-LCom mailbox protocol client");
 MODULE_LICENSE("GPL");

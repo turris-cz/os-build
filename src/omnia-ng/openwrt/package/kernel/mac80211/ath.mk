@@ -340,10 +340,10 @@ define KernelPackage/ath12k
   $(call KernelPackage/mac80211/Default)
   TITLE:=QTI 802.11be wireless cards support
   URL:=https://wireless.wiki.kernel.org/en/users/drivers/ath12k
-  DEPENDS+= +kmod-ath +kmod-hwmon-core +@DRIVER_11N_SUPPORT +@DRIVER_11W_SUPPORT +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT +@DRIVER_11BE_SUPPORT
-  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath12k/ath12k.ko
-  AUTOLOAD:=$(call AutoProbe,ath12k)
-  MODPARAMS.ath12k:=ppe_rfs_support=0 ppe_ds_enable=0
+  DEPENDS+= +kmod-ath +kmod-hwmon-core +@DRIVER_11N_SUPPORT +@DRIVER_11W_SUPPORT +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT +@DRIVER_11BE_SUPPORT +kmod-qca-nss-wifi-plugins
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath12k/ath12k.ko \
+         $(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath12k/wifi7/ath12k_wifi7.ko
+  AUTOLOAD:=$(call AutoProbe,ath12k ath12k_wifi7)
 endef
 
 define KernelPackage/ath12k/description
