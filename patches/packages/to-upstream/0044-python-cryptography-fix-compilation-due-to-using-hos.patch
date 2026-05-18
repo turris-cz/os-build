@@ -1,0 +1,96 @@
+From 9d9f3f652b17b276869b786e3c0817b5afa14437 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@nic.cz>
+Date: Mon, 18 May 2026 18:16:34 +0200
+Subject: [PATCH] python-cryptography: fix compilation due to using host python
+
+Fix compilation error, which was caused by using local host python
+instead of using SDK python during cross compilation.
+Fixing error:
+  cargo:warning=/usr/include/python3.13/pyconfig.h:15:12: fatal error: arm-linux-gnueabihf/python3.13/pyconfig.h: No such file or directory
+  cargo:warning=   15 | #  include <arm-linux-gnueabihf/python3.13/pyconfig.h>
+  cargo:warning=      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  cargo:warning=compilation terminated.
+---
+ lang/python/python-cryptography/Makefile      |  4 +++
+ ...mp-libc-popwerpc-multiple-definition.patch | 16 ----------
+ .../010-use-target-python-include.patch       | 30 +++++++++++++++++++
+ 3 files changed, 34 insertions(+), 16 deletions(-)
+ delete mode 100644 lang/python/python-cryptography/patches/002-bump-libc-popwerpc-multiple-definition.patch
+ create mode 100644 lang/python/python-cryptography/patches/010-use-target-python-include.patch
+
+diff --git a/lang/python/python-cryptography/Makefile b/lang/python/python-cryptography/Makefile
+index 360c4f1f8..0ad3f681e 100644
+--- a/lang/python/python-cryptography/Makefile
++++ b/lang/python/python-cryptography/Makefile
+@@ -25,6 +25,10 @@ include ../pypi.mk
+ include $(INCLUDE_DIR)/package.mk
+ include ../python3-package.mk
+ 
++PYTHON3_PKG_BUILD_VARS += \
++	CRYPTOGRAPHY_TARGET_PYTHON_INCLUDE="$(PYTHON3_INC_DIR)" \
++	PYO3_PYTHON="$(HOST_PYTHON3_BIN)"
++
+ define Package/python3-cryptography
+   SECTION:=lang
+   CATEGORY:=Languages
+diff --git a/lang/python/python-cryptography/patches/002-bump-libc-popwerpc-multiple-definition.patch b/lang/python/python-cryptography/patches/002-bump-libc-popwerpc-multiple-definition.patch
+deleted file mode 100644
+index 5aed8fe5d..000000000
+--- a/lang/python/python-cryptography/patches/002-bump-libc-popwerpc-multiple-definition.patch
++++ /dev/null
+@@ -1,16 +0,0 @@
+-Index: cryptography-41.0.7/src/rust/Cargo.lock
+-===================================================================
+---- cryptography-41.0.7.orig/src/rust/Cargo.lock
+-+++ cryptography-41.0.7/src/rust/Cargo.lock
+-@@ -137,9 +137,9 @@ checksum = "bfa799dd5ed20a7e349f3b4639aa
+- 
+- [[package]]
+- name = "libc"
+--version = "0.2.144"
+-+version = "0.2.148"
+- source = "registry+https://github.com/rust-lang/crates.io-index"
+--checksum = "2b00cc1c228a6782d0f076e7b232802e0c5689d41bb5df366f2a6b6621cfdfe1"
+-+checksum = "9cdc71e17332e86d2e1d38c1f99edcb6288ee11b815fb1a4b049eaa2114d369b"
+- 
+- [[package]]
+- name = "lock_api"
+diff --git a/lang/python/python-cryptography/patches/010-use-target-python-include.patch b/lang/python/python-cryptography/patches/010-use-target-python-include.patch
+new file mode 100644
+index 000000000..c230026d1
+--- /dev/null
++++ b/lang/python/python-cryptography/patches/010-use-target-python-include.patch
+@@ -0,0 +1,30 @@
++Index: cryptography-46.0.6/src/rust/cryptography-cffi/build.rs
++===================================================================
++--- cryptography-46.0.6.orig/src/rust/cryptography-cffi/build.rs
+++++ cryptography-46.0.6/src/rust/cryptography-cffi/build.rs
++@@ -47,16 +47,18 @@ fn main() {
++     )
++     .unwrap();
++     println!("cargo:rustc-cfg=python_implementation=\"{python_impl}\"");
++-    let python_includes = run_python_script(
+++    let python_includes = env::var("CRYPTOGRAPHY_TARGET_PYTHON_INCLUDE").unwrap_or_else(|_| {
+++    run_python_script(
++         &python,
++         "import os; \
++-         import setuptools.dist; \
++-         import setuptools.command.build_ext; \
++-         b = setuptools.command.build_ext.build_ext(setuptools.dist.Distribution()); \
++-         b.finalize_options(); \
++-         print(os.pathsep.join(b.include_dirs), end='')",
+++         import setuptools.dist; \
+++         import setuptools.command.build_ext; \
+++         b = setuptools.command.build_ext.build_ext(setuptools.dist.Distribution()); \
+++         b.finalize_options(); \
+++         print(os.pathsep.join(b.include_dirs), end='')",
++     )
++-    .unwrap();
+++    .unwrap()
+++});
++     let openssl_c = Path::new(&out_dir).join("_openssl.c");
++ 
++     let mut build = cc::Build::new();
+-- 
+2.47.3
+
