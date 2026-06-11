@@ -17,7 +17,7 @@
 set -eu
 
 # Step list that is run when no commands are specified
-DEFAULT_STEPS=( "prepare" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_junit" )
+DEFAULT_STEPS=( "prepare_tools" "compile" "sign" "store_hash" "stats" "pkgsrepo" "gen_junit" )
 
 # Paths to turris-build sources and common utilities inclusion
 src_dir="$(readlink -f "${0%/*}")"
@@ -314,7 +314,7 @@ pkgsrepo() {
 available_commands+=( ["compile_tools"]="Compile host tools" )
 compile_tools() {
 	report "Compiling tools"
-	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+	if [ -n "$PREBUILT_TOOLS" ] || [ -n "$PREBUILT_TOOLCHAIN" ]; then
 		echo "Skipping because of prebuilt tools/toolchain"
 		return
 	fi
@@ -324,7 +324,7 @@ compile_tools() {
 available_commands+=( ["compile_toolchain"]="Compile cross toolchain" )
 compile_toolchain() {
 	report "Compiling toolchain"
-	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+	if [ -n "$PREBUILT_TOOLS" ] || [ -n "$PREBUILT_TOOLCHAIN" ]; then
 		echo "Skipping because of prebuilt tools/toolchain"
 		return
 	fi
@@ -345,7 +345,7 @@ compile_packages() {
 
 available_commands+=( ["compile_SDK"]="Compiles SDK" )
 compile_SDK() {
-	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+	if [ -n "$PREBUILT_TOOLS" ] || [ -n "$PREBUILT_TOOLCHAIN" ]; then
 		echo "Skipping because of prebuilt tools/toolchain"
 		return
 	fi
@@ -358,7 +358,7 @@ compile_SDK() {
 available_commands+=( ["package_tools"]="Packages tools" )
 package_tools() {
 	report "Packaging tools"
-	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+	if [ -n "$PREBUILT_TOOLS" ] || [ -n "$PREBUILT_TOOLCHAIN" ]; then
 		echo "Skipping because of prebuilt tools/toolchain"
 		return
 	fi
@@ -367,12 +367,12 @@ package_tools() {
 
 available_commands+=( ["package_toolchain"]="Packages toolchain" )
 package_toolchain() {
-	if [ -n "$PREBUILT_TOOLS_TAR" ] || [ -n "$PREBUILT_TOOLCHAIN_TAR" ]; then
+	report "Packaging toolchain"
+	if [ -n "$PREBUILT_TOOLS" ] || [ -n "$PREBUILT_TOOLCHAIN" ]; then
 		echo "Skipping because of prebuilt tools/toolchain"
 		return
 	fi
 	if grep -q '^CONFIG_MAKE_TOOLCHAIN=y' "$build_dir"/.config; then
-		report "Packaging toolchain"
 		_openwrt_make target/toolchain/compile
 	fi
 }
@@ -382,6 +382,7 @@ prebuilt_tools() {
 	PREBUILT_TOOLS=1
 	local tools_dir="${build_dir}/prebuilt_toolchain/tools"
 
+	report "Using prebuilt tools"
 	if [ -z "$TARGET_BOARD" ]; then
 		echo "Need to specify target board"
 		print_help
@@ -411,6 +412,7 @@ prebuilt_toolchain() {
 	PREBUILT_TOOLCHAIN=1
 	local toolchain_dir="${build_dir}/prebuilt_toolchain/toolchain"
 
+	report "Using prebuilt toolchain"
 	if [ -z "$TARGET_BOARD" ]; then
 		echo "Need to specify target board"
 		print_help
@@ -438,11 +440,8 @@ prebuilt_toolchain() {
 }
 
 
-available_commands+=( ["compile"]="	Compile tools, target and packages" )
+available_commands+=( ["compile"]="	Compile packages, package toolchain and SDK" )
 compile() {
-	compile_tools
-	compile_toolchain
-	compile_target
 	compile_SDK
 	package_tools
 	package_toolchain
@@ -604,10 +603,6 @@ done
 
 # Set build_dir variable
 set_protected_build_dir
-
-# check for prebuilt tools/toolchain
-[ -d "${build_dir}/prebuilt_toolchain/tools" ] && PREBUILT_TOOLS=1
-[ -d "${build_dir}/prebuilt_toolchain/toolchain" ] && PREBUILT_TOOLCHAIN=1
 
 # OpenWRT directory for temporally data
 export TMPDIR="${build_dir}/tmp"
