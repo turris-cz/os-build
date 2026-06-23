@@ -5,16 +5,16 @@ Subject: [PATCH] odhcp6c: export DUID to /var/run/odhcp6c-duid.{ifname}
 
 Signed-off-by: Stepan Henek <stepan.henek@nic.cz>
 ---
- .../ipv6/odhcp6c/patches/020-duid.path.patch  | 135 ++++++++++++++++++
- 1 file changed, 135 insertions(+)
+ .../ipv6/odhcp6c/patches/020-duid.path.patch  | 141 ++++++++++++++++++
+ 1 file changed, 141 insertions(+)
  create mode 100644 package/network/ipv6/odhcp6c/patches/020-duid.path.patch
 
 diff --git a/package/network/ipv6/odhcp6c/patches/020-duid.path.patch b/package/network/ipv6/odhcp6c/patches/020-duid.path.patch
 new file mode 100644
-index 0000000000..4e9543048d
+index 0000000000..c7587a250b
 --- /dev/null
 +++ b/package/network/ipv6/odhcp6c/patches/020-duid.path.patch
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,141 @@
 +From 1931de469511fab82a79eaead4936e28ba6e6c40 Mon Sep 17 00:00:00 2001
 +From: Stepan Henek <stepan.henek@nic.cz>
 +Date: Tue, 9 Aug 2022 09:17:16 +0200
@@ -35,9 +35,11 @@ index 0000000000..4e9543048d
 + src/script.c  |  2 +-
 + 4 files changed, 36 insertions(+), 5 deletions(-)
 +
-+--- a/src/dhcpv6.c
-++++ b/src/dhcpv6.c
-+@@ -26,6 +26,7 @@
++Index: odhcp6c-2026.06.04~daf4ec30/src/dhcpv6.c
++===================================================================
++--- odhcp6c-2026.06.04~daf4ec30.orig/src/dhcpv6.c
+++++ odhcp6c-2026.06.04~daf4ec30/src/dhcpv6.c
++@@ -27,6 +27,7 @@
 + #include <resolv.h>
 + #include <signal.h>
 + #include <stdbool.h>
@@ -45,7 +47,7 @@ index 0000000000..4e9543048d
 + #include <stdlib.h>
 + #include <string.h>
 + #include <sys/ioctl.h>
-+@@ -561,7 +562,7 @@ static uint32_t dhcpv6_generate_iface_ia
++@@ -564,7 +565,7 @@ static uint32_t dhcpv6_generate_iface_ia
 + 	return iaid;
 + }
 + 
@@ -54,7 +56,7 @@ index 0000000000..4e9543048d
 + {
 + 	config_dhcp = config_dhcp_get();
 + 
-+@@ -652,6 +653,29 @@ int init_dhcpv6(const char *ifname)
++@@ -656,6 +657,29 @@ int init_dhcpv6(const char *ifname)
 + 		odhcp6c_add_state(STATE_CLIENT_ID, duid, sizeof(duid));
 + 	}
 + 
@@ -84,9 +86,11 @@ index 0000000000..4e9543048d
 + 	// Create ORO
 + 	if (!(client_options & DHCPV6_STRICT_OPTIONS)) {
 + 		uint16_t oro[] = {
-+--- a/src/odhcp6c.c
-++++ b/src/odhcp6c.c
-+@@ -217,6 +217,7 @@ int main(_o_unused int argc, char* const
++Index: odhcp6c-2026.06.04~daf4ec30/src/odhcp6c.c
++===================================================================
++--- odhcp6c-2026.06.04~daf4ec30.orig/src/odhcp6c.c
+++++ odhcp6c-2026.06.04~daf4ec30/src/odhcp6c.c
++@@ -224,6 +224,7 @@ int main(_o_unused int argc, char* const
 + 	// Allocate resources
 + 	const char *pidfile = NULL;
 + 	const char *script = "/lib/netifd/dhcpv6.script";
@@ -94,7 +98,7 @@ index 0000000000..4e9543048d
 + 	ssize_t l;
 + 	uint8_t buf[134], *o_data;
 + 	int optidx;
-+@@ -239,7 +240,7 @@ int main(_o_unused int argc, char* const
++@@ -246,7 +247,7 @@ int main(_o_unused int argc, char* const
 + 
 + 	atexit(odhcp6c_cleanup);
 + 
@@ -103,7 +107,7 @@ index 0000000000..4e9543048d
 + 		switch (c) {
 + 		case 0:
 + 			break;
-+@@ -345,6 +346,10 @@ int main(_o_unused int argc, char* const
++@@ -361,6 +362,10 @@ int main(_o_unused int argc, char* const
 + 			}
 + 			break;
 + 
@@ -114,7 +118,7 @@ index 0000000000..4e9543048d
 + 		case 'i':
 + 			if (!strcmp(optarg, DHCPV6_IFACEID_EUI64)) {
 + 				ra_ifid_mode = RA_IFID_EUI64;
-+@@ -593,7 +598,7 @@ int main(_o_unused int argc, char* const
++@@ -617,7 +622,7 @@ int main(_o_unused int argc, char* const
 + 			odhcp6c_get_state(STATE_ORO, &oro_len);
 + 			config_dhcp->oro_user_cnt = oro_len / sizeof(uint16_t);
 + 
@@ -123,7 +127,7 @@ index 0000000000..4e9543048d
 + 				error("failed to initialize: %s", strerror(errno));
 + 				return 1;
 + 			}
-+@@ -860,6 +865,7 @@ static int usage(void)
++@@ -884,6 +889,7 @@ static int usage(void)
 + 	"			-x 0x1f4:ABBA - option 500\n"
 + 	"			-x 202:'\"file\"' - option 202\n"
 + 	"	-c <clientid>	Override client-ID (base-16 encoded 16-bit type + value)\n"
@@ -131,18 +135,20 @@ index 0000000000..4e9543048d
 + 	"	-i <iface-id>	Use a custom interface identifier for RA handling\n"
 + 	"	-r <options>	Options to be requested (comma-separated)\n"
 + 	"	-R		Do not request any options except those specified with -r\n"
-+--- a/src/odhcp6c.h
-++++ b/src/odhcp6c.h
-+@@ -557,7 +557,7 @@ struct odhcp6c_opt_cfg {
++Index: odhcp6c-2026.06.04~daf4ec30/src/odhcp6c.h
++===================================================================
++--- odhcp6c-2026.06.04~daf4ec30.orig/src/odhcp6c.h
+++++ odhcp6c-2026.06.04~daf4ec30/src/odhcp6c.h
++@@ -558,7 +558,7 @@ struct odhcp6c_opt_cfg {
++ 	int strict_rfc7550;
 + };
 + 
-+ uint32_t hash_ifname(const char *s);
 +-int init_dhcpv6(const char *ifname);
 ++int init_dhcpv6(const char *ifname, const char *duid_path);
 + int dhcpv6_get_ia_mode(void);
 + int dhcpv6_promote_server_cand(void);
 + int dhcpv6_send_request(enum dhcpv6_msg type);
-+@@ -585,6 +585,7 @@ int ra_get_retransmit(void);
++@@ -586,6 +586,7 @@ int ra_get_retransmit(void);
 + void notify_state_change(const char *status, int delay, bool resume);
 + 
 + int script_init(const char *path, const char *ifname);
@@ -151,5 +157,5 @@ index 0000000000..4e9543048d
 + void script_hexlify(char *dst, const uint8_t *src, size_t len);
 + void script_call(const char *status, int delay, bool resume);
 -- 
-2.53.0
+2.47.3
 
