@@ -1,0 +1,66 @@
+From 387b6197ccf89fdf7557c6df3d89d80d86543ef8 Mon Sep 17 00:00:00 2001
+From: Alexandru Ardelean <alex@shruggie.ro>
+Date: Sat, 4 Apr 2026 21:37:47 +0300
+Subject: [PATCH] python-babel: bump to 2.18.0
+
+Changelog: https://github.com/python-babel/babel/blob/master/CHANGES.rst
+
+Minor release with bug fixes. Resets PKG_RELEASE to 1.
+Add test.sh to verify locale, date, and number formatting.
+
+Signed-off-by: Alexandru Ardelean <alex@shruggie.ro>
+---
+ lang/python/python-babel/Makefile |  6 +++---
+ lang/python/python-babel/test.sh  | 24 ++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+), 3 deletions(-)
+ create mode 100755 lang/python/python-babel/test.sh
+
+diff --git a/lang/python/python-babel/Makefile b/lang/python/python-babel/Makefile
+index 7f53b272bd22c6..8bbeafd12080f1 100644
+--- a/lang/python/python-babel/Makefile
++++ b/lang/python/python-babel/Makefile
+@@ -8,11 +8,11 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=python-babel
+-PKG_VERSION:=2.17.0
+-PKG_RELEASE:=2
++PKG_VERSION:=2.18.0
++PKG_RELEASE:=1
+ 
+ PYPI_NAME:=babel
+-PKG_HASH:=0c54cffb19f690cdcc52a3b50bcbf71e07a808d1c80d549f2459b9d2cf0afb9d
++PKG_HASH:=b80b99a14bd085fcacfa15c9165f651fbb3406e66cc603abf11c5750937c992d
+ 
+ PKG_MAINTAINER:=Josef Schlehofer <pepe.schlehofer@gmail.com>
+ PKG_LICENSE:=BSD-3-Clause
+diff --git a/lang/python/python-babel/test.sh b/lang/python/python-babel/test.sh
+new file mode 100755
+index 00000000000000..ac50672ba18ca0
+--- /dev/null
++++ b/lang/python/python-babel/test.sh
+@@ -0,0 +1,24 @@
++#!/bin/sh
++[ "$1" = python3-babel ] || exit 0
++python3 - << 'EOF'
++import babel
++assert babel.__version__, "babel version is empty"
++
++from babel import Locale
++from babel.dates import format_date, format_datetime
++from babel.numbers import format_number, format_currency
++import datetime
++
++locale = Locale.parse("en_US")
++assert locale.territory == "US"
++
++d = datetime.date(2024, 1, 15)
++formatted = format_date(d, locale="en_US")
++assert "2024" in formatted, f"date format missing year: {formatted}"
++
++n = format_number(1234567.89, locale="en_US")
++assert "1,234,567" in n, f"number format unexpected: {n}"
++
++c = format_currency(9.99, "USD", locale="en_US")
++assert "$" in c or "USD" in c, f"currency format unexpected: {c}"
++EOF

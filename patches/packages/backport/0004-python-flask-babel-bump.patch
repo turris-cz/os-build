@@ -1,0 +1,61 @@
+From c391447d123442423f638ae4ba3755fc04ba88df Mon Sep 17 00:00:00 2001
+From: Alexandru Ardelean <alex@shruggie.ro>
+Date: Thu, 16 Apr 2026 22:08:08 +0300
+Subject: [PATCH] python-flask-babel: update to 4.0.0; add test.sh
+
+Changes since 3.1.0:
+- drop Python 3.7 support; add PyPy 3.9 compatibility
+- replace deprecated locked_cached_property with cached_property
+
+Signed-off-by: Alexandru Ardelean <alex@shruggie.ro>
+---
+ lang/python/python-flask-babel/Makefile |  4 ++--
+ lang/python/python-flask-babel/test.sh  | 20 ++++++++++++++++++++
+ 2 files changed, 22 insertions(+), 2 deletions(-)
+ create mode 100755 lang/python/python-flask-babel/test.sh
+
+diff --git a/lang/python/python-flask-babel/Makefile b/lang/python/python-flask-babel/Makefile
+index c23fb476460987..2da9ad85570aa8 100644
+--- a/lang/python/python-flask-babel/Makefile
++++ b/lang/python/python-flask-babel/Makefile
+@@ -8,12 +8,12 @@
+ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=python-flask-babel
+-PKG_VERSION:=3.1.0
++PKG_VERSION:=4.0.0
+ PKG_RELEASE:=1
+ 
+ PYPI_NAME:=flask-babel
+ PYPI_SOURCE_NAME:=flask_babel
+-PKG_HASH:=be015772c5d7f046f3b99c508dcf618636eb93d21b713b356db79f3e79f69f39
++PKG_HASH:=dbeab4027a3f4a87678a11686496e98e1492eb793cbdd77ab50f4e9a2602a593
+ 
+ PKG_MAINTAINER:=Josef Schlehofer <pepe.schlehofer@gmail.com>
+ PKG_LICENSE:=BSD-3-Clause
+diff --git a/lang/python/python-flask-babel/test.sh b/lang/python/python-flask-babel/test.sh
+new file mode 100755
+index 00000000000000..48877f43277632
+--- /dev/null
++++ b/lang/python/python-flask-babel/test.sh
+@@ -0,0 +1,20 @@
++#!/bin/sh
++
++[ "$1" = python3-flask-babel ] || exit 0
++
++python3 - <<'EOF'
++from flask import Flask
++from flask_babel import Babel, gettext, lazy_gettext
++
++app = Flask(__name__)
++babel = Babel(app)
++
++with app.app_context():
++    result = gettext("Hello")
++    assert isinstance(result, str), "gettext should return a string"
++
++lazy = lazy_gettext("World")
++assert str(lazy) == "World", f"lazy_gettext failed: {lazy!r}"
++
++print("python3-flask-babel OK")
++EOF
