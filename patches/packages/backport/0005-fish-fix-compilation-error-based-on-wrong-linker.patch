@@ -1,0 +1,36 @@
+From 1a53e85347586b04ca6318eceddc011e23fe5671 Mon Sep 17 00:00:00 2001
+From: Tomas Zak <tomas.zak@turris.com>
+Date: Thu, 18 Jun 2026 17:59:46 +0200
+Subject: [PATCH] fish: fix compilation error based on wrong linker
+
+Fix compilation of fish package due to wrong provided linker. Switched to clean
+linker instead of linker with ccache wrapper, because Cargo/Rust takes it as
+argument not as usual ccache command with argument.
+
+Fixing:
+warning: `fish` (lib) generated 7 warnings (run `cargo fix --lib -p fish` to apply 7 suggestions)
+error: linker `ccache powerpc-openwrt-linux-musl-gcc` not found
+  |
+  = note: No such file or directory (os error 2)
+---
+ utils/fish/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/utils/fish/Makefile b/utils/fish/Makefile
+index 3cae0c993..4a76e49ae 100644
+--- a/utils/fish/Makefile
++++ b/utils/fish/Makefile
+@@ -28,9 +28,9 @@ include ../../lang/rust/rust-values.mk
+ export PCRE2_SYS_STATIC=0
+ 
+ # For pcre2-sys
+-export CC=$(TARGET_CC)
++export CC=$(TARGET_CC_NOCACHE)
+ export RUSTFLAGS+=-C target-feature=-crt-static
+-export CARGO_TARGET_$(shell echo $(RUSTC_TARGET_ARCH) | sed -e 'y/abcdefghijklmnopqrstuvwxyz-/ABCDEFGHIJKLMNOPQRSTUVWXYZ_/')_LINKER:=$(TARGET_CC)
++export CARGO_TARGET_$(shell echo $(RUSTC_TARGET_ARCH) | sed -e 'y/abcdefghijklmnopqrstuvwxyz-/ABCDEFGHIJKLMNOPQRSTUVWXYZ_/')_LINKER:=$(TARGET_CC_NOCACHE)
+ 
+ define Package/fish
+   SECTION:=utils
+-- 
+2.54.0
