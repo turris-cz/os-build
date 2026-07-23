@@ -7,11 +7,11 @@ Some interfaces are harder to restart then just link down/up. For
 example VPNs or NCM modems.
 ---
  utils/watchcat/files/watchcat.init |  3 ++-
- utils/watchcat/files/watchcat.sh   | 21 ++++++++++++++++-----
- 2 files changed, 18 insertions(+), 6 deletions(-)
+ utils/watchcat/files/watchcat.sh   | 27 ++++++++++++++++++++-------
+ 2 files changed, 22 insertions(+), 8 deletions(-)
 
 diff --git a/utils/watchcat/files/watchcat.init b/utils/watchcat/files/watchcat.init
-index 9bfc68d0e..d98ab884c 100644
+index 75a8f0124..2a19a125e 100644
 --- a/utils/watchcat/files/watchcat.init
 +++ b/utils/watchcat/files/watchcat.init
 @@ -39,6 +39,7 @@ config_watchcat() {
@@ -21,21 +21,21 @@ index 9bfc68d0e..d98ab884c 100644
 +	config_get logical_interface "$1" logical_interface
  	config_get mmifacename "$1" mmifacename "null"
  	config_get_bool unlockbands "$1" unlockbands "0"
- 	config_get addressfamily "$1" addressfamily "any"
-@@ -110,7 +111,7 @@ config_watchcat() {
- 		;;
- 	restart_iface)
- 		procd_open_instance "watchcat_${1}"
--		procd_set_param command /usr/bin/watchcat.sh "restart_iface" "$period" "$pinghosts" "$pingperiod" "$pingsize" "$interface" "$mmifacename" "$unlockbands" "$addressfamily"
-+		procd_set_param command /usr/bin/watchcat.sh "restart_iface" "$period" "$pinghosts" "$pingperiod" "$pingsize" "$interface" "$mmifacename" "$unlockbands" "$logical_interface" "$addressfamily"
+ 	config_get_bool reset_failure_timer "$1" reset_failure_timer "0"
+@@ -114,7 +115,7 @@ config_watchcat() {
+ 		procd_set_param command /usr/bin/watchcat.sh \
+ 			"restart_iface" "$period" "$pinghosts" "$pingperiod" \
+ 			"$pingsize" "$interface" "$mmifacename" "$unlockbands" \
+-			"$addressfamily" "" "$reset_failure_timer"
++			"$logical_interface" "$addressfamily" "" "$reset_failure_timer"
  		procd_set_param respawn "${respawn_threshold:-3600}" "${respawn_timeout:-5}" "${respawn_retry:-5}"
  		procd_close_instance
  		;;
 diff --git a/utils/watchcat/files/watchcat.sh b/utils/watchcat/files/watchcat.sh
-index 5167911fd..b16c25133 100644
+index 87c9678ca..de61f5687 100644
 --- a/utils/watchcat/files/watchcat.sh
 +++ b/utils/watchcat/files/watchcat.sh
-@@ -90,6 +90,12 @@ watchcat_restart_network_iface() {
+@@ -164,6 +164,12 @@ watchcat_restart_network_iface() {
  	ifup "$network"
  }
  
@@ -48,7 +48,7 @@ index 5167911fd..b16c25133 100644
  watchcat_run_script() {
  	logger -p daemon.info -t "watchcat[$$]" "Running script \"$1\" for network interface: \"$2\"."
  	"$1" "$2"
-@@ -108,8 +114,9 @@ watchcat_monitor_network() {
+@@ -182,8 +188,9 @@ watchcat_monitor_network() {
  	iface="$5"
  	mm_iface_name="$6"
  	mm_iface_unlock_bands="$7"
@@ -57,19 +57,19 @@ index 5167911fd..b16c25133 100644
 +	logical_interface="$8"
 +	address_family="$9"
 +	script="${10}"
- 
- 	time_now="$(cat /proc/uptime)"
- 	time_now="${time_now%%.*}"
-@@ -155,6 +162,8 @@ watchcat_monitor_network() {
+ 	ping_iface=""
+ 	restart_iface=""
+ 	reset_failure_timer=""
+@@ -249,6 +256,8 @@ watchcat_monitor_network() {
  			else
  				if [ "$script" != "" ]; then
- 					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Running script after reaching \"$failure_period\" seconds"
+ 					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Will run the script after \"$failure_period\" seconds of failed reachability"
 +				elif [ "$logical_iface" != "" ]; then
 +					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host for \"$((time_now - time_lastcheck_withinternet))\" seconds. Restarting \"$logical_iface\" after reaching \"$failure_period\" seconds"
  				elif [ "$iface" != "" ]; then
- 					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Restarting \"$iface\" after reaching \"$failure_period\" seconds"
+ 					logger -p daemon.info -t "watchcat[$$]" "Could not reach $host via \"$iface\" for \"$((time_now - time_lastcheck_withinternet))\" seconds. Will restart \"$iface\" after \"$failure_period\" seconds of failed reachability"
  				else
-@@ -170,7 +179,9 @@ watchcat_monitor_network() {
+@@ -266,7 +275,9 @@ watchcat_monitor_network() {
  				if [ "$mm_iface_name" != "" ]; then
  					watchcat_restart_modemmanager_iface "$mm_iface_name" "$mm_iface_unlock_bands"
  				fi
@@ -77,23 +77,33 @@ index 5167911fd..b16c25133 100644
 +				if [ "$logical_iface" != "" ]; then
 +					watchcat_restart_logical_network_iface "$logical_iface"
 +				elif [ "$iface" != "" ]; then
- 					watchcat_restart_network_iface "$iface"
+ 					watchcat_restart_network_iface "$iface" "$restart_iface"
  				else
  					watchcat_restart_all_network
-@@ -261,11 +272,11 @@ ping_reboot)
- 	;;
- restart_iface)
- 	# args from init script: period pinghosts pingperiod pingsize interface mmifacename unlockbands addressfamily
--	watchcat_monitor_network "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" ""
-+	watchcat_monitor_network "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" ""
- 	;;
- run_script)
- 	# args from init script: period pinghosts pingperiod pingsize interface addressfamily script
--	watchcat_monitor_network "$2" "$3" "$4" "$5" "$6" "" "" "$7" "$8"
-+	watchcat_monitor_network "$2" "$3" "$4" "$5" "$6" "" "" "" "$7" "$8"
- 	;;
- *)
- 	echo "Error: invalid mode selected: $mode"
+@@ -384,8 +395,9 @@ restart_iface)
+ 	iface="$5"
+ 	mm_iface_name="$6"
+ 	mm_iface_unlock_bands="$7"
+-	address_family="$8"
+-	script="$9"
++	logical_interface="$8"
++	address_family="$9"
++	script="${10}"
+ 	reset_failure_timer=""
+ 	if [ "$#" -gt 9 ]; then
+ 		shift 9
+@@ -405,8 +417,9 @@ run_script)
+ 	ping_frequency_interval="$3"
+ 	ping_size="$4"
+ 	iface="$5"
+-	address_family="$6"
+-	script="$7"
++	logical_interface="$6"
++	address_family="$7"
++	script="$8"
+ 	reset_failure_timer=""
+ 	if [ "$#" -gt 7 ]; then
+ 		shift 7
 -- 
-2.47.3
+2.55.0
 
