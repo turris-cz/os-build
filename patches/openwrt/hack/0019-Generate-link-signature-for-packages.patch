@@ -1,21 +1,8 @@
-From 861f6492dbbd79bdcdd6213fb5d5da0e0cd22ab5 Mon Sep 17 00:00:00 2001
-From: =?UTF-8?q?Erin=20Kalouskov=C3=A1?= <erin.kalouskova@nic.cz>
-Date: Tue, 9 Dec 2025 16:46:26 +0100
-Subject: [PATCH] Generate link signature for packages V2
-MIME-Version: 1.0
-Content-Type: text/plain; charset=UTF-8
-Content-Transfer-Encoding: 8bit
+From 041675ecab738641219569ed0edc0876b741a6c5 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Karel=20Ko=C4=8D=C3=AD?= <cynerd@email.cz>
+Date: Mon, 15 Jun 2020 21:38:58 +0200
+Subject: [PATCH] Generate link signature for packages
 
-This implements same idea as patch by Karel Kočí <cynerd@email.cz>
-which at some point broke by failing to enumerate external dynamic
-symbols.
-
-This patch, instead of using GNU Binutils' readelf and then filtering
-and transducing it's output using awk, sed and grep uses LLVM
-implementation of readelf which can output JSON we then process using
-jq.
-
--- Original Commit Message --
 This should solve most of the cases when new build of package with same
 version is linked against newer or different version of library or that
 new feature is linked in. This generates hash for all library and
@@ -25,29 +12,41 @@ different signature. This comes from reality that single repository
 snapshot has consistent link dependencies between packages and just
 packages that are installed with same version from older snapshot can
 break this dependency.
+
+[Josef Schlehofer: adapted to current OpenWrt where packaging lives in
+package-pack.mk; detect ELF files by magic bytes instead of file(1),
+spelled with the POSIX octal escape because dash's printf does not
+support \x; use wide readelf output and strip symbol version suffixes;
+tag entries by type so a library and a symbol of the same name cannot
+collide; force the C locale so sorting is reproducible; fail loudly
+when readelf is not available. Compared to the V2 variant of this patch
+this brings back readelf from the target toolchain, so the signature
+does not depend on tools installed on the build host (llvm-readelf,
+jq).]
 ---
- include/package-pack.mk       |  7 +++++++
- scripts/gen-link-signature.sh | 30 ++++++++++++++++++++++++++++++
+ include/package-pack.mk       |  8 ++++++++
+ scripts/gen-link-signature.sh | 29 +++++++++++++++++++++++++++++
  2 files changed, 37 insertions(+)
  create mode 100755 scripts/gen-link-signature.sh
 
 diff --git a/include/package-pack.mk b/include/package-pack.mk
-index aa734f5af0..489c8d621b 100644
+index aa734f5..1e93dbc 100644
 --- a/include/package-pack.mk
 +++ b/include/package-pack.mk
-@@ -85,6 +85,11 @@ ifneq ($(PKG_NAME),toolchain)
+@@ -85,6 +85,12 @@ ifneq ($(PKG_NAME),toolchain)
  		fi; \
  	)
    endef
 +  define GenerateLinkSignature
 +	LINK_SIGNATURE="$$$$( \
++		export READELF=$(TARGET_CROSS)readelf; \
 +		$(SCRIPT_DIR)/gen-link-signature.sh "$$(IDIR_$(1))"; \
 +	)";
 +  endef
  endif
  
  _addsep=$(word 1,$(1))$(foreach w,$(wordlist 2,$(words $(1)),$(1)),$(strip $(2) $(w)))
-@@ -253,8 +258,10 @@ endif
+@@ -253,8 +259,10 @@ endif
  ifeq ($(CONFIG_USE_APK),)
  	mkdir -p $$(IDIR_$(1))/CONTROL
  	(cd $$(IDIR_$(1))/CONTROL; \
@@ -60,13 +59,16 @@ index aa734f5af0..489c8d621b 100644
  		chmod 644 control; \
 diff --git a/scripts/gen-link-signature.sh b/scripts/gen-link-signature.sh
 new file mode 100755
-index 0000000000..692fcd812a
+index 0000000..abe7e7f
 --- /dev/null
 +++ b/scripts/gen-link-signature.sh
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,29 @@
 +#!/usr/bin/env sh
 +
-+ELF_MAGIC="$(printf "\x7fELF")"
++ELF_MAGIC="$(printf '\177ELF')"
++READELF="${READELF:-readelf}"
++
++export LC_ALL=C
 +
 +[ -z "$*" ] && {
 +	echo "$0: no directories or files specified" >&2
@@ -74,26 +76,22 @@ index 0000000000..692fcd812a
 +	exit 1
 +}
 +
++command -v "$READELF" >/dev/null 2>&1 || {
++	echo "$0: $READELF: command not found" >&2
++	exit 1
++}
++
 +find "$@" -type f | while IFS= read -r path; do
-+	[ "$(head -c4 $path)" != "${ELF_MAGIC}" ] && continue
-+	llvm-readelf \
-+		--elf-output-style=JSON \
-+		--dynamic-table \
-+		--dyn-symbols \
-+		"${path}"
++	[ "$(head -c4 "$path")" != "${ELF_MAGIC}" ] && continue
++	"$READELF" -W -d --dyn-syms "$path"
 +done \
-+	| jq --slurp --compact-output '
-+		reduce(.[][] | {
-+			libraries : [.DynamicSection[] | select(.Type == "NEEDED") | .Library],
-+			symbols   : [.DynamicSymbols[].Symbol
-+			             | select(.Section.Name == "Undefined" and .Name.Name != "")
-+			             | .Name.Name]
-+		}) as $o
-+			({libraries: {}, symbols: {}}; . * $o)
-+			| map_values(.|sort)
++	| awk '
++		$2 == "(NEEDED)" { gsub(/[\[\]]/, "", $NF); print "lib " $NF; next }
++		$7 == "UND" { sub(/@.*/, "", $8); if ($8 != "") print "sym " $8 }
 +	' \
++	| sort -u \
 +	| md5sum \
-+	| cut --delimiter=' ' --fields=1
++	| cut -d' ' -f1
 -- 
-2.52.0
+2.50.1 (Apple Git-155)
 
