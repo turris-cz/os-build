@@ -32,7 +32,7 @@
 
 #define BH_SKB_SIZE	2048
 
-#define DRV_NAME	"gpio-keys"
+#define DRV_NAME	"gpio-button-hotplug"
 #define PFX	DRV_NAME ": "
 
 struct bh_event {
@@ -417,13 +417,13 @@ gpio_keys_get_devtree_pdata(struct device *dev)
 }
 
 static struct of_device_id gpio_keys_of_match[] = {
-	{ .compatible = "gpio-keys", },
+	{ .compatible = "openwrt,gpio-button-hotplug", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, gpio_keys_of_match);
 
 static struct of_device_id gpio_keys_polled_of_match[] = {
-	{ .compatible = "gpio-keys-polled", },
+	{ .compatible = "openwrt,gpio-button-hotplug-polled", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, gpio_keys_polled_of_match);
@@ -494,10 +494,9 @@ static int gpio_keys_button_probe(struct platform_device *pdev,
 
 		bdata->map_entry = button_get_index(button->code);
 		if (bdata->map_entry < 0) {
-			dev_err(dev, "does not support key code:%u\n",
+			dev_err(dev, "skipping button: does not support key code:%u\n",
 				button->code);
-			error = -EINVAL;
-			goto out;
+			continue;
 		}
 
 		if (!(button->type == 0 || button->type == EV_KEY ||
@@ -692,7 +691,7 @@ static struct platform_driver gpio_keys_driver = {
 	.probe	= gpio_keys_probe,
 	.remove	= gpio_keys_remove,
 	.driver	= {
-		.name	= "gpio-keys",
+		.name	= "gpio-button-hotplug",
 		.of_match_table = of_match_ptr(gpio_keys_of_match),
 	},
 };
@@ -701,7 +700,7 @@ static struct platform_driver gpio_keys_polled_driver = {
 	.probe	= gpio_keys_polled_probe,
 	.remove	= gpio_keys_remove,
 	.driver	= {
-		.name	= "gpio-keys-polled",
+		.name	= "gpio-button-hotplug-polled",
 		.of_match_table = of_match_ptr(gpio_keys_polled_of_match),
 	},
 };
