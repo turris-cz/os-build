@@ -1,0 +1,77 @@
+Fix link propagation for SFP modules that appear late
+
+A GPON module like the Zyxel PMG3000-D20B boots its EEPROM emulation
+tens of seconds after power-up, so its module PHY is connected long
+after the netdev was opened. Nothing drives that inner PHY's state
+machine in this case (phylink would), so the link never reaches the
+port: the SFP core sits in link_up while the MAC stays NO-CARRIER,
+and only bouncing the netdev recovers it.
+
+Poll the module PHY from the port PHY's read_status instead of relying
+on the inner state machine, never hard-fail config_aneg on an absent
+module (phylib treats that as fatal and halts the port permanently),
+stop a started module PHY before suspending it on disconnect, and
+report the tracked link state instead of a constant in the HSL status
+path.
+
+--- a/src/hsl/phy/sfp_phy.c
++++ b/src/hsl/phy/sfp_phy.c
+@@ -381,6 +381,8 @@
+ 
+ 	pl->phydev = NULL;
+ 
++	if (phy_is_started(phy))
++		phy_stop(phy);
+ 	phy_suspend(phy);
+ 	phy->phylink = NULL;
+ 
+@@ -548,9 +550,13 @@
+ sfp_phy_config_aneg(struct phy_device *upstream)
+ {
+ 	struct sfp_priv *pl = get_sfp_priv(upstream);
+- 
++
++	/* An error here puts phylib into PHY_ERROR and permanently halts
++	 * the port's state machine. Without a module there is nothing to
++	 * configure yet; the configuration happens on module insert.
++	 */
+ 	if (!pl->module_present)
+-		return -ENODEV;
++		return 0;
+ 
+ 	/* TODO: support pause bits */
+ 	if (pl->phydev) {
+@@ -598,6 +604,24 @@
+ sfp_read_status(struct phy_device *phydev)
+ {
+ 	struct sfp_priv *pl = get_sfp_priv(phydev);
++
++	/* A module PHY that appears while the port is already open has
++	 * nobody driving its state machine (phylink would handle this),
++	 * so poll it from here: the port's own 1Hz poll then reflects
++	 * the module PHY's state regardless of the order in which the
++	 * module, the cage and the netdev came up.
++	 */
++	if (pl->phydev) {
++		struct phy_device *inner = pl->phydev;
++		int err;
++
++		mutex_lock(&inner->lock);
++		err = phy_read_status(inner);
++		mutex_unlock(&inner->lock);
++		if (!err)
++			sfp_phy_link_change(inner, inner->link);
++	}
++
+ 	phydev->link = pl->link_config.link;
+ 	phydev->speed = pl->link_config.speed;
+ 	phydev->duplex = pl->link_config.duplex;
+@@ -805,7 +829,7 @@
+ 		return SW_OK;
+ 	}
+ 
+-	phy_status->link_status = pl->phydev ? pl->link_config.link : 1;
++	phy_status->link_status = pl->module_present && pl->link_config.link;
+ 	phy_status->speed = pl->link_config.speed;
+ 	phy_status->duplex = pl->link_config.duplex;
+ 
