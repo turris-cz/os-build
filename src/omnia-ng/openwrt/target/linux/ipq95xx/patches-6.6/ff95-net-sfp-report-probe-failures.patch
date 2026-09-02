@@ -1,0 +1,32 @@
+net: sfp: do not fail sfp_probe silently
+
+A GPIO request that fails in sfp_probe returns the error without any
+message, so a cage that loses a probe race against its GPIO expander
+disappears without a trace: not bound, not deferred, nothing logged.
+Use dev_err_probe so the failure is visible (and a deferral shows its
+reason in /sys/kernel/debug/devices_deferred).
+
+--- a/drivers/net/phy/sfp.c
++++ b/drivers/net/phy/sfp.c
+@@ -2993,7 +2997,8 @@
+ 
+ 	i2c = i2c_get_adapter_by_fwnode(h);
+ 	if (!i2c) {
+-		err = -EPROBE_DEFER;
++		err = dev_err_probe(sfp->dev, -EPROBE_DEFER,
++				    "i2c bus not ready\n");
+ 		goto put;
+ 	}
+ 
+@@ -3037,7 +3042,10 @@
+ 			sfp->gpio[i] = devm_gpiod_get_optional(sfp->dev,
+ 					   gpio_names[i], gpio_flags[i]);
+ 			if (IS_ERR(sfp->gpio[i]))
+-				return PTR_ERR(sfp->gpio[i]);
++				return dev_err_probe(sfp->dev,
++						     PTR_ERR(sfp->gpio[i]),
++						     "failed to get '%s' GPIO\n",
++						     gpio_names[i]);
+ 		}
+ 
+ 	sfp->state_hw_mask = SFP_F_PRESENT;
