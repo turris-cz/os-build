@@ -1,0 +1,50 @@
+From 9b80d426ec0f912e50410f7a7cbd6ff5ce0da339 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 24 Sep 2026 13:42:18 +0200
+Subject: [PATCH] net: sfp: ignore LOS also on Hisense GPON modules
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Similar to commit 87d126852158467a ("net: sfp: improve Huawei MA5671a
+fixup"), in order to be able to communicate with the module for
+configuration even if the fiber is not connected, apply also the
+sfp_fixup_ignore_los() fixup to the following SFP modules:
+
+  Hisense-Leox LXT-010S-H
+  Hisense ZNID-GPON-2311NA
+  HSGQ HSGQ-XPON-Stick
+
+Note: tested only on the Hisense-Leox LXT-010S-H module, but applying to
+all three modules, since they were all added in the same
+commit 95aca8602ef70ffd ("net: sfp: add quirks for Hisense and HSGQ GPON
+ONT SFP modules"), which says they are all based on the same chipset
+Realtek RTL960x.
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+
+Index: b/drivers/net/phy/sfp.c
+===================================================================
+--- a/drivers/net/phy/sfp.c
++++ b/drivers/net/phy/sfp.c
+@@ -568,17 +568,17 @@ static const struct sfp_quirk sfp_quirks
+ 	// can operate at 2500base-X, but reports 1000BASE-LX / 1300MBd in its
+ 	// EEPROM
+ 	SFP_QUIRK("Hisense-Leox", "LXT-010S-H", sfp_quirk_2500basex,
+-		  sfp_fixup_ignore_tx_fault),
++		  sfp_fixup_ignore_tx_fault_and_los),
+ 
+ 	// Hisense ZNID-GPON-2311NA can operate at 2500base-X, but reports
+ 	// 1000BASE-LX / 1300MBd in its EEPROM
+ 	SFP_QUIRK("Hisense", "ZNID-GPON-2311NA", sfp_quirk_2500basex,
+-		  sfp_fixup_ignore_tx_fault),
++		  sfp_fixup_ignore_tx_fault_and_los),
+ 
+ 	// HSGQ HSGQ-XPON-Stick can operate at 2500base-X, but reports
+ 	// 1000BASE-LX / 1300MBd in its EEPROM
+ 	SFP_QUIRK("HSGQ", "HSGQ-XPON-Stick", sfp_quirk_2500basex,
+-		  sfp_fixup_ignore_tx_fault),
++		  sfp_fixup_ignore_tx_fault_and_los),
+ 
+ 	// Lantech 8330-262D-E and 8330-265D can operate at 2500base-X, but
+ 	// incorrectly report 2500MBd NRZ in their EEPROM.
