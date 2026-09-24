@@ -1,0 +1,91 @@
+From 468f2a3612aac463f4d463c25c971d2871db755f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Beh=C3=BAn?= <kabel@kernel.org>
+Date: Thu, 17 Sep 2026 14:46:30 +0200
+Subject: [PATCH] HACK: gpio: pca953x: retry reading pending interrupts on
+ failure
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+If we fail to read pending interrupts in interrupt handler, schedule a delayed work
+(delayed by 1 jiffy) and try reading and handling again.
+Try this 10 times before giving up.
+
+This is needed for some configurations, in particular on Turris Omnia NG,
+where the SFP cage and the corresponding PCAL6408 GPIO controller live under
+the same I2C mux channel. Some SFP modules (e.g. Huawei MA5671A) do weird
+things with I2C pins just after insertion. So on insertion of the SFP module:
+- the module detect pin changes state
+- the GPIO controller fires interrupt
+- the interrupt handler tries to read controller registers via I2C to determine
+  which interrupts line changed
+- but the SFP module on the same I2C line corrupts this communication
+
+Signed-off-by: Marek Behún <kabel@kernel.org>
+---
+ drivers/gpio/gpio-pca953x.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/drivers/gpio/gpio-pca953x.c b/drivers/gpio/gpio-pca953x.c
+index b882b26ab..8abb15ec7 100644
+--- a/drivers/gpio/gpio-pca953x.c
++++ b/drivers/gpio/gpio-pca953x.c
+@@ -22,6 +22,7 @@
+ #include <linux/regulator/consumer.h>
+ #include <linux/seq_file.h>
+ #include <linux/slab.h>
++#include <linux/workqueue.h>
+ 
+ #include <asm/unaligned.h>
+ 
+@@ -206,6 +207,8 @@ struct pca953x_chip {
+ 	DECLARE_BITMAP(irq_stat, MAX_LINE);
+ 	DECLARE_BITMAP(irq_trig_raise, MAX_LINE);
+ 	DECLARE_BITMAP(irq_trig_fall, MAX_LINE);
++	struct delayed_work irq_later_work;
++	unsigned int irq_later_tries;
+ #endif
+ 	atomic_t wakeup_path;
+ 
+@@ -887,6 +890,16 @@ static irqreturn_t pca953x_irq_handler(int irq, void *devid)
+ 	ret = pca953x_irq_pending(chip, pending);
+ 	mutex_unlock(&chip->i2c_lock);
+ 
++	if (!ret) {
++		chip->irq_later_tries++;
++		if (chip->irq_later_tries < 10)
++			mod_delayed_work(system_wq, &chip->irq_later_work, 1);
++
++		return IRQ_RETVAL(ret);
++	}
++
++	chip->irq_later_tries = 0;
++
+ 	if (ret) {
+ 		ret = 0;
+ 
+@@ -906,6 +919,15 @@ static irqreturn_t pca953x_irq_handler(int irq, void *devid)
+ 	return IRQ_RETVAL(ret);
+ }
+ 
++static void pca953x_irq_later_work_fn(struct work_struct *work)
++{
++	struct pca953x_chip *chip = container_of(to_delayed_work(work),
++						 struct pca953x_chip,
++						 irq_later_work);
++
++	pca953x_irq_handler(chip->client->irq, chip);
++}
++
+ static int pca953x_irq_setup(struct pca953x_chip *chip, int irq_base)
+ {
+ 	struct i2c_client *client = chip->client;
+@@ -953,6 +975,8 @@ static int pca953x_irq_setup(struct pca953x_chip *chip, int irq_base)
+ 	girq->threaded = true;
+ 	girq->first = irq_base; /* FIXME: get rid of this */
+ 
++	INIT_DELAYED_WORK(&chip->irq_later_work, pca953x_irq_later_work_fn);
++
+ 	ret = devm_request_threaded_irq(&client->dev, client->irq,
+ 					NULL, pca953x_irq_handler,
+ 					IRQF_ONESHOT | IRQF_SHARED,

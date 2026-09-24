@@ -1,0 +1,49 @@
+Index: b/drivers/net/phy/sfp.c
+===================================================================
+--- a/drivers/net/phy/sfp.c
++++ b/drivers/net/phy/sfp.c
+@@ -485,9 +485,6 @@ static const struct sfp_quirk sfp_quirks
+ 	// FS 2.5G Base-T
+ 	SFP_QUIRK_M("FS", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+ 
+-	// OEM SFP-GE-T is 1000Base-T module
+-	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
+-
+ 	// Lantech 8330-262D-E and 8330-265D can operate at 2500base-X, but
+ 	// incorrectly report 2500MBd NRZ in their EEPROM.
+ 	// Some 8330-265D modules have inverted LOS, while all of them report
+@@ -503,9 +500,6 @@ static const struct sfp_quirk sfp_quirks
+ 	SFP_QUIRK_F("Walsun", "HXSX-ATRC-1", sfp_fixup_fs_10gt),
+ 	SFP_QUIRK_F("Walsun", "HXSX-ATRI-1", sfp_fixup_fs_10gt),
+ 
+-	// OEM SFP-GE-T is a 1000Base-T module with broken TX_FAULT indicator
+-	SFP_QUIRK_F("OEM", "SFP-GE-T", sfp_fixup_ignore_tx_fault),
+-
+ 	SFP_QUIRK_F("OEM", "SFP-10G-T", sfp_fixup_rollball_cc),
+ 	SFP_QUIRK_M("OEM", "SFP-2.5G-T", sfp_quirk_oem_2_5g),
+ 	SFP_QUIRK_M("OEM", "SFP-2.5G-BX10-D", sfp_quirk_2500basex),
+@@ -2613,8 +2607,7 @@ static void sfp_sm_main(struct sfp *sfp,
+ 			 * or t_start_up, so assume there is a fault.
+ 			 */
+ 			sfp_sm_fault(sfp, SFP_S_INIT_TX_FAULT,
+-					!sfp->tx_fault_ignore &&
+-				     (sfp->sm_fault_retries == N_FAULT_INIT));
++				     sfp->sm_fault_retries == N_FAULT_INIT);
+ 		} else if (event == SFP_E_TIMEOUT || event == SFP_E_TX_CLEAR) {
+ 	init_done:
+ 			/* Create mdiobus and start trying for PHY */
+@@ -2868,12 +2861,10 @@ static void sfp_check_state(struct sfp *
+ 	mutex_lock(&sfp->st_mutex);
+ 	state = sfp_get_state(sfp);
+ 	changed = state ^ sfp->state;
+-	if (sfp->tx_fault_ignore) {
++	if (sfp->tx_fault_ignore)
+ 		changed &= SFP_F_PRESENT | SFP_F_LOS;
+-		state &= ~SFP_F_TX_FAULT;
+-	} else {
++	else
+ 		changed &= SFP_F_PRESENT | SFP_F_LOS | SFP_F_TX_FAULT;
+-	}
+ 
+ 	for (i = 0; i < GPIO_MAX; i++)
+ 		if (changed & BIT(i))

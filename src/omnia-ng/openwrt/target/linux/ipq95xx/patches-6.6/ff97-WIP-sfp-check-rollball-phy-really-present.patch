@@ -1,0 +1,36 @@
+Index: b/drivers/net/phy/sfp.c
+===================================================================
+--- a/drivers/net/phy/sfp.c
++++ b/drivers/net/phy/sfp.c
+@@ -1899,6 +1899,19 @@ static void sfp_sm_phy_detach(struct sfp
+ 	sfp->mod_phy = NULL;
+ }
+ 
++static bool rollball_phy_really_present(struct sfp *sfp, struct phy_device *phy)
++{
++	if (sfp->mdio_protocol != MDIO_I2C_ROLLBALL)
++		return true;
++
++	for (int i = 1; i < ARRAY_SIZE(phy->c45_ids.device_ids); ++i)
++		if (phy->c45_ids.device_ids[i] &&
++		    phy->c45_ids.device_ids[i] != 0xffffffff)
++			return true;
++
++	return false;
++}
++
+ static int sfp_sm_probe_phy(struct sfp *sfp, int addr, bool is_c45)
+ {
+ 	struct phy_device *phy;
+@@ -1912,6 +1925,11 @@ static int sfp_sm_probe_phy(struct sfp *
+ 		return PTR_ERR(phy);
+ 	}
+ 
++	if (!rollball_phy_really_present(sfp, phy)) {
++		phy_device_free(phy);
++		return -ENODEV;
++	}
++
+ 	/* Mark this PHY as being on a SFP module */
+ 	phy->is_on_sfp_module = true;
+ 
