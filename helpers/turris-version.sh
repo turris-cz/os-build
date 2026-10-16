@@ -13,12 +13,12 @@
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program.  If not, see http://www.gnu.org/licenses/.
 
 news_file="$(dirname "$(dirname "$(readlink -f "$0")")")/NEWS"
 
 get_version() {
-	sed -n '/^-\+$/{x;p;q}; x' "$news_file"
+	awk 'prev && /^-+$/ { print prev; exit } { prev = $0 }' "$news_file"
 }
 
 news_text() {
