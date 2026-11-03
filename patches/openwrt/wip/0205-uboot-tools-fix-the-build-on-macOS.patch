@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Tue, 3 Nov 2026 21:09:09 +0100
+Subject: [PATCH] uboot-tools: fix the build on macOS
+
+The build fails twice on macOS:
+- envtools: with no-dot-config-targets=envtools, U-Boot does not read
+  .config, so ARCH stays empty and tools/printinitialenv does not find
+  asm/config.h.
+- cross_tools: pylibfdt does not link against the host Python
+  (undefined _Py symbols).
+
+Pass ARCH=sandbox, which tools-only_defconfig selects, and NO_PYTHON=1,
+as OpenWrt main does since 96cb1c8840 ("uboot-tools: add stub package
+skeleton") and f482f6d98e ("uboot-tools: disable python build to fix
+build error"). Nothing built here needs pylibfdt, so also drop
+python3/host from PKG_BUILD_DEPENDS.
+
+Tested on macOS: uboot-envtools and uboot-mkimage build for mpc85xx.
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ package/boot/uboot-tools/Makefile | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/package/boot/uboot-tools/Makefile b/package/boot/uboot-tools/Makefile
+index c538b25c0a..046b15ed15 100644
+--- a/package/boot/uboot-tools/Makefile
++++ b/package/boot/uboot-tools/Makefile
+@@ -21,7 +21,7 @@ PKG_HASH:=f591da9ab90ef3d6b3d173766d0ddff90c4ed7330680897486117df390d83c8f
+ PKG_SOURCE_SUBDIR:=$(PKG_DISTNAME)-$(PKG_VERSION)
+ PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_DISTNAME)-$(PKG_VERSION)
+ 
+-PKG_BUILD_DEPENDS:=fstools python3/host
++PKG_BUILD_DEPENDS:=fstools
+ 
+ PKG_LICENSE:=GPL-2.0 GPL-2.0+
+ PKG_LICENSE_FILES:=Licenses/README
+@@ -83,6 +83,8 @@ define Build/Compile
+ 		no-dot-config-targets=envtools \
+ 		CROSS_BUILD_TOOLS=1 \
+ 		NO_SDL=1 \
++		ARCH=sandbox \
++		NO_PYTHON=1 \
+ 		envtools tools-only_defconfig
+ 	mv $(PKG_BUILD_DIR)/tools/env/fw_printenv $(PKG_BUILD_DIR)
+ 	echo 'CONFIG_FIT=y' >> $(PKG_BUILD_DIR)/.config
+@@ -98,6 +100,8 @@ endif
+ 		HOSTLDFLAGS= \
+ 		CROSS_BUILD_TOOLS=1 \
+ 		NO_SDL=1 \
++		ARCH=sandbox \
++		NO_PYTHON=1 \
+ 		cross_tools
+ endef
+ 
+-- 
+2.47.0
+
