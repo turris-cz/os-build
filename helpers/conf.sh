@@ -72,3 +72,4 @@ for config in "${configs[@]}"; do
 		source "$config"
 	fi
 done
+unset GIT_MIRROR
