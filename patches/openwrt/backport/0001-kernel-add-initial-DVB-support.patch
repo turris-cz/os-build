@@ -1,30 +1,56 @@
-From e5ba89e6be835ca29a3045a34cc2493d0856d0a5 Mon Sep 17 00:00:00 2001
+From ac0695a9199d447a97560ef0edc034f15ccd222e Mon Sep 17 00:00:00 2001
 From: Michal Hrusecky <michal.hrusecky@nic.cz>
-Date: Tue, 19 Jun 2018 12:45:40 +0200
-Subject: [PATCH] kernel: Initial DVB support
+Date: Tue, 18 Aug 2026 15:55:54 +0200
+Subject: [PATCH] kernel: add initial DVB support
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
 
-Add support for building some DVB modules. Not everything at the moment, plenty
-is unsupported, but the list can grow over the time.
+Add kernel packages for DVB adapters, frontends and tuners. Not
+everything is covered, but the list can grow over the time.
+
+Userspace uses these through /dev/dvb, for example tvheadend from the
+packages feed, which streams the tuners to network clients over HTTP
+and HTSP.
+
+Remote controller support (kmod-rc-core) goes into the Input modules
+menu: rc-core depends only on INPUT and is not DVB specific.
+
+Enabling DVB_CORE and RC_CORE makes parts of the media driver menu
+visible which nothing in the tree has enabled so far, so kconfig has
+no answer for them and stops for input. Add the 98 missing symbols to
+the generic config. CONFIG_MEDIA_RC_SUPPORT, CONFIG_VIDEO_V4L2,
+CONFIG_DVB_HD29L2, CONFIG_DVB_USB_FRIIO and CONFIG_IR_SIR do not exist
+in kernel 6.18 anymore and are removed.
+
+Tested on kernel 6.18.44, all 78 packages build with CONFIG_ALL_KMODS
+and their module paths and kernel symbols were verified against the
+kernel tree.
 
 Signed-off-by: Michal Hrusecky <michal.hrusecky@nic.cz>
 Signed-off-by: Karel Kočí <karel.koci@nic.cz>
-Signed-off-by: Josef Schlehofer <josef.schlehofer@nic.cz>
-(rebased on kernel 5.10, disabled cxusb analog)
-
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Link: https://github.com/openwrt/openwrt/pull/24788
+Signed-off-by: Robert Marko <robimarko@gmail.com>
+(cherry picked from commit 1560c75fa250576b5d551a860d0928b2b1cee54a)
+[Backport to 6.12: config-6.18 does not exist on openwrt-25.12, so
+ answer the newly visible symbols in config-6.12. The 35 symbols were
+ measured on vanilla 6.12.113 with 53 target configurations and the
+ rest of the Turris series applied, where hack/0026 answers six more.]
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
 ---
- package/kernel/linux/modules/dvb.mk | 1225 +++++++++++++++++++++++++++
- 1 file changed, 1225 insertions(+)
+ package/kernel/linux/modules/dvb.mk   | 1072 +++++++++++++++++++++++++
+ package/kernel/linux/modules/input.mk |   23 +
+ target/linux/generic/config-6.12      |   35 +
+ 3 files changed, 1130 insertions(+)
  create mode 100644 package/kernel/linux/modules/dvb.mk
 
 diff --git a/package/kernel/linux/modules/dvb.mk b/package/kernel/linux/modules/dvb.mk
 new file mode 100644
-index 0000000000..06875f5c00
+index 0000000000..c467974340
 --- /dev/null
 +++ b/package/kernel/linux/modules/dvb.mk
-@@ -0,0 +1,1225 @@
+@@ -0,0 +1,1072 @@
 +#
 +# Copyright (C) 2018-2022 CZ.NIC, z. s. p. o. <https://www.nic.cz>
 +#
@@ -35,177 +61,22 @@ index 0000000000..06875f5c00
 +DVB_MENU:=DVB Support
 +VIDEO_MENU:=Video Support
 +
-+CURRENTLY_UNSUPPORTED:= \
-+CONFIG_VIDEO_AU0828=n \
-+CONFIG_DVB_USB_CXUSB_ANALOG=n \
-+CONFIG_DVB_USB_UMT_010=n \
-+CONFIG_DVB_USB_M920X=n \
-+CONFIG_DVB_USB_DIGITV=n \
-+CONFIG_DVB_USB_VP7045=n \
-+CONFIG_DVB_USB_VP702X=n \
-+CONFIG_DVB_USB_GP8PSK=n \
-+CONFIG_DVB_USB_NOVA_T_USB2=n \
-+CONFIG_DVB_USB_DTT200U=n \
-+CONFIG_DVB_USB_OPERA1=n \
-+CONFIG_DVB_USB_AF9005=n \
-+CONFIG_DVB_USB_PCTV452E=n \
-+CONFIG_DVB_USB_DW2102=n \
-+CONFIG_DVB_USB_CINERGY_T2=n \
-+CONFIG_DVB_USB_DTV5100=n \
-+CONFIG_DVB_USB_FRIIO=n \
-+CONFIG_DVB_USB_AZ6027=n \
-+CONFIG_DVB_USB_TECHNISAT_USB2=n \
-+CONFIG_DVB_USB_AU6610=n \
-+CONFIG_DVB_USB_CE6230=n \
-+CONFIG_DVB_USB_EC168=n \
-+CONFIG_DVB_USB_GL861=n \
-+CONFIG_DVB_USB_LME2510=n \
-+CONFIG_DVB_USB_MXL111SF=n \
-+CONFIG_DVB_USB_ZD1301=n \
-+CONFIG_DVB_TTUSB_BUDGET=n \
-+CONFIG_DVB_TTUSB_DEC=n \
-+CONFIG_SMS_USB_DRV=n \
-+CONFIG_DVB_B2C2_FLEXCOP_USB=n \
-+CONFIG_DVB_AS102=n \
-+CONFIG_MEDIA_TUNER_M88RS6000T=n \
-+CONFIG_MEDIA_TUNER_MXL301RF=n \
-+CONFIG_MEDIA_TUNER_QM1D1C0042=n \
-+CONFIG_DVB_STB0899=n \
-+CONFIG_DVB_STB6100=n \
-+CONFIG_DVB_STV090x=n \
-+CONFIG_DVB_STV0910=n \
-+CONFIG_DVB_STV6110x=n \
-+CONFIG_DVB_STV6111=n \
-+CONFIG_DVB_MXL5XX=n \
-+CONFIG_DVB_TDA18271C2DD=n \
-+CONFIG_DVB_SI2165=n \
-+CONFIG_DVB_CX24110=n \
-+CONFIG_DVB_CX24123=n \
-+CONFIG_DVB_MT312=n \
-+CONFIG_DVB_ZL10036=n \
-+CONFIG_DVB_ZL10039=n \
-+CONFIG_DVB_S5H1420=n \
-+CONFIG_DVB_STV0288=n \
-+CONFIG_DVB_STB6000=n \
-+CONFIG_DVB_STV0299=n \
-+CONFIG_DVB_STV6110=n \
-+CONFIG_DVB_STV0900=n \
-+CONFIG_DVB_TDA8083=n \
-+CONFIG_DVB_TDA10086=n \
-+CONFIG_DVB_TDA8261=n \
-+CONFIG_DVB_VES1X93=n \
-+CONFIG_DVB_TUNER_ITD1000=n \
-+CONFIG_DVB_TUNER_CX24113=n \
-+CONFIG_DVB_TDA826X=n \
-+CONFIG_DVB_TUA6100=n \
-+CONFIG_DVB_CX24116=n \
-+CONFIG_DVB_CX24117=n \
-+CONFIG_DVB_CX24120=n \
-+CONFIG_DVB_SI21XX=n \
-+CONFIG_DVB_DS3000=n \
-+CONFIG_DVB_MB86A16=n \
-+CONFIG_DVB_TDA10071=n \
-+CONFIG_DVB_SP8870=n \
-+CONFIG_DVB_SP887X=n \
-+CONFIG_DVB_CX22700=n \
-+CONFIG_DVB_CX22702=n \
-+CONFIG_DVB_S5H1432=n \
-+CONFIG_DVB_DRXD=n \
-+CONFIG_DVB_L64781=n \
-+CONFIG_DVB_TDA1004X=n \
-+CONFIG_DVB_NXT6000=n \
-+CONFIG_DVB_MT352=n \
-+CONFIG_DVB_EC100=n \
-+CONFIG_DVB_STV0367=n \
-+CONFIG_DVB_CXD2820R=n \
-+CONFIG_DVB_ZD1301_DEMOD=n \
-+CONFIG_DVB_VES1820=n \
-+CONFIG_DVB_TDA10021=n \
-+CONFIG_DVB_STV0297=n \
-+CONFIG_DVB_NXT200X=n \
-+CONFIG_DVB_OR51211=n \
-+CONFIG_DVB_OR51132=n \
-+CONFIG_DVB_BCM3510=n \
-+CONFIG_DVB_LGDT330X=n \
-+CONFIG_DVB_LGDT3305=n \
-+CONFIG_DVB_LGDT3306A=n \
-+CONFIG_DVB_LG2160=n \
-+CONFIG_DVB_S5H1409=n \
-+CONFIG_DVB_AU8522_DTV=n \
-+CONFIG_DVB_S5H1411=n \
-+CONFIG_DVB_S921=n \
-+CONFIG_DVB_MB86A20S=n \
-+CONFIG_DVB_TC90522=n \
-+CONFIG_DVB_DRX39XYJ=n \
-+CONFIG_DVB_LNBH25=n \
-+CONFIG_DVB_LNBP21=n \
-+CONFIG_DVB_LNBP22=n \
-+CONFIG_DVB_ISL6405=n \
-+CONFIG_DVB_ISL6421=n \
-+CONFIG_DVB_ISL6423=n \
-+CONFIG_DVB_A8293=n \
-+CONFIG_DVB_HD29L2=n \
-+CONFIG_DVB_SP2=n \
-+CONFIG_DVB_LGS8GL5=n \
-+CONFIG_DVB_LGS8GXX=n \
-+CONFIG_DVB_ATBM8830=n \
-+CONFIG_DVB_TDA665x=n \
-+CONFIG_DVB_IX2505V=n \
-+CONFIG_DVB_M88RS2000=n \
-+CONFIG_DVB_HORUS3A=n \
-+CONFIG_DVB_ASCOT2E=n \
-+CONFIG_DVB_HELENE=n \
-+CONFIG_DVB_FIREDTV=n \
-+CONFIG_MEDIA_TUNER_MSI001=n \
-+CONFIG_SMS_SDIO_DRV=n
 +
 +# ------------------------------ core drivers ---------------------------------
-+
-+define KernelPackage/rc-core
-+  SUBMENU:=$(DVB_MENU)
-+  TITLE:=Remote Controller support
-+  KCONFIG:= \
-+	CONFIG_MEDIA_SUPPORT=m \
-+	CONFIG_MEDIA_RC_SUPPORT=y \
-+	CONFIG_RC_DEVICES=y \
-+	CONFIG_IR_SERIAL=n \
-+	CONFIG_IR_SIR=n \
-+	CONFIG_IR_TOY=n \
-+	CONFIG_RC_XBOX_DVD = n \
-+	CONFIG_LIRC=n \
-+	CONFIG_RC_CORE
-+  FILES:=$(LINUX_DIR)/drivers/media/rc/rc-core.ko
-+  AUTOLOAD:=$(call AutoProbe,rc-core)
-+  DEPENDS:=+kmod-input-core
-+endef
-+
-+define KernelPackage/rc-core/description
-+ Enable support for Remote Controllers on Linux. This is
-+ needed in order to support several video capture adapters,
-+ standalone IR receivers/transmitters, and RF receivers.
-+
-+ Enable this option if you have a video capture board even
-+ if you don't need IR, as otherwise, you may not be able to
-+ compile the driver for your adapter.
-+endef
-+
-+$(eval $(call KernelPackage,rc-core))
 +
 +define KernelPackage/dvb-core
 +  SUBMENU:=$(DVB_MENU)
 +  TITLE:=DVB core support
-+  KCONFIG:= $(CURRENTLY_UNSUPPORTED) \
-+	CONFIG_MEDIA_SUPPORT=m \
++  KCONFIG:= \
++	CONFIG_MEDIA_SUPPORT \
 +	CONFIG_MEDIA_DIGITAL_TV_SUPPORT=y \
 +	CONFIG_DVB_NET=y \
-+	CONFIG_DVB_MAX_ADAPTERS=8 \
 +	CONFIG_DVB_CORE \
 +	CONFIG_DVB_DYNAMIC_MINORS=y \
-+	CONFIG_DVB_DEMUX_SECTION_LOSS_LOG=y \
-+	CONFIG_DVB_PLATFORM_DRIVERS=n \
-+	CONFIG_DVB_USB_DEBUG=n
++	CONFIG_DVB_DEMUX_SECTION_LOSS_LOG=y
 +  FILES:=$(LINUX_DIR)/drivers/media/dvb-core/dvb-core.ko
 +  AUTOLOAD:=$(call AutoProbe,dvb-core)
++  DEPENDS:=+kmod-i2c-core
 +endef
 +
 +define KernelPackage/dvb-core/description
@@ -224,6 +95,7 @@ index 0000000000..06875f5c00
 +define KernelPackage/cypress-firmware
 +  SUBMENU:=$(DVB_MENU)
 +  TITLE:=Cypress firmware helper routines
++  HIDDEN:=1
 +  KCONFIG:=CONFIG_CYPRESS_FIRMWARE
 +  FILES:=$(LINUX_DIR)/drivers/media/common/cypress_firmware.ko
 +  DEPENDS:=+kmod-usb-core
@@ -242,7 +114,7 @@ index 0000000000..06875f5c00
 +  SUBMENU:=$(DVB_MENU)
 +  TITLE:=Support for various USB DVB devices
 +  KCONFIG:= \
-+	CONFIG_MEDIA_SUPPORT=m \
++	CONFIG_MEDIA_SUPPORT \
 +	CONFIG_MEDIA_DIGITAL_TV_SUPPORT=y \
 +	CONFIG_MEDIA_USB_SUPPORT=y \
 +	CONFIG_DVB_USB
@@ -302,20 +174,30 @@ index 0000000000..06875f5c00
 +
 +define KernelPackage/dvb-usb-dibusb-common
 +  TITLE:=Common library for DiBcom USB drivers
-+  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-common.ko \
-+         $(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-mc-common.ko
-+  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-common dvb-usb-dibusb-mc-common)
-+  $(call AddDepends/dvb-usb,+PACKAGE_kmod-dvb-dib3000mc:kmod-dvb-dib3000mc)
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-common.ko
++  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-common)
++  $(call AddDepends/dvb-usb)
 +endef
 +
 +$(eval $(call KernelPackage,dvb-usb-dibusb-common))
++
++define KernelPackage/dvb-usb-dibusb-mc-common
++  TITLE:=Common library for DiBcom USB MC drivers
++  HIDDEN:=1
++  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-mc-common.ko
++  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-mc-common)
++  $(call AddDepends/dvb-usb,+kmod-dvb-usb-dibusb-common +kmod-dvb-dib3000mc)
++endef
++
++$(eval $(call KernelPackage,dvb-usb-dibusb-mc-common))
 +
 +define KernelPackage/dvb-usb-a800
 +  TITLE:=AVerMedia AverTV DVB-T USB 2.0 (A800)
 +  KCONFIG:=CONFIG_DVB_USB_A800
 +  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-a800.ko
 +  AUTOLOAD:=$(call AutoProbe,dvb-usb-a800)
-+  $(call AddDepends/dvb-usb,+kmod-dvb-dib3000mc +kmod-dvb-usb-dibusb-common)
++  $(call AddDepends/dvb-usb,+kmod-dvb-dib3000mc +kmod-dvb-usb-dibusb-common +kmod-dvb-usb-dibusb-mc-common)
 +endef
 +
 +define KernelPackage/dvb-usb-a800/description
@@ -352,7 +234,7 @@ index 0000000000..06875f5c00
 +  KCONFIG:=CONFIG_DVB_USB_DIBUSB_MC
 +  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb/dvb-usb-dibusb-mc.ko
 +  AUTOLOAD:=$(call AutoProbe,dvb-usb-dibusb-mc)
-+  $(call AddDepends/dvb-usb,+kmod-dvb-dib3000mc +kmod-dvb-usb-dibusb-common)
++  $(call AddDepends/dvb-usb,+kmod-dvb-dib3000mc +kmod-dvb-usb-dibusb-common +kmod-dvb-usb-dibusb-mc-common)
 +endef
 +
 +define KernelPackage/dvb-usb-dibusb-mc/description
@@ -408,7 +290,7 @@ index 0000000000..06875f5c00
 +	CONFIG_DVB_USB_V2
 +  FILES:=$(LINUX_DIR)/drivers/media/usb/dvb-usb-v2/dvb_usb_v2.ko
 +  AUTOLOAD:=$(call AutoProbe,dvb_usb_v2)
-+  DEPENDS:=+PACKAGE_kmod-rc-core:kmod-rc-core
++  DEPENDS:=+kmod-i2c-core +PACKAGE_kmod-rc-core:kmod-rc-core
 +  $(call AddDepends/dvb-core,+kmod-usb-core)
 +endef
 +
@@ -572,7 +454,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-rtl2832
 +  TITLE:=Realtek RTL2832 DVB-T
 +  $(call DvbFrontend,rtl2832,CONFIG_DVB_RTL2832)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-rtl2832/description
@@ -584,7 +465,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-si2168
 +  TITLE:=Silicon Labs Si2168
 +  $(call DvbFrontend,si2168,CONFIG_DVB_SI2168)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-si2168/description
@@ -596,7 +476,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-mn88472
 +  TITLE:=Panasonic MN88472
 +  $(call DvbFrontend,mn88472,CONFIG_DVB_MN88472)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-mn88472/description
@@ -608,7 +487,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-mn88473
 +  TITLE:=Panasonic MN88473
 +  $(call DvbFrontend,mn88473,CONFIG_DVB_MN88473)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-mn88473/description
@@ -620,7 +498,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-m88ds3103
 +  TITLE:=Montage Technology M88DS3103
 +  $(call DvbFrontend,m88ds3103,CONFIG_DVB_M88DS3103)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-m88ds3103/description
@@ -632,7 +509,6 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-ts2020
 +  TITLE:=Montage Technology TS2020
 +  $(call DvbFrontend,ts2020,CONFIG_DVB_TS2020)
-+  DEPENDS+=+kmod-i2c-mux
 +endef
 +
 +define KernelPackage/dvb-ts2020/description
@@ -737,8 +613,10 @@ index 0000000000..06875f5c00
 +define KernelPackage/dvb-dibx000-common
 +  SUBMENU:=$(DVB_MENU)
 +  TITLE:=Common library for DiBX000 drivers
++  HIDDEN:=1
 +  FILES:=$(LINUX_DIR)/drivers/media/dvb-frontends/dibx000_common.ko
 +  AUTOLOAD:=$(call AutoProbe,dibx000_common)
++  DEPENDS:=+kmod-i2c-core
 +endef
 +
 +$(eval $(call KernelPackage,dvb-dibx000-common))
@@ -817,8 +695,8 @@ index 0000000000..06875f5c00
 +define MediaTuner
 +  SUBMENU:=$(TUNER_MENU)
 +  KCONFIG:= \
-+	CONFIG_MEDIA_SUPPORT=m \
-+	CONFIG_MEDIA_DIGITAL_TV_SUPPORT=m \
++	CONFIG_MEDIA_SUPPORT \
++	CONFIG_MEDIA_DIGITAL_TV_SUPPORT=y \
 +	$2
 +  DEPENDS:=+kmod-i2c-core
 +  FILES:=$(LINUX_DIR)/drivers/media/tuners/$1.ko
@@ -909,7 +787,7 @@ index 0000000000..06875f5c00
 +define KernelPackage/media-tuner-si2157
 +  TITLE:=Silicon Labs Si2157 silicon tuner
 +  $(call MediaTuner,si2157,CONFIG_MEDIA_TUNER_SI2157)
-+  DEPENDS+=+kmod-regmap-i2c
++  DEPENDS+=+kmod-regmap-i2c +kmod-media-controller
 +endef
 +
 +define KernelPackage/media-tuner-si2157/description
@@ -1043,7 +921,7 @@ index 0000000000..06875f5c00
 +  SUBMENU:=$(TUNER_MENU)
 +  TITLE:=Simple tuner support
 +  KCONFIG:= \
-+	CONFIG_MEDIA_SUPPORT=m \
++	CONFIG_MEDIA_SUPPORT \
 +	CONFIG_MEDIA_TUNER_SIMPLE
 +  DEPENDS:=+kmod-i2c-core +kmod-media-tuner-tda9887
 +  FILES:= \
@@ -1105,8 +983,8 @@ index 0000000000..06875f5c00
 +
 +define KernelPackage/media-tuner-tda8290
 +  TITLE:=TDA 8290/8295 + 8275(a)/18271 tuner combo
-+  DEPENDS:=+kmod-media-tuner-tda827x +kmod-media-tuner-tda18271
 +  $(call MediaTuner,tda8290,CONFIG_MEDIA_TUNER_TDA8290)
++  DEPENDS+=+kmod-media-tuner-tda827x +kmod-media-tuner-tda18271
 +endef
 +
 +define KernelPackage/media-tuner-tda8290/description
@@ -1197,36 +1075,31 @@ index 0000000000..06875f5c00
 +$(eval $(call KernelPackage,media-tuner-xc5000))
 +
 +define KernelPackage/tveeprom
-+  TITLE:=VIDEO_TVEEPROM
++  SUBMENU:=$(VIDEO_MENU)
++  TITLE:=TV hardware capabilities EEPROM support
++  HIDDEN:=1
 +  KCONFIG:=CONFIG_VIDEO_TVEEPROM
 +  FILES:=$(LINUX_DIR)/drivers/media/common/tveeprom.ko
 +  AUTOLOAD:=$(call AutoProbe,tveeprom)
++  DEPENDS:=+kmod-i2c-core
++endef
++
++define KernelPackage/tveeprom/description
++ Kernel module to read the EEPROM found on TV tuner cards, which
++ describes the hardware capabilities of the card.
 +endef
 +
 +$(eval $(call KernelPackage,tveeprom))
 +
-+define KernelPackage/v4l2
-+  TITLE:=v4l2
-+  KCONFIG:=CONFIG_VIDEO_V4L2
-+  FILES:=\
-+	$(LINUX_DIR)/drivers/media/v4l2-core/videodev.ko
-+  AUTOLOAD:=$(call AutoProbe,videodev v4l2-common)
-+endef
-+
-+$(eval $(call KernelPackage,v4l2))
 +
 +define KernelPackage/video-em28xx
 +  TITLE:=Empia EM28xx USB devices support
 +  KCONFIG:= \
-+	CONFIG_VIDEO_EM28XX=m \
-+	CONFIG_VIDEO_EM28XX_V4L2=m \
-+	CONFIG_VIDEO_EM28XX_ALSA=m \
-+	CONFIG_VIDEO_EM28XX_DVB=m \
-+	CONFIG_VIDEO_EM28XX_RC=m
++	CONFIG_MEDIA_USB_SUPPORT=y \
++	CONFIG_VIDEO_EM28XX
 +  FILES:=$(LINUX_DIR)/drivers/media/usb/em28xx/em28xx.ko
-+  AUTOLOAD:=$(call AutoProbe,video-em28xx)
-+  DEPENDS+=+kmod-tveeprom +kmod-video-core
-+  $(call AddDepends/dvb-usb)
++  AUTOLOAD:=$(call AutoProbe,em28xx)
++  DEPENDS+=+kmod-usb-core +kmod-i2c-core +kmod-tveeprom +kmod-video-core
 +  SUBMENU:=$(VIDEO_MENU)
 +endef
 +
@@ -1238,10 +1111,10 @@ index 0000000000..06875f5c00
 +
 +define KernelPackage/video-em28xx-dvb
 +  TITLE:=DVB/ATSC support for em28xx based TV cards
++  KCONFIG:=CONFIG_VIDEO_EM28XX_DVB
 +  FILES:=$(LINUX_DIR)/drivers/media/usb/em28xx/em28xx-dvb.ko
-+  AUTOLOAD:=$(call AutoProbe,video-em28xx-dvb)
++  AUTOLOAD:=$(call AutoProbe,em28xx-dvb)
 +  DEPENDS+=+kmod-dvb-core +kmod-video-em28xx
-+  $(call AddDepends/dvb-usb)
 +  SUBMENU:=$(VIDEO_MENU)
 +endef
 +
@@ -1250,6 +1123,122 @@ index 0000000000..06875f5c00
 +endef
 +
 +$(eval $(call KernelPackage,video-em28xx-dvb))
+diff --git a/package/kernel/linux/modules/input.mk b/package/kernel/linux/modules/input.mk
+index b780c1c4b2..69983babb4 100644
+--- a/package/kernel/linux/modules/input.mk
++++ b/package/kernel/linux/modules/input.mk
+@@ -331,3 +331,26 @@ define KernelPackage/input-serio-libps2/description
+ endef
+ 
+ $(eval $(call KernelPackage,input-serio-libps2))
++
++define KernelPackage/rc-core
++  SUBMENU:=$(INPUT_MODULES_MENU)
++  TITLE:=Remote Controller support
++  KCONFIG:= \
++	CONFIG_RC_DEVICES=y \
++	CONFIG_RC_CORE
++  FILES:=$(LINUX_DIR)/drivers/media/rc/rc-core.ko
++  AUTOLOAD:=$(call AutoProbe,rc-core)
++  DEPENDS:=+kmod-input-core
++endef
++
++define KernelPackage/rc-core/description
++ Enable support for Remote Controllers on Linux. This is
++ needed in order to support several video capture adapters,
++ standalone IR receivers/transmitters, and RF receivers.
++
++ Enable this option if you have a video capture board even
++ if you don't need IR, as otherwise, you may not be able to
++ compile the driver for your adapter.
++endef
++
++$(eval $(call KernelPackage,rc-core))
+diff --git a/target/linux/generic/config-6.12 b/target/linux/generic/config-6.12
+index 0a3edba368..52c7892c06 100644
+--- a/target/linux/generic/config-6.12
++++ b/target/linux/generic/config-6.12
+@@ -1844,7 +1844,32 @@ CONFIG_DVB_MAX_ADAPTERS=16
+ # CONFIG_DVB_TUNER_ITD1000 is not set
+ # CONFIG_DVB_ULE_DEBUG is not set
+ # CONFIG_DVB_USB is not set
++# CONFIG_DVB_USB_AF9005 is not set
++# CONFIG_DVB_USB_AU6610 is not set
++# CONFIG_DVB_USB_AZ6027 is not set
++# CONFIG_DVB_USB_CE6230 is not set
++# CONFIG_DVB_USB_CINERGY_T2 is not set
++# CONFIG_DVB_USB_CXUSB_ANALOG is not set
++# CONFIG_DVB_USB_DEBUG is not set
++# CONFIG_DVB_USB_DIGITV is not set
++# CONFIG_DVB_USB_DTT200U is not set
++# CONFIG_DVB_USB_DTV5100 is not set
++# CONFIG_DVB_USB_DW2102 is not set
++# CONFIG_DVB_USB_EC168 is not set
++# CONFIG_DVB_USB_GL861 is not set
++# CONFIG_DVB_USB_GP8PSK is not set
++# CONFIG_DVB_USB_LME2510 is not set
++# CONFIG_DVB_USB_M920X is not set
++# CONFIG_DVB_USB_MXL111SF is not set
++# CONFIG_DVB_USB_NOVA_T_USB2 is not set
++# CONFIG_DVB_USB_OPERA1 is not set
++# CONFIG_DVB_USB_PCTV452E is not set
++# CONFIG_DVB_USB_TECHNISAT_USB2 is not set
++# CONFIG_DVB_USB_UMT_010 is not set
+ # CONFIG_DVB_USB_V2 is not set
++# CONFIG_DVB_USB_VP702X is not set
++# CONFIG_DVB_USB_VP7045 is not set
++# CONFIG_DVB_USB_ZD1301 is not set
+ # CONFIG_DVB_VES1820 is not set
+ # CONFIG_DVB_VES1X93 is not set
+ # CONFIG_DVB_ZD1301_DEMOD is not set
+@@ -2952,6 +2977,8 @@ CONFIG_IP_VS_MH_TAB_INDEX=10
+ # CONFIG_IRQ_POLL is not set
+ # CONFIG_IRQ_TIME_ACCOUNTING is not set
+ # CONFIG_IRSD200 is not set
++# CONFIG_IR_ENE is not set
++# CONFIG_IR_FINTEK is not set
+ # CONFIG_IR_GPIO_CIR is not set
+ # CONFIG_IR_HIX5HD2 is not set
+ # CONFIG_IR_IGORPLUGUSB is not set
+@@ -2959,9 +2986,12 @@ CONFIG_IP_VS_MH_TAB_INDEX=10
+ # CONFIG_IR_IMG is not set
+ # CONFIG_IR_IMON is not set
+ # CONFIG_IR_IMON_RAW is not set
++# CONFIG_IR_ITE_CIR is not set
+ # CONFIG_IR_JVC_DECODER is not set
+ # CONFIG_IR_MCEUSB is not set
++# CONFIG_IR_MTK is not set
+ # CONFIG_IR_NEC_DECODER is not set
++# CONFIG_IR_NUVOTON is not set
+ # CONFIG_IR_RC5_DECODER is not set
+ # CONFIG_IR_RC6_DECODER is not set
+ # CONFIG_IR_REDRAT3 is not set
+@@ -2970,6 +3000,7 @@ CONFIG_IP_VS_MH_TAB_INDEX=10
+ # CONFIG_IR_STREAMZAP is not set
+ # CONFIG_IR_TOY is not set
+ # CONFIG_IR_TTUSBIR is not set
++# CONFIG_IR_WINBOND_CIR is not set
+ # CONFIG_ISA_BUS is not set
+ # CONFIG_ISA_BUS_API is not set
+ # CONFIG_ISCSI_BOOT_SYSFS is not set
+@@ -3414,6 +3445,7 @@ CONFIG_MAX_SKB_FRAGS=17
+ # CONFIG_MEDIA_ANALOG_TV_SUPPORT is not set
+ # CONFIG_MEDIA_ATTACH is not set
+ # CONFIG_MEDIA_CAMERA_SUPPORT is not set
++# CONFIG_MEDIA_CEC_RC is not set
+ # CONFIG_MEDIA_CEC_SUPPORT is not set
+ # CONFIG_MEDIA_CONTROLLER is not set
+ # CONFIG_MEDIA_CONTROLLER_DVB is not set
+@@ -7443,6 +7475,9 @@ CONFIG_VHOST_MENU=y
+ # CONFIG_VIDEO_DW9768 is not set
+ # CONFIG_VIDEO_DW9807_VCM is not set
+ # CONFIG_VIDEO_EM28XX is not set
++# CONFIG_VIDEO_EM28XX_ALSA is not set
++# CONFIG_VIDEO_EM28XX_RC is not set
++# CONFIG_VIDEO_EM28XX_V4L2 is not set
+ # CONFIG_VIDEO_ET8EK8 is not set
+ # CONFIG_VIDEO_FIXED_MINOR_RANGES is not set
+ # CONFIG_VIDEO_GO7007 is not set
 -- 
-2.32.0
+2.54.0 (Apple Git-157)
 
