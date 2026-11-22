@@ -8,25 +8,37 @@ although the correct way is probably something completely different. Also
 making kernel with dtbs fails for some reason. We need to dig deeper into
 kernel build part and rework it a little bit.
 
+The SDK has only part of the kernel tree and no kernel image, so skip
+both there.
 ---
- package/kernel/linux/Makefile | 17 +++++++++++------
- 1 file changed, 11 insertions(+), 6 deletions(-)
+ package/kernel/linux/Makefile | 25 +++++++++++++++++++------
+ 1 file changed, 19 insertions(+), 6 deletions(-)
 
 diff --git a/package/kernel/linux/Makefile b/package/kernel/linux/Makefile
-index 8dfb01ad66..ecd1433279 100644
+index f524e21483..a111fd212d 100644
 --- a/package/kernel/linux/Makefile
 +++ b/package/kernel/linux/Makefile
-@@ -41,6 +41,7 @@ define Build/Quilt
+@@ -41,8 +41,15 @@ endef
+ define Build/Quilt
  endef
  
++ifndef SDK
  define Build/Compile
 +	$(KERNEL_MAKE) $(KERNELNAME)
  endef
++else
++# The SDK has only part of the kernel tree and no kernel image
++define Build/Compile
++endef
++endif
  
  define KernelPackage/depends
-@@ -58,12 +59,16 @@ define Package/kernel
+ endef
+@@ -58,14 +65,20 @@ define Package/kernel
+   PKG_FLAGS:=nonshared
  endef
  
++ifndef SDK
  define Package/kernel/install
 -	$(INSTALL_DIR) $(1)/$(MODULES_SUBDIR)
 -	$(INSTALL_DATA) $(LINUX_DIR)/modules.builtin $(1)/$(MODULES_SUBDIR)
@@ -45,8 +57,10 @@ index 8dfb01ad66..ecd1433279 100644
 +		$(CP) $(DTS_DIR)/$(d) "$(1)"/boot; \
 +	)
  endef
++endif
  
  define Package/kernel/extra_provides
+ 	sed -e 's,.*/,,' $(LINUX_DIR)/modules.builtin;
 -- 
 2.47.0
 
