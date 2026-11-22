@@ -1,0 +1,46 @@
+name: Check patches
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  patches:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board:
+          - omnia
+          - omnia-ng
+          - mox
+          - turris1x
+
+    name: Patches for ${{ matrix.board }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Apply the changes of turris-build
+        run: bash .github/workflows/check-patches.sh "${{ matrix.board }}"
+
+      # hbl and hbd follow the branches of OpenWrt, so a change there can
+      # break the patches without any change to this repository
+      - name: Check out the base of the pull request
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Check the base of the pull request
+        if: failure() && github.event_name == 'pull_request'
+        run: |
+          if WORK_DIR="$RUNNER_TEMP/base" bash .github/workflows/check-patches.sh \
+              "${{ matrix.board }}" base >base.log 2>&1; then
+            echo "::error::The base branch passes, so this pull request breaks the patches"
+          else
+            tail -n 5 base.log
+            echo "::warning::The base branch fails as well, so this is not caused by this pull request"
+          fi
