@@ -1,0 +1,402 @@
+From 9696b7edfcc9399b9ae5c0dfb7c6880c5eec059c Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sat, 21 Nov 2026 16:19:54 +0100
+Subject: [PATCH] rtw89-git: add out-of-tree rtw89 driver with USB support
+
+The rtw89 driver in backports 6.12 has no USB support. That came in
+Linux 6.17 and the RTL8922AU in 7.2. Package the out-of-tree copy of the
+driver from morrownr/rtw89 and build it against the mac80211 backports,
+so the Wi-Fi 7 USB adapters with the RTL8922AU and RTL8912AU chips
+(0bda:8912) get a driver.
+
+The driver picks its code paths by LINUX_VERSION_CODE, which is the
+kernel version, while the wireless stack comes from backports. The
+checks are pointed at the backports version and a patch moves the ones
+about core kernel features back to the kernel version. The one option
+of the wireless stack the driver asks for, CONFIG_CFG80211_DEBUGFS, is
+passed on from the mac80211 package.
+
+Only the core, USB and RTL8922AU modules are built. The core conflicts
+with kmod-rtw89, because both export symbols with the same names.
+
+Build tested for mvebu/cortexa9 only (Turris OS 9.1.4 tree, kernel
+6.6.159, no CONFIG_PM). Tested on a Turris Omnia with Turris OS 9.1.5 and
+a Cudy BE6500, as AP on 2.4 and 5 GHz and as client. A 6 GHz AP also
+worked, with he_6ghz_rx_ant_pat=0 and he_6ghz_tx_ant_pat=0 in
+hostapd_options.
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ package/kernel/rtw89-git/Makefile             | 134 ++++++++++++++
+ ...host-kernel-for-core-kernel-features.patch | 172 ++++++++++++++++++
+ package/kernel/rtw89-git/src/Kbuild           |  38 ++++
+ 3 files changed, 344 insertions(+)
+ create mode 100644 package/kernel/rtw89-git/Makefile
+ create mode 100644 package/kernel/rtw89-git/patches/100-check-the-host-kernel-for-core-kernel-features.patch
+ create mode 100644 package/kernel/rtw89-git/src/Kbuild
+
+diff --git a/package/kernel/rtw89-git/Makefile b/package/kernel/rtw89-git/Makefile
+new file mode 100644
+index 0000000000..e5cf32254f
+--- /dev/null
++++ b/package/kernel/rtw89-git/Makefile
+@@ -0,0 +1,134 @@
++include $(TOPDIR)/rules.mk
++
++PKG_NAME:=rtw89-git
++PKG_RELEASE:=1
++
++PKG_SOURCE_PROTO:=git
++PKG_SOURCE_URL:=https://github.com/morrownr/rtw89
++PKG_SOURCE_DATE:=2026-11-09
++PKG_SOURCE_VERSION:=f2ce66eda6277e5505d5914a8a08454440518702
++PKG_MIRROR_HASH:=d6c78a59bc05f25de41186576cb6deb4de27f1a81bd15f4e60eeb07718263ba0
++
++PKG_LICENSE:=GPL-2.0-only OR BSD-3-Clause
++PKG_MAINTAINER:=Josef Schlehofer <pepe.schlehofer@gmail.com>
++PKG_BUILD_PARALLEL:=1
++
++PKG_CONFIG_DEPENDS += \
++	CONFIG_PACKAGE_MAC80211_DEBUGFS \
++	CONFIG_PACKAGE_kmod-rtw89-git-usb \
++	CONFIG_PACKAGE_kmod-rtw89-git-8922au
++
++STAMP_CONFIGURED_DEPENDS := $(STAGING_DIR)/usr/include/mac80211-backport/backport/autoconf.h
++
++include $(INCLUDE_DIR)/kernel.mk
++include $(INCLUDE_DIR)/package.mk
++
++# The driver picks its code paths by LINUX_VERSION_CODE. Here cfg80211 and
++# mac80211 come from backports, so the wireless API is newer than the kernel.
++# Build/Prepare points all checks at the backports version, the patches move
++# the few checks of core kernel features back to RTW89_HOST_VERSION_CODE.
++RTW89_WIRELESS_API:=6.12
++
++define KernelPackage/rtw89-git/Default
++  SUBMENU:=Wireless Drivers
++  URL:=https://github.com/morrownr/rtw89
++endef
++
++define KernelPackage/rtw89-git
++  $(call KernelPackage/rtw89-git/Default)
++  TITLE:=Realtek RTW89 core (out-of-tree)
++  DEPENDS:=+kmod-mac80211 +@DRIVER_11AC_SUPPORT +@DRIVER_11AX_SUPPORT
++  CONFLICTS:=kmod-rtw89
++  FILES:=$(PKG_BUILD_DIR)/rtw89_core_git.ko
++  AUTOLOAD:=$(call AutoProbe,rtw89_core_git)
++  HIDDEN:=1
++endef
++
++define KernelPackage/rtw89-git/description
++  Core of the out-of-tree rtw89 driver from morrownr/rtw89. It brings USB
++  support, which the rtw89 driver in the mac80211 package does not have
++  yet. Both export symbols with the same names, so only one of them can be
++  installed.
++endef
++
++define KernelPackage/rtw89-git-usb
++  $(call KernelPackage/rtw89-git/Default)
++  TITLE:=Realtek RTW89 USB chips support (out-of-tree)
++  DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-rtw89-git
++  FILES:=$(PKG_BUILD_DIR)/rtw89_usb_git.ko
++  AUTOLOAD:=$(call AutoProbe,rtw89_usb_git)
++  HIDDEN:=1
++endef
++
++define KernelPackage/rtw89-git-8922au
++  $(call KernelPackage/rtw89-git/Default)
++  TITLE:=Realtek RTL8922AU/RTL8912AU support (out-of-tree)
++  DEPENDS:=+kmod-rtw89-git-usb +@DRIVER_11BE_SUPPORT
++  FILES:= \
++	$(PKG_BUILD_DIR)/rtw89_8922a_git.ko \
++	$(PKG_BUILD_DIR)/rtw89_8922au_git.ko
++  AUTOLOAD:=$(call AutoProbe,rtw89_8922au_git)
++endef
++
++define KernelPackage/rtw89-git-8922au/description
++  Driver for Wi-Fi 7 USB adapters with the Realtek RTL8922AU and RTL8912AU
++  chips. The firmware is part of the package.
++endef
++
++kver_code = $(shell echo $(1) | awk -F. '{ print $$1 * 65536 + $$2 * 256 + $$3 }')
++
++NOSTDINC_FLAGS := \
++	$(KERNEL_NOSTDINC_FLAGS) \
++	-I$(PKG_BUILD_DIR) \
++	-I$(STAGING_DIR)/usr/include/mac80211-backport/uapi \
++	-I$(STAGING_DIR)/usr/include/mac80211-backport \
++	-I$(STAGING_DIR)/usr/include/mac80211/uapi \
++	-I$(STAGING_DIR)/usr/include/mac80211 \
++	-include backport/autoconf.h \
++	-include backport/backport.h
++
++NOSTDINC_FLAGS += \
++	-DRTW89_WIRELESS_VERSION_CODE=$(call kver_code,$(RTW89_WIRELESS_API)) \
++	-DRTW89_HOST_VERSION_CODE=LINUX_VERSION_CODE \
++	-DGIT_COMMIT=$(PKG_SOURCE_VERSION) \
++	-DCONFIG_RTW89_LEDS
++
++# Backports name their options CPTCFG_*, the driver asks for CONFIG_*.
++ifdef CONFIG_PACKAGE_MAC80211_DEBUGFS
++  NOSTDINC_FLAGS += \
++	-DCONFIG_CFG80211_DEBUGFS \
++	-DCONFIG_RTW89_DEBUGFS \
++	-DCONFIG_RTW89_DEBUGMSG
++endif
++
++ifdef CONFIG_PACKAGE_kmod-rtw89-git-usb
++  PKG_MAKE_FLAGS += CONFIG_RTW89_GIT_USB=m
++endif
++ifdef CONFIG_PACKAGE_kmod-rtw89-git-8922au
++  PKG_MAKE_FLAGS += CONFIG_RTW89_GIT_8922AU=m
++endif
++
++define Build/Prepare
++	$(call Build/Prepare/Default)
++	$(SED) 's/\bLINUX_VERSION_CODE\b/RTW89_WIRELESS_VERSION_CODE/g' \
++		$(PKG_BUILD_DIR)/*.[ch]
++endef
++
++define Build/Compile
++	+$(KERNEL_MAKE) $(PKG_JOBS) \
++		$(PKG_MAKE_FLAGS) \
++		M="$(PKG_BUILD_DIR)" \
++		NOSTDINC_FLAGS="$(NOSTDINC_FLAGS)" \
++		modules
++endef
++
++define KernelPackage/rtw89-git-8922au/install
++	$(INSTALL_DIR) $(1)/lib/firmware/rtw89
++	$(INSTALL_DATA) \
++		$(PKG_BUILD_DIR)/firmware/rtw8922a_fw-4.bin \
++		$(1)/lib/firmware/rtw89
++endef
++
++$(eval $(call KernelPackage,rtw89-git))
++$(eval $(call KernelPackage,rtw89-git-usb))
++$(eval $(call KernelPackage,rtw89-git-8922au))
+diff --git a/package/kernel/rtw89-git/patches/100-check-the-host-kernel-for-core-kernel-features.patch b/package/kernel/rtw89-git/patches/100-check-the-host-kernel-for-core-kernel-features.patch
+new file mode 100644
+index 0000000000..af60a5549e
+--- /dev/null
++++ b/package/kernel/rtw89-git/patches/100-check-the-host-kernel-for-core-kernel-features.patch
+@@ -0,0 +1,172 @@
++From: Josef Schlehofer <pepe.schlehofer@gmail.com>
++Subject: [PATCH] rtw89: check the host kernel for core kernel features
++
++The OpenWrt Makefile replaces LINUX_VERSION_CODE in the whole driver by the
++version of the wireless stack, because cfg80211 and mac80211 come from
++backports and are newer than the kernel.
++
++That is wrong for the checks that look at something outside of the wireless
++stack: NAPI helpers, BH workqueues, the sysfs group visibility macros, the
++math64 helpers and the string choice helpers. Backports do not provide
++these, so they have to follow the kernel the module is built for.
++
++Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
++---
++--- a/core.c
+++++ b/core.c
++@@ -4049,7 +4049,7 @@ static void rtw89_core_rx_to_mac80211(struct rtw89_dev *rtwdev,
++ 	struct napi_struct *napi = &rtwdev->napi;
++ 
++ 	/* In low power mode, napi isn't scheduled. Receive it to netif. */
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 7, 0)
++ 	if (unlikely(!napi_is_scheduled(napi)))
++ #else
++ 	if (unlikely(!test_bit(NAPI_STATE_SCHED, &napi->state)))
++--- a/core.h
+++++ b/core.h
++@@ -126,7 +126,7 @@ static inline void ieee80211_purge_tx_queue(struct ieee80211_hw *hw,
++ }
++ #endif
++ 
++-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+++#if RTW89_HOST_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
++ /**
++  * DIV_U64_ROUND_UP - unsigned 64bit divide with 32bit divisor rounded up
++  * @ll: unsigned 64bit dividend
++@@ -4912,7 +4912,7 @@ struct rtw89_sta_link {
++ 	u32 data_tx_cnt_lmt:6;
++ };
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ #define RTW89_EFUSE_SN_LEN 5
++ #define RTW89_EFUSE_UUID_LEN 16
++ #endif
++@@ -4929,7 +4929,7 @@ struct rtw89_efuse {
++ 	u8 adc_td;
++ 	u8 bt_setting_2;
++ 	u8 bt_setting_3;
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	u8 sn[RTW89_EFUSE_SN_LEN];
++ 	u8 uuid[RTW89_EFUSE_UUID_LEN];
++ #endif
++@@ -6757,7 +6757,7 @@ enum rtw89_quirks {
++ 	RTW89_QUIRK_THERMAL_PROT_120C,
++ 	RTW89_QUIRK_THERMAL_PROT_110C,
++ 	RTW89_QUIRK_THERMAL_PROT_VCORE,
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	RTW89_QUIRK_HW_INFO_SYSFS,
++ #endif
++ 	RTW89_QUIRK_DISABLE_2GHZ,
++--- a/debug.c
+++++ b/debug.c
++@@ -4993,7 +4993,7 @@ rtw89_debug_priv_mlo_mode_get(struct rtw89_dev *rtwdev,
++ 	int count = 0;
++ 
++ 	p += scnprintf(p, end - p, "MLD(s) status: (MLO DM: %s)\n",
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
++ 		       str_disable_enable(mlo_dm_dis));
++ #else
++ 		       str_enable_disable(!mlo_dm_dis));
++--- a/rtw8852c.c
+++++ b/rtw8852c.c
++@@ -628,7 +628,7 @@ static void rtw8852c_efuse_parsing_gain_offset(struct rtw89_dev *rtwdev,
++ 	gain->offset_valid = valid;
++ }
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ static void rtw8852c_efuse_copy_sn_uuid_usb(struct rtw89_dev *rtwdev,
++ 					    const struct rtw8852c_efuse *map)
++ {
++@@ -658,7 +658,7 @@ static int rtw8852c_read_efuse(struct rtw89_dev *rtwdev, u8 *log_map,
++ 		break;
++ 	case RTW89_HCI_TYPE_USB:
++ 		ether_addr_copy(efuse->addr, map->u.mac_addr);
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 		rtw8852c_efuse_copy_sn_uuid_usb(rtwdev, map);
++ #endif
++ 		break;
++--- a/rtw8852c.h
+++++ b/rtw8852c.h
++@@ -13,7 +13,7 @@
++ struct rtw8852c_u_efuse {
++ 	u8 rsvd[0x88];
++ 	u8 mac_addr[ETH_ALEN];
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	u8 rsvd1[8];
++ 	u8 sn[RTW89_EFUSE_SN_LEN];
++ 	u8 rsvd2[29];
++--- a/usb.c
+++++ b/usb.c
++@@ -442,7 +442,7 @@ static int rtw89_usb_ops_tx_write(struct rtw89_dev *rtwdev,
++ 	return 0;
++ }
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ static void rtw89_usb_rx_handler(struct work_struct *work)
++ {
++ 	struct rtw89_usb *rtwusb = container_of(work, struct rtw89_usb, rx_work);
++@@ -594,7 +594,7 @@ static void rtw89_usb_read_port_complete(struct urb *urb)
++ 		} else {
++ 			skb_put(skb, urb->actual_length);
++ 			skb_queue_tail(&rtwusb->rx_queue, skb);
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 			queue_work(rtwusb->rxwq, &rtwusb->rx_work);
++ #else
++ 			tasklet_schedule(&rtwusb->rx_tasklet);
++@@ -687,7 +687,7 @@ static int rtw89_usb_init_rx(struct rtw89_dev *rtwdev)
++ 
++ #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 18, 0)
++ 	rtwusb->rxwq = alloc_workqueue("rtw89_usb: rx wq", WQ_BH | WQ_PERCPU, 0);
++-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#elif RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	rtwusb->rxwq = alloc_workqueue("rtw89_usb: rx wq", WQ_BH, 0);
++ #else
++ 	tasklet_init(&rtwusb->rx_tasklet, rtw89_usb_rx_handler,
++@@ -703,7 +703,7 @@ static int rtw89_usb_init_rx(struct rtw89_dev *rtwdev)
++ 	skb_queue_head_init(&rtwusb->rx_queue);
++ 	skb_queue_head_init(&rtwusb->rx_free_queue);
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	INIT_WORK(&rtwusb->rx_work, rtw89_usb_rx_handler);
++ #endif
++ 	INIT_WORK(&rtwusb->rx_urb_work, rtw89_usb_rx_resubmit_work);
++@@ -1193,7 +1193,7 @@ static int rtw89_usb_switch_mode(struct rtw89_dev *rtwdev)
++ 	return rtw89_usb_switch_mode_be(rtwdev);
++ }
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ static ssize_t serial_number_show(struct device *dev,
++ 				  struct device_attribute *attr, char *buf)
++ {
++@@ -1269,7 +1269,7 @@ int rtw89_usb_probe(struct usb_interface *intf,
++ 	rtwusb->rtwdev = rtwdev;
++ 	rtwusb->info = info->bus.usb;
++ 
++-#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
++ 	rtwdev->hw->wiphy->dev.groups = rtw89_usb_groups;
++ #endif
++ 
++--- a/usb.h
+++++ b/usb.h
++@@ -78,7 +78,7 @@ struct rtw89_usb {
++ 	u8 out_pipe[RTW89_MAX_BULKOUT_NUM];
++ 
++ 	struct workqueue_struct *rxwq;
++-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
+++#if RTW89_HOST_VERSION_CODE < KERNEL_VERSION(6, 9, 0)
++ 	struct tasklet_struct rx_tasklet; // Can't use BH workqueue
++ #endif
++ 	struct rtw89_usb_rx_ctrl_block rx_cb[RTW89_USB_RXCB_NUM];
+diff --git a/package/kernel/rtw89-git/src/Kbuild b/package/kernel/rtw89-git/src/Kbuild
+new file mode 100644
+index 0000000000..ae8637f10d
+--- /dev/null
++++ b/package/kernel/rtw89-git/src/Kbuild
+@@ -0,0 +1,38 @@
++# SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
++#
++# Replaces the upstream Makefile, which builds every chip and bus at once.
++# Kbuild prefers this file. Only the modules that are packaged get built.
++
++obj-m += rtw89_core_git.o
++rtw89_core_git-y += core.o \
++		    mac80211.o \
++		    mac.o \
++		    mac_be.o \
++		    phy.o \
++		    phy_be.o \
++		    fw.o \
++		    cam.o \
++		    efuse.o \
++		    efuse_be.o \
++		    regd.o \
++		    sar.o \
++		    coex.o \
++		    ps.o \
++		    chan.o \
++		    ser.o \
++		    acpi.o \
++		    util.o \
++		    debug.o \
++		    led.o
++
++rtw89_core_git-$(CONFIG_PM) += wow.o
++
++obj-$(CONFIG_RTW89_GIT_USB) += rtw89_usb_git.o
++rtw89_usb_git-y := usb.o
++
++obj-$(CONFIG_RTW89_GIT_8922AU) += rtw89_8922a_git.o
++rtw89_8922a_git-y := rtw8922a.o \
++		     rtw8922a_rfk.o
++
++obj-$(CONFIG_RTW89_GIT_8922AU) += rtw89_8922au_git.o
++rtw89_8922au_git-y := rtw8922au.o
+-- 
+2.54.0 (Apple Git-157)
+
