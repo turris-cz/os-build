@@ -1,0 +1,100 @@
+From f103b594276130cf33e8ca4646a1741ea9b03571 Mon Sep 17 00:00:00 2001
+From: Josef Schlehofer <pepe.schlehofer@gmail.com>
+Date: Sun, 22 Nov 2026 12:03:11 +0100
+Subject: [PATCH] wifi-scripts: restart a device when its phy shows up again
+
+netifd in 24.10 gives up on a wireless device after a few failed setups
+and does not notice when the phy of a running device goes away. A device
+whose phy was not there yet, for example a slow PCIe card or a USB
+adapter plugged in later, stays down. A device whose phy went away stays
+up without interfaces. Both need "wifi" by hand.
+
+When a phy is added, restart the wireless devices that use it and whose
+setup failed or is still running, or that are up without an interface
+on that phy. Other devices are left alone. Only devices with a path
+option are matched, which is what wifi config writes unless the phy was
+renamed. main can retry the setup of such late devices from the ucode
+wireless code (727d8b27ab), which 24.10 does not have.
+
+Tested on a Turris Omnia with Turris OS (based on 24.10, same netifd)
+and a USB RTL8922AU adapter: after a power cycle of its USB port the AP
+came back by itself, from a failed setup and from a stale up state. A
+power cycle of another USB radio and an extra add event for the phy of
+the running AP did not restart it.
+
+Signed-off-by: Josef Schlehofer <pepe.schlehofer@gmail.com>
+---
+ package/network/config/wifi-scripts/Makefile  |  2 +-
+ .../etc/hotplug.d/ieee80211/10-wifi-detect    | 47 +++++++++++++++++--
+ 2 files changed, 45 insertions(+), 4 deletions(-)
+
+diff --git a/package/network/config/wifi-scripts/Makefile b/package/network/config/wifi-scripts/Makefile
+index ae41f74949..f84522d8fd 100644
+--- a/package/network/config/wifi-scripts/Makefile
++++ b/package/network/config/wifi-scripts/Makefile
+@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
+ 
+ PKG_NAME:=wifi-scripts
+ PKG_VERSION:=1.0
+-PKG_RELEASE:=1
++PKG_RELEASE:=2
+ PKG_LICENSE:=GPL-2.0
+ 
+ PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
+diff --git a/package/network/config/wifi-scripts/files/etc/hotplug.d/ieee80211/10-wifi-detect b/package/network/config/wifi-scripts/files/etc/hotplug.d/ieee80211/10-wifi-detect
+index b865552661..446ecaecca 100644
+--- a/package/network/config/wifi-scripts/files/etc/hotplug.d/ieee80211/10-wifi-detect
++++ b/package/network/config/wifi-scripts/files/etc/hotplug.d/ieee80211/10-wifi-detect
+@@ -1,5 +1,46 @@
+ #!/bin/sh
+ 
+-[ "${ACTION}" = "add" ] && {
+-	/sbin/wifi config
+-}
++[ "${ACTION}" = "add" ] || exit 0
++
++/sbin/wifi config
++
++# netifd here gives up on a device after a few failed setups and does
++# not notice when the phy of a running device goes away. Restart a
++# device that uses the new phy if its setup failed or is still running,
++# or if it is up but none of its interfaces is on the new phy. Leave
++# every other device alone.
++. /usr/share/libubox/jshn.sh
++
++json_init
++json_load "$(ubus -S call network.wireless status 2>/dev/null)" 2>/dev/null || exit 0
++json_get_keys radios
++for radio in $radios; do
++	json_select "$radio"
++	json_get_vars up pending retry_setup_failed
++	json_select config
++	json_get_vars path
++	json_select ..
++	on_phy=0
++	if json_is_a interfaces array; then
++		json_select interfaces
++		json_get_keys vifs
++		for vif in $vifs; do
++			ifname=
++			json_select "$vif"
++			json_get_var ifname ifname
++			json_select ..
++			[ -n "$ifname" ] || continue
++			[ "$(cat "/sys/class/net/$ifname/phy80211/name" 2>/dev/null)" = "$DEVICENAME" ] && on_phy=1
++		done
++		json_select ..
++	fi
++	json_select ..
++
++	[ "$pending" = 1 ] || [ "$retry_setup_failed" = 1 ] ||
++		{ [ "$up" = 1 ] && [ "$on_phy" = 0 ]; } || continue
++	[ -n "$path" ] || continue
++	[ "$(iwinfo nl80211 phyname "path=$path" 2>/dev/null)" = "$DEVICENAME" ] || continue
++
++	ubus call network.wireless down "{\"device\": \"$radio\"}"
++	ubus call network.wireless up "{\"device\": \"$radio\"}"
++done
+-- 
+2.54.0 (Apple Git-157)
+
